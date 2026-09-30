@@ -2,8 +2,8 @@
 
 本文档适用于一台 Linux 服务器，采用以下进程结构：
 
-- FastAPI 后端：`127.0.0.1:8000`
-- Vite Preview 前端：`127.0.0.1:5173`
+- FastAPI 后端：`127.0.0.1:6930`
+- Vite Preview 前端：`127.0.0.1:930`
 - Nginx：对外提供 80/443 端口，并将 `/api/` 转发到后端
 - MySQL：使用项目根目录 `.env` 中的数据库配置
 
@@ -52,6 +52,8 @@ MYSQL_USER=数据库账号
 MYSQL_PASSWORD=数据库密码
 MYSQL_DATABASE=strat_matrix
 INTEGRATION_TOKEN=请替换成随机长字符串
+BACKEND_PORT=6930
+FRONTEND_PORT=930
 ```
 
 确认数据库账号已经拥有 `strat_matrix` 数据库及项目表的读写权限。初始化或补齐表结构：
@@ -96,8 +98,8 @@ chmod +x start.sh stop.sh status.sh
 默认端口：
 
 ```text
-后端：8000
-前端：5173
+后端：6930
+前端：930
 ```
 
 首次只构建一次时可以：
@@ -136,7 +138,7 @@ tail -f logs/frontend.log
 后端健康检查：
 
 ```bash
-curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:6930/api/health
 ```
 
 ## 6. 配置 Nginx
@@ -153,8 +155,8 @@ sudo systemctl reload nginx
 
 配置文件将：
 
-- `/api/` 转发到 `127.0.0.1:8000`
-- 页面请求转发到 `127.0.0.1:5173`
+- `/api/` 转发到 `127.0.0.1:6930`
+- 页面请求转发到 `127.0.0.1:930`
 
 如果使用 HTTPS，可通过 Certbot 配置证书：
 
@@ -169,8 +171,8 @@ sudo certbot --nginx -d your-domain.example.com
 
 ```bash
 APP_ROOT=/opt/strat-matrix \
-BACKEND_PORT=8000 \
-FRONTEND_PORT=5173 \
+BACKEND_PORT=6930 \
+FRONTEND_PORT=930 \
 BUILD_FRONTEND=0 \
 ./start.sh
 ```
@@ -183,9 +185,9 @@ BUILD_FRONTEND=0 \
 | `PYTHON_BIN` | `backend/.venv/bin/python` | 后端 Python |
 | `NPM_BIN` | `npm` | Node 包管理器 |
 | `BACKEND_HOST` | `127.0.0.1` | 后端监听地址 |
-| `BACKEND_PORT` | `8000` | 后端端口 |
+| `BACKEND_PORT` | `6930` | 后端端口 |
 | `FRONTEND_HOST` | `127.0.0.1` | 前端监听地址 |
-| `FRONTEND_PORT` | `5173` | 前端端口 |
+| `FRONTEND_PORT` | `930` | 前端端口 |
 | `BUILD_FRONTEND` | `1` | 是否在启动前构建前端 |
 | `RUN_DIR` | `run` | PID 文件目录 |
 | `LOG_DIR` | `logs` | 日志目录 |
@@ -218,7 +220,7 @@ backend/.venv/bin/python -m app.init_db
 ### 前端页面能打开但接口失败
 
 ```bash
-curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:6930/api/health
 sudo nginx -t
 tail -f logs/backend.log
 ```
@@ -228,7 +230,7 @@ tail -f logs/backend.log
 ### 端口被占用
 
 ```bash
-ss -lntp | grep -E ':8000|:5173'
+ss -lntp | grep -E ':6930|:930'
 ```
 
 可以通过 `BACKEND_PORT` 和 `FRONTEND_PORT` 修改端口，并同步修改 Nginx 配置。

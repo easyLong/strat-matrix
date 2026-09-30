@@ -20,7 +20,7 @@ py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m app.init_db
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 6930
 ```
 
 另开终端：
@@ -31,7 +31,7 @@ npm install
 npm run dev
 ```
 
-访问 `http://localhost:5173`。后端未启动或数据库不可用时，四个页面以只读方式展示，页面顶部会显示连接状态。
+访问 `http://localhost:930`。后端未启动或数据库不可用时，四个页面以只读方式展示，页面顶部会显示连接状态。
 
 ## 当前能力与边界
 
@@ -59,7 +59,7 @@ npm run dev
 | `POST /api/integrations/content-history/sync` | 批量接收已发布内容与运营表现 |
 | `POST /api/integrations/content-status` | 接收内容生成或发布状态 |
 
-前三个同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`。每条记录必须有稳定业务 ID、带时区的 `updated_at`；服务端按 ID 和更新时间更新本地副本，重复数据可重传，旧版本不会覆盖新版本。`mode=full` 不会因为本批缺少某条记录而自动删除它，停用使用记录中的 `enabled=false`。单批最多 500 条。字段完整契约可在 `http://127.0.0.1:8000/docs` 查看。
+前三个同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`。每条记录必须有稳定业务 ID、带时区的 `updated_at`；服务端按 ID 和更新时间更新本地副本，重复数据可重传，旧版本不会覆盖新版本。`mode=full` 不会因为本批缺少某条记录而自动删除它，停用使用记录中的 `enabled=false`。单批最多 500 条。字段完整契约可在 `http://127.0.0.1:6930/docs` 查看。
 
 本项目前端仍调用 `/api/accounts`、`/api/topics`、`/api/batches` 等**内部前后端接口**。从已同步且可用的账号与选题创建手动批次，会生成 `SLOT_PLAN_CREATED` 待投递事件。项目内的策划工作进程拿到完整 Fit、T1–T7 和 Content Agent Input 后，调用受令牌保护的 `POST /api/internal/slots/{slot_id}/content-ready`，生成 `CONTENT_READY` 事件。内容生产系统再通过状态接口回传 `generated`、`failed` 或 `published`。状态和选题使用次数仅在有效回传后更新；重复 `event_id` 不重复生效。
 

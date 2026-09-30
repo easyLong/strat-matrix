@@ -3,10 +3,21 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="${APP_ROOT:-$SCRIPT_DIR}"
+ENV_FILE="${ENV_FILE:-$APP_ROOT/.env}"
+
+dotenv_value() {
+  local key="$1"
+  [[ -f "$ENV_FILE" ]] || return 0
+  awk -F= -v key="$key" '$1 == key { value=$0; sub(/^[^=]*=/, "", value); gsub(/^"|"$/, "", value); print value; exit }' "$ENV_FILE"
+}
+
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
-BACKEND_PORT="${BACKEND_PORT:-8000}"
+BACKEND_PORT="${BACKEND_PORT:-$(dotenv_value BACKEND_PORT)}"
+BACKEND_PORT="${BACKEND_PORT:-6930}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+FRONTEND_PORT="${FRONTEND_PORT:-$(dotenv_value FRONTEND_PORT)}"
+FRONTEND_PORT="${FRONTEND_PORT:-930}"
+export BACKEND_PORT FRONTEND_PORT
 PYTHON_BIN="${PYTHON_BIN:-$APP_ROOT/backend/.venv/bin/python}"
 NPM_BIN="${NPM_BIN:-npm}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"
