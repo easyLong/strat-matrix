@@ -182,7 +182,7 @@ BUILD_FRONTEND=0 \
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `APP_ROOT` | 脚本所在目录 | 项目根目录 |
-| `PYTHON_BIN` | `backend/.venv/bin/python` | 后端 Python |
+| `PYTHON_BIN` | 自动选择 `.venv/bin/python`，否则使用 `python3` | 后端 Python |
 | `NPM_BIN` | `npm` | Node 包管理器 |
 | `BACKEND_HOST` | `127.0.0.1` | 后端监听地址 |
 | `BACKEND_PORT` | `6930` | 后端端口 |

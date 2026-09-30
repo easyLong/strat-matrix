@@ -18,7 +18,13 @@ FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-$(dotenv_value FRONTEND_PORT)}"
 FRONTEND_PORT="${FRONTEND_PORT:-930}"
 export BACKEND_PORT FRONTEND_PORT
-PYTHON_BIN="${PYTHON_BIN:-$APP_ROOT/backend/.venv/bin/python}"
+if [[ -n "${PYTHON_BIN:-}" ]]; then
+  PYTHON_BIN="$PYTHON_BIN"
+elif [[ -x "$APP_ROOT/backend/.venv/bin/python" ]]; then
+  PYTHON_BIN="$APP_ROOT/backend/.venv/bin/python"
+else
+  PYTHON_BIN="$(command -v python3 || command -v python || true)"
+fi
 NPM_BIN="${NPM_BIN:-npm}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
@@ -38,9 +44,9 @@ is_running() {
   kill -0 "$pid" 2>/dev/null
 }
 
-if [[ ! -x "$PYTHON_BIN" ]]; then
-  echo "Python virtual environment not found: $PYTHON_BIN" >&2
-  echo "Create it first: python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements.txt" >&2
+if [[ -z "$PYTHON_BIN" || ! -x "$PYTHON_BIN" ]]; then
+  echo "Python executable not found: ${PYTHON_BIN:-python3}" >&2
+  echo "Install Python 3 and dependencies: python3 -m pip install -r backend/requirements.txt" >&2
   exit 1
 fi
 
