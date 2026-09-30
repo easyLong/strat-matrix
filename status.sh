@@ -11,12 +11,15 @@ dotenv_value() {
   awk -F= -v key="$key" '$1 == key { value=$0; sub(/^[^=]*=/, "", value); gsub(/^"|"$/, "", value); print value; exit }' "$ENV_FILE"
 }
 
+BACKEND_HOST="${BACKEND_HOST:-$(dotenv_value BACKEND_HOST)}"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-$(dotenv_value BACKEND_PORT)}"
 BACKEND_PORT="${BACKEND_PORT:-6930}"
+FRONTEND_HOST="${FRONTEND_HOST:-$(dotenv_value FRONTEND_HOST)}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-$(dotenv_value FRONTEND_PORT)}"
 FRONTEND_PORT="${FRONTEND_PORT:-930}"
+CHECK_HOST="${CHECK_HOST:-127.0.0.1}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 
 running=0
@@ -50,8 +53,8 @@ check_http() {
 
 check_process "Backend" "$RUN_DIR/backend.pid" || true
 check_process "Frontend" "$RUN_DIR/frontend.pid" || true
-check_http "Backend" "http://${BACKEND_HOST}:${BACKEND_PORT}/api/health" || true
-check_http "Frontend" "http://${FRONTEND_HOST}:${FRONTEND_PORT}/" || true
+check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true
+check_http "Frontend" "http://${CHECK_HOST}:${FRONTEND_PORT}/" || true
 
 if [[ "$running" -eq 2 ]]; then
   exit 0

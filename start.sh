@@ -11,9 +11,11 @@ dotenv_value() {
   awk -F= -v key="$key" '$1 == key { value=$0; sub(/^[^=]*=/, "", value); gsub(/^"|"$/, "", value); print value; exit }' "$ENV_FILE"
 }
 
+BACKEND_HOST="${BACKEND_HOST:-$(dotenv_value BACKEND_HOST)}"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-$(dotenv_value BACKEND_PORT)}"
 BACKEND_PORT="${BACKEND_PORT:-6930}"
+FRONTEND_HOST="${FRONTEND_HOST:-$(dotenv_value FRONTEND_HOST)}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-$(dotenv_value FRONTEND_PORT)}"
 FRONTEND_PORT="${FRONTEND_PORT:-930}"

@@ -52,9 +52,13 @@ MYSQL_USER=数据库账号
 MYSQL_PASSWORD=数据库密码
 MYSQL_DATABASE=strat_matrix
 INTEGRATION_TOKEN=请替换成随机长字符串
+BACKEND_HOST=127.0.0.1
 BACKEND_PORT=6930
+FRONTEND_HOST=127.0.0.1
 FRONTEND_PORT=930
 ```
+
+For direct public access on Alibaba Cloud, set BACKEND_HOST and FRONTEND_HOST to 0.0.0.0 and allow TCP 930 in the security group. With Nginx, expose only ports 80/443 and keep backend port 6930 private.
 
 确认数据库账号已经拥有 `strat_matrix` 数据库及项目表的读写权限。初始化或补齐表结构：
 
@@ -188,6 +192,7 @@ BUILD_FRONTEND=0 \
 | `BACKEND_PORT` | `6930` | 后端端口 |
 | `FRONTEND_HOST` | `127.0.0.1` | 前端监听地址 |
 | `FRONTEND_PORT` | `930` | 前端端口 |
+| `CHECK_HOST` | `127.0.0.1` | Local health-check address when services bind to `0.0.0.0` |
 | `BUILD_FRONTEND` | `1` | 是否在启动前构建前端 |
 | `RUN_DIR` | `run` | PID 文件目录 |
 | `LOG_DIR` | `logs` | 日志目录 |
