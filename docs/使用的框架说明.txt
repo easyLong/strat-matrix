@@ -1,0 +1,12 @@
+前端核心框架
+- Vue 3.5.26 — Composition API + <script setup>
+- Vite 6.4.1 — 构建工具
+- Vue Router 4.6.4 — 路由
+- Pinia 3.0.4 — 状态管理
+- Node 20版本及以上
+
+
+大模型版本：
+doubao-seed-2-0-lite-260215
+doubao-seedream-5-0-pro-260628
+

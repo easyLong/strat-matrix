@@ -1,0 +1,22 @@
+{
+  "name": "strat-matrix-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pinia": "3.0.4",
+    "vue": "3.5.26",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.4",
+    "typescript": "5.9.3",
+    "vite": "^6.4.3",
+    "vue-tsc": "2.2.12"
+  }
+}

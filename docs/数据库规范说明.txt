@@ -1,0 +1,13 @@
+基本sql支持，不允许存储过程、函数、视图
+表名以godp_开头
+所有新建表必须添加中文表注释（CREATE TABLE 的 COMMENT）
+表中的每个字段必须添加中文字段注释（字段定义的 COMMENT），包括主键、业务字段和审计字段
+后续 ALTER TABLE 新增字段时也必须同时添加中文 COMMENT
+不做外键
+自增Id
+create_time    DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+create_by  VARCHAR(50)    NOT NULL DEFAULT 'system'  COMMENT '创建人',
+update_time    DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP on update current_timestamp COMMENT '修改时间',
+update_by  VARCHAR(50)    NOT NULL DEFAULT 'system'  COMMENT '修改人',
+del_flag   VARCHAR(1) NOT NULL DEFAULT 'N'   COMMENT '删除标志',
+这几个字段必备

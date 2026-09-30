@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+APP_ROOT="${APP_ROOT:-$SCRIPT_DIR}"
+BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+PYTHON_BIN="${PYTHON_BIN:-$APP_ROOT/backend/.venv/bin/python}"
+NPM_BIN="${NPM_BIN:-npm}"
+BUILD_FRONTEND="${BUILD_FRONTEND:-1}"
+RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
+LOG_DIR="${LOG_DIR:-$APP_ROOT/logs}"
+
+mkdir -p "$RUN_DIR" "$LOG_DIR"
+
+backend_pid="$RUN_DIR/backend.pid"
+frontend_pid="$RUN_DIR/frontend.pid"
+
+is_running() {
+  local pid_file="$1"
+  [[ -s "$pid_file" ]] || return 1
+  local pid
+  pid="$(cat "$pid_file")"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "Python virtual environment not found: $PYTHON_BIN" >&2
+  echo "Create it first: python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements.txt" >&2
+  exit 1
+fi
+
+if is_running "$backend_pid"; then
+  echo "Backend is already running (PID $(cat "$backend_pid"))."
+else
+  rm -f "$backend_pid"
+  (
+    cd "$APP_ROOT/backend"
+    exec "$PYTHON_BIN" -m uvicorn app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT"
+  ) >"$LOG_DIR/backend.log" 2>&1 &
+  echo $! >"$backend_pid"
+  echo "Backend started (PID $(cat "$backend_pid"), http://${BACKEND_HOST}:${BACKEND_PORT})."
+fi
+
+if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
+  if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
+    echo "npm not found: $NPM_BIN" >&2
+    exit 1
+  fi
+  (
+    cd "$APP_ROOT/frontend"
+    if [[ ! -d node_modules ]]; then
+      "$NPM_BIN" ci
+    fi
+    "$NPM_BIN" run build
+  )
+fi
+
+if is_running "$frontend_pid"; then
+  echo "Frontend is already running (PID $(cat "$frontend_pid"))."
+else
+  rm -f "$frontend_pid"
+  (
+    cd "$APP_ROOT/frontend"
+    exec "$NPM_BIN" run preview -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
+  ) >"$LOG_DIR/frontend.log" 2>&1 &
+  echo $! >"$frontend_pid"
+  echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
+fi
+
+echo "Logs: $LOG_DIR/backend.log and $LOG_DIR/frontend.log"
