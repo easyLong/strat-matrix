@@ -361,6 +361,27 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag_history (
     UNIQUE KEY uk_topic_tag_history_version (topic_id, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题标签名称与稳定ID的版本历史';
 
+CREATE TABLE IF NOT EXISTS godp_topic_label_job (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题首次离线标签识别任务主键ID',
+    topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
+    source_payload_json LONGTEXT NOT NULL COMMENT '首次入库时普通选题来源内容快照JSON',
+    source_updated_at DATETIME(6) NOT NULL COMMENT '首次入库时来源记录更新时间，按UTC保存',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '任务状态：pending待领取、processing处理中、completed已完成、failed失败或cancelled已取消',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '任务已领取次数',
+    lease_id VARCHAR(64) NULL COMMENT '当前处理租约唯一编码',
+    lease_expires_at DATETIME(6) NULL COMMENT '当前处理租约到期时间，按UTC保存',
+    taxonomy_version INT NULL COMMENT '当前处理尝试锁定的T1到T5字典版本',
+    last_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近一次识别失败原因或空字符串',
+    completed_at DATETIME(6) NULL COMMENT '首次成功完成标签识别时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_topic_label_job_topic (topic_id),
+    KEY idx_topic_label_job_status (status, lease_expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题首次离线标签识别任务及重试状态';
+
 CREATE TABLE IF NOT EXISTS godp_topic_official_usage (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题正式使用次数记录主键ID',
     topic_type VARCHAR(16) NOT NULL COMMENT '选题类型：普通、营销或热点',

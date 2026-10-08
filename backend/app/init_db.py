@@ -216,6 +216,21 @@ def main() -> None:
             "taxonomy_version, label_status, label_error, update_time, update_by, 'migration' "
             "FROM godp_topic_tag WHERE del_flag='N'"
         )
+        cursor.execute(
+            "INSERT IGNORE INTO godp_topic_label_job "
+            "(topic_id, source_payload_json, source_updated_at, status, last_error, "
+            "create_by, update_by) "
+            "SELECT s.topic_id, s.payload_json, s.source_updated_at, "
+            "CASE WHEN tag.label_status='失败' THEN 'failed' ELSE 'pending' END, "
+            "COALESCE(tag.label_error, ''), 'migration', 'migration' "
+            "FROM godp_topic_source s "
+            "JOIN godp_topic t ON t.topic_code=s.topic_id "
+            "LEFT JOIN godp_topic_tag tag ON tag.topic_id=s.topic_id AND tag.del_flag='N' "
+            "WHERE s.del_flag='N' AND s.active_in_snapshot=1 "
+            "AND t.del_flag='N' AND t.status='可用' AND t.is_marketing=0 "
+            "AND s.topic_id NOT LIKE 'DEMO-%%' "
+            "AND (tag.id IS NULL OR tag.label_status<>'已完成')"
+        )
         updated_tables = sync_table_comments(cursor, source)
         updated_columns = sync_column_comments(cursor, source)
         db.commit()

@@ -189,6 +189,11 @@ def full_snapshot_finish(cursor, payload: AccountSync | TopicSync, source_type: 
                 "UPDATE godp_topic SET status='停用', update_by='integration' "
                 "WHERE topic_code=%s", (topic_id,),
             )
+            cursor.execute(
+                "UPDATE godp_topic_label_job SET status='cancelled', lease_id=NULL, "
+                "lease_expires_at=NULL, update_by='integration' "
+                "WHERE topic_id=%s AND status<>'completed'", (topic_id,),
+            )
     result = summary(payload.source_batch_id, len(payload.records),
                      {**counters, "deactivated": len(missing)})
     cursor.execute(
@@ -316,6 +321,31 @@ def sync_topics(payload: TopicSync) -> SyncResult:
                          "可用" if (record.status if record.status is not None else record.enabled)
                          else "停用"),
                     )
+                    usable = record.status if record.status is not None else record.enabled
+                    if not record.is_marketing and usable and not record.topic_id.startswith("DEMO-"):
+                        cursor.execute(
+                            "UPDATE godp_topic_label_job SET status='pending', "
+                            "source_payload_json=%s, source_updated_at=%s, "
+                            "lease_id=NULL, lease_expires_at=NULL, taxonomy_version=NULL, "
+                            "last_error='', update_by='integration' "
+                            "WHERE topic_id=%s AND status='cancelled' "
+                            "AND completed_at IS NULL",
+                            (raw, timestamp, record.topic_id),
+                        )
+                        cursor.execute(
+                            "INSERT IGNORE INTO godp_topic_label_job "
+                            "(topic_id, source_payload_json, source_updated_at, create_by, update_by) "
+                            "SELECT %s, %s, %s, 'integration', 'integration' FROM DUAL "
+                            "WHERE NOT EXISTS (SELECT 1 FROM godp_topic_tag "
+                            "WHERE topic_id=%s AND label_status='已完成' AND del_flag='N')",
+                            (record.topic_id, raw, timestamp, record.topic_id),
+                        )
+                    else:
+                        cursor.execute(
+                            "UPDATE godp_topic_label_job SET status='cancelled', "
+                            "lease_id=NULL, lease_expires_at=NULL, update_by='integration' "
+                            "WHERE topic_id=%s AND status<>'completed'", (record.topic_id,),
+                        )
                 result = (full_snapshot_finish(cursor, payload, "topic", full[0], full[1], counters)
                           if full else summary(payload.source_batch_id, len(payload.records), counters))
                 db.commit()
@@ -1155,6 +1185,7 @@ class TopicTagsInput(BaseModel):
     label_status: str | None = None
     label_error: str = Field(default="", max_length=500)
     taxonomy_version: int | None = Field(default=None, ge=1)
+    lease_id: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def check_status(self):
@@ -1293,6 +1324,86 @@ def resolve_topic_tag_ids(cursor, labels: dict[str, str], requested_version: int
     return ids, version
 
 
+@router.get("/api/internal/topic-label-jobs", dependencies=[Depends(require_integration_token)])
+def list_topic_label_jobs(limit: int = 100) -> dict:
+    limit = max(1, min(limit, 200))
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT j.topic_id, j.status, j.attempt_count, j.last_error, "
+                "j.source_updated_at, j.lease_expires_at FROM godp_topic_label_job j "
+                "JOIN godp_topic_source s ON s.topic_id=j.topic_id "
+                "JOIN godp_topic t ON t.topic_code=j.topic_id "
+                "WHERE j.del_flag='N' AND s.del_flag='N' AND s.active_in_snapshot=1 "
+                "AND t.del_flag='N' AND t.status='可用' AND t.is_marketing=0 "
+                "AND j.topic_id NOT LIKE 'DEMO-%%' "
+                "AND (j.status IN ('pending','failed') OR "
+                "(j.status='processing' AND j.lease_expires_at<=UTC_TIMESTAMP(6))) "
+                "ORDER BY j.id LIMIT %s", (limit,),
+            )
+            rows = cursor.fetchall()
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    return {"jobs": rows}
+
+
+@router.post("/api/internal/topic-label-jobs/{topic_id}/claim", dependencies=[Depends(require_integration_token)])
+def claim_topic_label_job(topic_id: str, lease_seconds: int = 1800) -> dict:
+    lease_seconds = max(60, min(lease_seconds, 7200))
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT status, attempt_count, lease_expires_at, "
+                "source_payload_json, source_updated_at FROM godp_topic_label_job "
+                "WHERE topic_id=%s AND del_flag='N' FOR UPDATE", (topic_id,),
+            )
+            job = cursor.fetchone()
+            if not job:
+                raise HTTPException(status_code=404, detail="待识别普通选题任务不存在")
+            cursor.execute(
+                "SELECT s.topic_id FROM godp_topic_source s JOIN godp_topic t "
+                "ON t.topic_code=s.topic_id WHERE s.topic_id=%s AND s.del_flag='N' "
+                "AND s.active_in_snapshot=1 AND t.del_flag='N' "
+                "AND t.status='可用' AND t.is_marketing=0", (topic_id,),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=409, detail="普通选题当前不可用")
+            if job["status"] not in ("pending", "failed") and not (
+                job["status"] == "processing" and job["lease_expires_at"]
+                and job["lease_expires_at"] <= now
+            ):
+                raise HTTPException(status_code=409, detail="任务已被领取、完成或取消")
+            cursor.execute(
+                "SELECT version, config_json FROM godp_strategy_config "
+                "WHERE config_key='tag_taxonomy' AND del_flag='N' FOR UPDATE"
+            )
+            config = cursor.fetchone()
+            if not config:
+                raise HTTPException(status_code=409, detail="T1–T5 标签字典尚未保存")
+            tags = active_tag_names(normalize_taxonomy(json.loads(config["config_json"])))
+            if any(not values for values in tags.values()):
+                raise HTTPException(status_code=409, detail="T1–T5 标签字典存在空维度")
+            lease_id = uuid4().hex.upper()
+            expires_at = now + timedelta(seconds=lease_seconds)
+            cursor.execute(
+                "UPDATE godp_topic_label_job SET status='processing', "
+                "attempt_count=attempt_count+1, lease_id=%s, lease_expires_at=%s, "
+                "taxonomy_version=%s, last_error='', update_by='label-worker' "
+                "WHERE topic_id=%s",
+                (lease_id, expires_at, config["version"], topic_id),
+            )
+            db.commit()
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    return {"topic_id": topic_id, "lease_id": lease_id,
+            "lease_expires_at": expires_at.isoformat() + "Z",
+            "attempt_count": job["attempt_count"] + 1,
+            "taxonomy_version": config["version"], "taxonomy": tags,
+            "topic": json.loads(job["source_payload_json"]),
+            "source_updated_at": job["source_updated_at"].isoformat() + "Z"}
+
+
 @router.put("/api/internal/topic-tags/{topic_id}", dependencies=[Depends(require_integration_token)])
 def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
     if not topic_id or topic_id.startswith("DEMO-"):
@@ -1302,7 +1413,8 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
             cursor.execute(
                 "SELECT t.is_marketing FROM godp_topic t JOIN godp_topic_source s "
                 "ON s.topic_id=t.topic_code WHERE t.topic_code=%s "
-                "AND t.del_flag='N' AND s.del_flag='N'", (topic_id,),
+                "AND t.del_flag='N' AND s.del_flag='N' "
+                "AND s.active_in_snapshot=1 AND t.status='可用'", (topic_id,),
             )
             topic_row = cursor.fetchone()
             if not topic_row or topic_row["is_marketing"]:
@@ -1310,15 +1422,17 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
             label_status = payload.label_status or (
                 "已完成" if single_choice_labels(payload.tags) else "处理中"
             )
-            labels = single_choice_labels(payload.tags) if label_status == "已完成" else None
-            tag_ids, taxonomy_version = (
-                resolve_topic_tag_ids(cursor, labels, payload.taxonomy_version)
-                if labels else ({}, None)
+            cursor.execute(
+                "SELECT status, lease_id, lease_expires_at, taxonomy_version "
+                "FROM godp_topic_label_job "
+                "WHERE topic_id=%s AND del_flag='N' FOR UPDATE", (topic_id,),
             )
+            job = cursor.fetchone()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            labels = single_choice_labels(payload.tags) if label_status == "已完成" else None
             tags = ({dimension.upper(): [name] for dimension, name in labels.items()}
                     if labels else payload.tags)
             tags_json = as_json(tags)
-            ids_json = as_json(tag_ids)
             cursor.execute(
                 "SELECT version, tags_json, tag_ids_json, taxonomy_version, "
                 "label_status, label_error, del_flag FROM godp_topic_tag "
@@ -1326,15 +1440,59 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
             )
             previous = cursor.fetchone()
             if previous and previous["del_flag"] == "N" and (
+                previous["label_status"] == "已完成" and label_status == "已完成" and
+                previous["tags_json"] == tags_json and
+                previous["label_error"] == payload.label_error and
+                payload.taxonomy_version in (None, previous["taxonomy_version"])
+            ):
+                return {"topic_id": topic_id, "version": previous["version"],
+                        "label_status": "已完成",
+                        "taxonomy_version": previous["taxonomy_version"],
+                        "tag_ids": json.loads(previous["tag_ids_json"] or "{}")}
+            if job:
+                if job["status"] == "cancelled":
+                    raise HTTPException(status_code=409, detail="选题已退出待识别范围")
+                if label_status not in ("已完成", "失败"):
+                    raise HTTPException(status_code=409, detail="任务结果只能是已完成或失败")
+                if job["status"] == "processing":
+                    if payload.lease_id != job["lease_id"] or not job["lease_expires_at"] \
+                            or job["lease_expires_at"] <= now:
+                        raise HTTPException(status_code=409, detail="识别任务租约无效或已过期")
+                    if label_status == "已完成" and payload.taxonomy_version != job["taxonomy_version"]:
+                        raise HTTPException(status_code=409, detail="识别结果的字典版本与任务租约不一致")
+                elif payload.lease_id is not None:
+                    raise HTTPException(status_code=409, detail="识别任务尚未领取或租约已失效")
+            elif payload.lease_id is not None:
+                raise HTTPException(status_code=409, detail="识别任务不存在")
+            tag_ids, taxonomy_version = (
+                resolve_topic_tag_ids(cursor, labels, payload.taxonomy_version)
+                if labels else ({}, None)
+            )
+            ids_json = as_json(tag_ids)
+            if previous and previous["del_flag"] == "N" and (
                 previous["tags_json"] == tags_json and
                 previous["tag_ids_json"] == ids_json and
                 previous["taxonomy_version"] == taxonomy_version and
                 previous["label_status"] == label_status and
                 previous["label_error"] == payload.label_error
             ):
+                if job and job["status"] != ("completed" if label_status == "已完成" else "failed"):
+                    cursor.execute(
+                        "UPDATE godp_topic_label_job SET status=%s, completed_at=%s, "
+                        "lease_id=NULL, lease_expires_at=NULL, last_error=%s, "
+                        "update_by='label-worker' WHERE topic_id=%s",
+                        ("completed" if label_status == "已完成" else "failed",
+                         now if label_status == "已完成" else None,
+                         payload.label_error if label_status == "失败" else "", topic_id),
+                    )
+                    db.commit()
                 return {"topic_id": topic_id, "version": previous["version"],
                         "label_status": label_status, "taxonomy_version": taxonomy_version,
                         "tag_ids": tag_ids}
+            if previous and previous["del_flag"] == "N" and previous["label_status"] == "已完成":
+                raise HTTPException(status_code=409, detail="普通选题标签已完成，不支持重新计算")
+            if job and job["status"] == "completed":
+                raise HTTPException(status_code=409, detail="普通选题标签任务已完成")
             version = previous["version"] + 1 if previous else 1
             cursor.execute(
                 "INSERT INTO godp_topic_tag "
@@ -1355,6 +1513,15 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                 (topic_id, version, tags_json, ids_json, taxonomy_version,
                  label_status, payload.label_error),
             )
+            if job:
+                cursor.execute(
+                    "UPDATE godp_topic_label_job SET status=%s, lease_id=NULL, "
+                    "lease_expires_at=NULL, completed_at=%s, last_error=%s, "
+                    "update_by='label-worker' WHERE topic_id=%s",
+                    ("completed" if label_status == "已完成" else "failed",
+                     now if label_status == "已完成" else None,
+                     payload.label_error if label_status == "失败" else "", topic_id),
+                )
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
