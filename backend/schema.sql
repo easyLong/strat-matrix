@@ -240,6 +240,8 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag (
     topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',
     version INT NOT NULL DEFAULT 1 COMMENT '选题标签当前版本号',
     tags_json LONGTEXT NOT NULL COMMENT '选题标签关联内容JSON',
+    label_status VARCHAR(16) NOT NULL DEFAULT '处理中' COMMENT '普通选题T1到T6标签识别状态：处理中、已完成或失败',
+    label_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '标签识别失败原因或空字符串',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
@@ -247,6 +249,36 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_tag_topic (topic_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本项目识别和维护的选题标签';
+
+CREATE TABLE IF NOT EXISTS godp_topic_official_usage (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题正式使用次数记录主键ID',
+    topic_type VARCHAR(16) NOT NULL COMMENT '选题类型：普通、营销或热点',
+    topic_id VARCHAR(64) NOT NULL COMMENT '对应类型命名空间内的选题唯一编码',
+    official_use_count BIGINT NOT NULL DEFAULT 0 COMMENT '独立业务逻辑确认的正式使用次数',
+    source_revision BIGINT NOT NULL COMMENT '独立计数来源的递增版本号',
+    source_name VARCHAR(64) NOT NULL COMMENT '独立计数来源名称',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_official_usage_topic (topic_type, topic_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='独立维护的三类选题正式使用次数';
+
+CREATE TABLE IF NOT EXISTS godp_topic_official_usage_history (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '正式使用次数变更记录主键ID',
+    topic_type VARCHAR(16) NOT NULL COMMENT '选题类型：普通、营销或热点',
+    topic_id VARCHAR(64) NOT NULL COMMENT '对应类型命名空间内的选题唯一编码',
+    official_use_count BIGINT NOT NULL COMMENT '本次确认的正式使用次数快照',
+    source_revision BIGINT NOT NULL COMMENT '独立计数来源的递增版本号',
+    source_name VARCHAR(64) NOT NULL COMMENT '独立计数来源名称',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_official_usage_history_revision (topic_type, topic_id, source_revision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='选题正式使用次数独立计数历史';
 
 CREATE TABLE IF NOT EXISTS godp_strategy_config_version (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置快照记录主键ID',

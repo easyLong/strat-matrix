@@ -19,6 +19,8 @@ from .integration_models import (
     ContentReadyInput,
     ContentStatusCallback,
     PublicationStatusCallback,
+    OfficialUsageQuery,
+    OfficialUsageUpdate,
     HistorySync,
     SyncResult,
     TopicSync,
@@ -32,6 +34,20 @@ def effective_topic_type(slot_type: str, is_marketing: bool) -> str:
     if slot_type == "hotspot":
         return "热点"
     return "营销" if slot_type == "marketing_priority" or is_marketing else "普通"
+
+
+def single_choice_labels(tags: dict) -> dict[str, str] | None:
+    if not isinstance(tags, dict):
+        return None
+    labels: dict[str, str] = {}
+    for index in range(1, 7):
+        value = tags.get(f"T{index}", tags.get(f"t{index}"))
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        if not isinstance(value, str) or not value.strip() or len(value) > 80:
+            return None
+        labels[f"t{index}"] = value.strip()
+    return labels
 
 
 def require_integration_token(x_integration_token: str = Header(default="")) -> None:
@@ -564,6 +580,118 @@ def receive_content_status(payload: ContentStatusCallback) -> dict:
         raise db_error(exc) from exc
 
 
+@router.get("/api/integrations/topics/{topic_id}/labels", dependencies=[Depends(require_integration_token)])
+def ordinary_topic_labels(topic_id: str) -> dict:
+    """IF-08: return saved T1-T6 labels without starting recognition."""
+    if topic_id.startswith("DEMO-"):
+        raise HTTPException(status_code=404, detail="普通选题不存在")
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT t.is_marketing, s.payload_json, tag.tags_json, tag.label_status "
+                "FROM godp_topic t JOIN godp_topic_source s ON s.topic_id=t.topic_code "
+                "LEFT JOIN godp_topic_tag tag ON tag.topic_id=t.topic_code AND tag.del_flag='N' "
+                "WHERE t.topic_code=%s AND t.del_flag='N' AND s.del_flag='N'",
+                (topic_id,),
+            )
+            row = cursor.fetchone()
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    if not row or row["is_marketing"]:
+        raise HTTPException(status_code=404, detail="普通选题不存在")
+    try:
+        source = json.loads(row["payload_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="选题来源数据不可用") from exc
+    if not isinstance(source, dict):
+        raise HTTPException(status_code=503, detail="选题来源数据不可用")
+    if source.get("topic_type", "normal") not in ("normal", "ordinary", "普通"):
+        raise HTTPException(status_code=404, detail="普通选题不存在")
+    if not row["tags_json"]:
+        return {"topic_id": topic_id, "label_status": "处理中", "labels": {}}
+    try:
+        labels = single_choice_labels(json.loads(row["tags_json"]))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="选题标签数据不可用") from exc
+    status = row["label_status"]
+    if status == "已完成" and labels is None:
+        raise HTTPException(status_code=503, detail="已完成标签数据不完整")
+    return {"topic_id": topic_id, "label_status": status,
+            "labels": labels if status == "已完成" else {}}
+
+
+@router.post("/api/integrations/topics/official-usage/query", dependencies=[Depends(require_integration_token)])
+def official_topic_usage(payload: OfficialUsageQuery) -> dict:
+    """IF-09: only read independently maintained official-use counts."""
+    placeholders = ",".join(["%s"] * len(payload.topic_ids))
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT topic_id, official_use_count FROM godp_topic_official_usage "
+                f"WHERE topic_type=%s AND topic_id IN ({placeholders}) AND del_flag='N'",
+                (payload.topic_type, *payload.topic_ids),
+            )
+            counts = {row["topic_id"]: row["official_use_count"] for row in cursor.fetchall()}
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    missing = [topic_id for topic_id in payload.topic_ids if topic_id not in counts]
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{len(missing)} 个选题的正式使用次数尚未同步：{', '.join(missing[:5])}",
+        )
+    return {"topic_type": payload.topic_type, "items": [
+        {"topic_id": topic_id, "official_use_count": counts[topic_id]}
+        for topic_id in payload.topic_ids
+    ]}
+
+
+@router.put("/api/internal/topic-official-usage", dependencies=[Depends(require_integration_token)])
+def update_official_topic_usage(payload: OfficialUsageUpdate) -> dict:
+    """Internal snapshot import from the independent official-use counter."""
+    counters = {"inserted": 0, "updated": 0, "unchanged": 0, "stale": 0}
+    try:
+        with connection() as db, db.cursor() as cursor:
+            for record in payload.records:
+                cursor.execute(
+                    "SELECT official_use_count, source_revision, source_name "
+                    "FROM godp_topic_official_usage WHERE topic_type=%s AND topic_id=%s "
+                    "FOR UPDATE", (payload.topic_type, record.topic_id),
+                )
+                previous = cursor.fetchone()
+                if previous and record.source_revision < previous["source_revision"]:
+                    counters["stale"] += 1
+                    continue
+                if previous and record.source_revision == previous["source_revision"]:
+                    if (record.official_use_count != previous["official_use_count"]
+                            or payload.source_name != previous["source_name"]):
+                        raise HTTPException(status_code=409, detail=f"{record.topic_id} 的同版本计数内容不同")
+                    counters["unchanged"] += 1
+                    continue
+                cursor.execute(
+                    "INSERT INTO godp_topic_official_usage "
+                    "(topic_type, topic_id, official_use_count, source_revision, source_name, "
+                    "create_by, update_by) VALUES (%s, %s, %s, %s, %s, 'usage-import', 'usage-import') "
+                    "ON DUPLICATE KEY UPDATE official_use_count=VALUES(official_use_count), "
+                    "source_revision=VALUES(source_revision), source_name=VALUES(source_name), "
+                    "update_by='usage-import', del_flag='N'",
+                    (payload.topic_type, record.topic_id, record.official_use_count,
+                     record.source_revision, payload.source_name),
+                )
+                cursor.execute(
+                    "INSERT INTO godp_topic_official_usage_history "
+                    "(topic_type, topic_id, official_use_count, source_revision, source_name, "
+                    "create_by, update_by) VALUES (%s, %s, %s, %s, %s, 'usage-import', 'usage-import')",
+                    (payload.topic_type, record.topic_id, record.official_use_count,
+                     record.source_revision, payload.source_name),
+                )
+                counters["updated" if previous else "inserted"] += 1
+            db.commit()
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    return {"topic_type": payload.topic_type, "received": len(payload.records), **counters}
+
+
 @router.get("/api/topics/{topic_id}/usage")
 def topic_usage(topic_id: str) -> dict:
     try:
@@ -595,7 +723,21 @@ class TagTaxonomyInput(BaseModel):
 
 
 class TopicTagsInput(BaseModel):
-    tags: dict[str, Any] = Field(min_length=1)
+    tags: dict[str, Any] = Field(default_factory=dict)
+    label_status: str | None = None
+    label_error: str = Field(default="", max_length=500)
+
+    @model_validator(mode="after")
+    def check_status(self):
+        if self.label_status not in (None, "处理中", "已完成", "失败"):
+            raise ValueError("label_status 只能是处理中、已完成或失败")
+        if self.label_status == "已完成" and single_choice_labels(self.tags) is None:
+            raise ValueError("已完成时必须提供 T1–T6 单选标签")
+        if self.label_status == "失败" and not self.label_error.strip():
+            raise ValueError("失败时必须提供 label_error")
+        if self.label_status not in ("失败", "处理中") and not self.tags:
+            raise ValueError("已完成状态必须提供 tags")
+        return self
 
 
 @router.get("/api/tag-taxonomy")
@@ -641,23 +783,36 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
         raise HTTPException(status_code=422, detail="无效的选题 ID")
     try:
         with connection() as db, db.cursor() as cursor:
-            cursor.execute("SELECT id FROM godp_topic WHERE topic_code=%s AND del_flag='N'", (topic_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="选题不存在")
             cursor.execute(
-                "INSERT INTO godp_topic_tag (topic_id, version, tags_json) VALUES (%s, 1, %s) "
-                "ON DUPLICATE KEY UPDATE version=version+1, tags_json=VALUES(tags_json), update_by='system'",
-                (topic_id, as_json(payload.tags)),
+                "SELECT t.is_marketing FROM godp_topic t JOIN godp_topic_source s "
+                "ON s.topic_id=t.topic_code WHERE t.topic_code=%s "
+                "AND t.del_flag='N' AND s.del_flag='N'", (topic_id,),
+            )
+            topic_row = cursor.fetchone()
+            if not topic_row or topic_row["is_marketing"]:
+                raise HTTPException(status_code=404, detail="普通选题不存在")
+            label_status = payload.label_status or (
+                "已完成" if single_choice_labels(payload.tags) else "处理中"
+            )
+            cursor.execute(
+                "INSERT INTO godp_topic_tag "
+                "(topic_id, version, tags_json, label_status, label_error) "
+                "VALUES (%s, 1, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE version=version+1, tags_json=VALUES(tags_json), "
+                "label_status=VALUES(label_status), label_error=VALUES(label_error), "
+                "update_by='system', del_flag='N'",
+                (topic_id, as_json(payload.tags), label_status, payload.label_error),
             )
             cursor.execute("SELECT version FROM godp_topic_tag WHERE topic_id=%s", (topic_id,))
             version = cursor.fetchone()["version"]
             queue_event(cursor, "topics", "TOPIC_TAGS_CHANGED", {
                 "topic_id": topic_id, "version": version, "tags": payload.tags,
+                "label_status": label_status,
             })
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    return {"topic_id": topic_id, "version": version}
+    return {"topic_id": topic_id, "version": version, "label_status": label_status}
 
 
 @router.get("/api/internal/outbox", dependencies=[Depends(require_integration_token)])

@@ -62,6 +62,8 @@ def check_database() -> bool:
                 "godp_content_receipt",
                 "godp_publication_receipt",
                 "godp_topic_tag",
+                "godp_topic_official_usage",
+                "godp_topic_official_usage_history",
                 "godp_strategy_config_version",
                 "godp_manual_preview",
                 "godp_manual_task",

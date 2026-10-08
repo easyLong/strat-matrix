@@ -157,6 +157,42 @@ class PublicationStatusCallback(BaseModel):
         return aware(value)
 
 
+class OfficialUsageQuery(BaseModel):
+    topic_type: Literal["普通", "营销", "热点"]
+    topic_ids: list[str] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def check_topic_ids(self):
+        if any(not value.strip() or len(value) > 64 for value in self.topic_ids):
+            raise ValueError("topic_ids 不能包含空值且每个 ID 最多 64 字符")
+        if len(set(self.topic_ids)) != len(self.topic_ids):
+            raise ValueError("topic_ids 不能重复")
+        return self
+
+
+class OfficialUsageFact(BaseModel):
+    topic_id: str = Field(min_length=1, max_length=64)
+    official_use_count: int = Field(ge=0, le=9223372036854775807)
+    source_revision: int = Field(ge=1, le=9223372036854775807)
+
+
+class OfficialUsageUpdate(BaseModel):
+    topic_type: Literal["普通", "营销", "热点"]
+    source_name: str = Field(min_length=1, max_length=64)
+    records: list[OfficialUsageFact] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def check_duplicates(self):
+        ids = [item.topic_id for item in self.records]
+        if any(not item.strip() for item in ids) or not self.source_name.strip():
+            raise ValueError("source_name 和 topic_id 不能为空")
+        if len(set(ids)) != len(ids):
+            raise ValueError("同一批次 topic_id 不能重复")
+        if any(item.startswith("DEMO-") for item in ids):
+            raise ValueError("DEMO- 编码保留给演示数据")
+        return self
+
+
 class ContentReadyInput(BaseModel):
     fit_score: float = Field(ge=0, le=100)
     tags: dict[str, Any]

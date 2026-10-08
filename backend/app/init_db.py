@@ -114,6 +114,17 @@ def main() -> None:
             )
             if cursor.fetchone()["column_count"] == 0:
                 cursor.execute(f"ALTER TABLE godp_planning_item ADD COLUMN `{name}` {definition}")
+        for name, definition in (
+            ("label_status", "VARCHAR(16) NOT NULL DEFAULT '处理中' COMMENT '普通选题T1到T6标签识别状态：处理中、已完成或失败'"),
+            ("label_error", "VARCHAR(500) NOT NULL DEFAULT '' COMMENT '标签识别失败原因或空字符串'"),
+        ):
+            cursor.execute(
+                "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_topic_tag' "
+                "AND COLUMN_NAME=%s", (name,),
+            )
+            if cursor.fetchone()["column_count"] == 0:
+                cursor.execute(f"ALTER TABLE godp_topic_tag ADD COLUMN `{name}` {definition}")
         cursor.execute(
             "INSERT IGNORE INTO godp_strategy_config_version "
             "(config_key, version, config_json, action, create_by, update_by) "
