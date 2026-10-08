@@ -6,11 +6,12 @@ This operator-triggered first slice does not claim to run vector matching or AI.
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import json
 from zoneinfo import ZoneInfo
 
 from .db import connection
+from .account_metrics import account_metrics
 from .models import LifecycleCondition, StrategyConfig
 
 
@@ -59,46 +60,54 @@ def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
         "AND a.status='启用' ORDER BY a.account_code"
     )
     accounts = []
+    direct_metrics: set[str] = set()
+    now_utc = datetime.now(timezone.utc)
     for row in cursor.fetchall():
         if row["account_code"].startswith("DEMO-") != (scope == "demo"):
             continue
         source = json.loads(row["payload_json"])
-        if not source.get("enabled", True) or not row["account_name"].strip() or not row["persona"].strip():
+        account_status = source.get("account_status")
+        enabled = account_status if account_status is not None else source.get("enabled", True)
+        if not enabled or not row["account_name"].strip() or not row["persona"].strip():
             continue
-        accounts.append({
+        account = {
             "account_id": row["account_code"],
             "account_name": row["account_name"],
             "persona": row["persona"],
-            "marketing_eligible": bool(row["marketing_eligible"] or source.get("is_marketing_account", False)),
-            "followers_count": int(source.get("followers") or 0),
+            "marketing_eligible": bool(row["marketing_eligible"]),
+            "followers_count": int(source.get("follower_count") if source.get("follower_count") is not None
+                                   else source.get("followers") or 0),
             "source_updated_at": row["source_updated_at"].isoformat(),
             "valid_content_count": 0,
             "rolling_interaction_count": 0,
-        })
+        }
+        if source.get("interaction_data") is not None:
+            account.update(account_metrics(source["interaction_data"], config.rolling_posts, now_utc))
+            direct_metrics.add(account["account_id"])
+        accounts.append(account)
     if not accounts:
         raise PlanningError(f"{scope} 范围内没有已同步且启用的账号")
 
     by_id = {account["account_id"]: account for account in accounts}
     cursor.execute(
-        "SELECT account_id, payload_json FROM godp_content_history "
+        "SELECT account_id, published_at, payload_json FROM godp_content_history "
         "WHERE del_flag='N' AND published_at IS NOT NULL "
         "AND published_at>=UTC_TIMESTAMP(6)-INTERVAL 3 MONTH "
         "AND published_at<=UTC_TIMESTAMP(6) "
         "ORDER BY account_id, published_at DESC, id DESC"
     )
-    recent_interactions: dict[str, list[int]] = {}
+    legacy_posts: dict[str, list[dict]] = {}
     for row in cursor.fetchall():
         account = by_id.get(row["account_id"])
-        if account is None:
+        if account is None or account["account_id"] in direct_metrics:
             continue
         content = json.loads(row["payload_json"])
-        account["valid_content_count"] += 1
-        values = recent_interactions.setdefault(row["account_id"], [])
-        if len(values) < config.rolling_posts:
-            values.append(sum(int(content.get(key) or 0) for key in ("likes", "favorites", "comments")))
+        content["published_at"] = row["published_at"]
+        legacy_posts.setdefault(row["account_id"], []).append(content)
     for account in accounts:
-        values = recent_interactions.get(account["account_id"], [])
-        account["rolling_interaction_count"] = sum(values) / len(values) if values else 0
+        if account["account_id"] not in direct_metrics:
+            account.update(account_metrics(legacy_posts.get(account["account_id"], []),
+                                           config.rolling_posts, now_utc))
         account["lifecycle_stage"] = lifecycle_stage(config, account)
     return accounts
 
@@ -120,7 +129,9 @@ def load_topics(cursor, scope: str) -> list[dict]:
         if row["topic_code"].startswith("DEMO-") != (scope == "demo"):
             continue
         source = json.loads(row["payload_json"])
-        if not row["title"].strip() or not source.get("enabled", True) or source.get("is_marketing", False):
+        topic_status = source.get("status")
+        enabled = topic_status if topic_status is not None else source.get("enabled", True)
+        if not row["title"].strip() or not enabled or source.get("is_marketing", False):
             continue
         if source.get("topic_type", "normal") not in ("normal", "ordinary", "普通"):
             continue

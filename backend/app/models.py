@@ -109,6 +109,7 @@ class ConfigVersionSummary(BaseModel):
 class AccountOption(BaseModel):
     account_id: str
     account_name: str
+    account_alias: str = ""
     city: str
     persona: str
     marketing_eligible: bool

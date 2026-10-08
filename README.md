@@ -67,7 +67,9 @@ npm run dev
 | `GET /api/integrations/topics/{topic_id}/labels` | IF-08 查询普通选题 T1–T6 标签识别结果 |
 | `POST /api/integrations/topics/official-usage/query` | IF-09 批量查询三类选题正式使用次数 |
 
-前三个同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`。每条记录必须有稳定业务 ID、带时区的 `updated_at`；服务端按 ID 和更新时间更新本地副本，重复数据可重传，旧版本不会覆盖新版本。`mode=full` 不会因为本批缺少某条记录而自动删除它，停用使用记录中的 `enabled=false`。单批最多 500 条。字段完整契约可在 `http://127.0.0.1:6930/docs` 查看。
+前三个同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`。每条记录必须有稳定业务 ID、带时区的 `updated_at`；服务端按 ID 和更新时间更新本地副本，重复数据可重传，旧版本不会覆盖新版本。`mode=full` 当前不会因为本批缺少某条记录而自动删除它；账号或普通选题可用正式状态字段停用，也兼容原 `enabled=false`。单批最多 500 条。字段完整契约可在 `http://127.0.0.1:6930/docs` 查看。
+
+IF-01 已接收账号别名、人设、粉丝量和近三个月帖子级互动，供生命周期与手动策划流量趋势计算；IF-02 已接收普通选题热度及可用状态。字段映射与计算口径见 [`docs/IF01_IF02_本地对接契约.md`](docs/IF01_IF02_本地对接契约.md)。
 
 IF-05 / IF-06 的请求、返回、选期和一致性校验规则见 [`docs/IF05_IF06_本地对接契约.md`](docs/IF05_IF06_本地对接契约.md)。IF-05 不会锁定结果；IF-06 成功标记已发布后，结果页会显示已发布并禁止替换。
 
@@ -81,7 +83,7 @@ IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点�
 
 `GET /api/internal/outbox` 使用同一令牌读取本地事件，目标 `planning` 指向客户内容生产系统，目标 `topics` 指向客户选题库。`PUT /api/tag-taxonomy` 保存 T1–T5 固定标签并生成选题库待投递事件；`PUT /api/internal/topic-tags/{topic_id}` 保存单个选题的识别标签并生成待投递事件。客户尚未提供接收地址，本地版将这些事件保存在数据库中供查看和后续投递，不会自动发送。`DEMO-` 演示记录及未通过客户同步接口建立的手工目录记录只保存在本地。
 
-本地版已产生的策划事件为 `SLOT_PLAN_CREATED` 和 `CONTENT_READY`；槽位状态变化、选题替换带来的 `SLOT_STATUS_CHANGED` 和 `CONTENT_VERSION_CHANGED`、自动策划调度及内容 Agent 的实际执行仍按后续 PRD 接入。内容生成失败后的再次生产也需要创建新版本，本地版会阻止复用同一版本重复提交。
+本地版已产生的策划事件为 `SLOT_PLAN_CREATED` 和 `CONTENT_READY`；槽位状态变化及内容 Agent 的实际执行仍需继续接入。周度规则调度和热点 T-1 确定已在项目内部运行，内容生成失败后的再次生产需要创建新版本，本地版会阻止复用同一版本重复提交。
 
 生产部署前应由客户确认系统间鉴权、接收地址、重试和状态字段映射；本地令牌仅用于当前受控开发环境。
 

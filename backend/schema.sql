@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS godp_account (
     account_code VARCHAR(64) NOT NULL COMMENT '客户账号唯一编码',
     account_name VARCHAR(120) NOT NULL COMMENT '账号展示名称',
     city VARCHAR(50) NOT NULL DEFAULT '' COMMENT '账号所属城市',
-    persona VARCHAR(80) NOT NULL DEFAULT '' COMMENT '账号人设类型',
+    persona VARCHAR(500) NOT NULL DEFAULT '' COMMENT '账号人设描述，用于账号画像与选题匹配',
     marketing_eligible TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否具备营销资格：1是0否',
     status VARCHAR(32) NOT NULL DEFAULT '启用' COMMENT '账号启用状态',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

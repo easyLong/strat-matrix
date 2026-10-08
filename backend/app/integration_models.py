@@ -17,9 +17,30 @@ class SyncBase(BaseModel):
     mode: Literal["full", "incremental"] = "incremental"
 
 
+class AccountInteraction(BaseModel):
+    content_id: str = Field(default="", max_length=64)
+    published_at: datetime
+    title: str = Field(default="", max_length=255)
+    red_star_count: int = Field(default=0, ge=0)
+    favorite_count: int = Field(default=0, ge=0)
+    comment_count: int = Field(default=0, ge=0)
+
+    @field_validator("published_at")
+    @classmethod
+    def check_time(cls, value: datetime) -> datetime:
+        return aware(value)
+
+
 class AccountFact(BaseModel):
     account_id: str = Field(min_length=1, max_length=64)
     account_name: str = Field(min_length=1, max_length=120)
+    account_alias: str = Field(default="", max_length=120)
+    account_status: bool | None = None
+    certification_status: bool | None = None
+    account_persona: str | None = Field(default=None, max_length=500)
+    account_tags: list[str] = Field(default_factory=list, max_length=100)
+    follower_count: int | None = Field(default=None, ge=0)
+    interaction_data: list[AccountInteraction] | None = Field(default=None, max_length=1000)
     platform: str = ""
     organization: str = ""
     city: str = Field(default="", max_length=50)
@@ -40,6 +61,13 @@ class AccountFact(BaseModel):
     def check_time(cls, value: datetime) -> datetime:
         return aware(value)
 
+    @model_validator(mode="after")
+    def check_interaction_ids(self):
+        ids = [post.content_id for post in self.interaction_data or [] if post.content_id]
+        if len(ids) != len(set(ids)):
+            raise ValueError("同一账号的 interaction_data 不能重复 content_id")
+        return self
+
 
 class AccountSync(SyncBase):
     records: list[AccountFact] = Field(min_length=1, max_length=500)
@@ -54,6 +82,7 @@ class TopicFact(BaseModel):
     category: str = Field(default="", max_length=50)
     content_type: str = ""
     topic_heat: float = Field(default=0, ge=0)
+    status: bool | None = None
     applicable_cities: list[str] = Field(default_factory=list)
     is_marketing: bool = False
     product_or_activity: str = ""

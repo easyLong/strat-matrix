@@ -49,7 +49,7 @@ const followerBounds = computed(() => {
 })
 
 const eligibleAccounts = computed(() => accounts.value.filter(account =>
-  (!accountKeyword.value.trim() || `${account.account_id} ${account.account_name}`.toLowerCase().includes(accountKeyword.value.trim().toLowerCase())) &&
+  (!accountKeyword.value.trim() || `${account.account_id} ${account.account_name} ${account.account_alias}`.toLowerCase().includes(accountKeyword.value.trim().toLowerCase())) &&
   (!cityFilter.value || account.city === cityFilter.value) &&
   (!personaFilter.value || account.persona === personaFilter.value) &&
   (!marketingFilter.value || account.marketing_eligible === (marketingFilter.value === 'yes')) &&
@@ -232,7 +232,7 @@ async function submit() {
         <button class="btn primary" type="button" :disabled="busy || shortfall > 0" @click="randomAccounts">{{ sampledIds.length ? '重新随机选取' : '随机选取' }} {{ targetCount }} 个</button>
       </div>
       <p v-if="queried && shortfall > 0" class="inline-error">筛选账号不足，还差 {{ shortfall }} 个，请调整筛选条件或规划数量。</p>
-      <div v-if="queried" class="table-wrap manual-account-table"><table><thead><tr><th></th><th>账号</th><th>认证状态</th><th>粉丝量</th><th>流量趋势</th><th>本次投放日期</th></tr></thead><tbody><tr v-for="account in eligibleAccounts" :key="account.account_id"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="busy || (!sampledIds.includes(account.account_id) && sampledIds.length >= targetCount)" @change="toggleSampledAccount(account.account_id, $event)" /></td><td><b>{{ account.account_name }}</b><small>{{ account.account_id }}</small></td><td><span :class="['tag', account.certified ? 'blue' : 'gray']">{{ account.certified ? '已认证' : '未认证' }}</span></td><td>{{ account.followers ?? '—' }}</td><td>{{ account.traffic_trend || '—' }}</td><td><span class="tag blue">{{ publishDate }}</span></td></tr><tr v-if="eligibleAccounts.length === 0"><td colspan="6"><div class="empty-state">当前筛选条件下暂无账号</div></td></tr></tbody></table></div>
+      <div v-if="queried" class="table-wrap manual-account-table"><table><thead><tr><th></th><th>账号</th><th>认证状态</th><th>粉丝量</th><th>流量趋势</th><th>本次投放日期</th></tr></thead><tbody><tr v-for="account in eligibleAccounts" :key="account.account_id"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="busy || (!sampledIds.includes(account.account_id) && sampledIds.length >= targetCount)" @change="toggleSampledAccount(account.account_id, $event)" /></td><td><b>{{ account.account_name }}</b><small>{{ account.account_alias ? `${account.account_alias} · ` : '' }}{{ account.account_id }}</small></td><td><span :class="['tag', account.certified ? 'blue' : 'gray']">{{ account.certified ? '已认证' : '未认证' }}</span></td><td>{{ account.followers ?? '—' }}</td><td>{{ account.traffic_trend || '—' }}</td><td><span class="tag blue">{{ publishDate }}</span></td></tr><tr v-if="eligibleAccounts.length === 0"><td colspan="6"><div class="empty-state">当前筛选条件下暂无账号</div></td></tr></tbody></table></div>
     </div>
   </section>
 

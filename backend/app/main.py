@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pymysql
 
 from .db import check_database, connection
+from .account_metrics import account_metrics
 from .integration import queue_event, queue_manual_slot, router as integration_router
 from .models import (
     AccountOption,
@@ -359,6 +360,12 @@ def list_accounts(limit: int = 200) -> list[dict]:
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
+                "SELECT config_json FROM godp_strategy_config "
+                "WHERE config_key='operations' AND del_flag='N'"
+            )
+            config_row = cursor.fetchone()
+            config = StrategyConfig.model_validate_json(config_row["config_json"]) if config_row else StrategyConfig()
+            cursor.execute(
                 "SELECT a.account_code AS account_id, a.account_name, a.city, a.persona, "
                 "a.marketing_eligible, a.status, s.payload_json "
                 "FROM godp_account a LEFT JOIN godp_account_source s "
@@ -367,11 +374,22 @@ def list_accounts(limit: int = 200) -> list[dict]:
                 (limit,),
             )
             rows = cursor.fetchall()
+            metrics_at = datetime.now(timezone.utc)
             for row in rows:
                 source = json.loads(row.pop("payload_json")) if row["payload_json"] else {}
-                row["certified"] = bool(source["certified"]) if "certified" in source else None
-                row["followers"] = int(source["followers"]) if "followers" in source else None
-                row["traffic_trend"] = source.get("traffic_trend") or "数据不足"
+                row["account_alias"] = source.get("account_alias") or ""
+                certified = source.get("certification_status")
+                row["certified"] = bool(certified if certified is not None else source["certified"]) \
+                    if certified is not None or "certified" in source else None
+                followers = source.get("follower_count")
+                row["followers"] = int(followers if followers is not None else source["followers"]) \
+                    if followers is not None or "followers" in source else None
+                row["traffic_trend"] = (
+                    account_metrics(source["interaction_data"], config.rolling_posts,
+                                    metrics_at)["traffic_trend"]
+                    if source.get("interaction_data") is not None else
+                    source.get("traffic_trend") or "数据不足"
+                )
             return rows
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise database_error() from exc
@@ -691,7 +709,7 @@ def preview_manual_plan(payload: ManualPreviewInput) -> dict:
     catalog = list_accounts(limit=1000)
     filtered = [account for account in catalog if
                   (not payload.keyword or payload.keyword.lower() in
-                   f"{account['account_id']} {account['account_name']}".lower()) and
+                   f"{account['account_id']} {account['account_name']} {account['account_alias']}".lower()) and
                   (not payload.city or account["city"] == payload.city) and
                   (not payload.persona or account["persona"] == payload.persona) and
                   (not payload.traffic_trend or account["traffic_trend"] == payload.traffic_trend) and

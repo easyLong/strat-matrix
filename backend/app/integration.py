@@ -70,6 +70,12 @@ def as_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def source_record_json(record: BaseModel, added_fields: set[str]) -> str:
+    """Keep retries from older clients byte-identical after optional fields are added."""
+    absent = added_fields - record.model_fields_set
+    return as_json(record.model_dump(mode="json", exclude=absent))
+
+
 def queue_event(cursor, destination: str, event_type: str, payload: dict) -> str:
     event_id = "EVT-" + uuid4().hex.upper()
     envelope = {
@@ -128,7 +134,10 @@ def sync_accounts(payload: AccountSync) -> SyncResult:
     try:
         with connection() as db, db.cursor() as cursor:
             for record in payload.records:
-                raw = as_json(record.model_dump(mode="json"))
+                raw = source_record_json(record, {
+                    "account_alias", "account_status", "certification_status",
+                    "account_persona", "account_tags", "follower_count", "interaction_data",
+                })
                 timestamp = utc_naive(record.updated_at)
                 state = source_state(cursor, "godp_account_source", "account_id", record.account_id, timestamp, raw)
                 counters[state] += 1
@@ -148,9 +157,12 @@ def sync_accounts(payload: AccountSync) -> SyncResult:
                     "ON DUPLICATE KEY UPDATE account_name=VALUES(account_name), city=VALUES(city), "
                     "persona=VALUES(persona), marketing_eligible=VALUES(marketing_eligible), "
                     "status=VALUES(status), update_by='integration', del_flag='N'",
-                    (record.account_id, record.account_name, record.city, record.persona,
+                    (record.account_id, record.account_name, record.city,
+                     record.account_persona if record.account_persona is not None else record.persona,
                      record.is_marketing_account if record.is_marketing_account is not None
-                     else record.marketing_eligible, "启用" if record.enabled else "停用"),
+                     else record.marketing_eligible,
+                     "启用" if (record.account_status if record.account_status is not None else record.enabled)
+                     else "停用"),
                 )
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
@@ -165,7 +177,7 @@ def sync_topics(payload: TopicSync) -> SyncResult:
     try:
         with connection() as db, db.cursor() as cursor:
             for record in payload.records:
-                raw = as_json(record.model_dump(mode="json"))
+                raw = source_record_json(record, {"status"})
                 timestamp = utc_naive(record.updated_at)
                 state = source_state(cursor, "godp_topic_source", "topic_id", record.topic_id, timestamp, raw)
                 counters[state] += 1
@@ -189,7 +201,8 @@ def sync_topics(payload: TopicSync) -> SyncResult:
                     "is_marketing=VALUES(is_marketing), status=VALUES(status), "
                     "update_by='integration', del_flag='N'",
                     (record.topic_id, record.title, record.category, record.is_marketing,
-                     "可用" if record.enabled else "停用"),
+                     "可用" if (record.status if record.status is not None else record.enabled)
+                     else "停用"),
                 )
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:

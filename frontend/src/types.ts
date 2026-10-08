@@ -47,6 +47,7 @@ export interface ConfigVersionSummary {
 export interface AccountOption {
   account_id: string
   account_name: string
+  account_alias: string
   city: string
   persona: string
   marketing_eligible: boolean
