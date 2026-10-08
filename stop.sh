@@ -30,5 +30,6 @@ stop_one() {
   rm -f "$pid_file"
 }
 
+stop_one "Ordinary scheduler" "$RUN_DIR/ordinary-scheduler.pid"
 stop_one "Frontend" "$RUN_DIR/frontend.pid"
 stop_one "Backend" "$RUN_DIR/backend.pid"

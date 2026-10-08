@@ -20,9 +20,12 @@ FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-$(dotenv_value FRONTEND_PORT)}"
 FRONTEND_PORT="${FRONTEND_PORT:-930}"
 CHECK_HOST="${CHECK_HOST:-127.0.0.1}"
+ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-$(dotenv_value ORDINARY_SCHEDULER_ENABLED)}"
+ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-1}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 
 running=0
+http_failures=0
 
 check_process() {
   local name="$1"
@@ -48,15 +51,21 @@ check_http() {
     return 0
   fi
   echo "$name HTTP: unavailable ($url)"
+  http_failures=$((http_failures + 1))
   return 1
 }
 
 check_process "Backend" "$RUN_DIR/backend.pid" || true
 check_process "Frontend" "$RUN_DIR/frontend.pid" || true
+expected=2
+if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
+  check_process "Ordinary scheduler" "$RUN_DIR/ordinary-scheduler.pid" || true
+  expected=3
+fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true
 check_http "Frontend" "http://${CHECK_HOST}:${FRONTEND_PORT}/" || true
 
-if [[ "$running" -eq 2 ]]; then
+if [[ "$running" -eq "$expected" && "$http_failures" -eq 0 ]]; then
   exit 0
 fi
 exit 1

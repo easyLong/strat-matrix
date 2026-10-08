@@ -29,6 +29,8 @@ else
 fi
 NPM_BIN="${NPM_BIN:-npm}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"
+ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-$(dotenv_value ORDINARY_SCHEDULER_ENABLED)}"
+ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-1}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 LOG_DIR="${LOG_DIR:-$APP_ROOT/logs}"
 
@@ -36,6 +38,7 @@ mkdir -p "$RUN_DIR" "$LOG_DIR"
 
 backend_pid="$RUN_DIR/backend.pid"
 frontend_pid="$RUN_DIR/frontend.pid"
+scheduler_pid="$RUN_DIR/ordinary-scheduler.pid"
 
 is_running() {
   local pid_file="$1"
@@ -64,6 +67,20 @@ else
   echo "Backend started (PID $(cat "$backend_pid"), http://${BACKEND_HOST}:${BACKEND_PORT})."
 fi
 
+if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
+  if is_running "$scheduler_pid"; then
+    echo "Ordinary scheduler is already running (PID $(cat "$scheduler_pid"))."
+  else
+    rm -f "$scheduler_pid"
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.ordinary_scheduler
+    ) >"$LOG_DIR/ordinary-scheduler.log" 2>&1 &
+    echo $! >"$scheduler_pid"
+    echo "Ordinary scheduler started (PID $(cat "$scheduler_pid"), Asia/Shanghai)."
+  fi
+fi
+
 if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
   if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
     echo "npm not found: $NPM_BIN" >&2
@@ -90,4 +107,4 @@ else
   echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
 fi
 
-echo "Logs: $LOG_DIR/backend.log and $LOG_DIR/frontend.log"
+echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log and $LOG_DIR/frontend.log"

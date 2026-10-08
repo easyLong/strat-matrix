@@ -56,6 +56,7 @@ BACKEND_HOST=127.0.0.1
 BACKEND_PORT=6930
 FRONTEND_HOST=127.0.0.1
 FRONTEND_PORT=930
+ORDINARY_SCHEDULER_ENABLED=1
 ```
 
 For direct public access on Alibaba Cloud, set BACKEND_HOST and FRONTEND_HOST to 0.0.0.0 and allow TCP 930 in the security group. With Nginx, expose only ports 80/443 and keep backend port 6930 private.
@@ -96,8 +97,9 @@ chmod +x start.sh stop.sh status.sh
 1. 检查 `backend/.venv`。
 2. 启动 FastAPI 后端。
 3. 执行前端生产构建；依赖不存在时执行 `npm ci`。
-4. 启动 Vite Preview 前端。
-5. 将 PID 写入 `run/`，日志写入 `logs/`。
+4. 启动普通内容周策划调度进程（默认开启，按服务端配置的北京时间执行）。
+5. 启动 Vite Preview 前端。
+6. 将 PID 写入 `run/`，日志写入 `logs/`。
 
 默认端口：
 
@@ -137,6 +139,7 @@ BUILD_FRONTEND=0 ./start.sh
 ```bash
 tail -f logs/backend.log
 tail -f logs/frontend.log
+tail -f logs/ordinary-scheduler.log
 ```
 
 后端健康检查：
@@ -196,6 +199,7 @@ BUILD_FRONTEND=0 \
 | `BUILD_FRONTEND` | `1` | 是否在启动前构建前端 |
 | `RUN_DIR` | `run` | PID 文件目录 |
 | `LOG_DIR` | `logs` | 日志目录 |
+| `ORDINARY_SCHEDULER_ENABLED` | `1` | 是否启动普通内容周策划调度进程；设为 `0` 后重启服务停用 |
 
 ## 8. 发布更新流程
 
