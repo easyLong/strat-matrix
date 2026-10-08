@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS godp_account_source (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号来源记录主键ID',
     account_id VARCHAR(64) NOT NULL COMMENT '客户账号唯一编码',
     source_updated_at DATETIME(6) NOT NULL COMMENT '客户系统账号最后更新时间（UTC）',
+    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '账号来源记录当前是否有效：1有效0已被全量快照停用',
     payload_json LONGTEXT NOT NULL COMMENT '客户账号同步原始内容JSON',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
@@ -131,6 +132,7 @@ CREATE TABLE IF NOT EXISTS godp_topic_source (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题来源记录主键ID',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',
     source_updated_at DATETIME(6) NOT NULL COMMENT '客户系统选题最后更新时间（UTC）',
+    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '普通选题来源记录当前是否有效：1有效0已被全量快照停用',
     approval_status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '选题审核状态',
     valid_from DATETIME(6) NULL COMMENT '选题有效期开始时间（UTC）',
     valid_to DATETIME(6) NULL COMMENT '选题有效期结束时间（UTC）',
@@ -143,6 +145,22 @@ CREATE TABLE IF NOT EXISTS godp_topic_source (
     UNIQUE KEY uk_topic_source_id (topic_id),
     KEY idx_topic_source_validity (approval_status, valid_from, valid_to)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户选题事实本地副本';
+
+CREATE TABLE IF NOT EXISTS godp_source_sync_run (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号或普通选题全量同步运行记录主键ID',
+    source_type VARCHAR(16) NOT NULL COMMENT '来源数据类型：account账号或topic普通选题',
+    source_batch_id VARCHAR(64) NOT NULL COMMENT '客户全量同步批次唯一编码',
+    source_snapshot_at DATETIME(6) NOT NULL COMMENT '客户全量快照时间或服务端接收时间，按UTC保存',
+    payload_json LONGTEXT NOT NULL COMMENT '本次全量同步完整请求内容JSON',
+    result_json LONGTEXT NOT NULL COMMENT '本次全量同步入库及停用数量JSON',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_source_sync_type_batch (source_type, source_batch_id),
+    KEY idx_source_sync_snapshot (source_type, source_snapshot_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-01与IF-02成功全量快照记录';
 
 CREATE TABLE IF NOT EXISTS godp_marketing_topic_source (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '营销选题来源记录主键ID',

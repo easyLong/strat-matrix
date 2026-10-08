@@ -123,6 +123,83 @@ def summary(batch_id: str, received: int, counters: dict[str, int]) -> SyncResul
     return SyncResult(source_batch_id=batch_id, received=received, **counters)
 
 
+def full_snapshot_start(cursor, payload: AccountSync | TopicSync,
+                        source_type: str) -> tuple[datetime, str] | SyncResult:
+    request_json = as_json(payload.model_dump(mode="json", exclude_unset=True))
+    cursor.execute(
+        "SELECT payload_json, result_json FROM godp_source_sync_run "
+        "WHERE source_type=%s AND source_batch_id=%s",
+        (source_type, payload.source_batch_id),
+    )
+    previous = cursor.fetchone()
+    if previous:
+        if previous["payload_json"] != request_json:
+            raise HTTPException(status_code=409, detail="相同批次 ID 的全量快照内容不同")
+        return SyncResult.model_validate_json(previous["result_json"])
+    cursor.execute(
+        "SELECT MAX(source_snapshot_at) AS latest_at FROM godp_source_sync_run "
+        "WHERE source_type=%s AND del_flag='N'", (source_type,),
+    )
+    latest_at = cursor.fetchone()["latest_at"]
+    snapshot_at = utc_naive(payload.snapshot_at) or datetime.now(timezone.utc).replace(tzinfo=None)
+    if latest_at and snapshot_at <= latest_at:
+        raise HTTPException(status_code=409, detail="全量快照时间未晚于已接收快照")
+    return snapshot_at, request_json
+
+
+def full_snapshot_finish(cursor, payload: AccountSync | TopicSync, source_type: str,
+                         snapshot_at: datetime, request_json: str,
+                         counters: dict[str, int]) -> SyncResult:
+    if source_type == "account":
+        cursor.execute(
+            "SELECT s.account_id FROM godp_account_source s "
+            "JOIN godp_account a ON a.account_code=s.account_id "
+            "WHERE s.del_flag='N' AND s.active_in_snapshot=1 "
+            "AND s.account_id NOT LIKE 'DEMO-%%' FOR UPDATE"
+        )
+        active = {row["account_id"] for row in cursor.fetchall()}
+        incoming = {record.account_id for record in payload.records}
+        missing = active - incoming
+        for account_id in missing:
+            cursor.execute(
+                "UPDATE godp_account_source SET active_in_snapshot=0, "
+                "update_by='integration' WHERE account_id=%s", (account_id,),
+            )
+            cursor.execute(
+                "UPDATE godp_account SET status='停用', update_by='integration' "
+                "WHERE account_code=%s", (account_id,),
+            )
+    else:
+        cursor.execute(
+            "SELECT s.topic_id FROM godp_topic_source s "
+            "JOIN godp_topic t ON t.topic_code=s.topic_id "
+            "WHERE s.del_flag='N' AND s.active_in_snapshot=1 AND t.is_marketing=0 "
+            "AND s.topic_id NOT LIKE 'DEMO-%%' FOR UPDATE"
+        )
+        active = {row["topic_id"] for row in cursor.fetchall()}
+        incoming = {record.topic_id for record in payload.records}
+        missing = active - incoming
+        for topic_id in missing:
+            cursor.execute(
+                "UPDATE godp_topic_source SET active_in_snapshot=0, "
+                "update_by='integration' WHERE topic_id=%s", (topic_id,),
+            )
+            cursor.execute(
+                "UPDATE godp_topic SET status='停用', update_by='integration' "
+                "WHERE topic_code=%s", (topic_id,),
+            )
+    result = summary(payload.source_batch_id, len(payload.records),
+                     {**counters, "deactivated": len(missing)})
+    cursor.execute(
+        "INSERT INTO godp_source_sync_run "
+        "(source_type, source_batch_id, source_snapshot_at, payload_json, result_json) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (source_type, payload.source_batch_id, snapshot_at, request_json,
+         as_json(result.model_dump(mode="json"))),
+    )
+    return result
+
+
 def db_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail="数据库暂不可用")
 
@@ -133,41 +210,61 @@ def sync_accounts(payload: AccountSync) -> SyncResult:
     counters = {"inserted": 0, "updated": 0, "unchanged": 0, "stale": 0}
     try:
         with connection() as db, db.cursor() as cursor:
-            for record in payload.records:
-                raw = source_record_json(record, {
-                    "account_alias", "account_status", "certification_status",
-                    "account_persona", "account_tags", "follower_count", "interaction_data",
-                })
-                timestamp = utc_naive(record.updated_at)
-                state = source_state(cursor, "godp_account_source", "account_id", record.account_id, timestamp, raw)
-                counters[state] += 1
-                if state in ("stale", "unchanged"):
-                    continue
-                cursor.execute(
-                    "INSERT INTO godp_account_source (account_id, source_updated_at, payload_json) "
-                    "VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE "
-                    "source_updated_at=VALUES(source_updated_at), payload_json=VALUES(payload_json), "
-                    "update_by='integration', del_flag='N'",
-                    (record.account_id, timestamp, raw),
-                )
-                cursor.execute(
-                    "INSERT INTO godp_account "
-                    "(account_code, account_name, city, persona, marketing_eligible, status, create_by, update_by) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, 'integration', 'integration') "
-                    "ON DUPLICATE KEY UPDATE account_name=VALUES(account_name), city=VALUES(city), "
-                    "persona=VALUES(persona), marketing_eligible=VALUES(marketing_eligible), "
-                    "status=VALUES(status), update_by='integration', del_flag='N'",
-                    (record.account_id, record.account_name, record.city,
-                     record.account_persona if record.account_persona is not None else record.persona,
-                     record.is_marketing_account if record.is_marketing_account is not None
-                     else record.marketing_eligible,
-                     "启用" if (record.account_status if record.account_status is not None else record.enabled)
-                     else "停用"),
-                )
-            db.commit()
+            lock_name = "godp:account-source-sync"
+            cursor.execute("SELECT GET_LOCK(%s, 5) AS acquired", (lock_name,))
+            if cursor.fetchone()["acquired"] != 1:
+                raise HTTPException(status_code=409, detail="账号同步正在执行，请稍后重试")
+            try:
+                full = full_snapshot_start(cursor, payload, "account") if payload.mode == "full" else None
+                if isinstance(full, SyncResult):
+                    return full
+                for record in payload.records:
+                    raw = source_record_json(record, {
+                        "account_alias", "account_status", "certification_status",
+                        "account_persona", "account_tags", "follower_count", "interaction_data",
+                    })
+                    timestamp = utc_naive(record.updated_at)
+                    state = source_state(cursor, "godp_account_source", "account_id", record.account_id, timestamp, raw)
+                    counters[state] += 1
+                    if state == "stale":
+                        if payload.mode == "full":
+                            raise HTTPException(status_code=409, detail=f"账号 {record.account_id} 的记录版本早于本地")
+                        continue
+                    if state == "unchanged" and payload.mode == "incremental":
+                        continue
+                    cursor.execute(
+                        "INSERT INTO godp_account_source "
+                        "(account_id, source_updated_at, active_in_snapshot, payload_json) "
+                        "VALUES (%s, %s, 1, %s) ON DUPLICATE KEY UPDATE "
+                        "source_updated_at=VALUES(source_updated_at), active_in_snapshot=1, "
+                        "payload_json=VALUES(payload_json), update_by='integration', del_flag='N'",
+                        (record.account_id, timestamp, raw),
+                    )
+                    cursor.execute(
+                        "INSERT INTO godp_account "
+                        "(account_code, account_name, city, persona, marketing_eligible, status, create_by, update_by) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, 'integration', 'integration') "
+                        "ON DUPLICATE KEY UPDATE account_name=VALUES(account_name), city=VALUES(city), "
+                        "persona=VALUES(persona), marketing_eligible=VALUES(marketing_eligible), "
+                        "status=VALUES(status), update_by='integration', del_flag='N'",
+                        (record.account_id, record.account_name, record.city,
+                         record.account_persona if record.account_persona is not None else record.persona,
+                         record.is_marketing_account if record.is_marketing_account is not None
+                         else record.marketing_eligible,
+                         "启用" if (record.account_status if record.account_status is not None else record.enabled)
+                         else "停用"),
+                    )
+                result = (full_snapshot_finish(cursor, payload, "account", full[0], full[1], counters)
+                          if full else summary(payload.source_batch_id, len(payload.records), counters))
+                db.commit()
+                return result
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                cursor.execute("SELECT RELEASE_LOCK(%s)", (lock_name,))
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    return summary(payload.source_batch_id, len(payload.records), counters)
 
 
 @router.post("/api/integrations/topics/sync", response_model=SyncResult, dependencies=[Depends(require_integration_token)])
@@ -176,38 +273,97 @@ def sync_topics(payload: TopicSync) -> SyncResult:
     counters = {"inserted": 0, "updated": 0, "unchanged": 0, "stale": 0}
     try:
         with connection() as db, db.cursor() as cursor:
-            for record in payload.records:
-                raw = source_record_json(record, {"status"})
-                timestamp = utc_naive(record.updated_at)
-                state = source_state(cursor, "godp_topic_source", "topic_id", record.topic_id, timestamp, raw)
-                counters[state] += 1
-                if state in ("stale", "unchanged"):
-                    continue
-                cursor.execute(
-                    "INSERT INTO godp_topic_source "
-                    "(topic_id, source_updated_at, approval_status, valid_from, valid_to, payload_json) "
-                    "VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE "
-                    "source_updated_at=VALUES(source_updated_at), approval_status=VALUES(approval_status), "
-                    "valid_from=VALUES(valid_from), valid_to=VALUES(valid_to), "
-                    "payload_json=VALUES(payload_json), update_by='integration', del_flag='N'",
-                    (record.topic_id, timestamp, record.approval_status,
-                     utc_naive(record.valid_from), utc_naive(record.valid_to), raw),
-                )
-                cursor.execute(
-                    "INSERT INTO godp_topic "
-                    "(topic_code, title, category, is_marketing, status, create_by, update_by) "
-                    "VALUES (%s, %s, %s, %s, %s, 'integration', 'integration') "
-                    "ON DUPLICATE KEY UPDATE title=VALUES(title), category=VALUES(category), "
-                    "is_marketing=VALUES(is_marketing), status=VALUES(status), "
-                    "update_by='integration', del_flag='N'",
-                    (record.topic_id, record.title, record.category, record.is_marketing,
-                     "可用" if (record.status if record.status is not None else record.enabled)
-                     else "停用"),
-                )
-            db.commit()
+            lock_name = "godp:ordinary-topic-source-sync"
+            cursor.execute("SELECT GET_LOCK(%s, 5) AS acquired", (lock_name,))
+            if cursor.fetchone()["acquired"] != 1:
+                raise HTTPException(status_code=409, detail="普通选题同步正在执行，请稍后重试")
+            try:
+                full = full_snapshot_start(cursor, payload, "topic") if payload.mode == "full" else None
+                if isinstance(full, SyncResult):
+                    return full
+                for record in payload.records:
+                    raw = source_record_json(record, {"status"})
+                    timestamp = utc_naive(record.updated_at)
+                    state = source_state(cursor, "godp_topic_source", "topic_id", record.topic_id, timestamp, raw)
+                    counters[state] += 1
+                    if state == "stale":
+                        if payload.mode == "full":
+                            raise HTTPException(status_code=409, detail=f"选题 {record.topic_id} 的记录版本早于本地")
+                        continue
+                    if state == "unchanged" and payload.mode == "incremental":
+                        continue
+                    cursor.execute(
+                        "INSERT INTO godp_topic_source "
+                        "(topic_id, source_updated_at, active_in_snapshot, approval_status, "
+                        "valid_from, valid_to, payload_json) "
+                        "VALUES (%s, %s, 1, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE "
+                        "source_updated_at=VALUES(source_updated_at), active_in_snapshot=1, "
+                        "approval_status=VALUES(approval_status), valid_from=VALUES(valid_from), "
+                        "valid_to=VALUES(valid_to), payload_json=VALUES(payload_json), "
+                        "update_by='integration', del_flag='N'",
+                        (record.topic_id, timestamp, record.approval_status,
+                         utc_naive(record.valid_from), utc_naive(record.valid_to), raw),
+                    )
+                    cursor.execute(
+                        "INSERT INTO godp_topic "
+                        "(topic_code, title, category, is_marketing, status, create_by, update_by) "
+                        "VALUES (%s, %s, %s, %s, %s, 'integration', 'integration') "
+                        "ON DUPLICATE KEY UPDATE title=VALUES(title), category=VALUES(category), "
+                        "is_marketing=VALUES(is_marketing), status=VALUES(status), "
+                        "update_by='integration', del_flag='N'",
+                        (record.topic_id, record.title, record.category, record.is_marketing,
+                         "可用" if (record.status if record.status is not None else record.enabled)
+                         else "停用"),
+                    )
+                result = (full_snapshot_finish(cursor, payload, "topic", full[0], full[1], counters)
+                          if full else summary(payload.source_batch_id, len(payload.records), counters))
+                db.commit()
+                return result
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                cursor.execute("SELECT RELEASE_LOCK(%s)", (lock_name,))
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    return summary(payload.source_batch_id, len(payload.records), counters)
+
+
+@router.get("/api/internal/source-sync-status/{source_type}", dependencies=[Depends(require_integration_token)])
+def source_sync_status(source_type: str) -> dict:
+    if source_type not in ("account", "topic"):
+        raise HTTPException(status_code=422, detail="来源类型只能为 account 或 topic")
+    count_sql = (
+        "SELECT COUNT(*) AS active_count FROM godp_account_source s "
+        "JOIN godp_account a ON a.account_code=s.account_id "
+        "WHERE s.del_flag='N' AND s.active_in_snapshot=1 AND a.status='启用' "
+        "AND s.account_id NOT LIKE 'DEMO-%%'"
+        if source_type == "account" else
+        "SELECT COUNT(*) AS active_count FROM godp_topic_source s "
+        "JOIN godp_topic t ON t.topic_code=s.topic_id "
+        "WHERE s.del_flag='N' AND s.active_in_snapshot=1 AND t.status='可用' "
+        "AND t.is_marketing=0 AND s.topic_id NOT LIKE 'DEMO-%%'"
+    )
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT source_batch_id, source_snapshot_at, result_json "
+                "FROM godp_source_sync_run WHERE source_type=%s AND del_flag='N' "
+                "ORDER BY source_snapshot_at DESC, id DESC LIMIT 1", (source_type,),
+            )
+            latest = cursor.fetchone()
+            if not latest:
+                return {"synced": False, "source_batch_id": None,
+                        "snapshot_at": None, "received": None,
+                        "deactivated": None, "active_count": None}
+            cursor.execute(count_sql)
+            active_count = cursor.fetchone()["active_count"]
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    result = json.loads(latest["result_json"])
+    return {"synced": True, "source_batch_id": latest["source_batch_id"],
+            "snapshot_at": latest["source_snapshot_at"].isoformat() + "Z",
+            "received": result["received"], "deactivated": result["deactivated"],
+            "active_count": active_count}
 
 
 @router.post("/api/integrations/marketing-topics/sync", dependencies=[Depends(require_integration_token)])
@@ -474,14 +630,15 @@ def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, acco
         return False
     cursor.execute(
         "SELECT a.account_id FROM godp_account_source a JOIN godp_account p "
-        "ON p.account_code=a.account_id WHERE a.account_id=%s AND p.status='启用' AND p.del_flag='N'",
+        "ON p.account_code=a.account_id WHERE a.account_id=%s AND a.active_in_snapshot=1 "
+        "AND p.status='启用' AND p.del_flag='N'",
         (account_id,),
     )
     account_ready = cursor.fetchone() is not None
     cursor.execute(
         "SELECT s.topic_id FROM godp_topic_source s JOIN godp_topic t "
         "ON t.topic_code=s.topic_id WHERE s.topic_id=%s AND t.status='可用' AND t.del_flag='N' "
-        "AND (t.is_marketing=0 OR s.approval_status='approved') "
+        "AND s.active_in_snapshot=1 AND (t.is_marketing=0 OR s.approval_status='approved') "
         "AND (s.valid_from IS NULL OR s.valid_from<=UTC_TIMESTAMP(6)) "
         "AND (s.valid_to IS NULL OR s.valid_to>=UTC_TIMESTAMP(6))",
         (topic_id,),

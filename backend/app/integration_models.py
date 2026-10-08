@@ -15,6 +15,21 @@ def aware(value: datetime) -> datetime:
 class SyncBase(BaseModel):
     source_batch_id: str = Field(min_length=1, max_length=64)
     mode: Literal["full", "incremental"] = "incremental"
+    snapshot_at: datetime | None = None
+
+    @field_validator("snapshot_at")
+    @classmethod
+    def check_snapshot_time(cls, value: datetime | None) -> datetime | None:
+        return aware(value) if value else None
+
+    @model_validator(mode="after")
+    def check_size(self):
+        records = getattr(self, "records", [])
+        if self.mode == "incremental" and not 1 <= len(records) <= 500:
+            raise ValueError("增量同步每批必须包含 1～500 条记录")
+        if self.mode == "full" and len(records) > 5000:
+            raise ValueError("全量同步每批最多包含 5000 条记录")
+        return self
 
 
 class AccountInteraction(BaseModel):
@@ -70,7 +85,7 @@ class AccountFact(BaseModel):
 
 
 class AccountSync(SyncBase):
-    records: list[AccountFact] = Field(min_length=1, max_length=500)
+    records: list[AccountFact] = Field(max_length=5000)
 
 
 class TopicFact(BaseModel):
@@ -109,7 +124,13 @@ class TopicFact(BaseModel):
 
 
 class TopicSync(SyncBase):
-    records: list[TopicFact] = Field(min_length=1, max_length=500)
+    records: list[TopicFact] = Field(max_length=5000)
+
+    @model_validator(mode="after")
+    def ordinary_only_full_snapshot(self):
+        if self.mode == "full" and any(record.is_marketing for record in self.records):
+            raise ValueError("普通选题全量快照不能包含营销选题；营销选题请使用 IF-03")
+        return self
 
 
 class MarketingTopicFact(BaseModel):
@@ -234,6 +255,7 @@ class SyncResult(BaseModel):
     updated: int
     unchanged: int
     stale: int
+    deactivated: int = 0
 
 
 class ContentStatusCallback(BaseModel):

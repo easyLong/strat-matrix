@@ -67,7 +67,7 @@ npm run dev
 | `GET /api/integrations/topics/{topic_id}/labels` | IF-08 查询普通选题 T1–T6 标签识别结果 |
 | `POST /api/integrations/topics/official-usage/query` | IF-09 批量查询三类选题正式使用次数 |
 
-前三个同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`。每条记录必须有稳定业务 ID、带时区的 `updated_at`；服务端按 ID 和更新时间更新本地副本，重复数据可重传，旧版本不会覆盖新版本。`mode=full` 当前不会因为本批缺少某条记录而自动删除它；账号或普通选题可用正式状态字段停用，也兼容原 `enabled=false`。单批最多 500 条。字段完整契约可在 `http://127.0.0.1:6930/docs` 查看。
+IF-01、IF-02 及历史内容同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`，每条记录使用稳定业务 ID 和带时区的 `updated_at`。IF-01/IF-02 按 ID 与更新时间更新本地副本；全量模式最多接收 5000 条，成功后停用缺席的正式账号或普通选题；增量模式每批最多 500 条，不处理缺席记录。IF-03、IF-04 有各自独立的全量快照契约。字段完整契约可在 `http://127.0.0.1:6930/docs` 查看。
 
 IF-01 已接收账号别名、人设、粉丝量和近三个月帖子级互动，供生命周期与手动策划流量趋势计算；IF-02 已接收普通选题热度及可用状态。字段映射与计算口径见 [`docs/IF01_IF02_本地对接契约.md`](docs/IF01_IF02_本地对接契约.md)。
 

@@ -56,6 +56,7 @@ def check_database() -> bool:
                 "godp_planning_item",
                 "godp_account_source",
                 "godp_topic_source",
+                "godp_source_sync_run",
                 "godp_marketing_topic_source",
                 "godp_marketing_sync_run",
                 "godp_hotspot_topic_source",

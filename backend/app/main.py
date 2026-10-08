@@ -370,7 +370,8 @@ def list_accounts(limit: int = 200) -> list[dict]:
                 "a.marketing_eligible, a.status, s.payload_json "
                 "FROM godp_account a LEFT JOIN godp_account_source s "
                 "ON s.account_id=a.account_code AND s.del_flag='N' "
-                "WHERE a.del_flag='N' AND a.status='启用' ORDER BY a.id LIMIT %s",
+                "WHERE a.del_flag='N' AND a.status='启用' "
+                "AND (s.id IS NULL OR s.active_in_snapshot=1) ORDER BY a.id LIMIT %s",
                 (limit,),
             )
             rows = cursor.fetchall()
@@ -405,7 +406,8 @@ def list_topics(limit: int = 200) -> list[dict]:
                 "t.is_marketing, t.status, s.payload_json FROM godp_topic t "
                 "LEFT JOIN godp_topic_source s ON s.topic_id=t.topic_code "
                 "WHERE t.del_flag='N' AND t.status='可用' "
-                "AND (s.id IS NULL OR ((t.is_marketing=0 OR s.approval_status='approved') "
+                "AND (s.id IS NULL OR (s.active_in_snapshot=1 "
+                "AND (t.is_marketing=0 OR s.approval_status='approved') "
                 "AND (s.valid_from IS NULL OR s.valid_from<=UTC_TIMESTAMP(6)) "
                 "AND (s.valid_to IS NULL OR s.valid_to>=UTC_TIMESTAMP(6)))) "
                 "ORDER BY t.id LIMIT %s",
@@ -693,7 +695,8 @@ def available_topics(cursor, topic_ids: list[str]) -> dict[str, dict]:
         "s.payload_json AS topic_payload "
         "FROM godp_topic t LEFT JOIN godp_topic_source s ON s.topic_id=t.topic_code "
         f"WHERE t.topic_code IN ({placeholders}) AND t.del_flag='N' AND t.status='可用' "
-        "AND (s.id IS NULL OR ((t.is_marketing=0 OR s.approval_status='approved') "
+        "AND (s.id IS NULL OR (s.active_in_snapshot=1 "
+        "AND (t.is_marketing=0 OR s.approval_status='approved') "
         "AND (s.valid_from IS NULL OR s.valid_from<=UTC_TIMESTAMP(6)) "
         "AND (s.valid_to IS NULL OR s.valid_to>=UTC_TIMESTAMP(6))))",
         topic_ids,
