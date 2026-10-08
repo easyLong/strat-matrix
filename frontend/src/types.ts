@@ -4,10 +4,28 @@ export interface StageTarget {
   conversion: number
 }
 
+export interface LifecycleCondition {
+  field: 'valid_content_count' | 'rolling_interaction_count' | 'followers_count'
+  operator: 'lt' | 'lte' | 'gte' | 'gt' | 'eq'
+  value: number
+  join: 'AND' | 'OR'
+}
+
+export interface LifecycleRule {
+  name: string
+  conditions: LifecycleCondition[]
+  catchAll: boolean
+}
+
 export interface StrategyConfig {
   marketing_max: number
+  planning_days: number[]
+  schedule_day: number
+  schedule_time: string
+  hotspot_ratio: number
   rolling_posts: number
   stage_targets: StageTarget[]
+  lifecycle_rules: LifecycleRule[]
 }
 
 export interface ConfigResponse {

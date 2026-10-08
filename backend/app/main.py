@@ -239,8 +239,8 @@ def restore_config(version: int, expected_version: int | None = None) -> ConfigR
 
 
 CONFIG_MODULE_FIELDS = {
-    "marketing": ("marketing_max",),
-    "strategy": ("rolling_posts", "stage_targets"),
+    "marketing": ("marketing_max", "planning_days", "schedule_day", "schedule_time", "hotspot_ratio"),
+    "strategy": ("rolling_posts", "stage_targets", "lifecycle_rules"),
 }
 
 

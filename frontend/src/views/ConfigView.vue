@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
-import type { ConfigVersionSummary, StrategyConfig } from '../types'
+import type { ConfigVersionSummary, LifecycleRule, StrategyConfig } from '../types'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -11,8 +11,13 @@ const router = useRouter()
 function cloneConfig(value: StrategyConfig): StrategyConfig {
   return {
     marketing_max: value.marketing_max,
+    planning_days: [...value.planning_days],
+    schedule_day: value.schedule_day,
+    schedule_time: value.schedule_time,
+    hotspot_ratio: value.hotspot_ratio,
     rolling_posts: value.rolling_posts,
     stage_targets: value.stage_targets.map(stage => ({ ...stage })),
+    lifecycle_rules: value.lifecycle_rules.map(rule => ({ ...rule, conditions: rule.conditions.map(condition => ({ ...condition })) })),
   }
 }
 
@@ -25,6 +30,20 @@ const versions = ref<Record<'marketing' | 'strategy', ConfigVersionSummary[]>>({
 const activeModule = ref<'marketing' | 'strategy'>('marketing')
 const moduleNames = { marketing: '营销配置', strategy: '经营策略' }
 const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(store.config))
+const marketingFields = (config: StrategyConfig) => ({
+  marketing_max: config.marketing_max,
+  planning_days: config.planning_days,
+  schedule_day: config.schedule_day,
+  schedule_time: config.schedule_time,
+  hotspot_ratio: config.hotspot_ratio,
+})
+const strategyFields = (config: StrategyConfig) => ({
+  rolling_posts: config.rolling_posts,
+  stage_targets: config.stage_targets,
+  lifecycle_rules: config.lifecycle_rules,
+})
+const marketingDirty = computed(() => JSON.stringify(marketingFields(draft.value)) !== JSON.stringify(marketingFields(store.config)))
+const strategyDirty = computed(() => JSON.stringify(strategyFields(draft.value)) !== JSON.stringify(strategyFields(store.config)))
 let removeRouteGuard: (() => void) | undefined
 const tagVersion = ref(0)
 const tagDraft = ref<Record<string, string>>({ T1: '', T2: '', T3: '', T4: '', T5: '' })
@@ -48,13 +67,12 @@ const prototypeTags: Record<string, string[]> = {
 }
 const newTagInputs = ref<Record<string, string>>({ T1: '', T2: '', T3: '', T4: '', T5: '' })
 const tagAddOpen = ref(false)
-const planningDays = ref<number[]>([1, 3, 5])
-const scheduleDay = ref(2)
-const scheduleTime = ref('22:00')
-const hotspotRatio = ref(20)
+const planningDays = computed(() => draft.value.planning_days)
+const scheduleDay = computed({ get: () => draft.value.schedule_day, set: value => { draft.value.schedule_day = value } })
+const scheduleTime = computed({ get: () => draft.value.schedule_time, set: value => { draft.value.schedule_time = value } })
+const hotspotRatio = computed({ get: () => draft.value.hotspot_ratio, set: value => { draft.value.hotspot_ratio = value } })
 const lifecycleEditing = ref(false)
-type LifecycleCondition = { field: string; operator: string; value: number; join: 'AND' | 'OR' }
-type LifecycleRule = { name: string; conditions: LifecycleCondition[]; catchAll?: boolean }
+const lifecycleRules = computed(() => draft.value.lifecycle_rules)
 const lifecycleMetricOptions = [
   { value: 'valid_content_count', label: '有效内容数', unit: '篇' },
   { value: 'rolling_interaction_count', label: '滚动周期内互动数', unit: '次' },
@@ -67,23 +85,10 @@ const lifecycleOperatorOptions = [
   { value: 'gt', label: '>' },
   { value: 'eq', label: '=' },
 ]
-function createCondition(field: string, operator: string, value: number, join: 'AND' | 'OR' = 'AND'): LifecycleCondition {
-  return { field, operator, value, join }
-}
-function createDefaultLifecycleRules(): LifecycleRule[] {
-  return [
-    { name: '冷启动验证期', conditions: [createCondition('valid_content_count', 'lt', 10)] },
-    { name: '流量增长期', conditions: [createCondition('valid_content_count', 'gte', 10), createCondition('rolling_interaction_count', 'lt', 100, 'AND')] },
-    { name: '转化试探期', conditions: [createCondition('rolling_interaction_count', 'gte', 100), createCondition('followers_count', 'lt', 100000, 'AND')] },
-    { name: '转化放大期', conditions: [createCondition('rolling_interaction_count', 'gte', 100), createCondition('followers_count', 'gte', 100000, 'AND')] },
-    { name: '稳定经营期', conditions: [], catchAll: true },
-  ]
-}
-const lifecycleRules = ref<LifecycleRule[]>(createDefaultLifecycleRules())
 const uiBaseline = ref('')
 
 function uiSnapshot() {
-  return JSON.stringify({ planningDays: planningDays.value, scheduleDay: scheduleDay.value, scheduleTime: scheduleTime.value, hotspotRatio: hotspotRatio.value, lifecycleRules: lifecycleRules.value, disabledTags: disabledTags.value })
+  return JSON.stringify({ disabledTags: disabledTags.value })
 }
 
 const uiDirty = computed(() => Boolean(uiBaseline.value) && uiSnapshot() !== uiBaseline.value)
@@ -95,7 +100,7 @@ function metricUnit(field: string) {
 
 function addLifecycleCondition(rule: LifecycleRule) {
   if (rule.catchAll) return
-  rule.conditions.push(createCondition('valid_content_count', 'gte', 0, rule.conditions.length ? 'AND' : 'AND'))
+  rule.conditions.push({ field: 'valid_content_count', operator: 'gte', value: 0, join: 'AND' })
 }
 
 function removeLifecycleCondition(rule: LifecycleRule, index: number) {
@@ -148,7 +153,7 @@ function togglePlanningDay(day: number) {
     if (days.size === 1) return
     days.delete(day)
   } else days.add(day)
-  planningDays.value = [...days].sort((a, b) => a - b)
+  draft.value.planning_days = [...days].sort((a, b) => a - b)
 }
 
 function loadUiSettings() {
@@ -156,17 +161,6 @@ function loadUiSettings() {
     const raw = localStorage.getItem('strat-matrix.config-ui')
     if (raw) {
       const saved = JSON.parse(raw)
-      if (Array.isArray(saved.planningDays) && saved.planningDays.length) planningDays.value = saved.planningDays
-      if (Number.isInteger(saved.scheduleDay)) scheduleDay.value = saved.scheduleDay
-      if (typeof saved.scheduleTime === 'string') scheduleTime.value = saved.scheduleTime
-      if (Number.isFinite(saved.hotspotRatio)) hotspotRatio.value = saved.hotspotRatio
-      if (Array.isArray(saved.lifecycleRules) && saved.lifecycleRules.every((rule: { conditions?: unknown }) => Array.isArray(rule.conditions))) {
-        lifecycleRules.value = saved.lifecycleRules.map((rule: { name?: string; conditions?: Array<Partial<LifecycleCondition>> }, index: number) => ({
-          name: rule.name ?? '',
-          conditions: (rule.conditions ?? []).map(condition => createCondition(lifecycleMetricOptions.some(option => option.value === condition.field) ? condition.field! : 'valid_content_count', lifecycleOperatorOptions.some(option => option.value === condition.operator) ? condition.operator! : 'gte', Number.isFinite(condition.value) ? Number(condition.value) : 0, condition.join === 'OR' ? 'OR' : 'AND')),
-          catchAll: index === saved.lifecycleRules.length - 1,
-        })).filter((rule: LifecycleRule) => rule.conditions.length > 0 || rule.catchAll)
-      }
       if (saved.disabledTags && typeof saved.disabledTags === 'object') disabledTags.value = saved.disabledTags
     }
   } catch { /* use prototype defaults */ }
@@ -252,15 +246,26 @@ async function saveTagTaxonomy() {
   finally { busy.value = false }
 }
 
-const isValid = computed(() =>
+const marketingValid = computed(() =>
   Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 &&
+  planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size &&
+  planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) &&
+  Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 &&
+  /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) &&
+  Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100,
+)
+const strategyValid = computed(() =>
   Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 &&
   draft.value.stage_targets.length === 5 &&
   draft.value.stage_targets.every(stage =>
     Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) &&
     stage.traffic >= 0 && stage.conversion >= 0 &&
     stage.traffic + stage.conversion === 100,
-  ),
+  ) &&
+  lifecycleRules.value.length === 5 &&
+  lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 &&
+    rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) &&
+  lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0,
 )
 
 function restore() {
@@ -270,13 +275,26 @@ function restore() {
 }
 
 async function save(module: 'marketing' | 'strategy') {
-  if (!store.databaseReady || !isValid.value) return
+  if (!store.databaseReady || !(module === 'marketing' ? marketingValid.value && marketingDirty.value : strategyValid.value && strategyDirty.value)) return
+  const otherModuleDraft = cloneConfig(draft.value)
+  const payload = cloneConfig(store.config)
+  Object.assign(payload, module === 'marketing' ? marketingFields(draft.value) : strategyFields(draft.value))
   busy.value = true
   notice.value = ''
   error.value = ''
   try {
-    await store.saveConfigModule(module, draft.value)
-    saveUiSettings()
+    await store.saveConfigModule(module, payload)
+    if (module === 'marketing') {
+      draft.value.rolling_posts = otherModuleDraft.rolling_posts
+      draft.value.stage_targets = otherModuleDraft.stage_targets
+      draft.value.lifecycle_rules = otherModuleDraft.lifecycle_rules
+    } else {
+      draft.value.marketing_max = otherModuleDraft.marketing_max
+      draft.value.planning_days = otherModuleDraft.planning_days
+      draft.value.schedule_day = otherModuleDraft.schedule_day
+      draft.value.schedule_time = otherModuleDraft.schedule_time
+      draft.value.hotspot_ratio = otherModuleDraft.hotspot_ratio
+    }
     await loadVersions()
     notice.value = `${moduleNames[module]}已保存为新版本`
   } catch (exc) {
@@ -325,8 +343,9 @@ async function restoreVersion(version: number) {
           <label class="field"><span>营销内容周上限</span><div class="input-unit"><input v-model.number="draft.marketing_max" type="number" min="0" /><span>条 / 营销账号 / 周</span></div><small>0 表示本周期不安排营销内容；实际数量不超过可执行槽位数。</small></label>
           <label class="field"><span>热点槽位占比</span><div class="input-unit"><input v-model.number="hotspotRatio" type="number" min="0" max="100" /><span>%</span></div><small>仅决定批次预规划热点槽位数量，不提前锁定具体热点选题。</small></label>
         </div>
-        <div class="banner info-banner"><b>热点动态替换：</b>无需预留热点槽位。热点进入后，从尚未触发内容生产的可替换结果中处理。</div>
-        <div class="footer-actions"><span class="form-note">当前：每周 {{ planningDays.length }} 个槽位 / 账号 · {{ ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][scheduleDay - 1] }} {{ scheduleTime }}</span><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !isValid || !planningDays.length || hotspotRatio < 0 || hotspotRatio > 100" @click="save('marketing')">保存账号配置</button></div>
+        <div class="banner info-banner"><b>热点槽位：</b>自动策划时按占比提前规划，具体热点选题在目标槽位前一天 22:00 确定。</div>
+        <p v-if="!marketingValid" class="inline-error">请检查每周策划日、调度时间、营销上限和热点占比。</p>
+        <div class="footer-actions"><span class="form-note">当前：每周 {{ planningDays.length }} 个槽位 / 账号 · {{ ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][scheduleDay - 1] }} {{ scheduleTime }}</span><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !marketingValid || !marketingDirty" @click="save('marketing')">保存账号配置</button></div>
       </div>
     </section>
 
@@ -344,11 +363,11 @@ async function restoreVersion(version: number) {
             </tr></tbody>
           </table>
         </div>
-        <div class="lifecycle-definition-head"><div><b>生命周期阶段定义</b><small>仅使用有效内容数、滚动周期互动数和粉丝数等可量化指标；按阶段顺序从上到下匹配，命中第一个阶段后停止。</small></div><button class="btn small" type="button" @click="lifecycleEditing = !lifecycleEditing">{{ lifecycleEditing ? '完成编辑' : '编辑定义' }}</button></div>
-        <div class="banner info-banner lifecycle-coverage-note"><b>唯一归属规则：</b>一个账号只允许归属一个阶段。前四个阶段按条件匹配，最后的“稳定经营期”作为兜底阶段，未命中前置条件的账号自动归入该阶段。</div>
+        <div class="lifecycle-definition-head"><div><b>生命周期阶段定义</b><small>使用有效内容数、滚动周期互动数和粉丝数等可量化指标；按成熟度从高到低匹配，命中第一个阶段后停止。</small></div><button class="btn small" type="button" @click="lifecycleEditing = !lifecycleEditing">{{ lifecycleEditing ? '完成编辑' : '编辑定义' }}</button></div>
+        <div class="banner info-banner lifecycle-coverage-note"><b>唯一归属规则：</b>一个账号只允许归属一个阶段。前四个阶段按条件匹配，未命中时归入“冷启验证期”。</div>
         <div class="lifecycle-definition-list"><div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition"><div class="lifecycle-stage-name"><b>{{ rule.name }}</b><small>{{ rule.catchAll ? '兜底阶段' : '进入条件' }}</small></div><div v-if="rule.catchAll" class="lifecycle-catch-all">未命中前置阶段条件的账号自动归入此阶段，确保每个账号都有且只有一个生命周期阶段。</div><div v-else class="lifecycle-condition-list"><div v-for="(condition, index) in rule.conditions" :key="`${rule.name}-${index}`" class="lifecycle-condition-row"><select v-model="condition.field" :disabled="!lifecycleEditing" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><select v-model="condition.operator" :disabled="!lifecycleEditing" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model.number="condition.value" :disabled="!lifecycleEditing" type="number" step="1" aria-label="阈值" /><span class="condition-unit">{{ metricUnit(condition.field) }}</span><select v-if="index > 0" v-model="condition.join" :disabled="!lifecycleEditing" class="condition-join" aria-label="条件关系"><option value="AND">且</option><option value="OR">或</option></select><button v-if="lifecycleEditing && rule.conditions.length > 1" class="icon-btn condition-remove" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, index)">×</button></div><button v-if="lifecycleEditing" class="text-btn condition-add" type="button" @click="addLifecycleCondition(rule)">＋ 添加条件</button></div></div></div>
-        <p v-if="!isValid" class="inline-error">请检查配置范围；每个阶段的流量与转化目标之和必须为 100%。</p>
-        <div class="footer-actions"><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !isValid" @click="save('strategy')">保存经营策略</button></div>
+        <p v-if="!strategyValid" class="inline-error">请检查滚动窗口、生命周期进入条件；每个阶段的流量与转化目标之和必须为 100%。</p>
+        <div class="footer-actions"><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !strategyValid || !strategyDirty" @click="save('strategy')">保存经营策略</button></div>
       </div>
     </section>
   </fieldset>
@@ -368,10 +387,10 @@ async function restoreVersion(version: number) {
   <section class="card">
     <div class="card-head"><div><h2>配置快照</h2><small>按模块查看历史，恢复只影响当前选择的模块</small></div><div class="tab-switch"><button type="button" :class="{ active: activeModule === 'marketing' }" @click="activeModule = 'marketing'">账号配置</button><button type="button" :class="{ active: activeModule === 'strategy' }" @click="activeModule = 'strategy'">经营策略</button></div></div>
     <div class="table-wrap"><table><thead><tr><th>版本</th><th>生成时间</th><th>配置摘要</th><th>动作</th><th>操作人</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="version in versions[activeModule]" :key="version.version"><td><b>V{{ version.version }}</b><span v-if="version.version === versions[activeModule][0]?.version" class="tag green row-tag">当前</span></td><td>{{ version.created_at }}</td><td>{{ activeModule === 'marketing' ? `营销上限 ${version.config.marketing_max} 条/周` : `滚动 ${version.config.rolling_posts} 篇 · 五阶段目标` }}</td><td>{{ version.action }}<small v-if="version.source_version">来自 V{{ version.source_version }}</small></td><td>{{ version.created_by }}</td><td><button class="text-btn" type="button" :disabled="busy || version.version === versions[activeModule][0]?.version" @click="restoreVersion(version.version)">恢复此版本</button></td></tr>
+      <tr v-for="version in versions[activeModule]" :key="version.version"><td><b>V{{ version.version }}</b><span v-if="version.version === versions[activeModule][0]?.version" class="tag green row-tag">当前</span></td><td>{{ version.created_at }}</td><td>{{ activeModule === 'marketing' ? `每周 ${version.config.planning_days.length} 天 · 调度周${['一', '二', '三', '四', '五', '六', '日'][version.config.schedule_day - 1]} ${version.config.schedule_time} · 营销上限 ${version.config.marketing_max} · 热点 ${version.config.hotspot_ratio}%` : `滚动 ${version.config.rolling_posts} 篇 · 五阶段目标与定义` }}</td><td>{{ version.action }}<small v-if="version.source_version">来自 V{{ version.source_version }}</small></td><td>{{ version.created_by }}</td><td><button class="text-btn" type="button" :disabled="busy || version.version === versions[activeModule][0]?.version" @click="restoreVersion(version.version)">恢复此版本</button></td></tr>
       <tr v-if="versions[activeModule].length === 0"><td colspan="6"><div class="empty-state">暂无该模块的配置记录</div></td></tr>
     </tbody></table></div>
   </section>
-  <p class="page-footnote">当前有效配置组合版本：V{{ store.configVersion }}<span v-if="store.configUpdatedAt"> · 更新时间：{{ store.configUpdatedAt }}</span>。生命周期阶段条件和回退规则待 PRD 的 P0 规则冻结后接入。</p>
+  <p class="page-footnote">当前有效配置组合版本：V{{ store.configVersion }}<span v-if="store.configUpdatedAt"> · 更新时间：{{ store.configUpdatedAt }}</span>。新批次读取保存后的配置；历史批次维持原结果。</p>
 </template>
 

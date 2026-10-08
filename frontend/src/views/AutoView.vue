@@ -34,13 +34,11 @@ function openCycle(cycle: AutoCycleSummary) {
 }
 const scheduleSummary = computed(() => {
   const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-  try {
-    const saved = JSON.parse(localStorage.getItem('strat-matrix.config-ui') ?? '{}')
-    const days = Array.isArray(saved.planningDays) && saved.planningDays.length ? saved.planningDays.map((day: number) => labels[day - 1]).join('/') : '周一/周三/周五'
-    const day = Number.isInteger(saved.scheduleDay) ? labels[saved.scheduleDay - 1] : '周二'
-    return { days, trigger: `${day} ${saved.scheduleTime || '22:00'}`, ratio: Number.isFinite(saved.hotspotRatio) ? saved.hotspotRatio : 20 }
-  } catch {
-    return { days: '周一/周三/周五', trigger: '周二 22:00', ratio: 20 }
+  const config = store.config
+  return {
+    days: config.planning_days.map(day => labels[day - 1]).join('/'),
+    trigger: `${labels[config.schedule_day - 1]} ${config.schedule_time}`,
+    ratio: config.hotspot_ratio,
   }
 })
 let refreshTimer: number | undefined

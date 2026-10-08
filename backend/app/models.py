@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class StageTarget(BaseModel):
@@ -11,9 +11,47 @@ class StageTarget(BaseModel):
     traffic: int = Field(ge=0, le=100)
     conversion: int = Field(ge=0, le=100)
 
+
+class LifecycleCondition(BaseModel):
+    field: Literal["valid_content_count", "rolling_interaction_count", "followers_count"]
+    operator: Literal["lt", "lte", "gte", "gt", "eq"]
+    value: int = Field(ge=0)
+    join: Literal["AND", "OR"] = "AND"
+
+
+class LifecycleRule(BaseModel):
+    name: str
+    conditions: list[LifecycleCondition] = Field(default_factory=list)
+    catchAll: bool = False
+
+
+def default_lifecycle_rules() -> list[LifecycleRule]:
+    return [
+        LifecycleRule(name="稳定经营期", conditions=[
+            LifecycleCondition(field="followers_count", operator="gte", value=100000),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=100),
+        ]),
+        LifecycleRule(name="转化放大期", conditions=[
+            LifecycleCondition(field="followers_count", operator="gte", value=50000),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=100),
+        ]),
+        LifecycleRule(name="转化试探期", conditions=[
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=100),
+        ]),
+        LifecycleRule(name="流量增长期", conditions=[
+            LifecycleCondition(field="valid_content_count", operator="gte", value=10),
+        ]),
+        LifecycleRule(name="冷启验证期", catchAll=True),
+    ]
+
 class StrategyConfig(BaseModel):
     marketing_max: int = Field(default=1, ge=0, le=10000)
+    planning_days: list[int] = Field(default_factory=lambda: [1, 3, 5])
+    schedule_day: int = Field(default=2, ge=1, le=7)
+    schedule_time: str = Field(default="22:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    hotspot_ratio: int = Field(default=20, ge=0, le=100)
     rolling_posts: int = Field(default=10, ge=1, le=100)
+    lifecycle_rules: list[LifecycleRule] = Field(default_factory=default_lifecycle_rules)
     stage_targets: list[StageTarget] = Field(
         default_factory=lambda: [
             StageTarget(name="冷启验证期", traffic=80, conversion=20),
@@ -32,6 +70,24 @@ class StrategyConfig(BaseModel):
         if any(target.traffic + target.conversion != 100 for target in targets):
             raise ValueError("每个阶段的流量与转化占比之和必须为 100%")
         return targets
+
+    @field_validator("planning_days")
+    @classmethod
+    def validate_planning_days(cls, days: list[int]) -> list[int]:
+        if not days or len(days) != len(set(days)) or any(day < 1 or day > 7 for day in days):
+            raise ValueError("每周策划日须选择周一至周日至少一天，且不能重复")
+        return sorted(days)
+
+    @model_validator(mode="after")
+    def validate_lifecycle_rules(self) -> "StrategyConfig":
+        names = [rule.name for rule in self.lifecycle_rules]
+        if names != ["稳定经营期", "转化放大期", "转化试探期", "流量增长期", "冷启验证期"]:
+            raise ValueError("生命周期阶段须按成熟度从高到低配置五个固定阶段")
+        if any(rule.catchAll or not rule.conditions for rule in self.lifecycle_rules[:-1]):
+            raise ValueError("前四个生命周期阶段均须配置进入条件")
+        if not self.lifecycle_rules[-1].catchAll or self.lifecycle_rules[-1].conditions:
+            raise ValueError("冷启验证期须作为唯一兜底阶段")
+        return self
 
 
 class ConfigResponse(BaseModel):

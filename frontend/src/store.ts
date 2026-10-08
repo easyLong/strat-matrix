@@ -4,6 +4,10 @@ import type { BatchSummary, ConfigResponse, ManualPlanInput, StrategyConfig } fr
 
 export const defaultConfig: StrategyConfig = {
   marketing_max: 1,
+  planning_days: [1, 3, 5],
+  schedule_day: 2,
+  schedule_time: '22:00',
+  hotspot_ratio: 20,
   rolling_posts: 10,
   stage_targets: [
     { name: '冷启验证期', traffic: 80, conversion: 20 },
@@ -11,6 +15,13 @@ export const defaultConfig: StrategyConfig = {
     { name: '转化试探期', traffic: 50, conversion: 50 },
     { name: '转化放大期', traffic: 30, conversion: 70 },
     { name: '稳定经营期', traffic: 50, conversion: 50 },
+  ],
+  lifecycle_rules: [
+    { name: '稳定经营期', conditions: [{ field: 'followers_count', operator: 'gte', value: 100000, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 100, join: 'AND' }], catchAll: false },
+    { name: '转化放大期', conditions: [{ field: 'followers_count', operator: 'gte', value: 50000, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 100, join: 'AND' }], catchAll: false },
+    { name: '转化试探期', conditions: [{ field: 'rolling_interaction_count', operator: 'gte', value: 100, join: 'AND' }], catchAll: false },
+    { name: '流量增长期', conditions: [{ field: 'valid_content_count', operator: 'gte', value: 10, join: 'AND' }], catchAll: false },
+    { name: '冷启验证期', conditions: [], catchAll: true },
   ],
 }
 
