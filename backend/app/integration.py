@@ -1,13 +1,15 @@
 """Customer-system boundary and the project's local integration state."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hmac import compare_digest
 import json
 import os
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 import pymysql
 
@@ -16,6 +18,7 @@ from .integration_models import (
     AccountSync,
     ContentReadyInput,
     ContentStatusCallback,
+    PublicationStatusCallback,
     HistorySync,
     SyncResult,
     TopicSync,
@@ -23,6 +26,12 @@ from .integration_models import (
 
 
 router = APIRouter()
+
+
+def effective_topic_type(slot_type: str, is_marketing: bool) -> str:
+    if slot_type == "hotspot":
+        return "热点"
+    return "营销" if slot_type == "marketing_priority" or is_marketing else "普通"
 
 
 def require_integration_token(x_integration_token: str = Header(default="")) -> None:
@@ -286,6 +295,175 @@ def content_ready(slot_id: str, payload: ContentReadyInput) -> dict:
             )
             db.commit()
             return {"slot_id": slot_id, "version": slot["version"], "event_id": event_id, "queued": True}
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+
+
+@router.get("/api/integrations/accounts/{account_id}/current-plan", dependencies=[Depends(require_integration_token)])
+def current_producible_plan(account_id: str) -> dict:
+    """IF-05: read the current effective, unpublished results without locking them."""
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    week_start = today - timedelta(days=today.weekday())
+    sql = (
+        "SELECT i.id AS planning_result_id, i.publish_date, i.topic_id, "
+        "i.topic_title AS title, i.slot_type, s.slot_id, s.version AS result_version, "
+        "t.is_marketing, ts.payload_json AS topic_payload, b.cycle_start, b.cycle_end "
+        "FROM godp_planning_item i "
+        "JOIN godp_planning_batch b ON b.id=i.batch_id "
+        "JOIN godp_slot_state s ON s.item_id=i.id "
+        "LEFT JOIN godp_topic t ON t.topic_code=i.topic_id AND t.del_flag='N' "
+        "LEFT JOIN godp_topic_source ts ON ts.topic_id=i.topic_id AND ts.del_flag='N' "
+        "WHERE i.account_id=%s AND b.cycle_start=%s "
+        "AND i.del_flag='N' AND b.del_flag='N' AND s.del_flag='N' "
+        "AND b.batch_code NOT LIKE 'DEMO-%%' "
+        "AND i.topic_id<>'' AND s.topic_id=i.topic_id AND s.published_at IS NULL "
+        "AND i.status<>'已发布' "
+        "ORDER BY i.publish_date, i.id"
+    )
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(sql, (account_id, week_start))
+            rows = cursor.fetchall()
+            if not rows:
+                cursor.execute(
+                    "SELECT MIN(b.cycle_start) AS cycle_start "
+                    "FROM godp_planning_item i JOIN godp_planning_batch b ON b.id=i.batch_id "
+                    "JOIN godp_slot_state s ON s.item_id=i.id "
+                    "WHERE i.account_id=%s AND b.cycle_start>%s "
+                    "AND i.del_flag='N' AND b.del_flag='N' AND s.del_flag='N' "
+                    "AND b.batch_code NOT LIKE 'DEMO-%%' "
+                    "AND i.topic_id<>'' AND s.topic_id=i.topic_id AND s.published_at IS NULL "
+                    "AND i.status<>'已发布'",
+                    (account_id, week_start),
+                )
+                next_cycle = cursor.fetchone()["cycle_start"]
+                if next_cycle:
+                    cursor.execute(sql, (account_id, next_cycle))
+                    rows = cursor.fetchall()
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    if not rows:
+        return {"account_id": account_id, "planning_cycle": None, "planning_contents": []}
+    contents = []
+    for row in rows:
+        try:
+            topic = json.loads(row["topic_payload"]) if row["topic_payload"] else {}
+        except (TypeError, json.JSONDecodeError):
+            topic = {}
+        contents.append({
+            "planning_result_id": row["planning_result_id"],
+            "slot_id": row["slot_id"],
+            "result_version": row["result_version"],
+            "publish_date": row["publish_date"].isoformat(),
+            "topic_id": row["topic_id"],
+            "topic_type": effective_topic_type(row["slot_type"], bool(row["is_marketing"])),
+            "title": row["title"],
+            "outline": topic.get("outline") or topic.get("summary") or "",
+            "content_type": topic.get("content_type") or "",
+            "publish_status": "未发布",
+        })
+    return {
+        "account_id": account_id,
+        "planning_cycle": {
+            "start": rows[0]["cycle_start"].isoformat(),
+            "end": rows[0]["cycle_end"].isoformat(),
+        },
+        "planning_contents": contents,
+    }
+
+
+@router.post("/api/integrations/publication-status", dependencies=[Depends(require_integration_token)])
+def receive_publication_status(payload: PublicationStatusCallback) -> Any:
+    """IF-06: validate the effective result and persist the publication fact."""
+    receipt_json = as_json(payload.model_dump(mode="json"))
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT payload_json, validation_status FROM godp_publication_receipt "
+                "WHERE event_id=%s", (payload.event_id,),
+            )
+            previous = cursor.fetchone()
+            if previous:
+                if previous["payload_json"] != receipt_json:
+                    raise HTTPException(status_code=409, detail="相同事件 ID 的回传内容不同")
+                if previous["validation_status"] == "mismatch":
+                    return JSONResponse(status_code=409, content={
+                        "accepted": False, "applied": False, "reason": "result_mismatch",
+                    })
+                return {"accepted": True, "applied": False, "reason": "duplicate_event"}
+            cursor.execute(
+                "SELECT i.id, i.topic_id, i.slot_type, i.status, b.batch_code, "
+                "s.version, s.topic_id AS slot_topic_id, s.slot_id, s.published_at, "
+                "s.content_id, t.is_marketing "
+                "FROM godp_planning_item i "
+                "JOIN godp_planning_batch b ON b.id=i.batch_id "
+                "JOIN godp_slot_state s ON s.item_id=i.id "
+                "LEFT JOIN godp_topic t ON t.topic_code=i.topic_id AND t.del_flag='N' "
+                "WHERE i.id=%s AND i.del_flag='N' AND b.del_flag='N' AND s.del_flag='N' "
+                "FOR UPDATE", (payload.planning_result_id,),
+            )
+            item = cursor.fetchone()
+            if not item or item["batch_code"].startswith("DEMO-"):
+                raise HTTPException(status_code=404, detail="策划结果不存在")
+            cursor.execute(
+                "SELECT payload_json, validation_status FROM godp_publication_receipt "
+                "WHERE event_id=%s", (payload.event_id,),
+            )
+            previous = cursor.fetchone()
+            if previous:
+                if previous["payload_json"] != receipt_json:
+                    raise HTTPException(status_code=409, detail="相同事件 ID 的回传内容不同")
+                if previous["validation_status"] == "mismatch":
+                    return JSONResponse(status_code=409, content={
+                        "accepted": False, "applied": False, "reason": "result_mismatch",
+                    })
+                return {"accepted": True, "applied": False, "reason": "duplicate_event"}
+            current_status = "已发布" if item["published_at"] else "未发布"
+            mismatch = (
+                item["version"] != payload.result_version
+                or not item["topic_id"]
+                or item["slot_topic_id"] != item["topic_id"]
+                or item["topic_id"] != payload.topic_id
+                or effective_topic_type(item["slot_type"], bool(item["is_marketing"])) != payload.topic_type
+                or (current_status == "已发布" and payload.publish_status == "未发布")
+                or (item["content_id"] is not None and payload.content_id is not None
+                    and item["content_id"] != payload.content_id)
+            )
+            cursor.execute(
+                "INSERT INTO godp_publication_receipt "
+                "(event_id, planning_result_id, result_version, topic_id, topic_type, "
+                "publish_status, validation_status, content_id, occurred_at, payload_json) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (payload.event_id, payload.planning_result_id, payload.result_version,
+                 payload.topic_id, payload.topic_type, payload.publish_status,
+                 "mismatch" if mismatch else "accepted", payload.content_id,
+                 utc_naive(payload.occurred_at), receipt_json),
+            )
+            if mismatch:
+                db.commit()
+                return JSONResponse(status_code=409, content={
+                    "accepted": False, "applied": False, "reason": "result_mismatch",
+                    "current_publish_status": current_status,
+                })
+            applied = payload.publish_status == "已发布" and current_status != "已发布"
+            if applied:
+                cursor.execute(
+                    "UPDATE godp_slot_state SET production_status='published', "
+                    "content_id=COALESCE(%s, content_id), published_at=%s, update_by='integration' "
+                    "WHERE item_id=%s",
+                    (payload.content_id, utc_naive(payload.occurred_at), payload.planning_result_id),
+                )
+                cursor.execute(
+                    "UPDATE godp_planning_item SET status='已发布', update_by='integration' "
+                    "WHERE id=%s", (payload.planning_result_id,),
+                )
+            db.commit()
+            return {
+                "accepted": True,
+                "applied": applied,
+                "reason": "applied" if applied else "already_current",
+                "current_publish_status": payload.publish_status,
+            }
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
 

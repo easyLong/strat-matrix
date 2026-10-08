@@ -139,6 +139,24 @@ class ContentStatusCallback(BaseModel):
         return self
 
 
+class PublicationStatusCallback(BaseModel):
+    """IF-06: publication facts, separate from content production progress."""
+
+    event_id: str = Field(min_length=1, max_length=64)
+    planning_result_id: int = Field(ge=1)
+    result_version: int = Field(ge=1)
+    topic_id: str = Field(min_length=1, max_length=64)
+    topic_type: Literal["普通", "营销", "热点"]
+    publish_status: Literal["未发布", "已发布"]
+    occurred_at: datetime
+    content_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("occurred_at")
+    @classmethod
+    def check_time(cls, value: datetime) -> datetime:
+        return aware(value)
+
+
 class ContentReadyInput(BaseModel):
     fit_score: float = Field(ge=0, le=100)
     tags: dict[str, Any]

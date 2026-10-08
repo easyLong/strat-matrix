@@ -214,6 +214,27 @@ CREATE TABLE IF NOT EXISTS godp_content_receipt (
     KEY idx_content_receipt_slot (slot_id, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='内容生产状态回传记录';
 
+CREATE TABLE IF NOT EXISTS godp_publication_receipt (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '发布状态回传记录主键ID',
+    event_id VARCHAR(64) NOT NULL COMMENT '客户发布状态事件唯一编码',
+    planning_result_id BIGINT NOT NULL COMMENT '关联策划结果条目ID，无外键',
+    result_version INT NOT NULL COMMENT '客户确认的策划结果版本号',
+    topic_id VARCHAR(64) NOT NULL COMMENT '客户实际发布的选题编码',
+    topic_type VARCHAR(16) NOT NULL COMMENT '客户实际发布的选题类型：普通、营销或热点',
+    publish_status VARCHAR(16) NOT NULL COMMENT '客户回传的发布状态：未发布或已发布',
+    validation_status VARCHAR(16) NOT NULL COMMENT '回传校验结果：accepted通过或mismatch不一致',
+    content_id VARCHAR(64) NULL COMMENT '客户内容系统中的内容编码',
+    occurred_at DATETIME(6) NOT NULL COMMENT '客户发布状态发生时间，按UTC保存',
+    payload_json LONGTEXT NOT NULL COMMENT '发布状态回传完整请求内容JSON',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_publication_receipt_event (event_id),
+    KEY idx_publication_receipt_result (planning_result_id, result_version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户发布状态回传与一致性校验记录';
+
 CREATE TABLE IF NOT EXISTS godp_topic_tag (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题标签记录主键ID',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',

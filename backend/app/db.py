@@ -60,6 +60,7 @@ def check_database() -> bool:
                 "godp_slot_state",
                 "godp_integration_outbox",
                 "godp_content_receipt",
+                "godp_publication_receipt",
                 "godp_topic_tag",
                 "godp_strategy_config_version",
                 "godp_manual_preview",

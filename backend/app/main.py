@@ -88,17 +88,15 @@ def enrich_plan_item(row: dict, plan_type: str | None = None) -> dict:
         row["outline"] = ""
     row["lifecycle_stage"] = row.get("lifecycle_stage") or infer_lifecycle_stage(row.get("account_id", ""))
     row["content_role"] = row.get("content_role") or infer_content_role(row, source if source_payload else {})
-    production_status = row.get("production_status")
     published_at = row.get("published_at")
     known = bool(row.get("slot_id"))
     publish_status = "已发布" if published_at else ("未发布" if known else "状态未知")
-    allow = bool(plan_type == "auto" and known and production_status == "planned" and not published_at)
+    allow = bool(plan_type == "auto" and known and not published_at)
     row["publish_status"] = publish_status
     row["allow_replace"] = allow
     row["replace_block_reason"] = "" if allow else (
-        "仅支持状态可信且未触发生产的 AI 自动策划结果" if plan_type != "auto" else
+        "仅支持 AI 自动策划结果" if plan_type != "auto" else
         "发布状态已确认不可替换" if published_at else
-        "生产状态已变化，不允许替换" if known and production_status != "planned" else
         "状态暂无法确认，不允许替换"
     )
     row["result_version"] = row.get("version")
@@ -513,8 +511,6 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
                 raise HTTPException(status_code=409, detail="当前基线只允许替换 AI 自动策划结果")
             if not item["slot_id"] or item["version"] != payload.expected_version:
                 raise HTTPException(status_code=409, detail="结果版本已变化或状态无法确认，请刷新后重试")
-            if item["production_status"] != "planned":
-                raise HTTPException(status_code=409, detail="内容生产已触发或状态已变化，当前结果不可替换")
             if item["published_at"] is not None:
                 raise HTTPException(status_code=409, detail="内容已发布，当前结果不可替换")
             topics = available_topics(cursor, [payload.new_topic_id])
@@ -542,11 +538,13 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
                 next_role = infer_content_role(item, topic_payload)
             cursor.execute(
                 "UPDATE godp_planning_item SET topic_id=%s, topic_title=%s, "
-                "content_role=%s, update_by='system' WHERE id=%s",
+                "content_role=%s, status='已规划', update_by='system' WHERE id=%s",
                 (topic["topic_id"], topic["topic_title"], next_role, item_id),
             )
             cursor.execute(
-                "UPDATE godp_slot_state SET version=%s, topic_id=%s, update_by='system' WHERE item_id=%s",
+                "UPDATE godp_slot_state SET version=%s, topic_id=%s, "
+                "production_status='planned', content_id=NULL, generated_at=NULL, "
+                "update_by='system' WHERE item_id=%s",
                 (next_version, topic["topic_id"], item_id),
             )
             cursor.execute(
@@ -583,8 +581,8 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
     updated = {
         "id": item_id, "account_id": item["account_id"], "account_name": item["account_name"],
         "publish_date": item["publish_date"], "slot_type": item["slot_type"],
-        "topic_id": topic["topic_id"], "topic_title": topic["topic_title"], "status": item["status"],
-        "slot_id": item["slot_id"], "production_status": item["production_status"],
+        "topic_id": topic["topic_id"], "topic_title": topic["topic_title"], "status": "已规划",
+        "slot_id": item["slot_id"], "production_status": "planned",
         "batch_code": item["batch_code"], "plan_type": item["plan_type"],
         "cycle_start": item["cycle_start"], "cycle_end": item["cycle_end"],
         "publish_status": "未发布", "allow_replace": True,
