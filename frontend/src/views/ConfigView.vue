@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from '../api'
+import { api, type TagTaxonomyItem } from '../api'
 import { usePlanningStore } from '../store'
 import type { ConfigVersionSummary, LifecycleRule, StrategyConfig } from '../types'
 
@@ -46,11 +46,11 @@ const marketingDirty = computed(() => JSON.stringify(marketingFields(draft.value
 const strategyDirty = computed(() => JSON.stringify(strategyFields(draft.value)) !== JSON.stringify(strategyFields(store.config)))
 let removeRouteGuard: (() => void) | undefined
 const tagVersion = ref(0)
-const tagDraft = ref<Record<string, string>>({ T1: '', T2: '', T3: '', T4: '', T5: '' })
+const tagItems = ref<Record<string, TagTaxonomyItem[]>>({ T1: [], T2: [], T3: [], T4: [], T5: [] })
+const tagBaseline = ref('')
 const tagNames: Record<string, string> = { T1: '业务属性', T2: '经营作用', T3: '主题域', T4: '目标客群', T5: '生活场景' }
 const tagTabs = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'] as const
 const activeTag = ref<typeof tagTabs[number]>('T1')
-const disabledTags = ref<Record<string, string[]>>({})
 const tagDescriptions: Record<string, string> = {
   T1: '定义选题是否具有明确业务或营销属性。',
   T2: '定义内容在账号经营中的主要作用。',
@@ -85,14 +85,8 @@ const lifecycleOperatorOptions = [
   { value: 'gt', label: '>' },
   { value: 'eq', label: '=' },
 ]
-const uiBaseline = ref('')
-
-function uiSnapshot() {
-  return JSON.stringify({ disabledTags: disabledTags.value })
-}
-
-const uiDirty = computed(() => Boolean(uiBaseline.value) && uiSnapshot() !== uiBaseline.value)
-const pageDirty = computed(() => dirty.value || uiDirty.value)
+const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value)
+const pageDirty = computed(() => dirty.value || tagDirty.value)
 
 function metricUnit(field: string) {
   return lifecycleMetricOptions.find(option => option.value === field)?.unit ?? ''
@@ -109,42 +103,41 @@ function removeLifecycleCondition(rule: LifecycleRule, index: number) {
   rule.conditions.splice(index, 1)
 }
 
-function getTagValues(code: string): string[] {
-  return [...new Set((tagDraft.value[code] ?? '').split(/[,\uFF0C\n]/).map(value => value.trim()).filter(Boolean))]
-}
-
-function setTagValues(code: string, values: string[]) {
-  tagDraft.value[code] = [...new Set(values.map(value => value.trim()).filter(Boolean))].join('\uFF0C')
+function getTagItems(code: string): TagTaxonomyItem[] {
+  return tagItems.value[code] ?? []
 }
 
 function addTag(code: string) {
   const value = (newTagInputs.value[code] ?? '').trim()
   if (!value) return
-  const values = getTagValues(code)
-  if (!values.includes(value)) setTagValues(code, [...values, value])
+  if (getTagItems(code).some(tag => tag.name === value)) {
+    error.value = '同一维度中已存在该标签'
+    return
+  }
+  tagItems.value[code].push({ id: null, name: value, enabled: true })
   newTagInputs.value[code] = ''
   tagAddOpen.value = false
+  error.value = ''
 }
 
-function removeTag(code: string, value: string) {
-  setTagValues(code, getTagValues(code).filter(tag => tag !== value))
+function renameTag(code: string, tag: TagTaxonomyItem) {
+  const next = window.prompt('请输入新的标签名称', tag.name)?.trim()
+  if (!next || next === tag.name) return
+  if (next.length > 80 || getTagItems(code).some(item => item !== tag && item.name === next)) {
+    error.value = '标签名称不能超过 80 字，且同一维度内不能重复'
+    return
+  }
+  tag.name = next
+  error.value = ''
 }
 
-function renameTag(code: string, value: string) {
-  const next = window.prompt('请输入新的标签名称', value)?.trim()
-  if (!next || next === value) return
-  setTagValues(code, getTagValues(code).map(tag => tag === value ? next : tag))
-}
-
-function isTagDisabled(code: string, value: string) {
-  return (disabledTags.value[code] ?? []).includes(value)
-}
-
-function toggleTagDisabled(code: string, value: string) {
-  const values = new Set(disabledTags.value[code] ?? [])
-  if (values.has(value)) values.delete(value)
-  else values.add(value)
-  disabledTags.value[code] = [...values]
+function toggleTagDisabled(code: string, tag: TagTaxonomyItem) {
+  if (tag.enabled && getTagItems(code).filter(item => item.enabled).length === 1) {
+    error.value = '每个维度至少保留一个启用标签'
+    return
+  }
+  tag.enabled = !tag.enabled
+  error.value = ''
 }
 
 function togglePlanningDay(day: number) {
@@ -154,27 +147,6 @@ function togglePlanningDay(day: number) {
     days.delete(day)
   } else days.add(day)
   draft.value.planning_days = [...days].sort((a, b) => a - b)
-}
-
-function loadUiSettings() {
-  try {
-    const raw = localStorage.getItem('strat-matrix.config-ui')
-    if (raw) {
-      const saved = JSON.parse(raw)
-      if (saved.disabledTags && typeof saved.disabledTags === 'object') disabledTags.value = saved.disabledTags
-    }
-  } catch { /* use prototype defaults */ }
-  uiBaseline.value = uiSnapshot()
-}
-
-function saveUiSettings() {
-  localStorage.setItem('strat-matrix.config-ui', uiSnapshot())
-  uiBaseline.value = uiSnapshot()
-}
-
-function resetTagTaxonomy() {
-  for (const code of Object.keys(tagNames)) setTagValues(code, prototypeTags[code] ?? [])
-  disabledTags.value = {}
 }
 
 watch(() => store.config, value => { draft.value = cloneConfig(value) }, { deep: true })
@@ -187,7 +159,6 @@ const beforeUnload = (event: BeforeUnloadEvent) => {
   event.returnValue = '当前存在未保存修改，离开后修改内容将丢失。'
 }
 onMounted(() => {
-  loadUiSettings()
   window.addEventListener('beforeunload', beforeUnload)
   removeRouteGuard = router.beforeEach((to, from) => {
     if (to.fullPath === from.fullPath || !pageDirty.value) return true
@@ -225,7 +196,33 @@ async function loadTagTaxonomy() {
   try {
     const loaded = await api.tagTaxonomy()
     tagVersion.value = loaded.version
-    for (const code of Object.keys(tagNames)) tagDraft.value[code] = (loaded.tags[code]?.length ? loaded.tags[code] : prototypeTags[code] ?? []).join('，')
+    for (const code of Object.keys(tagNames)) {
+      tagItems.value[code] = loaded.items[code]?.length
+        ? loaded.items[code].map(item => ({ ...item }))
+        : (prototypeTags[code] ?? []).map(name => ({ id: null, name, enabled: true }))
+    }
+    tagBaseline.value = JSON.stringify(Object.fromEntries(
+      Object.keys(tagNames).map(code => [code, loaded.items[code] ?? []]),
+    ))
+    // The previous page saved disabled names only in this browser. Offer them as
+    // an unsaved draft when the server has no disabled labels yet.
+    if (!Object.values(loaded.items).some(items => items.some(item => !item.enabled))) {
+      try {
+        const legacy = JSON.parse(localStorage.getItem('strat-matrix.config-ui') ?? '{}')
+        const oldDisabled = legacy.disabledTags as Record<string, string[]> | undefined
+        let restored = false
+        for (const code of Object.keys(tagNames)) {
+          const items = tagItems.value[code]
+          for (const item of items) {
+            if (oldDisabled?.[code]?.includes(item.name) && items.filter(tag => tag.enabled).length > 1) {
+              item.enabled = false
+              restored = true
+            }
+          }
+        }
+        if (restored) notice.value = '已读取此浏览器旧的停用标签，请核对并保存到服务端'
+      } catch { /* Invalid old browser settings do not affect server data. */ }
+    }
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取标签配置失败' }
 }
 
@@ -234,13 +231,11 @@ async function saveTagTaxonomy() {
   error.value = ''
   notice.value = ''
   try {
-    const tags = Object.fromEntries(Object.keys(tagNames).map(code => [
-      code,
-      [...new Set((tagDraft.value[code] ?? '').split(/[,，\n]/).map(value => value.trim()).filter(Boolean))],
-    ])) as Record<string, string[]>
-    const saved = await api.saveTagTaxonomy(tags)
+    const saved = await api.saveTagTaxonomy(tagItems.value, tagVersion.value)
     tagVersion.value = saved.version
-    saveUiSettings()
+    tagItems.value = saved.items
+    tagBaseline.value = JSON.stringify(tagItems.value)
+    localStorage.removeItem('strat-matrix.config-ui')
     notice.value = `T1–T5 标签配置已保存为 V${saved.version}，选题库同步事件已进入待投递队列`
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '保存标签配置失败' }
   finally { busy.value = false }
@@ -372,12 +367,12 @@ async function restoreVersion(version: number) {
     </section>
   </fieldset>
   <section class="card">
-    <div class="card-head"><div><h2>多维标签配置 <button class="help-btn" type="button" title="T1–T5 为运营维护字典，T6 用户需求由模型单选识别">?</button></h2><small>T1–T5 固定字典单选；历史已引用标签停用后仅影响后续新识别。</small></div><div class="page-actions"><button class="btn small" type="button" :disabled="busy || activeTag === 'T6' || !store.databaseReady" @click="tagAddOpen = !tagAddOpen">{{ tagAddOpen ? '取消新增' : '新增标签' }}</button><button class="btn small primary" type="button" :disabled="busy || !store.databaseReady" @click="saveTagTaxonomy">保存标签配置</button></div></div>
+    <div class="card-head"><div><h2>多维标签配置 <button class="help-btn" type="button" title="T1–T5 为运营维护字典，T6 用户需求由模型单选识别">?</button></h2><small>T1–T5 固定字典单选 · 当前 V{{ tagVersion }}；历史已引用标签停用后仅影响后续新识别。</small></div><div class="page-actions"><button class="btn small" type="button" :disabled="busy || activeTag === 'T6' || !store.databaseReady" @click="tagAddOpen = !tagAddOpen">{{ tagAddOpen ? '取消新增' : '新增标签' }}</button><button class="btn small primary" type="button" :disabled="busy || !store.databaseReady || !tagDirty" @click="saveTagTaxonomy">保存标签配置</button></div></div>
     <div class="tag-tabs" role="tablist"><button v-for="code in tagTabs" :key="code" class="tag-tab" :class="{ active: activeTag === code }" type="button" role="tab" :aria-selected="activeTag === code" @click="activeTag = code">{{ code }} {{ code === 'T1' ? '业务属性' : code === 'T2' ? '经营作用' : code === 'T3' ? '主题域' : code === 'T4' ? '目标客群' : code === 'T5' ? '生活场景' : '用户需求' }}</button></div>
     <div class="card-body tag-content">
       <template v-if="activeTag !== 'T6'">
         <div class="tag-content-head"><div><b>{{ activeTag }} {{ tagNames[activeTag] }}</b><small>{{ tagDescriptions[activeTag] }}</small></div><span class="tag blue">单选字典</span></div>
-        <div class="tag-pills"><div v-for="tag in getTagValues(activeTag)" :key="tag" class="pill-edit" :class="{ disabled: isTagDisabled(activeTag, tag) }"><span>{{ tag }}</span><button class="mini" type="button" @click="renameTag(activeTag, tag)">改名</button><button class="mini" type="button" @click="toggleTagDisabled(activeTag, tag)">{{ isTagDisabled(activeTag, tag) ? '启用' : '停用' }}</button></div><span v-if="getTagValues(activeTag).length === 0" class="taxonomy-empty">暂无标签，请添加</span></div>
+        <div class="tag-pills"><div v-for="tag in getTagItems(activeTag)" :key="tag.id ?? tag.name" class="pill-edit" :class="{ disabled: !tag.enabled }"><span>{{ tag.name }}</span><button class="mini" type="button" @click="renameTag(activeTag, tag)">改名</button><button class="mini" type="button" @click="toggleTagDisabled(activeTag, tag)">{{ tag.enabled ? '停用' : '启用' }}</button></div><span v-if="getTagItems(activeTag).length === 0" class="taxonomy-empty">暂无标签，请添加</span></div>
         <div v-if="tagAddOpen" class="taxonomy-add inline-add"><input v-model="newTagInputs[activeTag]" class="field-input" type="text" :placeholder="`添加${tagNames[activeTag]}标签`" @keyup.enter.prevent="addTag(activeTag)" /><button class="btn" type="button" :disabled="!newTagInputs[activeTag]?.trim()" @click="addTag(activeTag)">＋ 添加标签</button></div>
         <p class="hint">标签内部 ID 在改名时保持稳定；停用不会物理删除历史标签，仅影响后续新增选题的标签识别。</p>
       </template>

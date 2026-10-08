@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 
 from .db import connection
+from .taxonomy import normalize_taxonomy
 
 
 TAGS = {
@@ -97,12 +98,11 @@ def seed_config(cursor, now: datetime) -> None:
         "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), action='保存', del_flag='N'",
         (config_json,),
     )
-    tags_json = json.dumps(TAGS, ensure_ascii=False, separators=(",", ":"))
+    tags_json = json.dumps(normalize_taxonomy(TAGS), ensure_ascii=False, separators=(",", ":"))
     cursor.execute(
-        "INSERT INTO godp_strategy_config (config_key, config_json, version, create_by, update_by) "
-        "VALUES ('tag_taxonomy', %s, 1, 'demo-seed', 'demo-seed') "
-        "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), version=1, "
-        "create_by='demo-seed', update_by='demo-seed', del_flag='N'",
+        "INSERT IGNORE INTO godp_strategy_config "
+        "(config_key, config_json, version, create_by, update_by) "
+        "VALUES ('tag_taxonomy', %s, 1, 'demo-seed', 'demo-seed')",
         (tags_json,),
     )
 

@@ -1,5 +1,12 @@
 import type { AccountOption, AccountPlanRecord, AdjustmentRecord, AutoCycleSummary, AutoFailure, BatchDetail, BatchSummary, ConfigResponse, ConfigVersionSummary, ManualPlanInput, ManualPreviewInput, ManualPreviewResponse, ManualTaskSummary, PlanningCycleSummary, StrategyConfig, TopicOption } from './types'
 
+export interface TagTaxonomyItem { id: string | null; name: string; enabled: boolean }
+export interface TagTaxonomyResponse {
+  version: number
+  tags: Record<string, string[]>
+  items: Record<string, TagTaxonomyItem[]>
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response
   try {
@@ -35,9 +42,9 @@ export const api = {
     request<ConfigResponse>(`/config/modules/${module}?expected_version=${expectedVersion}`, { method: 'PUT', body: JSON.stringify(config) }),
   restoreConfigModule: (module: 'marketing' | 'strategy', version: number, expectedVersion: number) =>
     request<ConfigResponse>(`/config/modules/${module}/versions/${version}/restore?expected_version=${expectedVersion}`, { method: 'POST' }),
-  tagTaxonomy: () => request<{ version: number; tags: Record<string, string[]> }>('/tag-taxonomy'),
-  saveTagTaxonomy: (tags: Record<string, string[]>) =>
-    request<{ version: number; tags: Record<string, string[]> }>('/tag-taxonomy', { method: 'PUT', body: JSON.stringify({ tags }) }),
+  tagTaxonomy: () => request<TagTaxonomyResponse>('/tag-taxonomy'),
+  saveTagTaxonomy: (items: Record<string, TagTaxonomyItem[]>, expectedVersion: number) =>
+    request<TagTaxonomyResponse>('/tag-taxonomy', { method: 'PUT', body: JSON.stringify({ items, expected_version: expectedVersion }) }),
   accounts: () => request<AccountOption[]>('/accounts'),
   topics: () => request<TopicOption[]>('/topics?limit=1000'),
   batches: (type?: 'manual' | 'auto') =>

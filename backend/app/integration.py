@@ -27,6 +27,7 @@ from .integration_models import (
     SyncResult,
     TopicSync,
 )
+from .taxonomy import DIMENSIONS, active_tag_names, normalize_taxonomy
 
 
 router = APIRouter()
@@ -1112,18 +1113,40 @@ def topic_usage(topic_id: str) -> dict:
     return {"topic_id": topic_id, "generated_count": row["generated_count"]}
 
 
+class TagTaxonomyItemInput(BaseModel):
+    id: str | None = None
+    name: str = Field(min_length=1, max_length=80)
+    enabled: bool = True
+
+
 class TagTaxonomyInput(BaseModel):
-    tags: dict[str, list[str]]
+    items: dict[str, list[TagTaxonomyItemInput]] | None = None
+    tags: dict[str, list[str]] | None = None
+    expected_version: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def check_tags(self):
-        if set(self.tags) != {f"T{index}" for index in range(1, 6)}:
+        if (self.items is None) == (self.tags is None):
+            raise ValueError("必须且只能提交 items 或旧版 tags")
+        values_by_dimension = self.items if self.items is not None else self.tags
+        if set(values_by_dimension) != set(DIMENSIONS):
             raise ValueError("固定标签必须包含 T1–T5")
-        for values in self.tags.values():
-            if not values or len(values) > 100 or len(set(values)) != len(values):
-                raise ValueError("每个标签维度需有 1–100 个不重复的值")
-            if any(not value.strip() or len(value) > 80 for value in values):
-                raise ValueError("标签值不能为空且不能超过 80 字")
+        seen_ids = set()
+        for values in values_by_dimension.values():
+            if not 1 <= len(values) <= 100:
+                raise ValueError("每个标签维度需有 1–100 个值")
+            names = [value.name.strip() if isinstance(value, TagTaxonomyItemInput) else value.strip()
+                     for value in values]
+            if len(set(names)) != len(names) or any(not name or len(name) > 80 for name in names):
+                raise ValueError("同一维度标签名称必须唯一且不超过 80 字")
+            if self.items is not None:
+                if not any(value.enabled for value in values):
+                    raise ValueError("每个维度至少保留一个启用标签")
+                for value in values:
+                    if value.id is not None:
+                        if value.id in seen_ids:
+                            raise ValueError("标签 ID 不能重复")
+                        seen_ids.add(value.id)
         return self
 
 
@@ -1156,30 +1179,82 @@ def get_tag_taxonomy() -> dict:
             row = cursor.fetchone()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    return {"version": row["version"], "tags": json.loads(row["config_json"])} if row else {"version": 0, "tags": {}}
+    if not row:
+        return {"version": 0, "tags": {}, "items": {}}
+    items = normalize_taxonomy(json.loads(row["config_json"]))
+    return {"version": row["version"], "tags": active_tag_names(items), "items": items}
 
 
 @router.put("/api/tag-taxonomy")
 def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
     try:
         with connection() as db, db.cursor() as cursor:
+            # Lock the row even when the first dictionary is being created.
+            cursor.execute(
+                "INSERT IGNORE INTO godp_strategy_config "
+                "(config_key, config_json, version, create_by, update_by) "
+                "VALUES ('tag_taxonomy', '{}', 0, 'system', 'system')"
+            )
+            cursor.execute(
+                "SELECT version, config_json FROM godp_strategy_config "
+                "WHERE config_key='tag_taxonomy' AND del_flag='N' FOR UPDATE"
+            )
+            current = cursor.fetchone()
+            version = current["version"] if current else 0
+            if payload.expected_version is not None and payload.expected_version != version:
+                raise HTTPException(status_code=409, detail="标签配置已被其他操作更新，请刷新后重试")
+            existing = normalize_taxonomy(json.loads(current["config_json"])) if current else {
+                dimension: [] for dimension in DIMENSIONS
+            }
+            next_items = {}
+            for dimension in DIMENSIONS:
+                known = {item["id"]: item for item in existing[dimension]}
+                incoming = payload.items[dimension] if payload.items is not None else [
+                    TagTaxonomyItemInput(id=next((item["id"] for item in existing[dimension]
+                                                  if item["name"] == name.strip()), None), name=name.strip())
+                    for name in payload.tags[dimension]
+                ]
+                values = []
+                supplied_ids = set()
+                for item in incoming:
+                    if item.id and item.id not in known:
+                        raise HTTPException(status_code=409, detail=f"{dimension} 标签 ID 不存在，请刷新后重试")
+                    tag_id = item.id or f"{dimension}-{uuid4().hex.upper()}"
+                    supplied_ids.add(tag_id)
+                    values.append({"id": tag_id, "name": item.name.strip(), "enabled": item.enabled})
+                # Missing IDs are retained for historical references, but are disabled.
+                values.extend({**item, "enabled": False} for item in existing[dimension]
+                              if item["id"] not in supplied_ids)
+                names = [item["name"] for item in values]
+                if len(values) > 100 or len(names) != len(set(names)):
+                    raise HTTPException(status_code=422, detail=f"{dimension} 标签名称重复或超过 100 个")
+                next_items[dimension] = values
+            if next_items == existing:
+                return {"version": version, "tags": active_tag_names(existing), "items": existing}
+            next_version = version + 1
+            serialized = as_json(next_items)
             cursor.execute(
                 "INSERT INTO godp_strategy_config "
                 "(config_key, config_json, version, create_by, update_by) "
-                "VALUES ('tag_taxonomy', %s, 1, 'system', 'system') "
+                "VALUES ('tag_taxonomy', %s, %s, 'system', 'system') "
                 "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), "
-                "version=version+1, update_by='system', del_flag='N'",
-                (as_json(payload.tags),),
+                "version=VALUES(version), update_by='system', del_flag='N'",
+                (serialized, next_version),
             )
-            cursor.execute("SELECT version FROM godp_strategy_config WHERE config_key='tag_taxonomy'")
-            version = cursor.fetchone()["version"]
+            cursor.execute(
+                "INSERT INTO godp_strategy_config_version "
+                "(config_key, version, config_json, action, create_by, update_by) "
+                "VALUES ('tag_taxonomy', %s, %s, '保存', 'system', 'system')",
+                (next_version, serialized),
+            )
+            tags = active_tag_names(next_items)
             queue_event(cursor, "topics", "TOPIC_TAXONOMY_CHANGED", {
-                "taxonomy_version": version, "tags": payload.tags,
+                "taxonomy_version": next_version, "tags": tags, "items": next_items,
             })
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    return {"version": version, "tags": payload.tags}
+    return {"version": next_version, "tags": tags, "items": next_items}
 
 
 @router.put("/api/internal/topic-tags/{topic_id}", dependencies=[Depends(require_integration_token)])

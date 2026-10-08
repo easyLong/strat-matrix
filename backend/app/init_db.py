@@ -1,9 +1,11 @@
 """Apply the first release schema to the configured MySQL database."""
 
 from pathlib import Path
+import json
 import re
 
 from .db import connection
+from .taxonomy import normalize_taxonomy
 
 
 def column_definitions(schema: str) -> dict[str, dict[str, tuple[str, str]]]:
@@ -141,6 +143,33 @@ def main() -> None:
                 cursor.execute(
                     f"ALTER TABLE `{table}` ADD COLUMN active_in_snapshot "
                     f"TINYINT(1) NOT NULL DEFAULT 1 COMMENT '{description}'"
+                )
+        cursor.execute(
+            "SELECT config_json FROM godp_strategy_config "
+            "WHERE config_key='tag_taxonomy' AND del_flag='N' FOR UPDATE"
+        )
+        taxonomy_row = cursor.fetchone()
+        if taxonomy_row:
+            raw_taxonomy = json.loads(taxonomy_row["config_json"])
+            if any(isinstance(value, str) for values in raw_taxonomy.values() for value in values):
+                cursor.execute(
+                    "UPDATE godp_strategy_config SET config_json=%s, update_by='migration' "
+                    "WHERE config_key='tag_taxonomy'",
+                    (json.dumps(normalize_taxonomy(raw_taxonomy), ensure_ascii=False,
+                                separators=(",", ":")),),
+                )
+        cursor.execute(
+            "SELECT id, config_json FROM godp_strategy_config_version "
+            "WHERE config_key='tag_taxonomy' AND del_flag='N'"
+        )
+        for old_version in cursor.fetchall():
+            old_raw = json.loads(old_version["config_json"])
+            if any(isinstance(value, str) for values in old_raw.values() for value in values):
+                cursor.execute(
+                    "UPDATE godp_strategy_config_version SET config_json=%s, update_by='migration' "
+                    "WHERE id=%s",
+                    (json.dumps(normalize_taxonomy(old_raw), ensure_ascii=False,
+                                separators=(",", ":")), old_version["id"]),
                 )
         cursor.execute(
             "INSERT IGNORE INTO godp_strategy_config_version "
