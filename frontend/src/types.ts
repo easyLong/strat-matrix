@@ -99,7 +99,7 @@ export interface PlanItem {
   outline: string
   lifecycle_stage?: string | null
   content_role?: string | null
-  topic_type?: 'normal' | 'marketing' | 'hotspot' | null
+  topic_type?: '普通' | '营销' | '热点' | 'normal' | 'marketing' | 'hotspot' | null
 }
 
 export interface BatchDetail extends BatchSummary {

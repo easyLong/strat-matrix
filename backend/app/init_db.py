@@ -106,6 +106,9 @@ def main() -> None:
         for name, definition in (
             ("lifecycle_stage", "VARCHAR(32) NULL COMMENT '策划时账号生命周期阶段快照'"),
             ("content_role", "VARCHAR(16) NULL COMMENT '策划时选题经营作用快照：流量或转化'"),
+            ("topic_type", "VARCHAR(16) NULL COMMENT '实际绑定选题的来源类型：普通、营销或热点；待定空槽为空'"),
+            ("outline", "LONGTEXT NULL COMMENT '策划结果选题大纲快照；待定空槽为空'"),
+            ("content_type", "VARCHAR(100) NULL COMMENT '策划结果内容类型快照；待定空槽为空'"),
         ):
             cursor.execute(
                 "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "

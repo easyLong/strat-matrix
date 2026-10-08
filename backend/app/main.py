@@ -75,28 +75,33 @@ def database_error() -> HTTPException:
 def enrich_plan_item(row: dict, plan_type: str | None = None) -> dict:
     source_payload = row.pop("topic_payload", None)
     source = {}
-    if source_payload:
+    if source_payload and row.get("topic_type") not in ("营销", "热点"):
         try:
             source = json.loads(source_payload)
-            row["content_type"] = source.get("content_type", "")
-            row["outline"] = source.get("outline", "") or source.get("summary", "")
+            if not isinstance(source, dict):
+                source = {}
         except (TypeError, json.JSONDecodeError):
-            row["content_type"] = ""
-            row["outline"] = ""
-    else:
-        row["content_type"] = ""
-        row["outline"] = ""
+            source = {}
+    row["content_type"] = row.get("content_type") or source.get("content_type", "")
+    row["outline"] = row.get("outline") or source.get("outline", "") or source.get("summary", "")
+    if not row.get("topic_type") and row.get("topic_id"):
+        row["topic_type"] = (
+            "热点" if row.get("slot_type") == "hotspot" else
+            "营销" if row.get("slot_type") == "marketing_priority" or source.get("is_marketing") else "普通"
+        )
     row["lifecycle_stage"] = row.get("lifecycle_stage") or infer_lifecycle_stage(row.get("account_id", ""))
     row["content_role"] = row.get("content_role") or infer_content_role(row, source if source_payload else {})
     published_at = row.get("published_at")
     known = bool(row.get("slot_id"))
-    publish_status = "已发布" if published_at else ("未发布" if known else "状态未知")
-    allow = bool(plan_type == "auto" and known and not published_at)
+    publish_status = ("待确定选题" if not row.get("topic_id") else
+                      "已发布" if published_at else "未发布" if known else "状态未知")
+    allow = bool(plan_type == "auto" and known and row.get("topic_id") and not published_at)
     row["publish_status"] = publish_status
     row["allow_replace"] = allow
     row["replace_block_reason"] = "" if allow else (
         "仅支持 AI 自动策划结果" if plan_type != "auto" else
         "发布状态已确认不可替换" if published_at else
+        "热点空槽待确定选题" if not row.get("topic_id") else
         "状态暂无法确认，不允许替换"
     )
     row["result_version"] = row.get("version")
@@ -451,7 +456,8 @@ def get_batch(batch_id: int) -> dict:
                 raise HTTPException(status_code=404, detail="策划批次不存在")
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
+                "i.topic_id, i.topic_title, i.topic_type, i.outline, i.content_type, "
+                "i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
                 "s.published_at, s.version, ts.payload_json AS topic_payload "
                 "FROM godp_planning_item i LEFT JOIN godp_slot_state s ON s.item_id=i.id "
                 "LEFT JOIN godp_topic_source ts ON ts.topic_id=i.topic_id "
@@ -474,7 +480,8 @@ def search_items(account: str, limit: int = 1000) -> list[dict]:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
+                "i.topic_id, i.topic_title, i.topic_type, i.outline, i.content_type, "
+                "i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
                 "s.published_at, s.version, ts.payload_json AS topic_payload, "
                 "b.batch_code, b.plan_type, "
                 "b.cycle_start, b.cycle_end FROM godp_planning_item i "
@@ -498,7 +505,8 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, b.id AS batch_id, b.plan_type, b.batch_code, b.cycle_start, b.cycle_end, "
+                "i.topic_id, i.topic_title, i.topic_type, i.status, i.lifecycle_stage, i.content_role, "
+                "b.id AS batch_id, b.plan_type, b.batch_code, b.cycle_start, b.cycle_end, "
                 "s.slot_id, s.version, s.production_status, s.published_at "
                 "FROM godp_planning_item i JOIN godp_planning_batch b ON b.id=i.batch_id "
                 "LEFT JOIN godp_slot_state s ON s.item_id=i.id "
@@ -513,6 +521,8 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
                 raise HTTPException(status_code=409, detail="结果版本已变化或状态无法确认，请刷新后重试")
             if item["published_at"] is not None:
                 raise HTTPException(status_code=409, detail="内容已发布，当前结果不可替换")
+            if not item["topic_id"]:
+                raise HTTPException(status_code=409, detail="热点空槽尚未确定选题，当前不可替换")
             topics = available_topics(cursor, [payload.new_topic_id])
             topic = topics.get(payload.new_topic_id)
             if topic is None:
@@ -537,9 +547,13 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
             if next_role not in ("流量", "转化"):
                 next_role = infer_content_role(item, topic_payload)
             cursor.execute(
-                "UPDATE godp_planning_item SET topic_id=%s, topic_title=%s, "
-                "content_role=%s, status='已规划', update_by='system' WHERE id=%s",
-                (topic["topic_id"], topic["topic_title"], next_role, item_id),
+                "UPDATE godp_planning_item SET topic_id=%s, topic_title=%s, topic_type=%s, "
+                "outline=%s, content_type=%s, content_role=%s, "
+                "status='已规划', update_by='system' WHERE id=%s",
+                (topic["topic_id"], topic["topic_title"],
+                 "营销" if topic["is_marketing"] else "普通",
+                 topic_payload.get("outline") or topic_payload.get("summary") or "",
+                 topic_payload.get("content_type") or "", next_role, item_id),
             )
             cursor.execute(
                 "UPDATE godp_slot_state SET version=%s, topic_id=%s, "
@@ -589,6 +603,7 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
         "replace_block_reason": "", "result_version": next_version,
         "content_type": topic_payload.get("content_type", ""),
         "outline": topic_payload.get("outline", "") or topic_payload.get("summary", ""),
+        "topic_type": "营销" if topic["is_marketing"] else "普通",
         "lifecycle_stage": item.get("lifecycle_stage") or infer_lifecycle_stage(item["account_id"]),
         "content_role": next_role,
     }
@@ -863,6 +878,13 @@ def monday(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
+def hotspot_is_pending(item: dict) -> bool:
+    return item["slot_type"] == "hotspot" and (
+        not item["topic_id"] or
+        (item["account_id"].startswith("DEMO-") and item.get("production_status") in (None, "planned"))
+    )
+
+
 @app.get("/api/planning-cycles/{cycle_id}/items", response_model=list[AccountPlanRecord])
 def list_cycle_items(cycle_id: date, limit: int = 1000) -> list[dict]:
     if cycle_id.weekday() != 0:
@@ -872,7 +894,8 @@ def list_cycle_items(cycle_id: date, limit: int = 1000) -> list[dict]:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
+                "i.topic_id, i.topic_title, i.topic_type, i.outline, i.content_type, "
+                "i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
                 "s.published_at, s.version, ts.payload_json AS topic_payload, "
                 "b.batch_code, b.plan_type, b.cycle_start, b.cycle_end "
                 "FROM godp_planning_item i "
@@ -908,7 +931,7 @@ def list_planning_cycles() -> list[dict]:
         failed_ids = {item["account_id"] for item in auto_rows if "失败" in item["status"]}
         pending_hotspot_accounts = {
             item["account_id"] for item in auto_rows
-            if item["slot_type"] == "hotspot" and item.get("production_status") in (None, "planned")
+            if hotspot_is_pending(item)
         }
         missing_failed = sum(batch["account_count"] for batch in group
                              if batch["plan_type"] == "auto" and "失败" in batch["status"]
@@ -972,11 +995,11 @@ def list_auto_cycles() -> list[dict]:
         marketing_slots = sum(1 for item in rows if item["slot_type"] == "marketing_priority")
         hotspot_rows = [item for item in rows if item["slot_type"] == "hotspot"]
         hotspot_slots = len(hotspot_rows)
-        hotspot_pending = sum(1 for item in hotspot_rows if item.get("production_status") in (None, "planned"))
+        hotspot_pending = sum(1 for item in hotspot_rows if hotspot_is_pending(item))
         hotspot_submitted = hotspot_slots - hotspot_pending
         pending_hotspot_accounts = {
             item["account_id"] for item in hotspot_rows
-            if item.get("production_status") in (None, "planned")
+            if hotspot_is_pending(item)
         }
         execution_started = start <= datetime.now(timezone(timedelta(hours=8))).date()
         if not execution_started:

@@ -245,6 +245,7 @@ class PlanItemResponse(BaseModel):
     slot_type: str
     topic_id: str
     topic_title: str
+    topic_type: str | None = None
     status: str
     slot_id: str | None = None
     production_status: str | None = None

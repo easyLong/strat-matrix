@@ -24,6 +24,7 @@ class AccountFact(BaseModel):
     organization: str = ""
     city: str = Field(default="", max_length=50)
     marketing_eligible: bool = False
+    is_marketing_account: bool | None = None
     persona: str = Field(default="", max_length=80)
     target_audience: list[str] = Field(default_factory=list)
     interests: list[str] = Field(default_factory=list)

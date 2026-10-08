@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS godp_planning_item (
     slot_type VARCHAR(32) NOT NULL COMMENT '槽位类型',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码；占位槽可为空',
     topic_title VARCHAR(255) NOT NULL COMMENT '策划时的选题标题快照',
+    topic_type VARCHAR(16) NULL COMMENT '实际绑定选题的来源类型：普通、营销或热点；待定空槽为空',
+    outline LONGTEXT NULL COMMENT '策划结果选题大纲快照；待定空槽为空',
+    content_type VARCHAR(100) NULL COMMENT '策划结果内容类型快照；待定空槽为空',
     status VARCHAR(32) NOT NULL COMMENT '策划条目当前状态',
     lifecycle_stage VARCHAR(32) NULL COMMENT '策划时账号生命周期阶段快照',
     content_role VARCHAR(16) NULL COMMENT '策划时选题经营作用快照：流量或转化',
@@ -93,14 +96,14 @@ CREATE TABLE IF NOT EXISTS godp_auto_plan_run (
     cycle_start DATE NOT NULL COMMENT '目标策划周期周一日期',
     cycle_end DATE NOT NULL COMMENT '目标策划周期周日日期',
     data_scope VARCHAR(16) NOT NULL COMMENT '输入数据范围：demo演示或live正式',
-    plan_mode VARCHAR(32) NOT NULL COMMENT '策划方式：ordinary_fallback普通选题兜底',
+    plan_mode VARCHAR(32) NOT NULL COMMENT '策划方式：ordinary_fallback普通兜底或rule_fallback规则槽位加普通兜底',
     batch_id BIGINT NOT NULL COMMENT '逻辑关联策划批次ID，无外键',
     config_version INT NOT NULL COMMENT '运行启动时使用的全局配置版本号',
     config_json LONGTEXT NOT NULL COMMENT '运行启动时冻结的完整配置JSON',
     account_snapshot_json LONGTEXT NOT NULL COMMENT '参与账号及其来源版本和生命周期指标快照JSON',
-    topic_snapshot_json LONGTEXT NOT NULL COMMENT '可用普通选题及其来源版本和热度快照JSON',
+    topic_snapshot_json LONGTEXT NOT NULL COMMENT '本次可用普通和营销选题及其来源版本快照JSON',
     account_count INT NOT NULL COMMENT '本次参与策划的账号数量',
-    slot_count INT NOT NULL COMMENT '本次生成的普通内容槽位数量',
+    slot_count INT NOT NULL COMMENT '本次生成的全部自动策划槽位数量',
     status VARCHAR(24) NOT NULL COMMENT '运行状态：已规划或已完成',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
@@ -109,7 +112,7 @@ CREATE TABLE IF NOT EXISTS godp_auto_plan_run (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_auto_plan_scope_cycle (data_scope, cycle_start, plan_mode),
     KEY idx_auto_plan_batch (batch_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容自动策划运行与输入快照';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自动策划运行与输入快照';
 
 CREATE TABLE IF NOT EXISTS godp_account_source (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号来源记录主键ID',

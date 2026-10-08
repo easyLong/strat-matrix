@@ -53,7 +53,7 @@ def lifecycle_stage(config: StrategyConfig, metrics: dict[str, int | float]) -> 
 
 def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
     cursor.execute(
-        "SELECT a.account_code, a.account_name, a.persona, s.source_updated_at, "
+        "SELECT a.account_code, a.account_name, a.persona, a.marketing_eligible, s.source_updated_at, "
         "s.payload_json FROM godp_account a JOIN godp_account_source s "
         "ON s.account_id=a.account_code WHERE a.del_flag='N' AND s.del_flag='N' "
         "AND a.status='启用' ORDER BY a.account_code"
@@ -69,6 +69,7 @@ def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
             "account_id": row["account_code"],
             "account_name": row["account_name"],
             "persona": row["persona"],
+            "marketing_eligible": bool(row["marketing_eligible"] or source.get("is_marketing_account", False)),
             "followers_count": int(source.get("followers") or 0),
             "source_updated_at": row["source_updated_at"].isoformat(),
             "valid_content_count": 0,
@@ -129,6 +130,8 @@ def load_topics(cursor, scope: str) -> list[dict]:
         topics.append({
             "topic_id": row["topic_code"],
             "title": row["title"],
+            "outline": source.get("outline") or source.get("summary") or "",
+            "content_type": source.get("content_type") or "",
             "topic_heat": float(source.get("topic_heat", source.get("heat", 0)) or 0),
             "content_role": role if role in ("流量", "转化") else "流量",
             "source_updated_at": row["source_updated_at"].isoformat(),
@@ -203,12 +206,14 @@ def run_ordinary_planning(cycle_start: date | None = None, scope: str = "live") 
                     cursor.execute(
                         "INSERT INTO godp_planning_item "
                         "(batch_id, account_id, account_name, publish_date, slot_type, "
-                        "topic_id, topic_title, status, lifecycle_stage, content_role, "
+                        "topic_id, topic_title, topic_type, outline, content_type, "
+                        "status, lifecycle_stage, content_role, "
                         "create_by, update_by) "
-                        "VALUES (%s, %s, %s, %s, 'regular', %s, %s, '已规划', %s, %s, "
+                        "VALUES (%s, %s, %s, %s, 'regular', %s, %s, '普通', %s, %s, '已规划', %s, %s, "
                         "'ordinary-plan-cli', 'ordinary-plan-cli')",
                         (batch_id, account["account_id"], account["account_name"], publish_date,
-                         topic["topic_id"], topic["title"], account["lifecycle_stage"], topic["content_role"]),
+                         topic["topic_id"], topic["title"], topic["outline"], topic["content_type"],
+                         account["lifecycle_stage"], topic["content_role"]),
                     )
                     item_id = cursor.lastrowid
                     cursor.execute(

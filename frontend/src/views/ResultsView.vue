@@ -78,7 +78,7 @@ const contents = computed(() => visibleCycleSummaries.value.reduce((sum, cycle) 
 const successAccounts = computed(() => visibleCycleSummaries.value.reduce((sum, cycle) => sum + cycle.success_accounts, 0))
 const completionStatus = computed(() => {
   if (visibleCycleSummaries.value.length === 0) return '暂无记录'
-  return visibleCycleSummaries.value.every(cycle => cycle.failed_accounts === 0) ? '已完成' : '未完成'
+  return visibleCycleSummaries.value.every(cycle => cycle.failed_accounts === 0 && cycle.success_accounts >= cycle.account_count) ? '已完成' : '未完成'
 })
 const filteredCycleItems = computed(() => cycleItems.value.filter(item =>
   (!cycleAccountQuery.value.trim() || `${item.account_name} ${item.account_id}`.toLowerCase().includes(cycleAccountQuery.value.trim().toLowerCase())) &&
@@ -141,6 +141,10 @@ const cyclePublishStatuses = computed(() => [...new Set(cycleItems.value.map(ite
 function slotLabel(slotType: string, planType: string) {
   if (planType === 'manual') return '手动追加'
   return ({ regular: '常规', marketing_priority: '营销', hotspot: '热点', manual_extra: '手动追加' } as Record<string, string>)[slotType] ?? slotType
+}
+function topicTypeLabel(item: AccountPlanRecord) {
+  if (!item.topic_id) return '待确定'
+  return item.topic_type || slotLabel(item.slot_type, item.plan_type)
 }
 function weekdayLabel(date: string) {
   return new Intl.DateTimeFormat('zh-CN', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`))
@@ -310,7 +314,7 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
           <span class="tag blue">{{ group.items.length }} 个策划槽位</span>
         </div>
         <div class="table-wrap"><table class="batch-account-items"><thead><tr><th>投放日期</th><th>策划类型</th><th>选题</th><th>选题大纲</th><th>内容类型</th><th>经营作用</th><th>选题类型</th><th>发布状态</th><th>操作</th></tr></thead><tbody>
-          <tr v-for="item in group.items" :key="item.id"><td><b>{{ item.publish_date }}</b><small>{{ weekdayLabel(item.publish_date) }}</small></td><td>{{ item.plan_type === 'auto' ? 'AI自动策划 ' : '手动追加' }}</td><td><b>{{ item.topic_title }}</b></td><td><span :title="item.outline">{{ item.outline || '?' }}</span></td><td>{{ item.content_type || '?' }}</td><td>{{ item.content_role || '?' }}</td><td>{{ item.topic_type || slotLabel(item.slot_type, item.plan_type) }}</td><td>{{ item.publish_status }}</td><td class="result-actions"><button v-if="item.allow_replace" class="text-btn" type="button" @click="openReplacement(item)">替换选题</button><button v-if="item.plan_type === 'auto'" class="text-btn" type="button" @click="openAdjustmentHistory(item)">查看调整记录</button><small v-if="!item.allow_replace && item.plan_type === 'auto'">{{ item.replace_block_reason }}</small></td></tr>
+          <tr v-for="item in group.items" :key="item.id"><td><b>{{ item.publish_date }}</b><small>{{ weekdayLabel(item.publish_date) }}</small></td><td>{{ item.plan_type === 'auto' ? 'AI自动策划 ' : '手动追加' }}</td><td><b>{{ item.topic_title }}</b></td><td><span :title="item.outline">{{ item.outline || '—' }}</span></td><td>{{ item.content_type || '—' }}</td><td>{{ item.content_role || '—' }}</td><td>{{ topicTypeLabel(item) }}</td><td>{{ item.publish_status }}</td><td class="result-actions"><button v-if="item.allow_replace" class="text-btn" type="button" @click="openReplacement(item)">替换选题</button><button v-if="item.plan_type === 'auto'" class="text-btn" type="button" @click="openAdjustmentHistory(item)">查看调整记录</button><small v-if="!item.allow_replace && item.plan_type === 'auto'">{{ item.replace_block_reason }}</small></td></tr>
         </tbody></table></div>
       </article>
     </div>
@@ -318,13 +322,13 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
   </section>
   <section v-if="pane === 'account'" class="card">
     <template v-if="selectedAccount">
-      <div class="card-head"><div><h2>账号详情</h2><small>{{ selectedAccount.account_name }} ? {{ selectedAccount.account_id }} ? 历史策划批次</small></div><button class="btn" type="button" @click="selectedAccount = null; pane = 'detail'">返回批次详情</button></div>
+      <div class="card-head"><div><h2>账号详情</h2><small>{{ selectedAccount.account_name }} · {{ selectedAccount.account_id }} · 历史策划批次</small></div><button class="btn" type="button" @click="selectedAccount = null; pane = 'detail'">返回批次详情</button></div>
       <div class="card-body"><div class="account-detail-summary"><span class="tag gray">{{ selectedAccount.account_id }}</span><span class="tag blue">{{ filteredAccountHistory.length }} 个策划槽位</span><label class="date-filter"><span>开始日期</span><input v-model="accountHistoryFrom" type="date" /></label><label class="date-filter"><span>结束日期</span><input v-model="accountHistoryTo" type="date" /></label><button class="text-btn" type="button" @click="accountHistoryFrom = ''; accountHistoryTo = ''">清空时间筛选</button></div></div>
       <div v-if="accountHistoryGroups.length" class="batch-account-list">
         <article v-for="history in accountHistoryGroups" :key="history.cycle_id" class="batch-account-card">
-          <div class="batch-account-head"><div><b>{{ history.cycle_start }} ? {{ history.cycle_end }}</b><small>{{ history.batch_code }}</small></div><span class="tag blue">{{ history.items.length }} 个策划槽位</span></div>
+          <div class="batch-account-head"><div><b>{{ history.cycle_start }} 至 {{ history.cycle_end }}</b><small>{{ history.batch_code }}</small></div><span class="tag blue">{{ history.items.length }} 个策划槽位</span></div>
           <div class="table-wrap"><table class="batch-account-items"><thead><tr><th>投放日期</th><th>策划类型</th><th>选题</th><th>选题大纲</th><th>内容类型</th><th>经营作用</th><th>选题类型</th><th>发布状态</th><th>操作</th></tr></thead><tbody>
-            <tr v-for="record in history.items" :key="record.id"><td><b>{{ record.publish_date }}</b><small>{{ weekdayLabel(record.publish_date) }}</small></td><td>{{ record.plan_type === 'manual' ? '手动策划' : 'AI自动策划' }}</td><td><b>{{ record.topic_title }}</b></td><td><span :title="record.outline">{{ record.outline || '?' }}</span></td><td>{{ record.content_type || '?' }}</td><td>{{ record.content_role || '?' }}</td><td>{{ record.topic_type || slotLabel(record.slot_type, record.plan_type) }}</td><td>{{ record.publish_status }}</td><td class="result-actions"><button v-if="record.allow_replace" class="text-btn" type="button" @click="openReplacement(record)">替换选题</button><button v-if="record.plan_type === 'auto'" class="text-btn" type="button" @click="openAdjustmentHistory(record)">查看调整记录</button><small v-if="!record.allow_replace && record.plan_type === 'auto'">{{ record.replace_block_reason }}</small></td></tr>
+            <tr v-for="record in history.items" :key="record.id"><td><b>{{ record.publish_date }}</b><small>{{ weekdayLabel(record.publish_date) }}</small></td><td>{{ record.plan_type === 'manual' ? '手动策划' : 'AI自动策划' }}</td><td><b>{{ record.topic_title }}</b></td><td><span :title="record.outline">{{ record.outline || '—' }}</span></td><td>{{ record.content_type || '—' }}</td><td>{{ record.content_role || '—' }}</td><td>{{ topicTypeLabel(record) }}</td><td>{{ record.publish_status }}</td><td class="result-actions"><button v-if="record.allow_replace" class="text-btn" type="button" @click="openReplacement(record)">替换选题</button><button v-if="record.plan_type === 'auto'" class="text-btn" type="button" @click="openAdjustmentHistory(record)">查看调整记录</button><small v-if="!record.allow_replace && record.plan_type === 'auto'">{{ record.replace_block_reason }}</small></td></tr>
           </tbody></table></div>
         </article>
       </div>

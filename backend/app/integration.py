@@ -32,10 +32,12 @@ from .integration_models import (
 router = APIRouter()
 
 
-def effective_topic_type(slot_type: str, is_marketing: bool) -> str:
+def effective_topic_type(slot_type: str, is_marketing: bool, frozen: str | None = None) -> str:
+    if frozen in ("普通", "营销", "热点"):
+        return frozen
     if slot_type == "hotspot":
         return "热点"
-    return "营销" if slot_type == "marketing_priority" or is_marketing else "普通"
+    return "营销" if is_marketing else "普通"
 
 
 def single_choice_labels(tags: dict) -> dict[str, str] | None:
@@ -147,7 +149,8 @@ def sync_accounts(payload: AccountSync) -> SyncResult:
                     "persona=VALUES(persona), marketing_eligible=VALUES(marketing_eligible), "
                     "status=VALUES(status), update_by='integration', del_flag='N'",
                     (record.account_id, record.account_name, record.city, record.persona,
-                     record.marketing_eligible, "启用" if record.enabled else "停用"),
+                     record.is_marketing_account if record.is_marketing_account is not None
+                     else record.marketing_eligible, "启用" if record.enabled else "停用"),
                 )
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
@@ -551,7 +554,8 @@ def current_producible_plan(account_id: str) -> dict:
     week_start = today - timedelta(days=today.weekday())
     sql = (
         "SELECT i.id AS planning_result_id, i.publish_date, i.topic_id, "
-        "i.topic_title AS title, i.slot_type, s.slot_id, s.version AS result_version, "
+        "i.topic_title AS title, i.slot_type, i.topic_type, i.outline, i.content_type, "
+        "s.slot_id, s.version AS result_version, "
         "t.is_marketing, ts.payload_json AS topic_payload, b.cycle_start, b.cycle_end "
         "FROM godp_planning_item i "
         "JOIN godp_planning_batch b ON b.id=i.batch_id "
@@ -592,7 +596,9 @@ def current_producible_plan(account_id: str) -> dict:
     contents = []
     for row in rows:
         try:
-            topic = json.loads(row["topic_payload"]) if row["topic_payload"] else {}
+            topic = json.loads(row["topic_payload"]) if row["topic_payload"] and row["topic_type"] not in ("营销", "热点") else {}
+            if not isinstance(topic, dict):
+                topic = {}
         except (TypeError, json.JSONDecodeError):
             topic = {}
         contents.append({
@@ -601,10 +607,10 @@ def current_producible_plan(account_id: str) -> dict:
             "result_version": row["result_version"],
             "publish_date": row["publish_date"].isoformat(),
             "topic_id": row["topic_id"],
-            "topic_type": effective_topic_type(row["slot_type"], bool(row["is_marketing"])),
+            "topic_type": effective_topic_type(row["slot_type"], bool(row["is_marketing"]), row["topic_type"]),
             "title": row["title"],
-            "outline": topic.get("outline") or topic.get("summary") or "",
-            "content_type": topic.get("content_type") or "",
+            "outline": row["outline"] or topic.get("outline") or topic.get("summary") or "",
+            "content_type": row["content_type"] or topic.get("content_type") or "",
             "publish_status": "未发布",
         })
     return {
@@ -637,7 +643,7 @@ def receive_publication_status(payload: PublicationStatusCallback) -> Any:
                     })
                 return {"accepted": True, "applied": False, "reason": "duplicate_event"}
             cursor.execute(
-                "SELECT i.id, i.topic_id, i.slot_type, i.status, b.batch_code, "
+                "SELECT i.id, i.topic_id, i.topic_type, i.slot_type, i.status, b.batch_code, "
                 "s.version, s.topic_id AS slot_topic_id, s.slot_id, s.published_at, "
                 "s.content_id, t.is_marketing "
                 "FROM godp_planning_item i "
@@ -669,7 +675,7 @@ def receive_publication_status(payload: PublicationStatusCallback) -> Any:
                 or not item["topic_id"]
                 or item["slot_topic_id"] != item["topic_id"]
                 or item["topic_id"] != payload.topic_id
-                or effective_topic_type(item["slot_type"], bool(item["is_marketing"])) != payload.topic_type
+                or effective_topic_type(item["slot_type"], bool(item["is_marketing"]), item["topic_type"]) != payload.topic_type
                 or (current_status == "已发布" and payload.publish_status == "未发布")
                 or (item["content_id"] is not None and payload.content_id is not None
                     and item["content_id"] != payload.content_id)

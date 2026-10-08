@@ -97,7 +97,7 @@ chmod +x start.sh stop.sh status.sh
 1. 检查 `backend/.venv`。
 2. 启动 FastAPI 后端。
 3. 执行前端生产构建；依赖不存在时执行 `npm ci`。
-4. 启动普通内容周策划调度进程（默认开启，按服务端配置的北京时间执行）。
+4. 启动周度规则策划调度进程（默认开启，按服务端配置的北京时间执行）。
 5. 启动 Vite Preview 前端。
 6. 将 PID 写入 `run/`，日志写入 `logs/`。
 

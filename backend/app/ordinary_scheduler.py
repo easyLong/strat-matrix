@@ -1,4 +1,4 @@
-"""Run the ordinary-topic weekly fallback at the configured business time."""
+"""Run rule-based weekly planning at the configured business time."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from zoneinfo import ZoneInfo
 
 from .db import connection
 from .models import StrategyConfig
-from .ordinary_planning import PlanningError, monday, run_ordinary_planning
+from .ordinary_planning import PlanningError, monday
+from .weekly_planning import run_weekly_planning
 
 
 BUSINESS_ZONE = ZoneInfo("Asia/Shanghai")
@@ -39,7 +40,7 @@ def run_due(now: datetime) -> dict:
     cycle_start = due_cycle(now)
     if cycle_start is None:
         return {"status": "waiting"}
-    result = run_ordinary_planning(cycle_start=cycle_start, scope="live")
+    result = run_weekly_planning(cycle_start=cycle_start)
     return {"status": "reused" if result["reused"] else "created", **result}
 
 
@@ -56,7 +57,7 @@ def serve() -> None:
         try:
             cycle_start = due_cycle(now)
             if cycle_start and cycle_start != completed_cycle and (retry_after is None or now >= retry_after):
-                result = run_ordinary_planning(cycle_start=cycle_start, scope="live")
+                result = run_weekly_planning(cycle_start=cycle_start)
                 completed_cycle = cycle_start
                 retry_after = None
                 log({"status": "reused" if result["reused"] else "created", **result})
@@ -71,7 +72,7 @@ def serve() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="按服务端配置执行正式普通内容周策划")
+    parser = argparse.ArgumentParser(description="按服务端配置执行正式规则周策划")
     parser.add_argument("--once", action="store_true", help="只检查一次配置并在到期时执行")
     args = parser.parse_args()
     if args.once:
