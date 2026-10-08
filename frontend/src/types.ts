@@ -214,6 +214,11 @@ export interface AutoCycleSummary {
   hotspot_pending: number
   status: string
   updated_at: string
+  config_version: number | null
+  planning_days: number[] | null
+  schedule_day: number | null
+  schedule_time: string | null
+  allocation_method: string | null
 }
 
 export interface AutoFailure {

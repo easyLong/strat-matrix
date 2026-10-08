@@ -52,6 +52,7 @@ class TopicFact(BaseModel):
     source: str = ""
     category: str = Field(default="", max_length=50)
     content_type: str = ""
+    topic_heat: float = Field(default=0, ge=0)
     applicable_cities: list[str] = Field(default_factory=list)
     is_marketing: bool = False
     product_or_activity: str = ""

@@ -65,6 +65,7 @@ def check_database() -> bool:
                 "godp_manual_preview",
                 "godp_manual_task",
                 "godp_planning_adjustment",
+                "godp_auto_plan_run",
             }.issubset(tables)
     except (pymysql.MySQLError, RuntimeError, ValueError):
         return False

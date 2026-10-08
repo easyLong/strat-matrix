@@ -303,6 +303,11 @@ class AutoCycleSummary(BaseModel):
     hotspot_pending: int
     status: str
     updated_at: datetime
+    config_version: int | None = None
+    planning_days: list[int] | None = None
+    schedule_day: int | None = None
+    schedule_time: str | None = None
+    allocation_method: str | None = None
 
 
 class AutoFailure(BaseModel):

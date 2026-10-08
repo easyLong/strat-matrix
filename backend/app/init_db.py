@@ -103,6 +103,17 @@ def main() -> None:
     with connection() as db, db.cursor() as cursor:
         for statement in statements:
             cursor.execute(statement)
+        for name, definition in (
+            ("lifecycle_stage", "VARCHAR(32) NULL COMMENT '策划时账号生命周期阶段快照'"),
+            ("content_role", "VARCHAR(16) NULL COMMENT '策划时选题经营作用快照：流量或转化'"),
+        ):
+            cursor.execute(
+                "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_planning_item' "
+                "AND COLUMN_NAME=%s", (name,),
+            )
+            if cursor.fetchone()["column_count"] == 0:
+                cursor.execute(f"ALTER TABLE godp_planning_item ADD COLUMN `{name}` {definition}")
         cursor.execute(
             "INSERT IGNORE INTO godp_strategy_config_version "
             "(config_key, version, config_json, action, create_by, update_by) "

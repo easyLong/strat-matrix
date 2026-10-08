@@ -453,7 +453,7 @@ def get_batch(batch_id: int) -> dict:
                 raise HTTPException(status_code=404, detail="策划批次不存在")
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, s.slot_id, s.production_status, "
+                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
                 "s.published_at, s.version, ts.payload_json AS topic_payload "
                 "FROM godp_planning_item i LEFT JOIN godp_slot_state s ON s.item_id=i.id "
                 "LEFT JOIN godp_topic_source ts ON ts.topic_id=i.topic_id "
@@ -476,7 +476,7 @@ def search_items(account: str, limit: int = 1000) -> list[dict]:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, s.slot_id, s.production_status, "
+                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
                 "s.published_at, s.version, ts.payload_json AS topic_payload, "
                 "b.batch_code, b.plan_type, "
                 "b.cycle_start, b.cycle_end FROM godp_planning_item i "
@@ -500,7 +500,7 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, b.id AS batch_id, b.plan_type, b.batch_code, b.cycle_start, b.cycle_end, "
+                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, b.id AS batch_id, b.plan_type, b.batch_code, b.cycle_start, b.cycle_end, "
                 "s.slot_id, s.version, s.production_status, s.published_at "
                 "FROM godp_planning_item i JOIN godp_planning_batch b ON b.id=i.batch_id "
                 "LEFT JOIN godp_slot_state s ON s.item_id=i.id "
@@ -521,6 +521,8 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
             topic = topics.get(payload.new_topic_id)
             if topic is None:
                 raise HTTPException(status_code=409, detail="新选题不可用、未审核或已过期，请重新选择")
+            if item["slot_type"] == "regular" and topic["is_marketing"]:
+                raise HTTPException(status_code=409, detail="普通槽位只能替换为普通选题")
             next_version = item["version"] + 1
             topic_payload = {}
             if topic.get("topic_payload"):
@@ -529,8 +531,19 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
                 except (TypeError, json.JSONDecodeError):
                     topic_payload = {}
             cursor.execute(
-                "UPDATE godp_planning_item SET topic_id=%s, topic_title=%s, update_by='system' WHERE id=%s",
-                (topic["topic_id"], topic["topic_title"], item_id),
+                "SELECT tags_json FROM godp_topic_tag WHERE topic_id=%s AND del_flag='N'",
+                (topic["topic_id"],),
+            )
+            tag_row = cursor.fetchone()
+            tag_values = json.loads(tag_row["tags_json"]) if tag_row else {}
+            role_value = tag_values.get("T2", [])
+            next_role = role_value[0] if isinstance(role_value, list) and role_value else role_value
+            if next_role not in ("流量", "转化"):
+                next_role = infer_content_role(item, topic_payload)
+            cursor.execute(
+                "UPDATE godp_planning_item SET topic_id=%s, topic_title=%s, "
+                "content_role=%s, update_by='system' WHERE id=%s",
+                (topic["topic_id"], topic["topic_title"], next_role, item_id),
             )
             cursor.execute(
                 "UPDATE godp_slot_state SET version=%s, topic_id=%s, update_by='system' WHERE item_id=%s",
@@ -579,7 +592,7 @@ def replace_topic(item_id: int, payload: ReplaceTopicInput) -> dict:
         "content_type": topic_payload.get("content_type", ""),
         "outline": topic_payload.get("outline", "") or topic_payload.get("summary", ""),
         "lifecycle_stage": item.get("lifecycle_stage") or infer_lifecycle_stage(item["account_id"]),
-        "content_role": item.get("content_role") or infer_content_role(item, topic_payload),
+        "content_role": next_role,
     }
     return {"item": updated, "adjustment": adjustment}
 
@@ -861,7 +874,7 @@ def list_cycle_items(cycle_id: date, limit: int = 1000) -> list[dict]:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
                 "SELECT i.id, i.account_id, i.account_name, i.publish_date, i.slot_type, "
-                "i.topic_id, i.topic_title, i.status, s.slot_id, s.production_status, "
+                "i.topic_id, i.topic_title, i.status, i.lifecycle_stage, i.content_role, s.slot_id, s.production_status, "
                 "s.published_at, s.version, ts.payload_json AS topic_payload, "
                 "b.batch_code, b.plan_type, b.cycle_start, b.cycle_end "
                 "FROM godp_planning_item i "
@@ -927,6 +940,19 @@ def list_planning_cycles() -> list[dict]:
 @app.get("/api/auto-planning/cycles", response_model=list[AutoCycleSummary])
 def list_auto_cycles() -> list[dict]:
     batches, items = cycle_records()
+    auto_ids = [batch["id"] for batch in batches if batch["plan_type"] == "auto"]
+    run_by_batch: dict[int, dict] = {}
+    if auto_ids:
+        try:
+            with connection() as db, db.cursor() as cursor:
+                cursor.execute(
+                    "SELECT batch_id, config_version, config_json, plan_mode "
+                    "FROM godp_auto_plan_run WHERE del_flag='N' AND batch_id IN (" +
+                    ",".join(["%s"] * len(auto_ids)) + ")", auto_ids,
+                )
+                run_by_batch = {row["batch_id"]: row for row in cursor.fetchall()}
+        except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+            raise database_error() from exc
     by_batch: dict[int, list[dict]] = {}
     for item in items:
         by_batch.setdefault(item["batch_id"], []).append(item)
@@ -936,6 +962,8 @@ def list_auto_cycles() -> list[dict]:
             grouped.setdefault(monday(batch["cycle_start"]), []).append(batch)
     result = []
     for start, group in sorted(grouped.items(), reverse=True):
+        run = next((run_by_batch[batch["id"]] for batch in group if batch["id"] in run_by_batch), None)
+        run_config = StrategyConfig.model_validate_json(run["config_json"]) if run else None
         rows = [item for batch in group for item in by_batch.get(batch["id"], [])]
         accounts = {item["account_id"] for item in rows}
         failed_ids = {item["account_id"] for item in rows if "失败" in item["status"]}
@@ -972,6 +1000,11 @@ def list_auto_cycles() -> list[dict]:
             "hotspot_pending": hotspot_pending,
             "status": cycle_status,
             "updated_at": max(batch["update_time"] for batch in group),
+            "config_version": run["config_version"] if run else None,
+            "planning_days": run_config.planning_days if run_config else None,
+            "schedule_day": run_config.schedule_day if run_config else None,
+            "schedule_time": run_config.schedule_time if run_config else None,
+            "allocation_method": run["plan_mode"] if run else None,
         })
     return result
 
