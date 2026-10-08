@@ -59,6 +59,7 @@ npm run dev
 | `POST /api/integrations/accounts/sync` | 批量接收账号事实 |
 | `POST /api/integrations/topics/sync` | 批量接收选题和审核有效期事实 |
 | `POST /api/integrations/marketing-topics/sync` | IF-03 接收带账号绑定的营销选题全量快照 |
+| `POST /api/integrations/hotspot-topics/sync` | IF-04 接收热点选题全量快照 |
 | `POST /api/integrations/content-history/sync` | 批量接收已发布内容与运营表现 |
 | `POST /api/integrations/content-status` | 接收内容生成或发布状态 |
 | `GET /api/integrations/accounts/{account_id}/current-plan` | IF-05 按账号查询当前可生产的有效策划结果 |
@@ -73,6 +74,8 @@ IF-05 / IF-06 的请求、返回、选期和一致性校验规则见 [`docs/IF05
 IF-08 / IF-09 的字段、标签状态和独立计数口径见 [`docs/IF08_IF09_本地对接契约.md`](docs/IF08_IF09_本地对接契约.md)。正式使用次数需由独立业务逻辑写入，现有内容生成槽位计数不能替代。
 
 IF-03 营销选题全量同步的字段与空快照口径见 [`docs/IF03_营销选题同步契约.md`](docs/IF03_营销选题同步契约.md)。同步数据先作为独立来源事实保存，尚未参与周策划落位。
+
+IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点选题同步契约.md`](docs/IF04_热点选题同步契约.md)。同步数据先作为独立来源事实保存，尚未参与热点槽位触发。
 
 本项目前端仍调用 `/api/accounts`、`/api/topics`、`/api/batches` 等**内部前后端接口**。从已同步且可用的账号与选题创建手动批次，会生成 `SLOT_PLAN_CREATED` 待投递事件。项目内的策划工作进程拿到完整 Fit、T1–T7 和 Content Agent Input 后，调用受令牌保护的 `POST /api/internal/slots/{slot_id}/content-ready`，生成 `CONTENT_READY` 事件。内容生产系统再通过状态接口回传 `generated`、`failed` 或 `published`。状态和选题使用次数仅在有效回传后更新；重复 `event_id` 不重复生效。
 

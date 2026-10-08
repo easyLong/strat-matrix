@@ -130,6 +130,47 @@ class MarketingTopicSync(BaseModel):
         return self
 
 
+class HotspotTopicFact(BaseModel):
+    topic_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=255)
+    outline: str = ""
+    content_type: str = ""
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    enabled: bool = True
+
+    @field_validator("valid_from", "valid_to")
+    @classmethod
+    def check_times(cls, value: datetime | None) -> datetime | None:
+        return aware(value) if value else None
+
+    @model_validator(mode="after")
+    def check_validity(self):
+        if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
+            raise ValueError("valid_from 不能晚于 valid_to")
+        return self
+
+
+class HotspotTopicSync(BaseModel):
+    source_batch_id: str = Field(min_length=1, max_length=64)
+    snapshot_at: datetime
+    records: list[HotspotTopicFact] = Field(max_length=5000)
+
+    @field_validator("snapshot_at")
+    @classmethod
+    def check_time(cls, value: datetime) -> datetime:
+        return aware(value)
+
+    @model_validator(mode="after")
+    def check_records(self):
+        ids = [record.topic_id for record in self.records]
+        if len(set(ids)) != len(ids):
+            raise ValueError("同一快照的 topic_id 不能重复")
+        if any(value.startswith("DEMO-") for value in ids):
+            raise ValueError("DEMO- 编码保留给演示数据")
+        return self
+
+
 class HistoryFact(BaseModel):
     content_id: str = Field(min_length=1, max_length=64)
     account_id: str = Field(min_length=1, max_length=64)

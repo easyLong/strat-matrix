@@ -22,6 +22,7 @@ from .integration_models import (
     OfficialUsageQuery,
     OfficialUsageUpdate,
     HistorySync,
+    HotspotTopicSync,
     MarketingTopicSync,
     SyncResult,
     TopicSync,
@@ -283,6 +284,91 @@ def sync_marketing_topics(payload: MarketingTopicSync) -> dict:
         raise db_error(exc) from exc
 
 
+@router.post("/api/integrations/hotspot-topics/sync", dependencies=[Depends(require_integration_token)])
+def sync_hotspot_topics(payload: HotspotTopicSync) -> dict:
+    """IF-04 local contract: an atomic full snapshot of hotspot topics."""
+    request_json = as_json(payload.model_dump(mode="json"))
+    snapshot_at = utc_naive(payload.snapshot_at)
+    lock_name = "godp:hotspot-topic-sync"
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute("SELECT GET_LOCK(%s, 5) AS acquired", (lock_name,))
+            if cursor.fetchone()["acquired"] != 1:
+                raise HTTPException(status_code=409, detail="热点选题同步正在执行，请稍后重试")
+            try:
+                cursor.execute(
+                    "SELECT payload_json, result_json FROM godp_hotspot_sync_run "
+                    "WHERE source_batch_id=%s", (payload.source_batch_id,),
+                )
+                previous_run = cursor.fetchone()
+                if previous_run:
+                    if previous_run["payload_json"] != request_json:
+                        raise HTTPException(status_code=409, detail="相同批次 ID 的热点选题快照内容不同")
+                    return json.loads(previous_run["result_json"])
+                cursor.execute(
+                    "SELECT MAX(source_snapshot_at) AS latest_at FROM godp_hotspot_sync_run "
+                    "WHERE del_flag='N'"
+                )
+                latest_at = cursor.fetchone()["latest_at"]
+                if latest_at and snapshot_at <= latest_at:
+                    raise HTTPException(status_code=409, detail="热点选题快照时间未晚于已接收快照")
+                cursor.execute(
+                    "SELECT topic_id, payload_json, active_in_snapshot FROM godp_hotspot_topic_source "
+                    "WHERE del_flag='N' FOR UPDATE"
+                )
+                existing = {row["topic_id"]: row for row in cursor.fetchall()}
+                incoming = {record.topic_id for record in payload.records}
+                counters = {"inserted": 0, "updated": 0, "unchanged": 0, "deactivated": 0}
+                for record in payload.records:
+                    raw = as_json(record.model_dump(mode="json"))
+                    old = existing.get(record.topic_id)
+                    if old is None:
+                        counters["inserted"] += 1
+                    elif old["payload_json"] == raw and old["active_in_snapshot"]:
+                        counters["unchanged"] += 1
+                    else:
+                        counters["updated"] += 1
+                    cursor.execute(
+                        "INSERT INTO godp_hotspot_topic_source "
+                        "(topic_id, source_batch_id, source_snapshot_at, valid_from, valid_to, "
+                        "enabled, active_in_snapshot, payload_json) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, 1, %s) "
+                        "ON DUPLICATE KEY UPDATE source_batch_id=VALUES(source_batch_id), "
+                        "source_snapshot_at=VALUES(source_snapshot_at), "
+                        "valid_from=VALUES(valid_from), valid_to=VALUES(valid_to), "
+                        "enabled=VALUES(enabled), active_in_snapshot=1, "
+                        "payload_json=VALUES(payload_json), update_by='integration', del_flag='N'",
+                        (record.topic_id, payload.source_batch_id, snapshot_at,
+                         utc_naive(record.valid_from), utc_naive(record.valid_to),
+                         record.enabled, raw),
+                    )
+                for topic_id, old in existing.items():
+                    if topic_id not in incoming and old["active_in_snapshot"]:
+                        cursor.execute(
+                            "UPDATE godp_hotspot_topic_source SET active_in_snapshot=0, "
+                            "update_by='integration' WHERE topic_id=%s", (topic_id,),
+                        )
+                        counters["deactivated"] += 1
+                result = {"source_batch_id": payload.source_batch_id,
+                          "snapshot_at": payload.snapshot_at.isoformat(),
+                          "received": len(payload.records), **counters}
+                cursor.execute(
+                    "INSERT INTO godp_hotspot_sync_run "
+                    "(source_batch_id, source_snapshot_at, payload_json, result_json) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (payload.source_batch_id, snapshot_at, request_json, as_json(result)),
+                )
+                db.commit()
+                return result
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                cursor.execute("SELECT RELEASE_LOCK(%s)", (lock_name,))
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+
+
 @router.post("/api/integrations/content-history/sync", response_model=SyncResult, dependencies=[Depends(require_integration_token)])
 def sync_content_history(payload: HistorySync) -> SyncResult:
     duplicate_ids(payload.records, "content_id")
@@ -327,6 +413,32 @@ def marketing_sync_status() -> dict:
                         "snapshot_at": None, "received": None, "active_count": None}
             cursor.execute(
                 "SELECT COUNT(*) AS active_count FROM godp_marketing_topic_source "
+                "WHERE del_flag='N' AND active_in_snapshot=1 AND enabled=1"
+            )
+            active_count = cursor.fetchone()["active_count"]
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    return {"synced": True, "source_batch_id": latest["source_batch_id"],
+            "snapshot_at": latest["source_snapshot_at"].isoformat() + "Z",
+            "received": json.loads(latest["result_json"])["received"],
+            "active_count": active_count}
+
+
+@router.get("/api/internal/hotspot-topics/sync-status", dependencies=[Depends(require_integration_token)])
+def hotspot_sync_status() -> dict:
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT source_batch_id, source_snapshot_at, result_json "
+                "FROM godp_hotspot_sync_run WHERE del_flag='N' "
+                "ORDER BY source_snapshot_at DESC, id DESC LIMIT 1"
+            )
+            latest = cursor.fetchone()
+            if not latest:
+                return {"synced": False, "source_batch_id": None,
+                        "snapshot_at": None, "received": None, "active_count": None}
+            cursor.execute(
+                "SELECT COUNT(*) AS active_count FROM godp_hotspot_topic_source "
                 "WHERE del_flag='N' AND active_in_snapshot=1 AND enabled=1"
             )
             active_count = cursor.fetchone()["active_count"]

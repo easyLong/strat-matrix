@@ -178,6 +178,40 @@ CREATE TABLE IF NOT EXISTS godp_marketing_sync_run (
     KEY idx_marketing_sync_snapshot (source_snapshot_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-03营销选题全量同步成功记录';
 
+CREATE TABLE IF NOT EXISTS godp_hotspot_topic_source (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '热点选题来源记录主键ID',
+    topic_id VARCHAR(64) NOT NULL COMMENT '热点选题来源系统唯一编码',
+    source_batch_id VARCHAR(64) NOT NULL COMMENT '最近一次包含该选题的热点同步批次编码',
+    source_snapshot_at DATETIME(6) NOT NULL COMMENT '最近一次来源全量快照时间，按UTC保存',
+    valid_from DATETIME(6) NULL COMMENT '热点选题有效期开始时间，按UTC保存',
+    valid_to DATETIME(6) NULL COMMENT '热点选题有效期结束时间，按UTC保存',
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '来源选题是否启用：1启用0停用',
+    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否出现在最近一次成功全量快照：1是0否',
+    payload_json LONGTEXT NOT NULL COMMENT '热点选题完整来源记录JSON',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_hotspot_topic_source_id (topic_id),
+    KEY idx_hotspot_topic_validity (active_in_snapshot, enabled, valid_from, valid_to)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-04热点选题本地全量快照';
+
+CREATE TABLE IF NOT EXISTS godp_hotspot_sync_run (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '热点选题同步运行记录主键ID',
+    source_batch_id VARCHAR(64) NOT NULL COMMENT '客户热点选题全量同步批次唯一编码',
+    source_snapshot_at DATETIME(6) NOT NULL COMMENT '客户全量快照时间，按UTC保存',
+    payload_json LONGTEXT NOT NULL COMMENT '热点选题全量同步请求内容JSON',
+    result_json LONGTEXT NOT NULL COMMENT '热点选题同步结果和变更数量JSON',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_hotspot_sync_batch (source_batch_id),
+    KEY idx_hotspot_sync_snapshot (source_snapshot_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-04热点选题全量同步成功记录';
+
 CREATE TABLE IF NOT EXISTS godp_content_history (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '历史内容记录主键ID',
     content_id VARCHAR(64) NOT NULL COMMENT '客户内容唯一编码',
