@@ -57,6 +57,7 @@ BACKEND_PORT=6930
 FRONTEND_HOST=127.0.0.1
 FRONTEND_PORT=930
 ORDINARY_SCHEDULER_ENABLED=1
+HOTSPOT_SCHEDULER_ENABLED=1
 ```
 
 For direct public access on Alibaba Cloud, set BACKEND_HOST and FRONTEND_HOST to 0.0.0.0 and allow TCP 930 in the security group. With Nginx, expose only ports 80/443 and keep backend port 6930 private.
@@ -67,13 +68,13 @@ For direct public access on Alibaba Cloud, set BACKEND_HOST and FRONTEND_HOST to
 cd /opt/strat-matrix
 python3 -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements.txt
-backend/.venv/bin/python -m app.init_db
+(cd backend && .venv/bin/python -m app.init_db)
 ```
 
 如果需要初始化演示数据，再执行：
 
 ```bash
-backend/.venv/bin/python -m app.seed_prototype
+(cd backend && .venv/bin/python -m app.seed_prototype)
 ```
 
 生产环境不要执行演示数据脚本。
@@ -98,8 +99,9 @@ chmod +x start.sh stop.sh status.sh
 2. 启动 FastAPI 后端。
 3. 执行前端生产构建；依赖不存在时执行 `npm ci`。
 4. 启动周度规则策划调度进程（默认开启，按服务端配置的北京时间执行）。
-5. 启动 Vite Preview 前端。
-6. 将 PID 写入 `run/`，日志写入 `logs/`。
+5. 启动热点槽位调度进程（默认开启，按北京时间 T-1 22:00 确定具体选题）。
+6. 启动 Vite Preview 前端。
+7. 将 PID 写入 `run/`，日志写入 `logs/`。
 
 默认端口：
 
@@ -140,6 +142,7 @@ BUILD_FRONTEND=0 ./start.sh
 tail -f logs/backend.log
 tail -f logs/frontend.log
 tail -f logs/ordinary-scheduler.log
+tail -f logs/hotspot-scheduler.log
 ```
 
 后端健康检查：

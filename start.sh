@@ -31,6 +31,8 @@ NPM_BIN="${NPM_BIN:-npm}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-1}"
 ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-$(dotenv_value ORDINARY_SCHEDULER_ENABLED)}"
 ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-1}"
+HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-$(dotenv_value HOTSPOT_SCHEDULER_ENABLED)}"
+HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-1}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 LOG_DIR="${LOG_DIR:-$APP_ROOT/logs}"
 
@@ -39,6 +41,7 @@ mkdir -p "$RUN_DIR" "$LOG_DIR"
 backend_pid="$RUN_DIR/backend.pid"
 frontend_pid="$RUN_DIR/frontend.pid"
 scheduler_pid="$RUN_DIR/ordinary-scheduler.pid"
+hotspot_scheduler_pid="$RUN_DIR/hotspot-scheduler.pid"
 
 is_running() {
   local pid_file="$1"
@@ -81,6 +84,20 @@ if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
   fi
 fi
 
+if [[ "$HOTSPOT_SCHEDULER_ENABLED" == "1" ]]; then
+  if is_running "$hotspot_scheduler_pid"; then
+    echo "Hotspot scheduler is already running (PID $(cat "$hotspot_scheduler_pid"))."
+  else
+    rm -f "$hotspot_scheduler_pid"
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.hotspot_scheduler
+    ) >"$LOG_DIR/hotspot-scheduler.log" 2>&1 &
+    echo $! >"$hotspot_scheduler_pid"
+    echo "Hotspot scheduler started (PID $(cat "$hotspot_scheduler_pid"), Asia/Shanghai)."
+  fi
+fi
+
 if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
   if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
     echo "npm not found: $NPM_BIN" >&2
@@ -107,4 +124,4 @@ else
   echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
 fi
 
-echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log and $LOG_DIR/frontend.log"
+echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log and $LOG_DIR/frontend.log"

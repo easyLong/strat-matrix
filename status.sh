@@ -22,6 +22,8 @@ FRONTEND_PORT="${FRONTEND_PORT:-930}"
 CHECK_HOST="${CHECK_HOST:-127.0.0.1}"
 ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-$(dotenv_value ORDINARY_SCHEDULER_ENABLED)}"
 ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-1}"
+HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-$(dotenv_value HOTSPOT_SCHEDULER_ENABLED)}"
+HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-1}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 
 running=0
@@ -60,7 +62,11 @@ check_process "Frontend" "$RUN_DIR/frontend.pid" || true
 expected=2
 if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
   check_process "Ordinary scheduler" "$RUN_DIR/ordinary-scheduler.pid" || true
-  expected=3
+  expected=$((expected + 1))
+fi
+if [[ "$HOTSPOT_SCHEDULER_ENABLED" == "1" ]]; then
+  check_process "Hotspot scheduler" "$RUN_DIR/hotspot-scheduler.pid" || true
+  expected=$((expected + 1))
 fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true
 check_http "Frontend" "http://${CHECK_HOST}:${FRONTEND_PORT}/" || true

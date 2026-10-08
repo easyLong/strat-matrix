@@ -75,7 +75,7 @@ IF-08 / IF-09 的字段、标签状态和独立计数口径见 [`docs/IF08_IF09_
 
 IF-03 营销选题全量同步的字段与空快照口径见 [`docs/IF03_营销选题同步契约.md`](docs/IF03_营销选题同步契约.md)。同步数据作为独立来源事实保存，周度规则策划按账号绑定和审核时间安排营销槽位。
 
-IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点选题同步契约.md`](docs/IF04_热点选题同步契约.md)。热点来源数据独立保存，T-1 热点槽位触发仍待接入。
+IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点选题同步契约.md`](docs/IF04_热点选题同步契约.md)。热点来源数据独立保存；热点调度进程在 T-1 22:00 为待定槽位确定热点选题，候选不足时使用普通最热选题兜底。
 
 本项目前端仍调用 `/api/accounts`、`/api/topics`、`/api/batches` 等**内部前后端接口**。从已同步且可用的账号与选题创建手动批次，会生成 `SLOT_PLAN_CREATED` 待投递事件。项目内的策划工作进程拿到完整 Fit、T1–T7 和 Content Agent Input 后，调用受令牌保护的 `POST /api/internal/slots/{slot_id}/content-ready`，生成 `CONTENT_READY` 事件。内容生产系统再通过状态接口回传 `generated`、`failed` 或 `published`。状态和选题使用次数仅在有效回传后更新；重复 `event_id` 不重复生效。
 
