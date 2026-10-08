@@ -24,6 +24,8 @@ ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-$(dotenv_value ORDINAR
 ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-1}"
 HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-$(dotenv_value HOTSPOT_SCHEDULER_ENABLED)}"
 HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-1}"
+TOPIC_LABEL_WORKER_ENABLED="${TOPIC_LABEL_WORKER_ENABLED:-$(dotenv_value TOPIC_LABEL_WORKER_ENABLED)}"
+TOPIC_LABEL_WORKER_ENABLED="${TOPIC_LABEL_WORKER_ENABLED:-0}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 
 running=0
@@ -66,6 +68,10 @@ if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
 fi
 if [[ "$HOTSPOT_SCHEDULER_ENABLED" == "1" ]]; then
   check_process "Hotspot scheduler" "$RUN_DIR/hotspot-scheduler.pid" || true
+  expected=$((expected + 1))
+fi
+if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
+  check_process "Topic label worker" "$RUN_DIR/topic-label-worker.pid" || true
   expected=$((expected + 1))
 fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true

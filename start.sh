@@ -33,6 +33,9 @@ ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-$(dotenv_value ORDINAR
 ORDINARY_SCHEDULER_ENABLED="${ORDINARY_SCHEDULER_ENABLED:-1}"
 HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-$(dotenv_value HOTSPOT_SCHEDULER_ENABLED)}"
 HOTSPOT_SCHEDULER_ENABLED="${HOTSPOT_SCHEDULER_ENABLED:-1}"
+TOPIC_LABEL_WORKER_ENABLED="${TOPIC_LABEL_WORKER_ENABLED:-$(dotenv_value TOPIC_LABEL_WORKER_ENABLED)}"
+TOPIC_LABEL_WORKER_ENABLED="${TOPIC_LABEL_WORKER_ENABLED:-0}"
+LABEL_MODEL_URL="${LABEL_MODEL_URL:-$(dotenv_value LABEL_MODEL_URL)}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 LOG_DIR="${LOG_DIR:-$APP_ROOT/logs}"
 
@@ -42,6 +45,7 @@ backend_pid="$RUN_DIR/backend.pid"
 frontend_pid="$RUN_DIR/frontend.pid"
 scheduler_pid="$RUN_DIR/ordinary-scheduler.pid"
 hotspot_scheduler_pid="$RUN_DIR/hotspot-scheduler.pid"
+topic_label_worker_pid="$RUN_DIR/topic-label-worker.pid"
 
 is_running() {
   local pid_file="$1"
@@ -55,6 +59,11 @@ is_running() {
 if [[ -z "$PYTHON_BIN" || ! -x "$PYTHON_BIN" ]]; then
   echo "Python executable not found: ${PYTHON_BIN:-python3}" >&2
   echo "Install Python 3 and dependencies: python3 -m pip install -r backend/requirements.txt" >&2
+  exit 1
+fi
+
+if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" && -z "$LABEL_MODEL_URL" ]]; then
+  echo "Topic label worker enabled, but LABEL_MODEL_URL is empty." >&2
   exit 1
 fi
 
@@ -98,6 +107,20 @@ if [[ "$HOTSPOT_SCHEDULER_ENABLED" == "1" ]]; then
   fi
 fi
 
+if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
+  if is_running "$topic_label_worker_pid"; then
+    echo "Topic label worker is already running (PID $(cat "$topic_label_worker_pid"))."
+  else
+    rm -f "$topic_label_worker_pid"
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.topic_label_worker
+    ) >"$LOG_DIR/topic-label-worker.log" 2>&1 &
+    echo $! >"$topic_label_worker_pid"
+    echo "Topic label worker started (PID $(cat "$topic_label_worker_pid"))."
+  fi
+fi
+
 if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
   if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
     echo "npm not found: $NPM_BIN" >&2
@@ -124,4 +147,4 @@ else
   echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
 fi
 
-echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log and $LOG_DIR/frontend.log"
+echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log, $LOG_DIR/topic-label-worker.log and $LOG_DIR/frontend.log"

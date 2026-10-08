@@ -85,7 +85,7 @@ IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点�
 
 T1–T5 字典的稳定 ID、改名、启停、选题标签 ID 关联和逐版历史见 [`docs/TAG_TAXONOMY.md`](docs/TAG_TAXONOMY.md)。
 
-正式普通选题首次同步会创建内部标签识别任务；领取租约、失败重试和结果回写见 [`docs/TOPIC_LABEL_JOBS.md`](docs/TOPIC_LABEL_JOBS.md)。当前尚无模型识别器，任务不会自动产出标签。
+正式普通选题首次同步会创建内部标签识别任务；可配置的本地识别进程、模型服务 JSON 契约、领取租约、失败重试和结果回写见 [`docs/TOPIC_LABEL_JOBS.md`](docs/TOPIC_LABEL_JOBS.md)。未配置模型服务时识别进程默认关闭，任务不会自动产出标签。
 
 本地版已产生的策划事件为 `SLOT_PLAN_CREATED` 和 `CONTENT_READY`；槽位状态变化及内容 Agent 的实际执行仍需继续接入。周度规则调度和热点 T-1 确定已在项目内部运行，内容生成失败后的再次生产需要创建新版本，本地版会阻止复用同一版本重复提交。
 

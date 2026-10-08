@@ -1325,21 +1325,22 @@ def resolve_topic_tag_ids(cursor, labels: dict[str, str], requested_version: int
 
 
 @router.get("/api/internal/topic-label-jobs", dependencies=[Depends(require_integration_token)])
-def list_topic_label_jobs(limit: int = 100) -> dict:
+def list_topic_label_jobs(limit: int = 100, after_id: int = 0) -> dict:
     limit = max(1, min(limit, 200))
+    after_id = max(0, after_id)
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
-                "SELECT j.topic_id, j.status, j.attempt_count, j.last_error, "
+                "SELECT j.id, j.topic_id, j.status, j.attempt_count, j.last_error, "
                 "j.source_updated_at, j.lease_expires_at FROM godp_topic_label_job j "
                 "JOIN godp_topic_source s ON s.topic_id=j.topic_id "
                 "JOIN godp_topic t ON t.topic_code=j.topic_id "
-                "WHERE j.del_flag='N' AND s.del_flag='N' AND s.active_in_snapshot=1 "
+                "WHERE j.id>%s AND j.del_flag='N' AND s.del_flag='N' AND s.active_in_snapshot=1 "
                 "AND t.del_flag='N' AND t.status='可用' AND t.is_marketing=0 "
                 "AND j.topic_id NOT LIKE 'DEMO-%%' "
                 "AND (j.status IN ('pending','failed') OR "
                 "(j.status='processing' AND j.lease_expires_at<=UTC_TIMESTAMP(6))) "
-                "ORDER BY j.id LIMIT %s", (limit,),
+                "ORDER BY j.id LIMIT %s", (after_id, limit),
             )
             rows = cursor.fetchall()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:

@@ -30,6 +30,7 @@ stop_one() {
   rm -f "$pid_file"
 }
 
+stop_one "Topic label worker" "$RUN_DIR/topic-label-worker.pid"
 stop_one "Hotspot scheduler" "$RUN_DIR/hotspot-scheduler.pid"
 stop_one "Ordinary scheduler" "$RUN_DIR/ordinary-scheduler.pid"
 stop_one "Frontend" "$RUN_DIR/frontend.pid"
