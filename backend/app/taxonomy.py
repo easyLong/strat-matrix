@@ -29,3 +29,27 @@ def normalize_taxonomy(raw: dict) -> dict[str, list[dict]]:
 def active_tag_names(items: dict[str, list[dict]]) -> dict[str, list[str]]:
     return {dimension: [item["name"] for item in items[dimension] if item["enabled"]]
             for dimension in DIMENSIONS}
+
+
+def tag_names_for_dimensions(tags: dict) -> dict[str, str]:
+    """Read legacy scalar or one-element-list values without guessing missing tags."""
+    names = {}
+    for dimension in DIMENSIONS:
+        value = tags.get(dimension, tags.get(dimension.lower()))
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        if isinstance(value, str) and value.strip():
+            names[dimension] = value.strip()
+    return names
+
+
+def legacy_tag_ids(tags: dict, snapshots: list[dict[str, list[dict]]]) -> dict[str, str]:
+    """Backfill only unambiguous name-to-ID links from saved dictionary versions."""
+    names = tag_names_for_dimensions(tags)
+    resolved = {}
+    for dimension, name in names.items():
+        candidates = {item["id"] for snapshot in snapshots
+                      for item in snapshot[dimension] if item["name"] == name}
+        if len(candidates) == 1:
+            resolved[dimension] = candidates.pop()
+    return resolved

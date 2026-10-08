@@ -5,7 +5,7 @@ import json
 import re
 
 from .db import connection
-from .taxonomy import normalize_taxonomy
+from .taxonomy import legacy_tag_ids, normalize_taxonomy
 
 
 def column_definitions(schema: str) -> dict[str, dict[str, tuple[str, str]]]:
@@ -122,6 +122,8 @@ def main() -> None:
         for name, definition in (
             ("label_status", "VARCHAR(16) NOT NULL DEFAULT '处理中' COMMENT '普通选题T1到T6标签识别状态：处理中、已完成或失败'"),
             ("label_error", "VARCHAR(500) NOT NULL DEFAULT '' COMMENT '标签识别失败原因或空字符串'"),
+            ("tag_ids_json", "LONGTEXT NULL COMMENT '选题已识别T1到T5标签稳定ID映射JSON；旧数据可部分解析'"),
+            ("taxonomy_version", "INT NULL COMMENT '本次标签识别使用的T1到T5字典版本；旧记录未知时为空'"),
         ):
             cursor.execute(
                 "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
@@ -185,6 +187,35 @@ def main() -> None:
                 "FROM godp_strategy_config WHERE config_key='operations' AND del_flag='N'",
                 (module,),
             )
+        cursor.execute(
+            "SELECT config_json FROM godp_strategy_config_version "
+            "WHERE config_key='tag_taxonomy' AND del_flag='N' ORDER BY version"
+        )
+        snapshots = [normalize_taxonomy(json.loads(row["config_json"]))
+                     for row in cursor.fetchall()]
+        cursor.execute(
+            "SELECT id, tags_json FROM godp_topic_tag "
+            "WHERE tag_ids_json IS NULL AND del_flag='N'"
+        )
+        for tag_row in cursor.fetchall():
+            try:
+                tags = json.loads(tag_row["tags_json"])
+                resolved = legacy_tag_ids(tags, snapshots) if isinstance(tags, dict) else {}
+            except (TypeError, json.JSONDecodeError):
+                resolved = {}
+            cursor.execute(
+                "UPDATE godp_topic_tag SET tag_ids_json=%s, "
+                "update_by='migration', update_time=update_time WHERE id=%s",
+                (json.dumps(resolved, ensure_ascii=False, separators=(",", ":")), tag_row["id"]),
+            )
+        cursor.execute(
+            "INSERT IGNORE INTO godp_topic_tag_history "
+            "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, "
+            "label_status, label_error, create_time, create_by, update_by) "
+            "SELECT topic_id, version, tags_json, COALESCE(tag_ids_json, '{}'), "
+            "taxonomy_version, label_status, label_error, update_time, update_by, 'migration' "
+            "FROM godp_topic_tag WHERE del_flag='N'"
+        )
         updated_tables = sync_table_comments(cursor, source)
         updated_columns = sync_column_comments(cursor, source)
         db.commit()

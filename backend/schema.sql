@@ -332,6 +332,8 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag (
     topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',
     version INT NOT NULL DEFAULT 1 COMMENT '选题标签当前版本号',
     tags_json LONGTEXT NOT NULL COMMENT '选题标签关联内容JSON',
+    tag_ids_json LONGTEXT NULL COMMENT '选题已识别T1到T5标签稳定ID映射JSON；旧数据可部分解析',
+    taxonomy_version INT NULL COMMENT '本次标签识别使用的T1到T5字典版本；旧记录未知时为空',
     label_status VARCHAR(16) NOT NULL DEFAULT '处理中' COMMENT '普通选题T1到T6标签识别状态：处理中、已完成或失败',
     label_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '标签识别失败原因或空字符串',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -341,6 +343,23 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_tag_topic (topic_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本项目识别和维护的选题标签';
+
+CREATE TABLE IF NOT EXISTS godp_topic_tag_history (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题标签历史快照主键ID',
+    topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
+    version INT NOT NULL COMMENT '该选题标签结果版本号',
+    tags_json LONGTEXT NOT NULL COMMENT '该版本T1到T6标签名称快照JSON',
+    tag_ids_json LONGTEXT NOT NULL COMMENT '该版本T1到T5标签稳定ID映射JSON',
+    taxonomy_version INT NULL COMMENT '该版本标签识别所用字典版本；旧记录未知时为空',
+    label_status VARCHAR(16) NOT NULL COMMENT '该版本标签识别状态',
+    label_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '该版本标签识别失败原因或空字符串',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_topic_tag_history_version (topic_id, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题标签名称与稳定ID的版本历史';
 
 CREATE TABLE IF NOT EXISTS godp_topic_official_usage (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题正式使用次数记录主键ID',

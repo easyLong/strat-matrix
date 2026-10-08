@@ -1154,17 +1154,19 @@ class TopicTagsInput(BaseModel):
     tags: dict[str, Any] = Field(default_factory=dict)
     label_status: str | None = None
     label_error: str = Field(default="", max_length=500)
+    taxonomy_version: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def check_status(self):
         if self.label_status not in (None, "处理中", "已完成", "失败"):
             raise ValueError("label_status 只能是处理中、已完成或失败")
-        if self.label_status == "已完成" and single_choice_labels(self.tags) is None:
+        status = self.label_status or ("已完成" if single_choice_labels(self.tags) else "处理中")
+        if status == "已完成" and single_choice_labels(self.tags) is None:
             raise ValueError("已完成时必须提供 T1–T6 单选标签")
-        if self.label_status == "失败" and not self.label_error.strip():
+        if status == "失败" and not self.label_error.strip():
             raise ValueError("失败时必须提供 label_error")
-        if self.label_status not in ("失败", "处理中") and not self.tags:
-            raise ValueError("已完成状态必须提供 tags")
+        if status != "已完成" and self.taxonomy_version is not None:
+            raise ValueError("只有已完成标签结果才能关联字典版本")
         return self
 
 
@@ -1257,6 +1259,40 @@ def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
     return {"version": next_version, "tags": tags, "items": next_items}
 
 
+def resolve_topic_tag_ids(cursor, labels: dict[str, str], requested_version: int | None
+                          ) -> tuple[dict[str, str], int]:
+    cursor.execute(
+        "SELECT version, config_json FROM godp_strategy_config "
+        "WHERE config_key='tag_taxonomy' AND del_flag='N' FOR UPDATE"
+    )
+    current = cursor.fetchone()
+    if not current:
+        raise HTTPException(status_code=409, detail="T1–T5 标签字典尚未保存")
+    version = requested_version or current["version"]
+    if version == current["version"]:
+        snapshot = current["config_json"]
+    else:
+        cursor.execute(
+            "SELECT config_json FROM godp_strategy_config_version "
+            "WHERE config_key='tag_taxonomy' AND version=%s AND del_flag='N'",
+            (version,),
+        )
+        historical = cursor.fetchone()
+        if not historical:
+            raise HTTPException(status_code=409, detail="指定的标签字典版本不存在")
+        snapshot = historical["config_json"]
+    items = normalize_taxonomy(json.loads(snapshot))
+    ids = {}
+    for dimension in DIMENSIONS:
+        name = labels[dimension.lower()]
+        matched = [item["id"] for item in items[dimension]
+                   if item["enabled"] and item["name"] == name]
+        if len(matched) != 1:
+            raise HTTPException(status_code=422, detail=f"{dimension} 标签不在 V{version} 启用字典中：{name}")
+        ids[dimension] = matched[0]
+    return ids, version
+
+
 @router.put("/api/internal/topic-tags/{topic_id}", dependencies=[Depends(require_integration_token)])
 def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
     if not topic_id or topic_id.startswith("DEMO-"):
@@ -1274,25 +1310,80 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
             label_status = payload.label_status or (
                 "已完成" if single_choice_labels(payload.tags) else "处理中"
             )
+            labels = single_choice_labels(payload.tags) if label_status == "已完成" else None
+            tag_ids, taxonomy_version = (
+                resolve_topic_tag_ids(cursor, labels, payload.taxonomy_version)
+                if labels else ({}, None)
+            )
+            tags = ({dimension.upper(): [name] for dimension, name in labels.items()}
+                    if labels else payload.tags)
+            tags_json = as_json(tags)
+            ids_json = as_json(tag_ids)
+            cursor.execute(
+                "SELECT version, tags_json, tag_ids_json, taxonomy_version, "
+                "label_status, label_error, del_flag FROM godp_topic_tag "
+                "WHERE topic_id=%s FOR UPDATE", (topic_id,),
+            )
+            previous = cursor.fetchone()
+            if previous and previous["del_flag"] == "N" and (
+                previous["tags_json"] == tags_json and
+                previous["tag_ids_json"] == ids_json and
+                previous["taxonomy_version"] == taxonomy_version and
+                previous["label_status"] == label_status and
+                previous["label_error"] == payload.label_error
+            ):
+                return {"topic_id": topic_id, "version": previous["version"],
+                        "label_status": label_status, "taxonomy_version": taxonomy_version,
+                        "tag_ids": tag_ids}
+            version = previous["version"] + 1 if previous else 1
             cursor.execute(
                 "INSERT INTO godp_topic_tag "
-                "(topic_id, version, tags_json, label_status, label_error) "
-                "VALUES (%s, 1, %s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE version=version+1, tags_json=VALUES(tags_json), "
+                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, "
+                "label_status, label_error) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE version=VALUES(version), tags_json=VALUES(tags_json), "
+                "tag_ids_json=VALUES(tag_ids_json), taxonomy_version=VALUES(taxonomy_version), "
                 "label_status=VALUES(label_status), label_error=VALUES(label_error), "
                 "update_by='system', del_flag='N'",
-                (topic_id, as_json(payload.tags), label_status, payload.label_error),
+                (topic_id, version, tags_json, ids_json, taxonomy_version,
+                 label_status, payload.label_error),
             )
-            cursor.execute("SELECT version FROM godp_topic_tag WHERE topic_id=%s", (topic_id,))
-            version = cursor.fetchone()["version"]
-            queue_event(cursor, "topics", "TOPIC_TAGS_CHANGED", {
-                "topic_id": topic_id, "version": version, "tags": payload.tags,
-                "label_status": label_status,
-            })
+            cursor.execute(
+                "INSERT INTO godp_topic_tag_history "
+                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, "
+                "label_status, label_error) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (topic_id, version, tags_json, ids_json, taxonomy_version,
+                 label_status, payload.label_error),
+            )
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    return {"topic_id": topic_id, "version": version, "label_status": label_status}
+    return {"topic_id": topic_id, "version": version, "label_status": label_status,
+            "taxonomy_version": taxonomy_version, "tag_ids": tag_ids}
+
+
+@router.get("/api/internal/topic-tags/{topic_id}/history", dependencies=[Depends(require_integration_token)])
+def topic_tag_history(topic_id: str, limit: int = 100) -> dict:
+    limit = max(1, min(limit, 200))
+    try:
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT version, tags_json, tag_ids_json, taxonomy_version, "
+                "label_status, label_error, create_time FROM godp_topic_tag_history "
+                "WHERE topic_id=%s AND del_flag='N' ORDER BY version DESC LIMIT %s",
+                (topic_id, limit),
+            )
+            rows = cursor.fetchall()
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+    return {"topic_id": topic_id, "history": [
+        {"version": row["version"], "tags": json.loads(row["tags_json"]),
+         "tag_ids": json.loads(row["tag_ids_json"]),
+         "taxonomy_version": row["taxonomy_version"],
+         "label_status": row["label_status"], "label_error": row["label_error"],
+         "created_at": row["create_time"]}
+        for row in rows
+    ]}
 
 
 @router.get("/api/internal/outbox", dependencies=[Depends(require_integration_token)])

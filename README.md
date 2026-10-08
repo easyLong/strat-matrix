@@ -81,9 +81,9 @@ IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点�
 
 本项目前端仍调用 `/api/accounts`、`/api/topics`、`/api/batches` 等**内部前后端接口**。从已同步且可用的账号与选题创建手动批次，会生成 `SLOT_PLAN_CREATED` 待投递事件。项目内的策划工作进程拿到完整 Fit、T1–T7 和 Content Agent Input 后，调用受令牌保护的 `POST /api/internal/slots/{slot_id}/content-ready`，生成 `CONTENT_READY` 事件。内容生产系统再通过状态接口回传 `generated`、`failed` 或 `published`。状态和选题使用次数仅在有效回传后更新；重复 `event_id` 不重复生效。
 
-`GET /api/internal/outbox` 使用同一令牌读取本地事件，目标 `planning` 指向客户内容生产系统，目标 `topics` 指向客户选题库。`PUT /api/tag-taxonomy` 保存 T1–T5 固定标签并生成选题库待投递事件；`PUT /api/internal/topic-tags/{topic_id}` 保存单个选题的识别标签并生成待投递事件。客户尚未提供接收地址，本地版将这些事件保存在数据库中供查看和后续投递，不会自动发送。`DEMO-` 演示记录及未通过客户同步接口建立的手工目录记录只保存在本地。
+`GET /api/internal/outbox` 使用同一令牌读取本地事件，目标 `planning` 指向客户内容生产系统，目标 `topics` 指向客户选题库。`PUT /api/tag-taxonomy` 保存 T1–T5 固定标签并生成本地待投递事件；`PUT /api/internal/topic-tags/{topic_id}` 保存单个选题的识别标签，由选题方通过 IF-08 主动查询，不推送标签结果。客户尚未提供接收地址，本地版将待投递事件保存在数据库中供查看和后续投递，不会自动发送。`DEMO-` 演示记录及未通过客户同步接口建立的手工目录记录只保存在本地。
 
-T1–T5 字典的稳定 ID、改名、启停和版本保存口径见 [`docs/TAG_TAXONOMY.md`](docs/TAG_TAXONOMY.md)。
+T1–T5 字典的稳定 ID、改名、启停、选题标签 ID 关联和逐版历史见 [`docs/TAG_TAXONOMY.md`](docs/TAG_TAXONOMY.md)。
 
 本地版已产生的策划事件为 `SLOT_PLAN_CREATED` 和 `CONTENT_READY`；槽位状态变化及内容 Agent 的实际执行仍需继续接入。周度规则调度和热点 T-1 确定已在项目内部运行，内容生成失败后的再次生产需要创建新版本，本地版会阻止复用同一版本重复提交。
 
