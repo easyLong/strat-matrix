@@ -377,6 +377,26 @@ CREATE TABLE IF NOT EXISTS godp_t6_tag (
     KEY idx_t6_tag_embedding_model (embedding_model)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题T6用户需求标签及语义向量库';
 
+CREATE TABLE IF NOT EXISTS godp_topic_profile (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题画像和向量记录主键ID',
+    topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
+    content_hash CHAR(64) NOT NULL COMMENT '当前有效内容与T1到T6标签画像的SHA256指纹',
+    tag_version INT NOT NULL COMMENT '画像使用的普通选题标签结果版本号',
+    profile_json LONGTEXT NOT NULL COMMENT '由当前有效选题内容与标签构建的画像JSON',
+    vector_json LONGTEXT NULL COMMENT '当前画像对应的选题向量JSON；待生成或失效时为空',
+    vector_model VARCHAR(100) NULL COMMENT '当前选题向量所使用的模型标识；待生成或失效时为空',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '向量准备状态：pending待生成、ready已就绪或failed生成失败',
+    last_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近一次向量生成失败原因或空字符串',
+    completed_at DATETIME(6) NULL COMMENT '当前画像向量生成完成时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_topic_profile_topic (topic_id),
+    KEY idx_topic_profile_status (status, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题当前内容版本的画像与向量准备状态';
+
 CREATE TABLE IF NOT EXISTS godp_topic_label_job (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题首次离线标签识别任务主键ID',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',

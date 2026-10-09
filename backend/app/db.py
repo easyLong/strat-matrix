@@ -69,6 +69,7 @@ def check_database() -> bool:
                 "godp_topic_tag",
                 "godp_topic_tag_history",
                 "godp_t6_tag",
+                "godp_topic_profile",
                 "godp_topic_label_job",
                 "godp_topic_official_usage",
                 "godp_topic_official_usage_history",

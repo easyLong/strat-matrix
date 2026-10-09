@@ -29,6 +29,7 @@ from .integration_models import (
 )
 from .taxonomy import DIMENSIONS, active_tag_names, normalize_taxonomy
 from .t6_tags import normalized_embedding, resolve_t6_tag
+from .topic_profile import upsert_topic_profile
 
 
 router = APIRouter()
@@ -347,6 +348,21 @@ def sync_topics(payload: TopicSync) -> SyncResult:
                             "lease_id=NULL, lease_expires_at=NULL, update_by='integration' "
                             "WHERE topic_id=%s AND status<>'completed'", (record.topic_id,),
                         )
+                    if usable and not record.is_marketing and not record.topic_id.startswith("DEMO-"):
+                        cursor.execute(
+                            "SELECT version, tags_json FROM godp_topic_tag "
+                            "WHERE topic_id=%s AND label_status='已完成' AND del_flag='N'",
+                            (record.topic_id,),
+                        )
+                        completed_tags = cursor.fetchone()
+                        if completed_tags:
+                            try:
+                                upsert_topic_profile(cursor, record.topic_id, raw,
+                                                     completed_tags["tags_json"],
+                                                     completed_tags["version"])
+                            except ValueError:
+                                # Legacy incomplete tags must not block source sync.
+                                pass
                 result = (full_snapshot_finish(cursor, payload, "topic", full[0], full[1], counters)
                           if full else summary(payload.source_batch_id, len(payload.records), counters))
                 db.commit()
@@ -1419,10 +1435,10 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
-                "SELECT t.is_marketing FROM godp_topic t JOIN godp_topic_source s "
+                "SELECT t.is_marketing, s.payload_json FROM godp_topic t JOIN godp_topic_source s "
                 "ON s.topic_id=t.topic_code WHERE t.topic_code=%s "
                 "AND t.del_flag='N' AND s.del_flag='N' "
-                "AND s.active_in_snapshot=1 AND t.status='可用'", (topic_id,),
+                "AND s.active_in_snapshot=1 AND t.status='可用' FOR UPDATE", (topic_id,),
             )
             topic_row = cursor.fetchone()
             if not topic_row or topic_row["is_marketing"]:
@@ -1453,6 +1469,9 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                 previous["label_error"] == payload.label_error and
                 payload.taxonomy_version in (None, previous["taxonomy_version"])
             ):
+                upsert_topic_profile(cursor, topic_id, topic_row["payload_json"],
+                                     previous["tags_json"], previous["version"])
+                db.commit()
                 return {"topic_id": topic_id, "version": previous["version"],
                         "label_status": "已完成",
                         "taxonomy_version": previous["taxonomy_version"],
@@ -1500,6 +1519,9 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                 previous["label_status"] == label_status and
                 previous["label_error"] == payload.label_error
             ):
+                if label_status == "已完成":
+                    upsert_topic_profile(cursor, topic_id, topic_row["payload_json"],
+                                         tags_json, previous["version"])
                 if job and job["status"] != ("completed" if label_status == "已完成" else "failed"):
                     cursor.execute(
                         "UPDATE godp_topic_label_job SET status=%s, completed_at=%s, "
@@ -1538,6 +1560,9 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                 (topic_id, version, tags_json, ids_json, taxonomy_version, t6_tag_id,
                  label_status, payload.label_error),
             )
+            if label_status == "已完成":
+                upsert_topic_profile(cursor, topic_id, topic_row["payload_json"],
+                                     tags_json, version)
             if job:
                 cursor.execute(
                     "UPDATE godp_topic_label_job SET status=%s, lease_id=NULL, "

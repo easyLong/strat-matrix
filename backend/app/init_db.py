@@ -6,6 +6,7 @@ import re
 
 from .db import connection
 from .taxonomy import legacy_tag_ids, normalize_taxonomy
+from .topic_profile import upsert_topic_profile
 
 
 def saved_t6_name(raw_tags: str) -> str | None:
@@ -269,6 +270,22 @@ def main() -> None:
                     "WHERE id=%s",
                     (t6_ids[name], tag_row["id"]),
                 )
+        cursor.execute(
+            "SELECT s.topic_id, s.payload_json, tag.tags_json, tag.version "
+            "FROM godp_topic_source s JOIN godp_topic_tag tag "
+            "ON tag.topic_id=s.topic_id JOIN godp_topic t ON t.topic_code=s.topic_id "
+            "WHERE s.del_flag='N' AND tag.del_flag='N' AND tag.label_status='已完成' "
+            "AND t.del_flag='N' AND t.is_marketing=0 "
+            "AND s.topic_id NOT LIKE 'DEMO-%%'"
+        )
+        for topic_row in cursor.fetchall():
+            try:
+                upsert_topic_profile(cursor, topic_row["topic_id"],
+                                     topic_row["payload_json"], topic_row["tags_json"],
+                                     topic_row["version"])
+            except ValueError:
+                # Old malformed labels stay outside the AI candidate pool.
+                continue
         cursor.execute(
             "INSERT IGNORE INTO godp_topic_label_job "
             "(topic_id, source_payload_json, source_updated_at, status, last_error, "
