@@ -8,6 +8,22 @@ from .db import connection
 from .taxonomy import legacy_tag_ids, normalize_taxonomy
 
 
+def saved_t6_name(raw_tags: str) -> str | None:
+    try:
+        tags = json.loads(raw_tags)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(tags, dict):
+        return None
+    value = tags.get("T6", tags.get("t6"))
+    if isinstance(value, list) and len(value) == 1:
+        value = value[0]
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    return name if 0 < len(name) <= 80 else None
+
+
 def column_definitions(schema: str) -> dict[str, dict[str, tuple[str, str]]]:
     """Read the column declarations used for both CREATE and comment updates."""
     tables: dict[str, dict[str, tuple[str, str]]] = {}
@@ -124,6 +140,7 @@ def main() -> None:
             ("label_error", "VARCHAR(500) NOT NULL DEFAULT '' COMMENT '标签识别失败原因或空字符串'"),
             ("tag_ids_json", "LONGTEXT NULL COMMENT '选题已识别T1到T5标签稳定ID映射JSON；旧数据可部分解析'"),
             ("taxonomy_version", "INT NULL COMMENT '本次标签识别使用的T1到T5字典版本；旧记录未知时为空'"),
+            ("t6_tag_id", "BIGINT NULL COMMENT '识别后复用或新增的T6用户需求标签稳定ID；旧记录未解析时为空'"),
         ):
             cursor.execute(
                 "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
@@ -132,6 +149,16 @@ def main() -> None:
             )
             if cursor.fetchone()["column_count"] == 0:
                 cursor.execute(f"ALTER TABLE godp_topic_tag ADD COLUMN `{name}` {definition}")
+        cursor.execute(
+            "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_topic_tag_history' "
+            "AND COLUMN_NAME='t6_tag_id'"
+        )
+        if cursor.fetchone()["column_count"] == 0:
+            cursor.execute(
+                "ALTER TABLE godp_topic_tag_history ADD COLUMN t6_tag_id BIGINT NULL "
+                "COMMENT '该版本关联的T6用户需求标签稳定ID；旧历史未解析时为空'"
+            )
         for table, description in (
             ("godp_account_source", "账号来源记录当前是否有效：1有效0已被全量快照停用"),
             ("godp_topic_source", "普通选题来源记录当前是否有效：1有效0已被全量快照停用"),
@@ -216,6 +243,32 @@ def main() -> None:
             "taxonomy_version, label_status, label_error, update_time, update_by, 'migration' "
             "FROM godp_topic_tag WHERE del_flag='N'"
         )
+        t6_ids: dict[str, int] = {}
+        for table in ("godp_topic_tag", "godp_topic_tag_history"):
+            cursor.execute(
+                f"SELECT id, tags_json FROM {table} "
+                "WHERE label_status='已完成' AND t6_tag_id IS NULL AND del_flag='N'"
+            )
+            for tag_row in cursor.fetchall():
+                name = saved_t6_name(tag_row["tags_json"])
+                if not name:
+                    continue
+                if name not in t6_ids:
+                    cursor.execute(
+                        "INSERT IGNORE INTO godp_t6_tag "
+                        "(name, create_by, update_by) VALUES (%s, 'migration', 'migration')",
+                        (name,),
+                    )
+                    cursor.execute(
+                        "SELECT id FROM godp_t6_tag WHERE name=%s AND del_flag='N'",
+                        (name,),
+                    )
+                    t6_ids[name] = cursor.fetchone()["id"]
+                cursor.execute(
+                    f"UPDATE {table} SET t6_tag_id=%s, update_time=update_time "
+                    "WHERE id=%s",
+                    (t6_ids[name], tag_row["id"]),
+                )
         cursor.execute(
             "INSERT IGNORE INTO godp_topic_label_job "
             "(topic_id, source_payload_json, source_updated_at, status, last_error, "

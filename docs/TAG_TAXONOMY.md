@@ -27,19 +27,22 @@
 
 ## 选题标签与字典版本关联
 
-内部识别结果通过 `PUT /api/internal/topic-tags/{topic_id}` 写入。完成状态仍提交 T1–T6 单选名称，可以额外提交识别时使用的 `taxonomy_version`；省略时按当前字典版本解析。T1–T5 名称必须在该版本处于启用状态，服务端将其对应稳定 ID 与字典版本保存在选题标签记录中。T6 保留名称快照，不使用 T1–T5 字典 ID。
+内部识别结果通过 `PUT /api/internal/topic-tags/{topic_id}` 写入。完成状态仍提交 T1–T6 单选名称；已领取的任务必须附带 `lease_id` 和领取时锁定的 `taxonomy_version`，没有任务的旧调用方省略版本时按当前字典版本解析。T1–T5 名称必须在该版本处于启用状态，服务端将其对应稳定 ID 与字典版本保存在选题标签记录中。新的已完成结果还须提交 `t6_embedding` 和 `t6_embedding_model`，由服务端复用或创建 T6 稳定 ID；T6 不使用 T1–T5 字典 ID。
 
 ```json
 {
   "label_status": "已完成",
+  "lease_id": "CLAIM-LEASE-ID",
   "taxonomy_version": 3,
   "tags": {
     "T1": ["非营销"], "T2": ["流量"], "T3": ["本地生活"],
     "T4": ["年轻客群"], "T5": ["周末休闲"], "T6": ["周末出行规划"]
-  }
+  },
+  "t6_embedding_model": "your-embedding-model-version",
+  "t6_embedding": [0.12, 0.34, 0.56]
 }
 ```
 
-每次实际变更同时保存到 `godp_topic_tag_history`；重复提交完全相同的结果复用当前版本。`GET /api/internal/topic-tags/{topic_id}/history` 可用对接令牌查看逐版名称、稳定 ID、所用字典版本和识别状态。IF-08 对外查询仍仅返回 T1–T6 名称及状态，不改变客户接口契约；标签结果不主动推送。
+每次实际变更同时保存到 `godp_topic_tag_history`；重复提交完全相同的结果复用当前版本。`GET /api/internal/topic-tags/{topic_id}/history` 可用对接令牌查看逐版名称、T1–T5 稳定 ID、T6 稳定 ID、所用字典版本和识别状态。IF-08 对外查询仍仅返回 T1–T6 名称及状态，不改变客户接口契约；标签结果不主动推送。
 
-部署更新后运行 `cd backend && python3 -m app.init_db`：为既有标签记录补充能从字典历史**唯一确定**的 T1–T5 ID，并把当前记录作为迁移基线写入历史表。无法唯一确定的旧名称保持原值、ID 留空；旧记录的准确识别字典版本未知时为 `null`。迁移无法恢复过去已被覆盖的标签版本。首次识别任务的领取与回写见[普通选题首次标签识别任务](TOPIC_LABEL_JOBS.md)。
+部署更新后运行 `cd backend && python3 -m app.init_db`：为既有标签记录补充能从字典历史**唯一确定**的 T1–T5 ID，并把当前记录作为迁移基线写入历史表。无法唯一确定的旧名称保持原值、ID 留空；旧记录的准确识别字典版本未知时为 `null`。既有 T6 按名称补稳定 ID，但历史向量无法恢复。迁移无法恢复过去已被覆盖的标签版本。首次识别任务的领取与回写见[普通选题首次标签识别任务](TOPIC_LABEL_JOBS.md)。

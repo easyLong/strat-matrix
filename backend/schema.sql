@@ -334,6 +334,7 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag (
     tags_json LONGTEXT NOT NULL COMMENT '选题标签关联内容JSON',
     tag_ids_json LONGTEXT NULL COMMENT '选题已识别T1到T5标签稳定ID映射JSON；旧数据可部分解析',
     taxonomy_version INT NULL COMMENT '本次标签识别使用的T1到T5字典版本；旧记录未知时为空',
+    t6_tag_id BIGINT NULL COMMENT '识别后复用或新增的T6用户需求标签稳定ID；旧记录未解析时为空',
     label_status VARCHAR(16) NOT NULL DEFAULT '处理中' COMMENT '普通选题T1到T6标签识别状态：处理中、已完成或失败',
     label_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '标签识别失败原因或空字符串',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -351,6 +352,7 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag_history (
     tags_json LONGTEXT NOT NULL COMMENT '该版本T1到T6标签名称快照JSON',
     tag_ids_json LONGTEXT NOT NULL COMMENT '该版本T1到T5标签稳定ID映射JSON',
     taxonomy_version INT NULL COMMENT '该版本标签识别所用字典版本；旧记录未知时为空',
+    t6_tag_id BIGINT NULL COMMENT '该版本关联的T6用户需求标签稳定ID；旧历史未解析时为空',
     label_status VARCHAR(16) NOT NULL COMMENT '该版本标签识别状态',
     label_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '该版本标签识别失败原因或空字符串',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -360,6 +362,20 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag_history (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_tag_history_version (topic_id, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题标签名称与稳定ID的版本历史';
+
+CREATE TABLE IF NOT EXISTS godp_t6_tag (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'T6用户需求标签稳定ID',
+    name VARCHAR(80) NOT NULL COMMENT 'T6用户需求标签名称',
+    embedding_model VARCHAR(100) NULL COMMENT '该标签语义向量所使用的模型标识；旧标签无向量时为空',
+    embedding_json LONGTEXT NULL COMMENT '该标签在对应模型下的语义向量JSON；旧标签无向量时为空',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_t6_tag_name (name),
+    KEY idx_t6_tag_embedding_model (embedding_model)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题T6用户需求标签及语义向量库';
 
 CREATE TABLE IF NOT EXISTS godp_topic_label_job (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题首次离线标签识别任务主键ID',

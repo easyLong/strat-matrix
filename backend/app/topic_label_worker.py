@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
 
+from .t6_tags import normalized_embedding
+
 
 load_dotenv(Path(__file__).resolve().parents[2] / "docs" / ".env")
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
@@ -86,11 +88,18 @@ def process_job(topic_id: str, api_url: str, api_token: str,
             "taxonomy": claim["taxonomy"],
         }, headers=model_headers, timeout=model_timeout)
         tags = checked_labels(response, claim["taxonomy"])
+        try:
+            t6_embedding = normalized_embedding(
+                response["t6_embedding"], response["t6_embedding_model"])
+        except (KeyError, ValueError) as exc:
+            raise WorkerError(f"模型返回的 T6 语义向量无效：{exc}") from exc
         json_request(f"{api_url}/api/internal/topic-tags/{topic_path}", "PUT", body={
             "tags": tags,
             "label_status": "已完成",
             "taxonomy_version": claim["taxonomy_version"],
             "lease_id": lease_id,
+            "t6_embedding": t6_embedding,
+            "t6_embedding_model": response["t6_embedding_model"].strip(),
         }, headers=internal_headers, lease_conflict=True)
         LOG.info("选题 %s 标签识别完成", topic_id)
     except LeaseLost:

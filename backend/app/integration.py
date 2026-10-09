@@ -28,6 +28,7 @@ from .integration_models import (
     TopicSync,
 )
 from .taxonomy import DIMENSIONS, active_tag_names, normalize_taxonomy
+from .t6_tags import normalized_embedding, resolve_t6_tag
 
 
 router = APIRouter()
@@ -1186,6 +1187,8 @@ class TopicTagsInput(BaseModel):
     label_error: str = Field(default="", max_length=500)
     taxonomy_version: int | None = Field(default=None, ge=1)
     lease_id: str | None = Field(default=None, min_length=1, max_length=64)
+    t6_embedding: list[float] | None = Field(default=None, min_length=1, max_length=4096)
+    t6_embedding_model: str | None = Field(default=None, min_length=1, max_length=100)
 
     @model_validator(mode="after")
     def check_status(self):
@@ -1198,6 +1201,10 @@ class TopicTagsInput(BaseModel):
             raise ValueError("失败时必须提供 label_error")
         if status != "已完成" and self.taxonomy_version is not None:
             raise ValueError("只有已完成标签结果才能关联字典版本")
+        if self.t6_embedding is not None or self.t6_embedding_model is not None:
+            if status != "已完成":
+                raise ValueError("只有已完成标签结果才能关联 T6 语义向量")
+            normalized_embedding(self.t6_embedding, self.t6_embedding_model)
         return self
 
 
@@ -1435,7 +1442,7 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                     if labels else payload.tags)
             tags_json = as_json(tags)
             cursor.execute(
-                "SELECT version, tags_json, tag_ids_json, taxonomy_version, "
+                "SELECT version, tags_json, tag_ids_json, taxonomy_version, t6_tag_id, "
                 "label_status, label_error, del_flag FROM godp_topic_tag "
                 "WHERE topic_id=%s FOR UPDATE", (topic_id,),
             )
@@ -1449,7 +1456,8 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                 return {"topic_id": topic_id, "version": previous["version"],
                         "label_status": "已完成",
                         "taxonomy_version": previous["taxonomy_version"],
-                        "tag_ids": json.loads(previous["tag_ids_json"] or "{}")}
+                        "tag_ids": json.loads(previous["tag_ids_json"] or "{}"),
+                        "t6_tag_id": previous["t6_tag_id"]}
             if job:
                 if job["status"] == "cancelled":
                     raise HTTPException(status_code=409, detail="选题已退出待识别范围")
@@ -1461,19 +1469,34 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                         raise HTTPException(status_code=409, detail="识别任务租约无效或已过期")
                     if label_status == "已完成" and payload.taxonomy_version != job["taxonomy_version"]:
                         raise HTTPException(status_code=409, detail="识别结果的字典版本与任务租约不一致")
-                elif payload.lease_id is not None:
+                elif payload.lease_id is not None and not (
+                    job["status"] == "completed" and label_status == "已完成" and
+                    previous and previous["label_status"] == "已完成"
+                ):
                     raise HTTPException(status_code=409, detail="识别任务尚未领取或租约已失效")
             elif payload.lease_id is not None:
                 raise HTTPException(status_code=409, detail="识别任务不存在")
+            if labels and (payload.t6_embedding is None or payload.t6_embedding_model is None):
+                raise HTTPException(status_code=422, detail="首次完成标签识别必须提供 T6 语义向量及模型标识")
             tag_ids, taxonomy_version = (
                 resolve_topic_tag_ids(cursor, labels, payload.taxonomy_version)
                 if labels else ({}, None)
             )
+            t6_tag_id = None
+            if labels:
+                t6_tag_id, canonical_t6 = resolve_t6_tag(
+                    cursor, labels["t6"],
+                    normalized_embedding(payload.t6_embedding, payload.t6_embedding_model),
+                    payload.t6_embedding_model.strip(),
+                )
+                tags["T6"] = [canonical_t6]
+                tags_json = as_json(tags)
             ids_json = as_json(tag_ids)
             if previous and previous["del_flag"] == "N" and (
                 previous["tags_json"] == tags_json and
                 previous["tag_ids_json"] == ids_json and
                 previous["taxonomy_version"] == taxonomy_version and
+                previous["t6_tag_id"] == t6_tag_id and
                 previous["label_status"] == label_status and
                 previous["label_error"] == payload.label_error
             ):
@@ -1486,10 +1509,10 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                          now if label_status == "已完成" else None,
                          payload.label_error if label_status == "失败" else "", topic_id),
                     )
-                    db.commit()
+                db.commit()
                 return {"topic_id": topic_id, "version": previous["version"],
                         "label_status": label_status, "taxonomy_version": taxonomy_version,
-                        "tag_ids": tag_ids}
+                        "tag_ids": tag_ids, "t6_tag_id": t6_tag_id}
             if previous and previous["del_flag"] == "N" and previous["label_status"] == "已完成":
                 raise HTTPException(status_code=409, detail="普通选题标签已完成，不支持重新计算")
             if job and job["status"] == "completed":
@@ -1497,21 +1520,22 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
             version = previous["version"] + 1 if previous else 1
             cursor.execute(
                 "INSERT INTO godp_topic_tag "
-                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, "
+                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, t6_tag_id, "
                 "label_status, label_error) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON DUPLICATE KEY UPDATE version=VALUES(version), tags_json=VALUES(tags_json), "
                 "tag_ids_json=VALUES(tag_ids_json), taxonomy_version=VALUES(taxonomy_version), "
+                "t6_tag_id=VALUES(t6_tag_id), "
                 "label_status=VALUES(label_status), label_error=VALUES(label_error), "
                 "update_by='system', del_flag='N'",
-                (topic_id, version, tags_json, ids_json, taxonomy_version,
+                (topic_id, version, tags_json, ids_json, taxonomy_version, t6_tag_id,
                  label_status, payload.label_error),
             )
             cursor.execute(
                 "INSERT INTO godp_topic_tag_history "
-                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, "
-                "label_status, label_error) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (topic_id, version, tags_json, ids_json, taxonomy_version,
+                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, t6_tag_id, "
+                "label_status, label_error) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (topic_id, version, tags_json, ids_json, taxonomy_version, t6_tag_id,
                  label_status, payload.label_error),
             )
             if job:
@@ -1527,7 +1551,8 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
     return {"topic_id": topic_id, "version": version, "label_status": label_status,
-            "taxonomy_version": taxonomy_version, "tag_ids": tag_ids}
+            "taxonomy_version": taxonomy_version, "tag_ids": tag_ids,
+            "t6_tag_id": t6_tag_id}
 
 
 @router.get("/api/internal/topic-tags/{topic_id}/history", dependencies=[Depends(require_integration_token)])
@@ -1536,7 +1561,7 @@ def topic_tag_history(topic_id: str, limit: int = 100) -> dict:
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
-                "SELECT version, tags_json, tag_ids_json, taxonomy_version, "
+                "SELECT version, tags_json, tag_ids_json, taxonomy_version, t6_tag_id, "
                 "label_status, label_error, create_time FROM godp_topic_tag_history "
                 "WHERE topic_id=%s AND del_flag='N' ORDER BY version DESC LIMIT %s",
                 (topic_id, limit),
@@ -1548,6 +1573,7 @@ def topic_tag_history(topic_id: str, limit: int = 100) -> dict:
         {"version": row["version"], "tags": json.loads(row["tags_json"]),
          "tag_ids": json.loads(row["tag_ids_json"]),
          "taxonomy_version": row["taxonomy_version"],
+          "t6_tag_id": row["t6_tag_id"],
          "label_status": row["label_status"], "label_error": row["label_error"],
          "created_at": row["create_time"]}
         for row in rows
