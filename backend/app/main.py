@@ -14,6 +14,7 @@ from .db import check_database, connection
 from .account_metrics import account_metrics
 from .integration import queue_event, queue_manual_slot, router as integration_router
 from .topic_vector_api import router as topic_vector_router
+from .account_vector_api import router as account_vector_router
 from .models import (
     AccountOption,
     AccountPlanRecord,
@@ -50,6 +51,7 @@ app.add_middleware(
 )
 app.include_router(integration_router)
 app.include_router(topic_vector_router)
+app.include_router(account_vector_router)
 
 
 LIFECYCLE_STAGES = ('冷启动验证期', '流量增长期', '转化探索期', '转化放大期', '稳定经营期')

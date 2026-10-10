@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-import math
+from .vector_utils import normalized_vector
 
 
 PROFILE_TEXT_FIELDS = (
@@ -61,17 +61,4 @@ def upsert_topic_profile(cursor, topic_id: str, source_json: str,
 
 
 def normalized_topic_vector(values: object, model: object) -> list[float]:
-    if not isinstance(model, str) or not model.strip() or len(model.strip()) > 100:
-        raise ValueError("选题向量模型标识必须为 1–100 字")
-    if not isinstance(values, list) or not 1 <= len(values) <= 4096:
-        raise ValueError("选题向量维度必须在 1–4096 之间")
-    if any(isinstance(value, bool) or not isinstance(value, (int, float))
-           for value in values):
-        raise ValueError("选题向量必须全部是数值")
-    vector = [float(value) for value in values]
-    if any(not math.isfinite(value) or abs(value) > 1e6 for value in vector):
-        raise ValueError("选题向量存在无效数值")
-    length = math.sqrt(math.fsum(value * value for value in vector))
-    if length == 0 or not math.isfinite(length):
-        raise ValueError("选题向量不能是零向量")
-    return [value / length for value in vector]
+    return normalized_vector(values, model, "选题")

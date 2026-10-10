@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from .db import connection
 from .account_metrics import account_metrics
+from .account_profile import interaction_snapshot, save_batch_account_profiles
 from .models import LifecycleCondition, StrategyConfig
 
 
@@ -69,21 +70,29 @@ def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
         source = json.loads(row["payload_json"])
         account_status = source.get("account_status")
         enabled = account_status if account_status is not None else source.get("enabled", True)
-        if not enabled or not row["account_name"].strip() or not row["persona"].strip():
+        persona = source.get("account_persona")
+        if persona is None:
+            persona = source.get("persona") or row["persona"]
+        if not enabled or not row["account_name"].strip() or not persona.strip():
             continue
         account = {
             "account_id": row["account_code"],
             "account_name": row["account_name"],
-            "persona": row["persona"],
+            "persona": persona,
             "marketing_eligible": bool(row["marketing_eligible"]),
             "followers_count": int(source.get("follower_count") if source.get("follower_count") is not None
                                    else source.get("followers") or 0),
             "source_updated_at": row["source_updated_at"].isoformat(),
             "valid_content_count": 0,
             "rolling_interaction_count": 0,
+            "source_payload": source,
+            "metrics_as_of": now_utc.isoformat(),
+            "rolling_posts": config.rolling_posts,
         }
         if source.get("interaction_data") is not None:
-            account.update(account_metrics(source["interaction_data"], config.rolling_posts, now_utc))
+            account["interaction_data"] = interaction_snapshot(source["interaction_data"], now_utc)
+            account["interaction_source"] = "if01"
+            account.update(account_metrics(account["interaction_data"], config.rolling_posts, now_utc))
             direct_metrics.add(account["account_id"])
         accounts.append(account)
     if not accounts:
@@ -93,9 +102,10 @@ def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
     cursor.execute(
         "SELECT account_id, published_at, payload_json FROM godp_content_history "
         "WHERE del_flag='N' AND published_at IS NOT NULL "
-        "AND published_at>=UTC_TIMESTAMP(6)-INTERVAL 3 MONTH "
-        "AND published_at<=UTC_TIMESTAMP(6) "
-        "ORDER BY account_id, published_at DESC, id DESC"
+        "AND published_at>=DATE_SUB(%s, INTERVAL 3 MONTH) "
+        "AND published_at<=%s "
+        "ORDER BY account_id, published_at DESC, id DESC",
+        (now_utc.replace(tzinfo=None), now_utc.replace(tzinfo=None)),
     )
     legacy_posts: dict[str, list[dict]] = {}
     for row in cursor.fetchall():
@@ -103,13 +113,16 @@ def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
         if account is None or account["account_id"] in direct_metrics:
             continue
         content = json.loads(row["payload_json"])
-        content["published_at"] = row["published_at"]
+        content["published_at"] = row["published_at"].isoformat()
         legacy_posts.setdefault(row["account_id"], []).append(content)
     for account in accounts:
         if account["account_id"] not in direct_metrics:
-            account.update(account_metrics(legacy_posts.get(account["account_id"], []),
-                                           config.rolling_posts, now_utc))
+            account["interaction_data"] = interaction_snapshot(legacy_posts.get(account["account_id"], []), now_utc)
+            account["interaction_source"] = "legacy_content_history"
+            account.update(account_metrics(account["interaction_data"], config.rolling_posts, now_utc))
         account["lifecycle_stage"] = lifecycle_stage(config, account)
+        target = next(target for target in config.stage_targets if target.name == account["lifecycle_stage"])
+        account["business_goal"] = {"traffic": target.traffic, "conversion": target.conversion}
     return accounts
 
 
@@ -165,6 +178,9 @@ def run_ordinary_planning(cycle_start: date | None = None, scope: str = "live") 
     lock_name = f"godp:ordinary:{scope}:{start:%Y%m%d}"
 
     with connection() as db, db.cursor() as cursor:
+        # Keep every source read on one database snapshot, including the
+        # legacy interaction fallback, regardless of the server default.
+        cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         cursor.execute("SELECT GET_LOCK(%s, 5) AS acquired", (lock_name,))
         if cursor.fetchone()["acquired"] != 1:
             raise PlanningError("同周期普通策划正在执行，请稍后重试")
@@ -246,6 +262,8 @@ def run_ordinary_planning(cycle_start: date | None = None, scope: str = "live") 
                  json.dumps(accounts, ensure_ascii=False), json.dumps(topics, ensure_ascii=False),
                  len(accounts), slot_count),
             )
+            if scope == "live":
+                save_batch_account_profiles(cursor, batch_id, accounts, config_version, "ordinary-plan-cli")
             db.commit()
             return {"batch_id": batch_id, "batch_code": batch_code,
                     "account_count": len(accounts), "slot_count": slot_count,

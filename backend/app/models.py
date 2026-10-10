@@ -83,6 +83,8 @@ class StrategyConfig(BaseModel):
         names = [rule.name for rule in self.lifecycle_rules]
         if names != ["稳定经营期", "转化放大期", "转化试探期", "流量增长期", "冷启验证期"]:
             raise ValueError("生命周期阶段须按成熟度从高到低配置五个固定阶段")
+        if {target.name for target in self.stage_targets} != set(names):
+            raise ValueError("经营目标必须覆盖五个固定生命周期阶段")
         if any(rule.catchAll or not rule.conditions for rule in self.lifecycle_rules[:-1]):
             raise ValueError("前四个生命周期阶段均须配置进入条件")
         if not self.lifecycle_rules[-1].catchAll or self.lifecycle_rules[-1].conditions:

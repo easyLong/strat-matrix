@@ -377,6 +377,29 @@ CREATE TABLE IF NOT EXISTS godp_t6_tag (
     KEY idx_t6_tag_embedding_model (embedding_model)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题T6用户需求标签及语义向量库';
 
+CREATE TABLE IF NOT EXISTS godp_account_profile (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '批次账号画像与向量记录主键ID',
+    batch_id BIGINT NOT NULL COMMENT '逻辑关联策划批次ID，无外键；画像仅供该批次使用',
+    account_id VARCHAR(64) NOT NULL COMMENT '参与该批次策划的客户账号唯一编码',
+    config_version INT NOT NULL COMMENT '该批次冻结的策划配置版本号',
+    source_updated_at DATETIME(6) NOT NULL COMMENT '该批次读取的账号来源版本时间，按UTC保存',
+    profile_hash CHAR(64) NOT NULL COMMENT '批次身份、配置版本和完整账号输入画像的SHA256指纹',
+    snapshot_json LONGTEXT NOT NULL COMMENT '该批次冻结的账号事实、互动明细、指标、阶段与经营目标JSON',
+    profile_json LONGTEXT NOT NULL COMMENT '仅由该批次账号输入快照构建的画像JSON',
+    vector_json LONGTEXT NULL COMMENT '该批次账号画像单位向量JSON；待生成或失败时为空',
+    vector_model VARCHAR(100) NULL COMMENT '账号向量模型及版本标识；须与匹配选题使用相同向量空间',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '账号向量准备状态：pending待生成、ready已就绪或failed生成失败',
+    last_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近一次账号向量生成失败原因或空字符串',
+    completed_at DATETIME(6) NULL COMMENT '该批次账号向量生成完成时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_account_profile_batch_account (batch_id, account_id),
+    KEY idx_account_profile_status (status, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='按策划批次冻结的账号画像与向量准备状态';
+
 CREATE TABLE IF NOT EXISTS godp_topic_profile (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题画像和向量记录主键ID',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',

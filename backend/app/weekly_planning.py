@@ -10,6 +10,7 @@ import json
 import random
 
 from .db import connection
+from .account_profile import save_batch_account_profiles
 from .models import StrategyConfig
 from .ordinary_planning import PlanningError, current_next_monday, load_accounts, load_topics
 
@@ -65,6 +66,7 @@ def run_weekly_planning(cycle_start: date | None = None) -> dict:
     lock_name = f"godp:ordinary:live:{start:%Y%m%d}"
 
     with connection() as db, db.cursor() as cursor:
+        cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         cursor.execute("SELECT GET_LOCK(%s, 5) AS acquired", (lock_name,))
         if cursor.fetchone()["acquired"] != 1:
             raise PlanningError("同周期自动策划正在执行，请稍后重试")
@@ -193,6 +195,7 @@ def run_weekly_planning(cycle_start: date | None = None) -> dict:
                  json.dumps(accounts, ensure_ascii=False), json.dumps(snapshot, ensure_ascii=False),
                  len(accounts), slot_count),
             )
+            save_batch_account_profiles(cursor, batch_id, accounts, config_version, "weekly-plan-cli")
             db.commit()
             return {"batch_id": batch_id, "batch_code": batch_code,
                     "cycle_start": start.isoformat(), "cycle_end": end.isoformat(),
