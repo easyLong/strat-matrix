@@ -100,8 +100,9 @@ chmod +x start.sh stop.sh status.sh
 3. 执行前端生产构建；依赖不存在时执行 `npm ci`。
 4. 启动周度规则策划调度进程（默认开启，按服务端配置的北京时间执行）。
 5. 启动热点槽位调度进程（默认开启，按北京时间 T-1 22:00 确定具体选题）。
-6. 启动 Vite Preview 前端。
-7. 将 PID 写入 `run/`，日志写入 `logs/`。
+6. 按 `.env` 开关启动普通选题标签和选题向量进程（默认关闭，须先配置模型服务地址）。
+7. 启动 Vite Preview 前端。
+8. 将 PID 写入 `run/`，日志写入 `logs/`。
 
 默认端口：
 
@@ -203,6 +204,9 @@ BUILD_FRONTEND=0 \
 | `RUN_DIR` | `run` | PID 文件目录 |
 | `LOG_DIR` | `logs` | 日志目录 |
 | `ORDINARY_SCHEDULER_ENABLED` | `1` | 是否启动普通内容周策划调度进程；设为 `0` 后重启服务停用 |
+| `HOTSPOT_SCHEDULER_ENABLED` | `1` | 是否启动热点槽位调度进程 |
+| `TOPIC_LABEL_WORKER_ENABLED` | `0` | 是否启动普通选题首次标签识别进程；还需配置 `LABEL_MODEL_URL` |
+| `TOPIC_VECTOR_WORKER_ENABLED` | `0` | 是否启动普通选题画像向量进程；还需配置 `TOPIC_VECTOR_MODEL_URL` |
 
 ## 8. 发布更新流程
 
@@ -211,12 +215,13 @@ cd /opt/strat-matrix
 ./stop.sh
 git pull
 backend/.venv/bin/pip install -r backend/requirements.txt
+(cd backend && .venv/bin/python -m app.init_db)
 BUILD_FRONTEND=1 ./start.sh
 ./status.sh
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-如果更新涉及数据库结构，先备份数据库，再执行 `backend/.venv/bin/python -m app.init_db`。
+若更新涉及数据库结构，执行初始化前先备份数据库；`app.init_db` 会按建表脚本补齐新表、字段及中文注释，并保留已有业务记录。
 
 ## 9. 故障排查
 
@@ -224,7 +229,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ```bash
 cat logs/backend.log
-backend/.venv/bin/python -m app.init_db
+(cd backend && .venv/bin/python -m app.init_db)
 ```
 
 重点检查 `.env`、数据库网络访问、数据库授权和 Python 依赖。

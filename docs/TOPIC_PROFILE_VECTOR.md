@@ -36,6 +36,43 @@ python3 -m app.init_db
 }
 ```
 
-上例中 `content_hash` 须替换为任务接口返回的真实值；三维数字只演示协议格式。向量须为 1–4096 维有效非零数值，服务端保存单位向量。失败回写使用同一接口，提交 `status="failed"`、`error`、`content_hash` 和 `tag_version`，不提交 `vector` 和 `vector_model`。失败任务可再次领取。当前版本没有向量服务的具体接入地址，因此只提供项目内部准备状态和回写契约，**不会自动生成或伪造向量**。
+上例中 `content_hash` 须替换为任务接口返回的真实值；三维数字只演示协议格式。向量须为 1–4096 维有效非零数值，服务端保存单位向量。失败回写使用同一接口，提交 `status="failed"`、`error`、`content_hash` 和 `tag_version`，不提交 `vector` 和 `vector_model`。失败任务可再次领取。
 
-当前任务列表没有租约，多个向量进程可能读取同一任务；同一画像先写入的已就绪向量获胜，后续完全相同的回写可幂等返回，不同向量返回 409。内容或标签更新后旧指纹失效，旧结果无法写入。任务列表和 `ai-topic-candidates` 读取时再次核对当前内容指纹，避免过期画像进入后续 AI 匹配。分页时始终使用响应的 `next_after_id` 继续查询，即使当前页因过期记录被过滤后为空。当前正式周策划仍使用普通选题热度规则兜底，尚未读取这个 AI 候选接口，也尚未运行账号画像、Recall、Fit 或全局分配。
+## 配置向量执行进程
+
+项目内已有 `python3 -m app.topic_vector_worker` 执行器。它分页读取当前画像，将画像交给配置的模型服务，校验返回的向量并回写。模型服务地址尚未提供，所以默认关闭；没有配置 `TOPIC_VECTOR_MODEL_URL` 或 `INTEGRATION_TOKEN` 时，进程直接退出，**不会处理任务或伪造向量**。在 `.env` 中配置：
+
+```dotenv
+TOPIC_VECTOR_WORKER_ENABLED=1
+TOPIC_VECTOR_MODEL_URL=https://your-trusted-model-service.example/topic-embedding
+TOPIC_VECTOR_MODEL_TOKEN=your-model-service-token
+TOPIC_VECTOR_MODEL_TIMEOUT_SECONDS=120
+TOPIC_VECTOR_POLL_SECONDS=30
+TOPIC_VECTOR_RETRY_SECONDS=600
+```
+
+`TOPIC_VECTOR_MODEL_TOKEN` 可留空；非空时使用 `Authorization: Bearer <token>`。模型服务接收 JSON `POST`：
+
+```json
+{
+  "task": "ordinary_topic_embedding",
+  "topic_id": "TOPIC-001",
+  "content_hash": "任务接口返回的64位小写SHA256指纹",
+  "tag_version": 1,
+  "profile": {
+    "content": {"title": "示例标题", "summary": "示例摘要", "outline": "示例大纲", "content_type": "图文", "category": "生活", "source": "", "product_or_activity": ""},
+    "applicable_cities": ["杭州"],
+    "labels": {"T1": "非营销", "T2": "流量", "T3": "本地生活", "T4": "年轻客群", "T5": "周末休闲", "T6": "周末出行规划"}
+  }
+}
+```
+
+服务响应格式：
+
+```json
+{"vector_model": "your-topic-embedding-model-version", "vector": [0.12, 0.34, 0.56]}
+```
+
+模型标识须能区分不同向量空间或模型版本，向量维度由实际模型确定，上例数字只演示协议。可以在 `backend` 目录运行 `python3 -m app.topic_vector_worker --once` 处理一轮任务。Linux `start.sh`、`stop.sh` 和 `status.sh` 管理常驻进程，日志写入 `logs/topic-vector-worker.log`。向量进程与后端不在同一主机时，可另外设置 `TOPIC_VECTOR_API_URL` 指向后端内部地址。
+
+当前任务列表没有租约，多个向量进程可能读取同一任务；同一画像先写入的已就绪向量获胜，后续完全相同的回写可幂等返回，不同向量返回 409。内容或标签更新后旧指纹失效，旧结果无法写入。模型调用失败或返回无效向量时，执行器回写 `failed`；同一进程至少等待 `TOPIC_VECTOR_RETRY_SECONDS` 后再次处理该选题。任务列表和 `ai-topic-candidates` 读取时再次核对当前内容指纹，避免过期画像进入后续 AI 匹配。分页时始终使用响应的 `next_after_id` 继续查询，即使当前页因过期记录被过滤后为空。当前正式周策划仍使用普通选题热度规则兜底，尚未读取这个 AI 候选接口，也尚未运行账号画像、Recall、Fit 或全局分配。
