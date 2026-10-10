@@ -47,8 +47,78 @@ IF-01 的 `interaction_data` 优先；显式空数组表示没有帖子，不读
 
 其他批次的指纹、损坏的冻结输入或已结束的周期返回 409。首次就绪后，完全相同的向量和模型回写幂等返回；不同向量、不同模型或退回失败返回 409。失败可重新生成。任务没有领取租约，多个执行器可能重复计算，由回写接口锁定记录保证首个就绪结果不被覆盖。
 
+## 配置账号向量执行进程
+
+执行器 `python3 -m app.account_vector_worker` 按批次读取冻结画像，调用项目约定的模型服务 JSON 接口，并回写该批次的向量。它不会查询最新账号来源，不会复用其他批次的账号向量。模型地址未配置时默认关闭，不自动生成向量。
+
+在项目根目录 `.env` 配置：
+
+```dotenv
+ACCOUNT_VECTOR_WORKER_ENABLED=1
+ACCOUNT_VECTOR_MODEL_URL=https://your-trusted-model-service.example/account-embedding
+ACCOUNT_VECTOR_MODEL_TOKEN=your-model-service-token
+ACCOUNT_VECTOR_MODEL_TIMEOUT_SECONDS=120
+ACCOUNT_VECTOR_POLL_SECONDS=30
+ACCOUNT_VECTOR_RETRY_SECONDS=600
+```
+
+`INTEGRATION_TOKEN` 用于调用后端内部接口，必须配置。`ACCOUNT_VECTOR_MODEL_TOKEN` 可留空，非空时向模型服务发送 `Authorization: Bearer <token>`。后端接口默认使用 `http://127.0.0.1:<BACKEND_PORT>`；跨主机部署时另外设置 `ACCOUNT_VECTOR_API_URL`。
+
+| 配置 | 默认值 | 范围或用途 |
+| --- | --- | --- |
+| `ACCOUNT_VECTOR_WORKER_ENABLED` | `0` | Linux 脚本设为 `1` 时启动常驻进程 |
+| `ACCOUNT_VECTOR_MODEL_URL` | 空 | 完整的模型服务 HTTP(S) 地址 |
+| `ACCOUNT_VECTOR_API_URL` | 本机后端地址 | 后端基础地址，不带 `/api` |
+| `ACCOUNT_VECTOR_MODEL_TIMEOUT_SECONDS` | `120` | 模型请求超时，1–600 秒 |
+| `ACCOUNT_VECTOR_POLL_SECONDS` | `30` | 队列扫描间隔，5–3600 秒 |
+| `ACCOUNT_VECTOR_RETRY_SECONDS` | `600` | 同一批次、账号和画像指纹的重试间隔，60–86400 秒 |
+
+模型服务接收 JSON `POST`：
+
+```json
+{
+  "task": "account_profile_embedding",
+  "batch_id": 123,
+  "account_id": "ACCOUNT-001",
+  "profile_hash": "任务接口返回的64位小写SHA256指纹",
+  "config_version": 3,
+  "profile": {
+    "schema_version": 1,
+    "account": {"account_id": "ACCOUNT-001", "account_name": "示例账号", "persona": "本地生活分享", "city": "杭州"},
+    "interaction": {"valid_content_count": 12, "rolling_interaction_count": 80, "traffic_trend": "平稳"},
+    "lifecycle_stage": "流量增长期",
+    "business_goal": {"traffic": 70, "conversion": 30}
+  }
+}
+```
+
+上例画像字段为节选；执行器原样发送任务接口返回的完整 `profile`，其中包含冻结的基本信息、互动时间窗口与帖子明细。模型响应：
+
+```json
+{"vector_model": "your-shared-embedding-model-version", "vector": [0.12, 0.34, 0.56]}
+```
+
+执行器先校验响应中的模型标识和向量，再交给后端按画像指纹保存单位向量。模型请求失败或返回无效向量时，回写 `failed`。如果模型成功、后端回写暂时失败，则在当前进程内保留该向量，等待重试回写，不将回写异常标记为模型失败。缓存不写磁盘，进程重启后可能重新调用模型。后端返回 404/409 时丢弃本次结果；已经就绪的记录不会被覆盖。
+
+每轮分页扫描所有待处理任务，包括被过滤为空但游标仍推进的页面。重试间隔按 `batch_id + account_id + profile_hash` 记录，一个批次的失败不会阻止同账号其他批次生成向量。失败不会停止整轮其余任务。
+
+可在 `backend` 目录使用以下命令：
+
+```bash
+# 仅检查配置；不读取任务、不调用模型
+python3 -m app.account_vector_worker --check-config
+
+# 处理一轮全部任务
+python3 -m app.account_vector_worker --once
+
+# 只处理指定批次的一轮任务
+python3 -m app.account_vector_worker --once --batch-id 123
+```
+
+配置无效返回退出码 2；单轮全部任务处理正常或无任务返回 0，发生模型、队列读取或回写错误返回 1。Linux `start.sh` 在启动服务前检查已启用进程的配置，`stop.sh` 和 `status.sh` 管理该进程；PID 保存到 `run/account-vector-worker.pid`，日志写入 `logs/account-vector-worker.log`。日志不记录令牌、完整 URL、账号画像或模型响应正文。
+
 ## 当前开发边界
 
-本轮完成批次画像冻结、向量准备状态和内部接口；账号向量执行进程及具体模型服务尚未接入。账号和选题向量用于后续匹配前，还须核对模型标识、维度和向量空间一致性，不能直接比较不同模型的向量。
+批次画像冻结、准备接口和可配置执行进程已完成。具体模型服务地址仍需提供，并须遵循上述项目 JSON 契约；这些配置不是直接调用某个厂商 SDK 的参数。账号和选题向量用于后续匹配前，还须核对模型标识、维度和向量空间一致性，不能直接比较不同模型的向量。
 
-正式周策划继续采用规则热度兜底，尚未使用账号候选执行 Recall、Fit 或全局分配。向量准备不重新分配已产生的规则策划结果，也不自动投递内容生产任务。下一步接入账号向量执行进程，再实现正式匹配与降级分支。
+正式周策划继续采用规则热度兜底，尚未使用账号候选执行 Recall、Fit 或全局分配。向量准备不重新分配已产生的规则策划结果，也不自动投递内容生产任务。下一步实现匹配所需的向量一致性检查、正式匹配与降级分支。

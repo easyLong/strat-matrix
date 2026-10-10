@@ -30,6 +30,7 @@ stop_one() {
   rm -f "$pid_file"
 }
 
+stop_one "Account vector worker" "$RUN_DIR/account-vector-worker.pid"
 stop_one "Topic vector worker" "$RUN_DIR/topic-vector-worker.pid"
 stop_one "Topic label worker" "$RUN_DIR/topic-label-worker.pid"
 stop_one "Hotspot scheduler" "$RUN_DIR/hotspot-scheduler.pid"
