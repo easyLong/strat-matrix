@@ -88,3 +88,13 @@ def save_batch_account_profiles(cursor, batch_id: int, accounts: list[dict],
              post_time(account["source_updated_at"]).replace(tzinfo=None),
              profile_hash, canonical_json(account), profile_json, actor, actor),
         )
+
+
+def profile_from_preparation(snapshot: dict, preparation_id: int,
+                             config_version: int) -> tuple[str, str]:
+    """Keep preparation identities separate from published batch identities."""
+    profile_json, _ = profile_from_snapshot(snapshot, 0, config_version)
+    fingerprint = canonical_json({"preparation_id": preparation_id,
+                                  "config_version": config_version,
+                                  "profile": json.loads(profile_json), "snapshot": snapshot})
+    return profile_json, hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()

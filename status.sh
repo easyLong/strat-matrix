@@ -30,6 +30,8 @@ TOPIC_VECTOR_WORKER_ENABLED="${TOPIC_VECTOR_WORKER_ENABLED:-$(dotenv_value TOPIC
 TOPIC_VECTOR_WORKER_ENABLED="${TOPIC_VECTOR_WORKER_ENABLED:-0}"
 ACCOUNT_VECTOR_WORKER_ENABLED="${ACCOUNT_VECTOR_WORKER_ENABLED:-$(dotenv_value ACCOUNT_VECTOR_WORKER_ENABLED)}"
 ACCOUNT_VECTOR_WORKER_ENABLED="${ACCOUNT_VECTOR_WORKER_ENABLED:-0}"
+AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-$(dotenv_value AI_PREPARATION_WORKER_ENABLED)}"
+AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-0}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 
 running=0
@@ -84,6 +86,10 @@ if [[ "$TOPIC_VECTOR_WORKER_ENABLED" == "1" ]]; then
 fi
 if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
   check_process "Account vector worker" "$RUN_DIR/account-vector-worker.pid" || true
+  expected=$((expected + 1))
+fi
+if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
+  check_process "AI preparation worker" "$RUN_DIR/ai-preparation-worker.pid" || true
   expected=$((expected + 1))
 fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true

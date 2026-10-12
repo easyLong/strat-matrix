@@ -14,6 +14,7 @@ from .db import connection
 from .account_metrics import account_metrics
 from .account_profile import interaction_snapshot, save_batch_account_profiles
 from .models import LifecycleCondition, StrategyConfig
+from .planning_reservation import ai_preparation_exists
 
 
 class PlanningError(Exception):
@@ -208,6 +209,9 @@ def run_ordinary_planning(cycle_start: date | None = None, scope: str = "live") 
             )
             if cursor.fetchone():
                 raise PlanningError("该周期已有自动策划批次，不能叠加生成普通内容批次")
+
+            if scope == "live" and ai_preparation_exists(cursor, start):
+                raise PlanningError("该周期正在准备正式AI输入；请先完成或取消准备记录")
 
             cursor.execute(
                 "SELECT version, config_json FROM godp_strategy_config "

@@ -209,6 +209,8 @@ BUILD_FRONTEND=0 \
 | `TOPIC_LABEL_WORKER_ENABLED` | `0` | 是否启动普通选题首次标签识别进程；还需配置 `LABEL_MODEL_URL` |
 | `TOPIC_VECTOR_WORKER_ENABLED` | `0` | 是否启动普通选题画像向量进程；还需配置 `TOPIC_VECTOR_MODEL_URL` |
 | `ACCOUNT_VECTOR_WORKER_ENABLED` | `0` | 是否启动批次账号画像向量进程；还需配置 `ACCOUNT_VECTOR_MODEL_URL` 和内部接口令牌 |
+| `AI_PREPARATION_WORKER_ENABLED` | `0` | 是否推进已创建的AI准备记录，等待输入并冻结；不自动新建准备或生成结果 |
+| `AI_PREPARATION_POLL_SECONDS` | `60` | AI准备推进轮询间隔，允许5–3600秒 |
 
 ## 8. 发布更新流程
 
@@ -226,6 +228,8 @@ sudo nginx -t && sudo systemctl reload nginx
 若更新涉及数据库结构，执行初始化前先备份数据库；`app.init_db` 会按建表脚本补齐新表、字段及中文注释，并保留已有业务记录。
 
 批次账号画像版本新增 `godp_account_profile`，更新代码后须先执行上面的初始化命令，再启动策划调度器。新正式批次会同时保存账号画像与向量准备状态；旧批次不使用当前账号数据补造历史画像。内部接口、模型服务契约和账号向量进程配置见[批次账号画像与向量准备](ACCOUNT_PROFILE_VECTOR.md)。账号向量进程默认关闭；启用后启动脚本先检查 URL、令牌和超时配置，配置无效时在启动其他服务前退出。
+
+正式AI准备版本新增 `godp_ai_preparation`、`godp_ai_preparation_account`、`godp_ai_preparation_topic`，也须先运行初始化命令。规则策划会检查该周期的AI准备占用，取消准备后恢复规则调度的周期生成资格。新增推进进程默认关闭；模型服务未配置时不会完成向量准备。账号向量进程已兼容两种身份，需要模型服务支持 `preparation_id`；接口、命令和新进程运维见[正式AI输入准备流程](AI_PREPARATION.md)。
 
 ## 9. 故障排查
 

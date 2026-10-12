@@ -33,9 +33,10 @@ def vector_space(row: dict) -> tuple[str, int] | None:
         return None
 
 
-def account_state(snapshot: dict, profile: dict | None, batch: dict) -> tuple[str, tuple | None]:
+def account_state(snapshot: dict, profile: dict | None, batch: dict,
+                  profile_builder=profile_from_snapshot) -> tuple[str, tuple | None]:
     try:
-        expected_json, expected_hash = profile_from_snapshot(
+        expected_json, expected_hash = profile_builder(
             snapshot, batch["batch_id"], batch["config_version"],
         )
     except (KeyError, TypeError, ValueError):
@@ -87,7 +88,7 @@ def topic_state(row: dict, checked_at: datetime) -> tuple[str, tuple | None]:
 
 
 def evaluate_readiness(batch: dict, profiles: list[dict], topics: list[dict],
-                       checked_at: datetime) -> dict:
+                       checked_at: datetime, *, profile_builder=profile_from_snapshot) -> dict:
     if checked_at.tzinfo is None:
         raise ValueError("检查时间必须带时区")
     reasons = []
@@ -127,7 +128,7 @@ def evaluate_readiness(batch: dict, profiles: list[dict], topics: list[dict],
     account_spaces = Counter()
     account_samples: dict[str, list[str]] = {}
     for snapshot in snapshots:
-        state, space = account_state(snapshot, by_account.get(snapshot["account_id"]), batch)
+        state, space = account_state(snapshot, by_account.get(snapshot["account_id"]), batch, profile_builder)
         account_counts[state] += 1
         if state != "ready":
             sample = account_samples.setdefault(state, [])

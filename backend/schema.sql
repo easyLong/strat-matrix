@@ -377,6 +377,72 @@ CREATE TABLE IF NOT EXISTS godp_t6_tag (
     KEY idx_t6_tag_embedding_model (embedding_model)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题T6用户需求标签及语义向量库';
 
+CREATE TABLE IF NOT EXISTS godp_ai_preparation (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '正式AI策划内部准备记录主键ID，与运营批次ID独立',
+    preparation_code VARCHAR(64) NOT NULL COMMENT '内部准备记录唯一编码',
+    reservation_key VARCHAR(64) NULL COMMENT '正式周期占用键；取消或过期后为空以释放周期',
+    cycle_start DATE NOT NULL COMMENT '目标策划周期开始日期，必须为周一',
+    cycle_end DATE NOT NULL COMMENT '目标策划周期结束日期，按北京时间判断过期',
+    status VARCHAR(24) NOT NULL DEFAULT 'waiting_inputs' COMMENT '内部状态：waiting_inputs等待输入、blocked输入异常、inputs_frozen输入已冻结、cancelled已取消或expired已过期',
+    version INT NOT NULL DEFAULT 1 COMMENT '准备记录递增版本号，用于推进和取消操作的并发校验',
+    selection_json LONGTEXT NOT NULL COMMENT '创建请求的账号选择JSON；null表示全部正式可用账号',
+    config_version INT NOT NULL COMMENT '创建准备记录时冻结的运营配置版本',
+    config_json LONGTEXT NOT NULL COMMENT '创建准备记录时冻结的完整运营配置JSON',
+    account_snapshot_json LONGTEXT NOT NULL COMMENT '本次冻结的账号事实、互动、指标、阶段及经营目标JSON',
+    slot_blueprint_json LONGTEXT NOT NULL COMMENT '账号与投放日期安排JSON；尚未确定槽位类型和选题',
+    account_count INT NOT NULL COMMENT '冻结的参与账号数量',
+    slot_count INT NOT NULL COMMENT '冻结的日期安排数量，不代表已生成策划槽位',
+    topic_count INT NOT NULL DEFAULT 0 COMMENT '冻结的兼容普通选题数量；未冻结时为零',
+    input_hash CHAR(64) NULL COMMENT '完整账号、配置、日期及选题输入的SHA256指纹；冻结前为空',
+    frozen_at DATETIME(6) NULL COMMENT '匹配输入冻结时间，按UTC保存',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '已执行输入检查和推进的次数',
+    last_report_json LONGTEXT NULL COMMENT '最近一次就绪检查报告JSON，包含内部阻断原因',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_ai_preparation_code (preparation_code),
+    UNIQUE KEY uk_ai_preparation_reservation (reservation_key),
+    KEY idx_ai_preparation_cycle (cycle_start, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式AI策划结果生成前的内部输入准备与周期占用';
+
+CREATE TABLE IF NOT EXISTS godp_ai_preparation_account (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'AI准备记录账号画像主键ID',
+    preparation_id BIGINT NOT NULL COMMENT '逻辑关联内部AI准备记录ID，无外键；不是运营批次ID',
+    account_id VARCHAR(64) NOT NULL COMMENT '冻结的客户账号唯一编码',
+    config_version INT NOT NULL COMMENT '本次账号画像使用的冻结运营配置版本',
+    source_updated_at DATETIME(6) NOT NULL COMMENT '账号来源版本时间，按UTC保存',
+    profile_hash CHAR(64) NOT NULL COMMENT '内部准备身份、配置和账号输入画像的SHA256指纹',
+    snapshot_json LONGTEXT NOT NULL COMMENT '本次冻结的完整账号输入JSON',
+    profile_json LONGTEXT NOT NULL COMMENT '由本次账号快照构建的画像JSON',
+    vector_json LONGTEXT NULL COMMENT '本次账号画像单位向量JSON；待生成或失败时为空',
+    vector_model VARCHAR(100) NULL COMMENT '账号向量模型及版本标识',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '向量准备状态：pending待生成、ready已就绪或failed失败可重试',
+    last_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近一次向量生成失败原因或空字符串',
+    completed_at DATETIME(6) NULL COMMENT '账号向量生成完成时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_ai_preparation_account (preparation_id, account_id),
+    KEY idx_ai_preparation_account_jobs (status, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式AI准备记录独立冻结的账号画像及向量任务';
+
+CREATE TABLE IF NOT EXISTS godp_ai_preparation_topic (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'AI准备记录冻结选题主键ID',
+    preparation_id BIGINT NOT NULL COMMENT '逻辑关联内部AI准备记录ID，无外键',
+    topic_id VARCHAR(64) NOT NULL COMMENT '冻结的正式普通选题唯一编码',
+    snapshot_json LONGTEXT NOT NULL COMMENT '冻结的来源、有效期、标签稳定ID及版本、画像指纹和向量完整JSON',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_ai_preparation_topic (preparation_id, topic_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式AI准备记录不可变的兼容普通选题输入快照';
+
 CREATE TABLE IF NOT EXISTS godp_account_profile (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '批次账号画像与向量记录主键ID',
     batch_id BIGINT NOT NULL COMMENT '逻辑关联策划批次ID，无外键；画像仅供该批次使用',

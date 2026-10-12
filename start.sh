@@ -43,6 +43,8 @@ ACCOUNT_VECTOR_WORKER_ENABLED="${ACCOUNT_VECTOR_WORKER_ENABLED:-$(dotenv_value A
 ACCOUNT_VECTOR_WORKER_ENABLED="${ACCOUNT_VECTOR_WORKER_ENABLED:-0}"
 ACCOUNT_VECTOR_MODEL_URL="${ACCOUNT_VECTOR_MODEL_URL:-$(dotenv_value ACCOUNT_VECTOR_MODEL_URL)}"
 export ACCOUNT_VECTOR_MODEL_URL
+AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-$(dotenv_value AI_PREPARATION_WORKER_ENABLED)}"
+AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-0}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 LOG_DIR="${LOG_DIR:-$APP_ROOT/logs}"
 
@@ -55,6 +57,7 @@ hotspot_scheduler_pid="$RUN_DIR/hotspot-scheduler.pid"
 topic_label_worker_pid="$RUN_DIR/topic-label-worker.pid"
 topic_vector_worker_pid="$RUN_DIR/topic-vector-worker.pid"
 account_vector_worker_pid="$RUN_DIR/account-vector-worker.pid"
+ai_preparation_worker_pid="$RUN_DIR/ai-preparation-worker.pid"
 
 is_running() {
   local pid_file="$1"
@@ -89,6 +92,13 @@ if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
   (
     cd "$APP_ROOT/backend"
     ACCOUNT_VECTOR_MODEL_URL="$ACCOUNT_VECTOR_MODEL_URL" "$PYTHON_BIN" -m app.account_vector_worker --check-config
+  )
+fi
+
+if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
+  (
+    cd "$APP_ROOT/backend"
+    "$PYTHON_BIN" -m app.ai_preparation_worker --check-config
   )
 fi
 
@@ -174,6 +184,20 @@ if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
   fi
 fi
 
+if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
+  if is_running "$ai_preparation_worker_pid"; then
+    echo "AI preparation worker is already running (PID $(cat "$ai_preparation_worker_pid"))."
+  else
+    rm -f "$ai_preparation_worker_pid"
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.ai_preparation_worker
+    ) >"$LOG_DIR/ai-preparation-worker.log" 2>&1 &
+    echo $! >"$ai_preparation_worker_pid"
+    echo "AI preparation worker started (PID $(cat "$ai_preparation_worker_pid"))."
+  fi
+fi
+
 if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
   if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
     echo "npm not found: $NPM_BIN" >&2
@@ -200,4 +224,4 @@ else
   echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
 fi
 
-echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log, $LOG_DIR/topic-label-worker.log, $LOG_DIR/topic-vector-worker.log, $LOG_DIR/account-vector-worker.log and $LOG_DIR/frontend.log"
+echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log, $LOG_DIR/topic-label-worker.log, $LOG_DIR/topic-vector-worker.log, $LOG_DIR/account-vector-worker.log, $LOG_DIR/ai-preparation-worker.log and $LOG_DIR/frontend.log"

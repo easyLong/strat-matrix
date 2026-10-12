@@ -13,6 +13,7 @@ from .db import connection
 from .account_profile import save_batch_account_profiles
 from .models import StrategyConfig
 from .ordinary_planning import PlanningError, current_next_monday, load_accounts, load_topics
+from .planning_reservation import ai_preparation_exists
 
 
 def load_marketing(cursor, accounts: list[dict]) -> tuple[list[dict], str | None]:
@@ -92,6 +93,8 @@ def run_weekly_planning(cycle_start: date | None = None) -> dict:
             )
             if cursor.fetchone():
                 raise PlanningError("该周期已有正式自动策划批次，不能重复生成")
+            if ai_preparation_exists(cursor, start):
+                raise PlanningError("该周期正在准备正式AI输入；请先完成或取消准备记录")
             cursor.execute(
                 "SELECT version, config_json FROM godp_strategy_config "
                 "WHERE config_key='operations' AND del_flag='N' FOR UPDATE"
