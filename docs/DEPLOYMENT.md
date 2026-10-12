@@ -231,6 +231,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 正式AI准备版本新增 `godp_ai_preparation`、`godp_ai_preparation_account`、`godp_ai_preparation_topic`，也须先运行初始化命令。规则策划会检查该周期的AI准备占用，取消准备后恢复规则调度的周期生成资格。新增推进进程默认关闭；模型服务未配置时不会完成向量准备。账号向量进程已兼容两种身份，需要模型服务支持 `preparation_id`；接口、命令和新进程运维见[正式AI输入准备流程](AI_PREPARATION.md)。
 
+匹配执行基础版本新增 `godp_matching_policy`、`godp_matching_task`、`godp_matching_attempt`，更新后先初始化数据库并重启后端。策略版本和租约任务接口见[算法策略及执行任务](MATCHING_EXECUTION.md)。本轮无新增常驻匹配执行器，不会自动创建策略、调用模型或提交运营策划结果。
+
 ## 9. 故障排查
 
 ### 后端启动失败

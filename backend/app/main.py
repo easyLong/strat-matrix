@@ -17,6 +17,7 @@ from .topic_vector_api import router as topic_vector_router
 from .account_vector_api import router as account_vector_router
 from .matching_readiness_api import router as matching_readiness_router
 from .ai_preparation_api import router as ai_preparation_router
+from .matching_execution_api import router as matching_execution_router
 from .models import (
     AccountOption,
     AccountPlanRecord,
@@ -56,6 +57,7 @@ app.include_router(topic_vector_router)
 app.include_router(account_vector_router)
 app.include_router(matching_readiness_router)
 app.include_router(ai_preparation_router)
+app.include_router(matching_execution_router)
 
 
 LIFECYCLE_STAGES = ('冷启动验证期', '流量增长期', '转化探索期', '转化放大期', '稳定经营期')

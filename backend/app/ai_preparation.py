@@ -287,23 +287,29 @@ def cancel_preparation(preparation_id: int, expected_version: int) -> dict:
         return result
 
 
+def load_frozen_inputs(cursor, row: dict) -> tuple[dict, list[dict]]:
+    """Verify all inputs on the caller's snapshot, including locked task flows."""
+    if not row["input_hash"]:
+        raise HTTPException(409, "该准备记录尚未冻结完整匹配输入")
+    accounts = load_preparation_accounts(cursor, row["id"])
+    cursor.execute("SELECT id, snapshot_json FROM godp_ai_preparation_topic "
+                   "WHERE preparation_id=%s AND del_flag='N' ORDER BY id", (row["id"],))
+    rows = cursor.fetchall()
+    try:
+        inputs = frozen_input(row, accounts, [json.loads(topic["snapshot_json"]) for topic in rows])
+        if len(rows) != row["topic_count"] or len(accounts) != row["account_count"] \
+                or input_digest(inputs) != row["input_hash"] or any(p["status"] != "ready" for p in accounts):
+            raise ValueError("输入指纹不一致")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(409, "冻结输入完整性校验未通过，请排查准备记录") from exc
+    return inputs, rows
+
+
 def read_inputs(preparation_id: int, after_id: int, limit: int) -> dict:
     with connection() as db, db.cursor() as cursor:
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         row = select_preparation(cursor, preparation_id)
-        if not row["input_hash"]:
-            raise HTTPException(409, "该准备记录尚未冻结完整匹配输入")
-        accounts = load_preparation_accounts(cursor, preparation_id)
-        cursor.execute("SELECT id, snapshot_json FROM godp_ai_preparation_topic "
-                       "WHERE preparation_id=%s AND del_flag='N' ORDER BY id", (preparation_id,))
-        rows = cursor.fetchall()
-        try:
-            inputs = frozen_input(row, accounts, [json.loads(topic["snapshot_json"]) for topic in rows])
-            if len(rows) != row["topic_count"] or len(accounts) != row["account_count"] \
-                    or input_digest(inputs) != row["input_hash"] or any(p["status"] != "ready" for p in accounts):
-                raise ValueError("输入指纹不一致")
-        except (KeyError, TypeError, ValueError) as exc:
-            raise HTTPException(409, "冻结输入完整性校验未通过，请排查准备记录") from exc
+        inputs, rows = load_frozen_inputs(cursor, row)
         page = [topic for topic in rows if topic["id"] > after_id][:limit]
         inputs["topics"] = [json.loads(topic["snapshot_json"]) for topic in page]
         return {**summary(row), "inputs": inputs,

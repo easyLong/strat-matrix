@@ -1,0 +1,11 @@
+{
+  "policy_key": "ordinary-main",
+  "expected_latest_version": 0,
+  "document": {
+    "schema_version": 1,
+    "implementation_key": "pending-implementation",
+    "vector_space": null,
+    "required_inputs": ["accounts", "topics", "config", "positions"],
+    "decisions": {}
+  }
+}

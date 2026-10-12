@@ -14,7 +14,7 @@
 | `cancelled` | 人工取消准备，保留历史快照 | 释放周期，可重新创建准备记录 |
 | `expired` | 策划周期已结束 | 停止向量回写；推进进程释放周期占用 |
 
-`inputs_frozen` 表示输入准备完成。响应中的 `matching_executed=false`、`production_batch_id=null`、`algorithm_policy_configured=false` 明确当前阶段；评分、分配、营销/热点组合和运营“已规划”状态将在后续规则确认并完整生成结果后接入。
+`inputs_frozen` 表示输入准备完成。响应中的 `matching_executed=false`、`production_batch_id=null`、`algorithm_policy_configured=false` 描述准备阶段；算法策略改为由独立[匹配执行任务](MATCHING_EXECUTION.md)绑定并查询。评分、分配、营销/热点组合和运营“已规划”状态将在后续规则确认并完整生成结果后接入。
 
 ## 创建与冻结规则
 

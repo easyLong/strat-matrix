@@ -377,6 +377,67 @@ CREATE TABLE IF NOT EXISTS godp_t6_tag (
     KEY idx_t6_tag_embedding_model (embedding_model)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题T6用户需求标签及语义向量库';
 
+CREATE TABLE IF NOT EXISTS godp_matching_policy (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配算法策略版本主键ID',
+    policy_key VARCHAR(32) NOT NULL COMMENT '算法策略系列唯一标识',
+    version INT NOT NULL COMMENT '同一策略系列的递增版本号',
+    document_json LONGTEXT NOT NULL COMMENT '该版本明确规则、参数、输入依赖及验收样例完整JSON，不允许原地修改',
+    document_hash CHAR(64) NOT NULL COMMENT '不可变算法策略文档SHA256指纹',
+    status VARCHAR(16) NOT NULL DEFAULT 'draft' COMMENT '策略状态：draft待确认、approved已确认可绑定任务或disabled已停用',
+    confirmed_by VARCHAR(50) NULL COMMENT '内部接口提交的规则确认人标识；不是单点登录身份认证',
+    confirmed_at DATETIME(6) NULL COMMENT '策略规则确认时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_matching_policy_version (policy_key, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配算法不可变策略版本与确认记录';
+
+CREATE TABLE IF NOT EXISTS godp_matching_task (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配内部执行任务主键ID',
+    preparation_id BIGINT NOT NULL COMMENT '逻辑关联已冻结AI准备记录ID，无外键',
+    preparation_version INT NOT NULL COMMENT '创建任务时绑定的AI准备记录版本',
+    preparation_input_hash CHAR(64) NOT NULL COMMENT '创建任务时绑定的完整准备输入指纹',
+    policy_id BIGINT NOT NULL COMMENT '逻辑关联已确认的算法策略版本ID，无外键',
+    policy_hash CHAR(64) NOT NULL COMMENT '执行任务绑定的不可变算法策略指纹',
+    input_hash CHAR(64) NOT NULL COMMENT '契约版本、准备输入与策略身份组合SHA256指纹',
+    status VARCHAR(16) NOT NULL DEFAULT 'queued' COMMENT '任务状态：queued待执行、processing处理中、evaluated提案已保存、failed执行失败、cancelled取消或invalidated输入失效',
+    version INT NOT NULL DEFAULT 1 COMMENT '任务递增状态版本，用于重试并发校验',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '执行任务累计领取次数',
+    lease_id CHAR(32) NULL COMMENT '当前执行尝试租约唯一标识',
+    lease_expires_at DATETIME(6) NULL COMMENT '当前租约到期时间，按UTC保存',
+    error_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '最近一次内部异常原因码，不保存模型错误正文',
+    result_json LONGTEXT NULL COMMENT '通过契约校验的普通内容匹配提案及逐阶段记录JSON，尚未提交运营结果',
+    result_hash CHAR(64) NULL COMMENT '已保存执行提案SHA256指纹，用于重复回写校验',
+    completed_at DATETIME(6) NULL COMMENT '首次提案回写成功时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_matching_task_preparation (preparation_id),
+    KEY idx_matching_task_queue (status, lease_expires_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配提案内部执行队列，不是运营策划批次';
+
+CREATE TABLE IF NOT EXISTS godp_matching_attempt (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配执行尝试主键ID',
+    task_id BIGINT NOT NULL COMMENT '逻辑关联内部匹配任务ID，无外键',
+    attempt_number INT NOT NULL COMMENT '同一执行任务的领取序号',
+    lease_id CHAR(32) NOT NULL COMMENT '本次尝试唯一租约标识，旧尝试不能回写新尝试',
+    lease_expires_at DATETIME(6) NOT NULL COMMENT '本次尝试租约到期时间，按UTC保存',
+    status VARCHAR(16) NOT NULL DEFAULT 'processing' COMMENT '尝试状态：processing执行中、evaluated提案已保存、failed执行失败或expired租约过期',
+    error_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '本次执行失败或失效原因码',
+    completed_at DATETIME(6) NULL COMMENT '本次尝试结束时间，按UTC保存',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_matching_attempt_sequence (task_id, attempt_number),
+    UNIQUE KEY uk_matching_attempt_lease (lease_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配每次领取、续租、异常与过期的执行历史';
+
 CREATE TABLE IF NOT EXISTS godp_ai_preparation (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '正式AI策划内部准备记录主键ID，与运营批次ID独立',
     preparation_code VARCHAR(64) NOT NULL COMMENT '内部准备记录唯一编码',
