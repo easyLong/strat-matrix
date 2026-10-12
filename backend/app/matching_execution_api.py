@@ -11,7 +11,7 @@ from .matching_contracts import (ClaimTask, LeaseHeartbeat, MatchingEvaluation, 
                                  MatchingTaskCreate, PolicyConfirmation, PolicyCreate, TaskVersion)
 from .matching_policy import confirm_policy, create_policy, policy_summary, select_policy
 from .matching_tasks import (cancel_task, claim_task, create_task, fail_task, heartbeat_task,
-                             read_evaluation, retry_task, save_evaluation, select_task, task_summary)
+                             read_evaluation, read_task_inputs, retry_task, save_evaluation, select_task, task_summary)
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
@@ -110,6 +110,11 @@ def matching_task_result(task_id: int) -> dict:
         return {**task_summary(task), "evaluation": read_evaluation(task)}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
+
+
+@router.get("/api/internal/matching-tasks/{task_id}/inputs")
+def matching_task_inputs(task_id: int) -> dict:
+    return guarded(read_task_inputs, task_id)
 
 
 @router.post("/api/internal/matching-tasks/{task_id}/heartbeat")

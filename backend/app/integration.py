@@ -596,7 +596,7 @@ def sync_content_history(payload: HistorySync) -> SyncResult:
     try:
         with connection() as db, db.cursor() as cursor:
             for record in payload.records:
-                raw = as_json(record.model_dump(mode="json"))
+                raw = source_record_json(record, {"topic_type"})
                 timestamp = utc_naive(record.updated_at)
                 state = source_state(cursor, "godp_content_history", "content_id", record.content_id, timestamp, raw)
                 counters[state] += 1

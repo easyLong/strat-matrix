@@ -16,6 +16,8 @@ from .matching_inputs import load_matching_topics
 from .matching_policy import digest, intact_document, select_policy
 from .matching_readiness import topic_state
 from .planning_reservation import reservation_key
+from .matching_supplemental import (SupplementalInputError, build_snapshot, read_snapshot,
+                                    save_snapshot, validate_snapshot)
 
 
 class InvalidInputs(Exception):
@@ -34,6 +36,7 @@ def task_summary(row: dict, *, reused: bool = False) -> dict:
             "status": row["status"], "version": row["version"], "attempt_count": row["attempt_count"],
             "lease_expires_at": utc_text(row["lease_expires_at"]), "error_code": row["error_code"],
             "result_hash": row["result_hash"], "completed_at": utc_text(row["completed_at"]),
+            "contract_version": row.get("contract_version", 1), "supplemental_hash": row.get("supplemental_hash"),
             "evaluation_scope": "ordinary_only", "operations_result_committed": False,
             "production_batch_id": None, "reused": reused}
 
@@ -47,15 +50,19 @@ def select_task(cursor, task_id: int, *, lock: bool = False) -> dict:
     return row
 
 
-def execution_hash(preparation: dict, policy: dict) -> str:
-    return digest(canonical_json({"contract_version": 1, "evaluation_scope": "ordinary_only",
+def execution_hash(preparation: dict, policy: dict, *, contract_version: int = 1,
+                   supplemental_hash: str | None = None) -> str:
+    identity = {"contract_version": contract_version, "evaluation_scope": "ordinary_only",
                                   "preparation_id": preparation["id"],
                                   "preparation_version": preparation["version"],
                                   "preparation_input_hash": preparation["input_hash"],
-                                  "policy_id": policy["id"], "policy_hash": policy["document_hash"]}))
+                                  "policy_id": policy["id"], "policy_hash": policy["document_hash"]}
+    if contract_version == 2:
+        identity["supplemental_hash"] = supplemental_hash
+    return digest(canonical_json(identity))
 
 
-def checked_inputs(cursor, preparation: dict, policy: dict, checked_at: datetime) -> dict:
+def checked_inputs(cursor, preparation: dict, policy: dict, checked_at: datetime, *, task: dict | None = None) -> dict:
     from zoneinfo import ZoneInfo
     if preparation["status"] != "inputs_frozen" \
             or preparation["reservation_key"] != reservation_key(preparation["cycle_start"]):
@@ -83,6 +90,15 @@ def checked_inputs(cursor, preparation: dict, policy: dict, checked_at: datetime
                 raise InvalidInputs("topic_inputs_stale")
         except (TypeError, ValueError, KeyError) as exc:
             raise InvalidInputs("topic_inputs_stale") from exc
+    if task is not None:
+        contract = task.get("contract_version", 1)
+        if contract not in (1, 2) or contract != document.schema_version:
+            raise InvalidInputs("task_contract_mismatch")
+        if contract == 2:
+            try:
+                inputs["supplemental"] = validate_snapshot(cursor, task, inputs, document, checked_at)
+            except SupplementalInputError as exc:
+                raise InvalidInputs(exc.code) from exc
     return inputs
 
 
@@ -90,7 +106,8 @@ def check_binding(task: dict, preparation: dict, policy: dict) -> None:
     if task["preparation_version"] != preparation["version"] \
             or task["preparation_input_hash"] != preparation["input_hash"] \
             or task["policy_hash"] != policy["document_hash"] \
-            or task["input_hash"] != execution_hash(preparation, policy):
+            or task["input_hash"] != execution_hash(preparation, policy,
+                  contract_version=task.get("contract_version", 1), supplemental_hash=task.get("supplemental_hash")):
         raise InvalidInputs("task_binding_changed")
 
 
@@ -144,7 +161,7 @@ def read_evaluation(task: dict) -> dict:
 def require_current_inputs(db, cursor, preparation, policy, task, checked_at) -> dict:
     try:
         check_binding(task, preparation, policy)
-        return checked_inputs(cursor, preparation, policy, checked_at)
+        return checked_inputs(cursor, preparation, policy, checked_at, task=task)
     except InvalidInputs as exc:
         invalidate(db, cursor, task, exc.code)
         raise HTTPException(409, {"message": "执行输入或策略已失效", "code": exc.code}) from exc
@@ -167,16 +184,27 @@ def create_task(payload: MatchingTaskCreate) -> dict:
             db.rollback()
             return task_summary(existing, reused=True)
         try:
-            checked_inputs(cursor, preparation, policy, now_utc())
+            checked_at = now_utc()
+            inputs = checked_inputs(cursor, preparation, policy, checked_at)
+            document = intact_document(policy)
+            supplemental = build_snapshot(cursor, inputs, document, checked_at) if document.schema_version == 2 else None
+        except SupplementalInputError as exc:
+            raise HTTPException(409, {"message": "补充输入尚不可执行", "code": exc.code}) from exc
         except InvalidInputs as exc:
             raise HTTPException(409, {"message": "匹配输入或算法策略尚不可执行", "code": exc.code}) from exc
-        fingerprint = execution_hash(preparation, policy)
+        supplemental_hash = digest(canonical_json(supplemental)) if supplemental is not None else None
+        contract = document.schema_version
+        fingerprint = execution_hash(preparation, policy, contract_version=contract, supplemental_hash=supplemental_hash)
         cursor.execute("INSERT INTO godp_matching_task "
                        "(preparation_id,preparation_version,preparation_input_hash,policy_id,policy_hash, "
-                       "input_hash,create_by,update_by) VALUES (%s,%s,%s,%s,%s,%s,'matching-task-api','matching-task-api')",
+                       "input_hash,contract_version,supplemental_hash,create_by,update_by) "
+                       "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'matching-task-api','matching-task-api')",
                        (preparation["id"], preparation["version"], preparation["input_hash"], policy["id"],
-                        policy["document_hash"], fingerprint))
-        task = select_task(cursor, cursor.lastrowid)
+                        policy["document_hash"], fingerprint, contract, supplemental_hash))
+        task_id = cursor.lastrowid
+        if supplemental is not None:
+            save_snapshot(cursor, task_id, supplemental)
+        task = select_task(cursor, task_id)
         db.commit()
         return task_summary(task)
 
@@ -198,7 +226,7 @@ def claim_task(payload: ClaimTask) -> dict:
             return {"job": None, "next_after_id": task["id"]}
         try:
             check_binding(task, preparation, policy)
-            inputs = checked_inputs(cursor, preparation, policy, now)
+            inputs = checked_inputs(cursor, preparation, policy, now, task=task)
         except InvalidInputs as exc:
             invalidate(db, cursor, task, exc.code)
             return {"job": None, "next_after_id": task["id"], "invalidated_code": exc.code}
@@ -216,7 +244,7 @@ def claim_task(payload: ClaimTask) -> dict:
         claimed = select_task(cursor, task["id"])
         db.commit()
         return {"next_after_id": task["id"], "job": {**task_summary(claimed), "lease_id": lease_id,
-                "contract_version": 1, "inputs": inputs, "policy": json.loads(policy["document_json"])}}
+                "inputs": inputs, "policy": json.loads(policy["document_json"])}}
 
 
 def require_lease(task: dict, payload: LeaseIdentity, checked_at: datetime) -> None:
@@ -252,8 +280,36 @@ def validate_positions(result: MatchingEvaluation, inputs: dict, policy: dict) -
     if len(actual) != len(expected) or set(actual) != expected:
         raise HTTPException(422, "匹配提案须完整覆盖冻结日期安排，不能重复或新增账号日期")
     topics = {p["topic_id"] for p in inputs["topics"]}
-    if any(p.topic_id not in topics for p in result.positions if p.topic_id is not None):
-        raise HTTPException(422, "匹配提案引用了冻结输入以外的选题")
+    fallback = inputs.get("supplemental", {}).get("fallback_topics")
+    fallback_ids = {p["topic_id"] for p in fallback} if fallback is not None else topics
+    for position in result.positions:
+        legal = fallback_ids if position.outcome == "fallback" else topics
+        if position.topic_id is not None and position.topic_id not in legal:
+            raise HTTPException(422, "匹配须引用冻结AI选题，兜底须引用冻结的对应兜底池")
+
+
+def read_task_inputs(task_id: int) -> dict:
+    """Read original inputs for audit, including cancelled/invalidated tasks."""
+    with connection() as db, db.cursor() as cursor:
+        cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        task = select_task(cursor, task_id)
+        preparation = select_preparation(cursor, task["preparation_id"])
+        policy = select_policy(cursor, task["policy_id"])
+        try:
+            inputs, _ = load_frozen_inputs(cursor, preparation)
+            if preparation["input_hash"] != task["preparation_input_hash"]:
+                raise InvalidInputs("snapshot_integrity_error")
+            document = intact_document(policy)
+            original_preparation = {**preparation, "version": task["preparation_version"]}
+            check_binding(task, original_preparation, policy)
+            if task.get("contract_version", 1) != document.schema_version:
+                raise InvalidInputs("task_contract_mismatch")
+            if task.get("contract_version", 1) == 2:
+                inputs["supplemental"] = read_snapshot(cursor, task)
+        except (InvalidInputs, SupplementalInputError) as exc:
+            raise HTTPException(409, {"message": "历史执行输入完整性校验未通过", "code": exc.code}) from exc
+        return {**task_summary(task), "inputs": inputs, "policy": json.loads(policy["document_json"]),
+                "source_currentness_checked": False}
 
 
 def save_evaluation(task_id: int, payload: MatchingEvaluation) -> dict:

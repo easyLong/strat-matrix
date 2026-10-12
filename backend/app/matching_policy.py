@@ -1,6 +1,7 @@
 """Persist immutable reviewed algorithm documents without creating defaults."""
 
 from hashlib import sha256
+import json
 
 from fastapi import HTTPException
 
@@ -26,7 +27,9 @@ def select_policy(cursor, policy_id: int, *, lock: bool = False) -> dict:
 def intact_document(row: dict) -> MatchingPolicyDocument:
     try:
         document = MatchingPolicyDocument.model_validate_json(row["document_json"])
-        if digest(canonical_json(document.model_dump())) != row["document_hash"]:
+        # Hash the saved document, not defaults added by a newer model schema.
+        # Legacy policy fingerprints remain stable across contract upgrades.
+        if digest(canonical_json(json.loads(row["document_json"]))) != row["document_hash"]:
             raise ValueError("策略指纹错误")
         return document
     except (ValueError, TypeError) as exc:
@@ -40,7 +43,7 @@ def policy_summary(row: dict, *, include_document: bool = False) -> dict:
               "implementation_key": document.implementation_key, "confirmed_by": row["confirmed_by"],
               "confirmed_at": utc_text(row["confirmed_at"]), "approval_errors": document.approval_errors()}
     if include_document:
-        result["document"] = document.model_dump()
+        result["document"] = json.loads(row["document_json"])
     return result
 
 

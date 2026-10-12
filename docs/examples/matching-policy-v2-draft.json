@@ -1,0 +1,18 @@
+{
+  "policy_key": "ordinary-main",
+  "expected_latest_version": 0,
+  "document": {
+    "schema_version": 2,
+    "implementation_key": "pending-implementation",
+    "vector_space": null,
+    "required_inputs": ["accounts", "topics", "config", "positions", "fallback_topics", "history", "official_usage"],
+    "input_options": {
+      "history_window_days": null,
+      "history_completeness": null,
+      "history_unknown_references": null,
+      "official_usage_unknown": null,
+      "fallback_unknown_heat": null
+    },
+    "decisions": {}
+  }
+}

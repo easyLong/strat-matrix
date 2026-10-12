@@ -123,6 +123,16 @@ def main() -> None:
         for statement in statements:
             cursor.execute(statement)
         for name, definition in (
+            ("contract_version", "INT NOT NULL DEFAULT 1 COMMENT '匹配任务契约版本：1基础输入或2含补充事实快照'"),
+            ("supplemental_hash", "CHAR(64) NULL COMMENT '第二版任务绑定的兜底、历史和正式计数补充输入指纹；第一版为空'"),
+        ):
+            cursor.execute(
+                "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_matching_task' AND COLUMN_NAME=%s", (name,),
+            )
+            if cursor.fetchone()["column_count"] == 0:
+                cursor.execute(f"ALTER TABLE godp_matching_task ADD COLUMN `{name}` {definition}")
+        for name, definition in (
             ("lifecycle_stage", "VARCHAR(32) NULL COMMENT '策划时账号生命周期阶段快照'"),
             ("content_role", "VARCHAR(16) NULL COMMENT '策划时选题经营作用快照：流量或转化'"),
             ("topic_type", "VARCHAR(16) NULL COMMENT '实际绑定选题的来源类型：普通、营销或热点；待定空槽为空'"),

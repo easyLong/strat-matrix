@@ -226,6 +226,7 @@ class HistoryFact(BaseModel):
     content_id: str = Field(min_length=1, max_length=64)
     account_id: str = Field(min_length=1, max_length=64)
     topic_id: str = Field(default="", max_length=64)
+    topic_type: Literal["普通", "营销", "热点"] | None = None
     title: str = ""
     published_at: datetime | None = None
     content_type: str = ""

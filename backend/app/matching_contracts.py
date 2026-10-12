@@ -11,6 +11,7 @@ from .account_profile import canonical_json
 AlgorithmCode = Literal["ALG-01", "ALG-02", "ALG-03", "ALG-04", "ALG-05", "ALG-06", "ALG-07", "ALG-08", "ALG-09"]
 ALGORITHM_CODES = set(AlgorithmCode.__args__)
 SUPPORTED_INPUTS = {"accounts", "topics", "config", "positions"}
+SUPPLEMENTAL_INPUTS = {"fallback_topics", "history", "official_usage"}
 
 
 class StrictModel(BaseModel):
@@ -29,12 +30,21 @@ class PolicyVectorSpace(StrictModel):
     semantic_space_id: str = Field(min_length=1, max_length=100)
 
 
+class MatchingInputOptions(StrictModel):
+    history_window_days: int | None = Field(default=None, strict=True, ge=1, le=3650)
+    history_completeness: Literal["allow_unknown", "require_complete"] | None = None
+    history_unknown_references: Literal["allow_unknown", "block"] | None = None
+    official_usage_unknown: Literal["allow_unknown", "block"] | None = None
+    fallback_unknown_heat: Literal["allow_unknown", "block"] | None = None
+
+
 class MatchingPolicyDocument(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     implementation_key: str = Field(min_length=1, max_length=100)
     vector_space: PolicyVectorSpace | None = None
     required_inputs: list[str] = Field(default_factory=list, max_length=20)
     decisions: dict[AlgorithmCode, RuleDecision] = Field(default_factory=dict)
+    input_options: MatchingInputOptions | None = None
 
     @model_validator(mode="after")
     def finite_document(self):
@@ -55,10 +65,29 @@ class MatchingPolicyDocument(StrictModel):
             problems.append("须声明双侧向量模型、维度和语义空间")
         if not self.required_inputs or len(set(self.required_inputs)) != len(self.required_inputs):
             problems.append("须声明不重复的输入依赖")
-        if set(self.required_inputs) - SUPPORTED_INPUTS:
+        supported = SUPPORTED_INPUTS | (SUPPLEMENTAL_INPUTS if self.schema_version == 2 else set())
+        if set(self.required_inputs) - supported:
             problems.append("策略要求的额外输入尚未冻结，不能批准执行")
         if not {"accounts", "topics", "config", "positions"} <= set(self.required_inputs):
             problems.append("普通匹配必须声明账号、选题、配置和日期输入")
+        if self.schema_version == 1 and self.input_options is not None:
+            problems.append("第一版策略不支持补充输入选项，请创建第二版策略")
+        if self.schema_version == 2:
+            options = self.input_options or MatchingInputOptions()
+            if "history" in self.required_inputs and (options.history_window_days is None
+                    or options.history_completeness is None or options.history_unknown_references is None):
+                problems.append("历史输入须明确时间窗口、完整性与未知选题引用的处理")
+            if "official_usage" in self.required_inputs and options.official_usage_unknown is None:
+                problems.append("正式使用次数输入须明确未知计数处理")
+            if "fallback_topics" in self.required_inputs and options.fallback_unknown_heat is None:
+                problems.append("兜底池须明确未知热度处理")
+            if "history" not in self.required_inputs and any(value is not None for value in (
+                    options.history_window_days, options.history_completeness, options.history_unknown_references)):
+                problems.append("历史输入选项与输入依赖声明不一致")
+            if "official_usage" not in self.required_inputs and options.official_usage_unknown is not None:
+                problems.append("正式计数输入选项与输入依赖声明不一致")
+            if "fallback_topics" not in self.required_inputs and options.fallback_unknown_heat is not None:
+                problems.append("兜底输入选项与输入依赖声明不一致")
         return problems
 
 

@@ -402,6 +402,8 @@ CREATE TABLE IF NOT EXISTS godp_matching_task (
     policy_id BIGINT NOT NULL COMMENT '逻辑关联已确认的算法策略版本ID，无外键',
     policy_hash CHAR(64) NOT NULL COMMENT '执行任务绑定的不可变算法策略指纹',
     input_hash CHAR(64) NOT NULL COMMENT '契约版本、准备输入与策略身份组合SHA256指纹',
+    contract_version INT NOT NULL DEFAULT 1 COMMENT '匹配任务契约版本：1基础输入或2含补充事实快照',
+    supplemental_hash CHAR(64) NULL COMMENT '第二版任务绑定的兜底、历史和正式计数补充输入指纹；第一版为空',
     status VARCHAR(16) NOT NULL DEFAULT 'queued' COMMENT '任务状态：queued待执行、processing处理中、evaluated提案已保存、failed执行失败、cancelled取消或invalidated输入失效',
     version INT NOT NULL DEFAULT 1 COMMENT '任务递增状态版本，用于重试并发校验',
     attempt_count INT NOT NULL DEFAULT 0 COMMENT '执行任务累计领取次数',
@@ -419,6 +421,21 @@ CREATE TABLE IF NOT EXISTS godp_matching_task (
     UNIQUE KEY uk_matching_task_preparation (preparation_id),
     KEY idx_matching_task_queue (status, lease_expires_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配提案内部执行队列，不是运营策划批次';
+
+CREATE TABLE IF NOT EXISTS godp_matching_input_snapshot (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '匹配任务补充事实输入快照主键ID',
+    task_id BIGINT NOT NULL COMMENT '逻辑关联第二版匹配任务ID，无外键；每个任务仅冻结一次',
+    as_of DATETIME(6) NOT NULL COMMENT '历史窗口截止及补充输入首次读取时点，按UTC保存',
+    snapshot_json LONGTEXT NOT NULL COMMENT '本任务冻结的兜底选题、历史事实及正式使用计数JSON，未知值不补零',
+    snapshot_hash CHAR(64) NOT NULL COMMENT '完整补充事实快照SHA256指纹',
+    counts_json LONGTEXT NOT NULL COMMENT '声明的补充输入数量、未知计数及历史覆盖状态摘要JSON',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_matching_input_task (task_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通匹配任务不可变的兜底、历史和正式使用计数事实快照';
 
 CREATE TABLE IF NOT EXISTS godp_matching_attempt (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配执行尝试主键ID',

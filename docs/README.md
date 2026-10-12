@@ -10,6 +10,7 @@
 - [正式 AI 匹配输入准备检查](MATCHING_PREPARATION.md)
 - [正式 AI 策划输入准备流程](AI_PREPARATION.md)
 - [算法策略版本与匹配执行任务](MATCHING_EXECUTION.md)
+- [兜底池、历史与正式使用计数输入快照](MATCHING_SUPPLEMENTAL_INPUTS.md)
 - [算法与策略说明 V1.0 草稿（待评审）](ALGORITHM_STRATEGY_V1.0.md)
 - [IF-01 / IF-02 本地对接契约](IF01_IF02_本地对接契约.md)
 - [IF-05 / IF-06 本地对接契约](IF05_IF06_本地对接契约.md)

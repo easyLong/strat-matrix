@@ -77,6 +77,7 @@ def check_database() -> bool:
                 "godp_matching_policy",
                 "godp_matching_task",
                 "godp_matching_attempt",
+                "godp_matching_input_snapshot",
                 "godp_topic_label_job",
                 "godp_topic_official_usage",
                 "godp_topic_official_usage_history",

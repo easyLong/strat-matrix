@@ -233,6 +233,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 匹配执行基础版本新增 `godp_matching_policy`、`godp_matching_task`、`godp_matching_attempt`，更新后先初始化数据库并重启后端。策略版本和租约任务接口见[算法策略及执行任务](MATCHING_EXECUTION.md)。本轮无新增常驻匹配执行器，不会自动创建策略、调用模型或提交运营策划结果。
 
+补充输入版本新增 `godp_matching_input_snapshot` 及任务表的 `contract_version`、`supplemental_hash`，仍先运行初始化命令再重启后端。旧任务默认保留第一版，不回填补充事实或改变指纹。第二版策略与历史 `topic_type` 可选扩展见[补充输入快照](MATCHING_SUPPLEMENTAL_INPUTS.md)，本轮没有新增环境变量或常驻进程。
+
 ## 9. 故障排查
 
 ### 后端启动失败
