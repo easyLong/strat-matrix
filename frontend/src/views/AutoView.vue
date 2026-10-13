@@ -4,22 +4,41 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AutoCycleSummary } from '../types'
+import { addCalendarDays, businessMonday, formatBusinessTime, weeklyTrigger } from '../planningTime'
 
 const store = usePlanningStore()
 const router = useRouter()
 const busy = ref(false)
 const error = ref('')
 const cycles = ref<AutoCycleSummary[]>([])
+const now = ref(Date.now())
+const currentMonday = computed(() => businessMonday(now.value))
 const historyYear = ref('all')
 const historyMonth = ref('all')
 const autoBatches = computed(() => store.batches.filter(batch => batch.plan_type === 'auto'))
-const activeStatuses = new Set(['已规划', '热点空槽待填充'])
-const latest = computed(() => cycles.value.find(cycle => activeStatuses.has(cycle.status)) ?? cycles.value[0])
-const latestAutoBatch = computed(() => autoBatches.value.find(batch => batch.cycle_start === latest.value?.cycle_id) ?? autoBatches.value[0])
+const latest = computed(() => {
+  const ordered = [...cycles.value].sort((a, b) => b.cycle_start.localeCompare(a.cycle_start))
+  return ordered.find(cycle => cycle.cycle_start === currentMonday.value)
+    ?? ordered.filter(cycle => cycle.cycle_start > currentMonday.value).at(-1)
+    ?? ordered[0]
+})
+const latestAutoBatch = computed(() => autoBatches.value.find(batch => batch.cycle_start === latest.value?.cycle_id))
 const latestCaption = computed(() => {
-  if (latest.value?.status === '已规划') return '已为下一自然周生成策划结果'
-  if (latest.value?.hotspot_pending) return '当前周期仍有待处理的热点槽位'
-  return '最近一次已生成的周度策划任务'
+  if (!latest.value) return '等待首个策划周期'
+  if (latest.value.cycle_start > currentMonday.value) return '策划已生成，等待进入执行周期'
+  if (latest.value.cycle_start < currentMonday.value) return '最近一个已有策划记录的周期'
+  if (latest.value.hotspot_pending) return '本周执行中，热点槽位按投放日期逐步填充'
+  return '本周所有策划槽位已确定'
+})
+const upcomingPlan = computed(() => {
+  const start = addCalendarDays(currentMonday.value, 7)
+  const end = addCalendarDays(start, 6)
+  const trigger = weeklyTrigger(currentMonday.value, store.config.schedule_day, store.config.schedule_time)
+  const cycle = cycles.value.find(item => item.cycle_start === start)
+  return { start, end, cycle, trigger: formatBusinessTime(trigger),
+    status: cycle ? '已规划' : now.value < trigger ? '待调度' : '等待策划结果',
+    hint: cycle ? '下周策划已生成，进入执行周期后开始填充热点槽位。'
+      : now.value < trigger ? '尚未到调度时间，当前尚未生成下周批次。' : '已到调度时间，尚未收到下周策划结果。' }
 })
 const hotspotStatus = computed(() => {
   if (!latest.value) return '等待批次规划'
@@ -62,6 +81,7 @@ function statusLabel(status: string, failedAccounts = 0) {
 }
 
 async function refresh() {
+  if (busy.value) return
   busy.value = true
   error.value = ''
   try {
@@ -73,7 +93,10 @@ async function refresh() {
 }
 
 watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immediate: true })
-onMounted(() => { refreshTimer = window.setInterval(() => { if (store.databaseReady && cycles.value.some(cycle => activeStatuses.has(cycle.status))) void refresh() }, 10000) })
+onMounted(() => { refreshTimer = window.setInterval(() => {
+  now.value = Date.now()
+  if (store.databaseReady) void refresh()
+}, 10000) })
 onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(refreshTimer) })
 </script>
 
@@ -84,17 +107,22 @@ onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(ref
   </div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
   <div class="auto-overview-grid">
-    <div class="kpi-card"><small>最近策划周期</small><strong class="kpi-text">{{ latest?.cycle_start ?? '暂无' }}</strong><span>{{ latest?.cycle_end ?? '等待首个周期' }}</span></div>
-    <div class="kpi-card"><small>参与账号</small><strong>{{ latest?.account_count ?? 0 }}</strong><span>最近周期</span></div>
-    <div class="kpi-card"><small>完成状态</small><strong class="kpi-text">{{ latest ? statusLabel(latest.status, latest.failed_accounts) : '暂无运行记录' }}</strong><span>系统按兜底规则完成策划</span></div>
+    <div class="kpi-card"><small>当前策划周期</small><strong class="kpi-text">{{ latest?.cycle_start ?? '暂无' }}</strong><span>{{ latest?.cycle_end ?? '等待首个周期' }}</span></div>
+    <div class="kpi-card"><small>参与账号</small><strong>{{ latest?.account_count ?? 0 }}</strong><span>{{ latest?.cycle_start === currentMonday ? '本周执行账号' : '所示周期账号' }}</span></div>
+    <div class="kpi-card"><small>完成状态</small><strong class="kpi-text">{{ latest ? statusLabel(latest.status, latest.failed_accounts) : '暂无运行记录' }}</strong><span>{{ latest?.hotspot_pending ? '热点槽位按时逐步填充' : '所有策划槽位已确定' }}</span></div>
     <div class="kpi-card"><small>热点槽位状态</small><strong class="kpi-text">{{ hotspotStatus }}</strong><span>全部热点提交后本周期才算完成</span></div>
   </div>
+
+  <section class="card">
+    <div class="card-head"><div><h2>下周策划调度</h2><small>{{ upcomingPlan.start }} 至 {{ upcomingPlan.end }}</small></div><span :class="['tag', upcomingPlan.cycle ? 'blue' : 'gray']">{{ upcomingPlan.status }}</span></div>
+    <div class="card-body auto-schedule-row"><div><b>{{ upcomingPlan.trigger }}</b><p>{{ upcomingPlan.hint }}</p></div><button v-if="upcomingPlan.cycle" class="text-btn" type="button" @click="openCycle(upcomingPlan.cycle)">查看详情</button></div>
+  </section>
 
   <section class="card">
     <div class="card-head auto-task-head"><div><h2>当前批次</h2><small>{{ latestCaption }}</small></div><div class="auto-state"><span class="pulse" />{{ latest ? statusLabel(latest.status, latest.failed_accounts) : '等待首个周期' }}</div><button v-if="latest" class="text-btn" type="button" @click="openCycle(latest)">查看详情</button></div>
     <div class="card-body"><div v-if="latest" class="auto-current-grid">
       <div class="summary-box"><div class="summary-row"><span>周度调度</span><b>{{ scheduleSummary.trigger }}</b></div><div class="summary-row"><span>每账号槽位</span><b>{{ scheduleSummary.days.split('/').length }} 个（{{ scheduleSummary.days }}）</b></div><div class="summary-row"><span>热点槽位提交</span><b>{{ hotspotStatus }}</b></div></div>
-      <div class="summary-box"><div class="summary-row"><span>账号数据</span><b>夜间同步快照</b></div><div class="summary-row"><span>普通槽位</span><b>{{ latest.regular_slots }} 个</b></div><div class="summary-row"><span>营销槽位</span><b>{{ latest.marketing_slots }} 个</b></div></div>
+      <div class="summary-box"><div class="summary-row"><span>总槽位</span><b>{{ latest.regular_slots + latest.marketing_slots + latest.hotspot_slots }} 个</b></div><div class="summary-row"><span>普通槽位</span><b>{{ latest.regular_slots }} 个</b></div><div class="summary-row"><span>营销槽位</span><b>{{ latest.marketing_slots }} 个</b></div></div>
       <div class="summary-box"><div class="summary-row"><span>开始时间</span><b>{{ latestAutoBatch?.created_at || '—' }}</b></div><div class="summary-row"><span>最后更新</span><b>{{ latest.updated_at || '—' }}</b></div><div class="summary-row"><span>批次状态</span><b>{{ statusLabel(latest.status, latest.failed_accounts) }}</b></div><div v-if="latest.allocation_method === 'ordinary_fallback' || latest.allocation_method === 'rule_fallback'" class="summary-row"><span>分配方式</span><b>{{ latest.allocation_method === 'rule_fallback' ? '热点/营销规则 + 普通兜底' : '普通选题兜底' }}</b></div></div>
     </div><div v-else class="empty-state">暂无当前自动策划批次</div><div class="banner info-banner auto-hotspot-note"><b>热点槽位：</b>具体热点选题在目标槽位前一天 22:00 后确定。周期状态按“已规划 → 热点空槽待填充 → 已完成”推进，全部热点槽位提交后本周期才算完成。</div></div>
   </section>
@@ -108,4 +136,9 @@ onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(ref
     </tbody></table></div>
   </section>
 </template>
+
+<style scoped>
+.auto-schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.auto-schedule-row p { margin: 5px 0 0; color: #5e6b85; font-size: 13px; }
+</style>
 

@@ -72,10 +72,13 @@ const scheduleDay = computed({ get: () => draft.value.schedule_day, set: value =
 const scheduleTime = computed({ get: () => draft.value.schedule_time, set: value => { draft.value.schedule_time = value } })
 const hotspotRatio = computed({ get: () => draft.value.hotspot_ratio, set: value => { draft.value.hotspot_ratio = value } })
 const lifecycleEditing = ref(false)
+const remoteConfigPending = ref(false)
+let configSyncTimer: number | undefined
+let configSyncBusy = false
 const lifecycleRules = computed(() => draft.value.lifecycle_rules)
 const lifecycleMetricOptions = [
   { value: 'valid_content_count', label: '有效内容数', unit: '篇' },
-  { value: 'rolling_interaction_count', label: '滚动周期内互动数', unit: '次' },
+  { value: 'rolling_interaction_count', label: '滚动篇均互动数', unit: '次/篇' },
   { value: 'followers_count', label: '粉丝数', unit: '人' },
 ]
 const lifecycleOperatorOptions = [
@@ -87,6 +90,18 @@ const lifecycleOperatorOptions = [
 ]
 const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value)
 const pageDirty = computed(() => dirty.value || tagDirty.value)
+const coldStartDefinition = computed(() => {
+  const growth = lifecycleRules.value.find(rule => rule.name === '流量增长期')
+  if (!growth || growth.conditions.length === 0 || growth.conditions.some((condition, index) =>
+    condition.operator !== 'gte' || (index > 0 && condition.join !== 'OR'))) {
+    return '未命中前置阶段条件的账号自动归入此阶段，确保每个账号都有且只有一个生命周期阶段。'
+  }
+  const conditions = growth.conditions.map(condition => {
+    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
+    return `${metric?.label ?? condition.field} < ${condition.value} ${metric?.unit ?? ''}`
+  }).join('，且 ')
+  return `未命中更高阶段，且 ${conditions}。边界随流量增长期的进入条件同步调整。`
+})
 
 function metricUnit(field: string) {
   return lifecycleMetricOptions.find(option => option.value === field)?.unit ?? ''
@@ -158,8 +173,13 @@ const beforeUnload = (event: BeforeUnloadEvent) => {
   event.preventDefault()
   event.returnValue = '当前存在未保存修改，离开后修改内容将丢失。'
 }
+const syncOnFocus = () => { void syncSavedConfig() }
+const syncOnVisible = () => { if (!document.hidden) void syncSavedConfig() }
 onMounted(() => {
   window.addEventListener('beforeunload', beforeUnload)
+  window.addEventListener('focus', syncOnFocus)
+  document.addEventListener('visibilitychange', syncOnVisible)
+  configSyncTimer = window.setInterval(() => { void syncSavedConfig() }, 10000)
   removeRouteGuard = router.beforeEach((to, from) => {
     if (to.fullPath === from.fullPath || !pageDirty.value) return true
     return window.confirm('当前存在未保存修改，离开后修改内容将丢失。点击“确定”放弃修改并离开，点击“取消”继续编辑。')
@@ -167,8 +187,36 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', beforeUnload)
+  window.removeEventListener('focus', syncOnFocus)
+  document.removeEventListener('visibilitychange', syncOnVisible)
+  if (configSyncTimer !== undefined) window.clearInterval(configSyncTimer)
   removeRouteGuard?.()
 })
+
+async function syncSavedConfig() {
+  if (!store.databaseReady || loading.value || busy.value || configSyncBusy || document.hidden) return
+  configSyncBusy = true
+  try {
+    const latest = await api.config()
+    if (loading.value || busy.value) return
+    const changed = latest.version !== store.configVersion || JSON.stringify(latest.config) !== JSON.stringify(store.config)
+    if (!changed) {
+      remoteConfigPending.value = false
+      return
+    }
+    if (pageDirty.value || lifecycleEditing.value) {
+      remoteConfigPending.value = true
+      return
+    }
+    store.applyConfig(latest)
+    remoteConfigPending.value = false
+    await loadVersions()
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : '同步策划配置失败'
+  } finally {
+    configSyncBusy = false
+  }
+}
 
 async function loadVersions() {
   try {
@@ -181,10 +229,13 @@ async function loadVersions() {
 }
 
 async function loadConfigData() {
+  if (pageDirty.value && !window.confirm('当前有未保存修改。加载最新配置将放弃这些修改，是否继续？')) return
+  lifecycleEditing.value = false
   loading.value = true
   error.value = ''
   try {
     await Promise.all([store.refreshConfig(), loadVersions(), loadTagTaxonomy()])
+    remoteConfigPending.value = false
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : '读取策划配置失败'
   } finally {
@@ -326,9 +377,10 @@ async function restoreVersion(version: number) {
 
   <div v-if="notice" class="banner success-banner" role="status">{{ notice }}</div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
+  <div v-if="remoteConfigPending" class="banner warning-banner" role="status">配置已在其它位置更新，当前编辑内容已保留。<button class="text-btn" type="button" :disabled="loading || busy" @click="loadConfigData">加载最新配置</button></div>
   <div v-if="store.configIsDemo" class="banner info-banner"><b>演示配置：</b>当前数值由示例数据填充。分别保存营销配置或经营策略后，所选模块会生成正式版本。</div>
   <div v-if="loading" class="banner info-banner" role="status">正在读取当前策划配置…</div>
-  <fieldset class="form-fieldset config-stack" :disabled="!store.databaseReady || busy">
+  <fieldset class="form-fieldset config-stack" :disabled="!store.databaseReady || busy || loading">
     <section class="card">
       <div class="card-head"><div><h2>账号与自动策划配置</h2><small>控制每周槽位、自动执行时间和特殊内容比例</small></div><span class="tag blue">运营可配置</span></div>
       <div class="card-body">
@@ -347,7 +399,7 @@ async function restoreVersion(version: number) {
     <section class="card">
       <div class="card-head"><div><h2>经营策略配置</h2><small>五个生命周期阶段的流量与转化目标</small></div><span class="tag blue">运营可配置</span></div>
       <div class="card-body">
-        <label class="field rolling-field"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" type="number" min="1" max="100" /><span>篇</span></div><small>阶段目标按最近的有效内容滚动计算。</small></label>
+        <label class="field rolling-field"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" type="number" min="1" max="100" /><span>篇</span></div><small>篇均互动取近三个月中最近 {{ draft.rolling_posts }} 篇有效内容的点赞／红星、收藏、评论合计平均值；不足窗口篇数时按实际篇数计算。有效内容数统计近三个月。</small></label>
         <div class="stage-table-wrap">
           <table class="stage-table"><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th><th>合计</th></tr></thead>
             <tbody><tr v-for="stage in draft.stage_targets" :key="stage.name">
@@ -359,8 +411,8 @@ async function restoreVersion(version: number) {
           </table>
         </div>
         <div class="lifecycle-definition-head"><div><b>生命周期阶段定义</b><small>使用有效内容数、滚动周期互动数和粉丝数等可量化指标；按成熟度从高到低匹配，命中第一个阶段后停止。</small></div><button class="btn small" type="button" @click="lifecycleEditing = !lifecycleEditing">{{ lifecycleEditing ? '完成编辑' : '编辑定义' }}</button></div>
-        <div class="banner info-banner lifecycle-coverage-note"><b>唯一归属规则：</b>一个账号只允许归属一个阶段。前四个阶段按条件匹配，未命中时归入“冷启验证期”。</div>
-        <div class="lifecycle-definition-list"><div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition"><div class="lifecycle-stage-name"><b>{{ rule.name }}</b><small>{{ rule.catchAll ? '兜底阶段' : '进入条件' }}</small></div><div v-if="rule.catchAll" class="lifecycle-catch-all">未命中前置阶段条件的账号自动归入此阶段，确保每个账号都有且只有一个生命周期阶段。</div><div v-else class="lifecycle-condition-list"><div v-for="(condition, index) in rule.conditions" :key="`${rule.name}-${index}`" class="lifecycle-condition-row"><select v-model="condition.field" :disabled="!lifecycleEditing" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><select v-model="condition.operator" :disabled="!lifecycleEditing" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model.number="condition.value" :disabled="!lifecycleEditing" type="number" step="1" aria-label="阈值" /><span class="condition-unit">{{ metricUnit(condition.field) }}</span><select v-if="index > 0" v-model="condition.join" :disabled="!lifecycleEditing" class="condition-join" aria-label="条件关系"><option value="AND">且</option><option value="OR">或</option></select><button v-if="lifecycleEditing && rule.conditions.length > 1" class="icon-btn condition-remove" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, index)">×</button></div><button v-if="lifecycleEditing" class="text-btn condition-add" type="button" @click="addLifecycleCondition(rule)">＋ 添加条件</button></div></div></div>
+        <div class="banner info-banner lifecycle-coverage-note"><b>唯一归属规则：</b>按成熟度从上往下判断，命中一个阶段后停止。流量增长期包含已有粉丝基础或内容基础的账号，其余账号归入“冷启验证期”。</div>
+        <div class="lifecycle-definition-list"><div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition"><div class="lifecycle-stage-name"><b>{{ rule.name }}</b><small>{{ rule.catchAll ? '基础验证阶段' : '进入条件' }}</small></div><div v-if="rule.catchAll" class="lifecycle-catch-all">{{ coldStartDefinition }}</div><div v-else class="lifecycle-condition-list"><div v-for="(condition, index) in rule.conditions" :key="`${rule.name}-${index}`" class="lifecycle-condition-row"><select v-model="condition.field" :disabled="!lifecycleEditing" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><select v-model="condition.operator" :disabled="!lifecycleEditing" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model.number="condition.value" :disabled="!lifecycleEditing" type="number" step="1" aria-label="阈值" /><span class="condition-unit">{{ metricUnit(condition.field) }}</span><select v-if="index > 0" v-model="condition.join" :disabled="!lifecycleEditing" class="condition-join" aria-label="条件关系"><option value="AND">且</option><option value="OR">或</option></select><button v-if="lifecycleEditing && rule.conditions.length > 1" class="icon-btn condition-remove" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, index)">×</button></div><button v-if="lifecycleEditing" class="text-btn condition-add" type="button" @click="addLifecycleCondition(rule)">＋ 添加条件</button></div></div></div>
         <p v-if="!strategyValid" class="inline-error">请检查滚动窗口、生命周期进入条件；每个阶段的流量与转化目标之和必须为 100%。</p>
         <div class="footer-actions"><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !strategyValid || !strategyDirty" @click="save('strategy')">保存经营策略</button></div>
       </div>

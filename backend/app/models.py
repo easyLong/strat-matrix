@@ -28,18 +28,23 @@ class LifecycleRule(BaseModel):
 def default_lifecycle_rules() -> list[LifecycleRule]:
     return [
         LifecycleRule(name="稳定经营期", conditions=[
-            LifecycleCondition(field="followers_count", operator="gte", value=100000),
-            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=100),
+            LifecycleCondition(field="followers_count", operator="gte", value=1000),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=20),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5),
         ]),
         LifecycleRule(name="转化放大期", conditions=[
-            LifecycleCondition(field="followers_count", operator="gte", value=50000),
-            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=100),
+            LifecycleCondition(field="followers_count", operator="gte", value=500),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=10),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5),
         ]),
         LifecycleRule(name="转化试探期", conditions=[
-            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=100),
+            LifecycleCondition(field="followers_count", operator="gte", value=200),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=5),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5),
         ]),
         LifecycleRule(name="流量增长期", conditions=[
-            LifecycleCondition(field="valid_content_count", operator="gte", value=10),
+            LifecycleCondition(field="followers_count", operator="gte", value=50),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5, join="OR"),
         ]),
         LifecycleRule(name="冷启验证期", catchAll=True),
     ]

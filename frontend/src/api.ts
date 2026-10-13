@@ -12,6 +12,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     response = await fetch(`/api${path}`, {
       ...options,
+      cache: options.cache ?? 'no-store',
       headers: { 'Content-Type': 'application/json', ...options.headers },
     })
   } catch {

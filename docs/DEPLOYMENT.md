@@ -191,14 +191,16 @@ BUILD_FRONTEND=0 \
 
 可用变量：
 
+下表为启动脚本未配置时的回退值；环境变量优先，其次读取根目录 `.env`。示例 `.env` 使用 `127.0.0.1` 配合 Nginx，直接通过服务器 IP 访问时可配置为 `0.0.0.0`。
+
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `APP_ROOT` | 脚本所在目录 | 项目根目录 |
 | `PYTHON_BIN` | 自动选择 `.venv/bin/python`，否则使用 `python3` | 后端 Python |
 | `NPM_BIN` | `npm` | Node 包管理器 |
-| `BACKEND_HOST` | `127.0.0.1` | 后端监听地址 |
+| `BACKEND_HOST` | `0.0.0.0` | 后端监听地址 |
 | `BACKEND_PORT` | `6930` | 后端端口 |
-| `FRONTEND_HOST` | `127.0.0.1` | 前端监听地址 |
+| `FRONTEND_HOST` | `0.0.0.0` | 前端监听地址 |
 | `FRONTEND_PORT` | `930` | 前端端口 |
 | `CHECK_HOST` | `127.0.0.1` | Local health-check address when services bind to `0.0.0.0` |
 | `BUILD_FRONTEND` | `1` | 是否在启动前构建前端 |

@@ -17,10 +17,10 @@ export const defaultConfig: StrategyConfig = {
     { name: '稳定经营期', traffic: 50, conversion: 50 },
   ],
   lifecycle_rules: [
-    { name: '稳定经营期', conditions: [{ field: 'followers_count', operator: 'gte', value: 100000, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 100, join: 'AND' }], catchAll: false },
-    { name: '转化放大期', conditions: [{ field: 'followers_count', operator: 'gte', value: 50000, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 100, join: 'AND' }], catchAll: false },
-    { name: '转化试探期', conditions: [{ field: 'rolling_interaction_count', operator: 'gte', value: 100, join: 'AND' }], catchAll: false },
-    { name: '流量增长期', conditions: [{ field: 'valid_content_count', operator: 'gte', value: 10, join: 'AND' }], catchAll: false },
+    { name: '稳定经营期', conditions: [{ field: 'followers_count', operator: 'gte', value: 1000, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 20, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
+    { name: '转化放大期', conditions: [{ field: 'followers_count', operator: 'gte', value: 500, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 10, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
+    { name: '转化试探期', conditions: [{ field: 'followers_count', operator: 'gte', value: 200, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 5, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
+    { name: '流量增长期', conditions: [{ field: 'followers_count', operator: 'gte', value: 50, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'OR' }], catchAll: false },
     { name: '冷启验证期', conditions: [], catchAll: true },
   ],
 }
