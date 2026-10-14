@@ -29,10 +29,8 @@ const detailCycleId = ref('')
 const cyclePage = ref(1)
 const cyclePageSize = ref(10)
 const cycleAccountId = ref('all')
-const cycleSlotType = ref('all')
+const cyclePlanType = ref('all')
 const cycleContentType = ref('all')
-const cycleRole = ref('all')
-const cyclePublishStatus = ref('all')
 const error = ref('')
 const visibleError = computed(() => error.value
   .split('；')
@@ -73,13 +71,11 @@ const visiblePlanningAccounts = computed(() => planningAccounts.value.filter(acc
 ))
 const filteredCycleItems = computed(() => cycleItems.value.filter(item =>
   (cycleAccountId.value === 'all' || item.account_id === cycleAccountId.value) &&
-  (cycleSlotType.value === 'all' || topicTypeLabel(item) === cycleSlotType.value) &&
-  (cycleContentType.value === 'all' || item.content_type === cycleContentType.value) &&
-  (cycleRole.value === 'all' || item.content_role === cycleRole.value) &&
-  (cyclePublishStatus.value === 'all' || item.publish_status === cyclePublishStatus.value),
+  (cyclePlanType.value === 'all' || item.plan_type === cyclePlanType.value) &&
+  (cycleContentType.value === 'all' || item.content_type === cycleContentType.value),
 ))
 const selectedCycleStats = computed(() => {
-  const items = cycleItems.value
+  const items = filteredCycleItems.value
   return {
     accountCount: new Set(items.map(item => item.account_id)).size,
     slotCount: items.length,
@@ -133,7 +129,7 @@ const accountHistoryPlanCounts = computed(() => {
     manual: items.filter(item => item.plan_type === 'manual').length,
   }
 })
-watch([cycleAccountId, cycleSlotType, cycleContentType, cycleRole, cyclePublishStatus, cyclePageSize], () => { cyclePage.value = 1 })
+watch([cycleAccountId, cyclePlanType, cycleContentType, cyclePageSize], () => { cyclePage.value = 1 })
 watch(cyclePageCount, pageCount => { if (cyclePage.value > pageCount) cyclePage.value = pageCount })
 const accountHistoryGroups = computed(() => {
   const groups = new Map<string, {
@@ -171,8 +167,6 @@ const pagedAccountHistoryGroups = computed(() => {
 watch([accountHistoryFrom, accountHistoryTo, accountHistoryCycleId, accountHistoryPageSize], () => { accountHistoryPage.value = 1 })
 watch(accountHistoryPageCount, pageCount => { if (accountHistoryPage.value > pageCount) accountHistoryPage.value = pageCount })
 const cycleContentTypes = computed(() => [...new Set(cycleItems.value.map(item => item.content_type).filter(Boolean))])
-const cycleRoles = computed(() => [...new Set(cycleItems.value.map(item => item.content_role).filter((value): value is string => Boolean(value)))])
-const cyclePublishStatuses = computed(() => [...new Set(cycleItems.value.map(item => item.publish_status).filter(Boolean))])
 
 function slotLabel(slotType: string, planType: string) {
   if (planType === 'manual') return '手动追加'
@@ -263,12 +257,13 @@ function returnFromAccountDetail() {
   selectedAccount.value = null
   pane.value = accountReturnPane.value
 }
-async function loadBatch(batchId: number) {
+async function loadBatch(batchId: number, planType?: 'manual' | 'auto') {
   if (!store.databaseReady) return
   error.value = ''
   try {
     const batch = await api.batch(batchId)
     await loadCycle(cycleWeekStart(batch.cycle_start))
+    if (planType) cyclePlanType.value = planType
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取批次周期失败' }
 }
 async function loadCycle(cycleId: string) {
@@ -280,6 +275,7 @@ async function loadCycle(cycleId: string) {
     detailCycleId.value = cycleId
     cyclePage.value = 1
     cycleAccountId.value = 'all'
+    cyclePlanType.value = 'all'
     cycleItems.value = await api.planningCycleItems(cycleId, 5000)
     pane.value = 'detail'
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取批次周期失败' }
@@ -373,9 +369,9 @@ async function refresh() {
 }
 
 
-watch(() => [route.query.batch, batchSummaries.value.length] as const, async ([id, count]) => {
+watch(() => [route.query.batch, route.query.plan_type, batchSummaries.value.length] as const, async ([id, planType, count]) => {
   if (!count || typeof id !== 'string' || !/^\d+$/.test(id)) return
-  await loadBatch(Number(id))
+  await loadBatch(Number(id), planType === 'manual' || planType === 'auto' ? planType : undefined)
 }, { immediate: true })
 watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immediate: true })
 </script>
@@ -397,10 +393,8 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
     <div class="card-body"><div class="cycle-detail-filter-grid">
       <label><span>批次周期</span><select v-model="detailCycleId" :disabled="busy || !store.databaseReady" @change="chooseDetailCycle"><option value="">选择批次周期</option><option v-for="cycle in planningCycleSummaries" :key="cycle.cycle_id" :value="cycle.cycle_id">{{ cyclePeriodLabel(cycle.cycle_start) }} · {{ cycle.cycle_start }} 至 {{ cycle.cycle_end }}</option></select></label>
       <label><span>账号</span><select v-model="cycleAccountId"><option value="all">全部账号</option><option v-for="account in cycleAccountOptions" :key="account.account_id" :value="account.account_id">{{ account.account_name }} · {{ account.account_id }}</option></select></label>
-      <label><span>槽位类型</span><select v-model="cycleSlotType"><option value="all">全部类型</option><option value="普通">普通</option><option value="营销">营销</option><option value="热点">热点</option></select></label>
+      <label><span>策划方式</span><select v-model="cyclePlanType"><option value="all">全部方式</option><option value="auto">自动策划</option><option value="manual">手动策划</option></select></label>
       <label><span>内容类型</span><select v-model="cycleContentType"><option value="all">全部内容类型</option><option v-for="value in cycleContentTypes" :key="value" :value="value">{{ value }}</option></select></label>
-      <label><span>经营作用</span><select v-model="cycleRole"><option value="all">全部经营作用</option><option v-for="value in cycleRoles" :key="value" :value="value">{{ value }}</option></select></label>
-      <label><span>发布状态</span><select v-model="cyclePublishStatus"><option value="all">全部发布状态</option><option v-for="value in cyclePublishStatuses" :key="value" :value="value">{{ value }}</option></select></label>
     </div></div>
 
     <template v-if="selectedCycle">
