@@ -20,14 +20,14 @@ TAGS = {
 }
 
 PROTOTYPE_ACCOUNTS = [
-    ("A", "美食小日记", "郑州", "生活向导", "@food_diary", True, 126000, "上升", 38000),
-    ("B", "旅行玩家", "洛阳", "城市观察", "@travel_go", True, 87000, "平稳", 29000),
-    ("C", "数码前沿", "开封", "数码顾问", "@digital_now", False, 32000, "上升", 18000),
-    ("D", "职场进阶指南", "南阳", "职场伙伴", "@career_up", True, 64000, "平稳", 22000),
-    ("E", "本地生活研究所", "新乡", "生活向导", "@city_life", True, 189000, "上升", 51000),
-    ("F", "年轻人理财课", "许昌", "理财顾问", "@money_young", False, 26000, "下滑", 9000),
-    ("G", "妈妈生活志", "商丘", "家庭管家", "@mom_life", True, 221000, "平稳", 44000),
-    ("H", "城市观察员", "焦作", "城市观察", "@city_watch", False, 13000, "上升", 11000),
+    ("A", "美食小日记", "郑州", "生活向导", "@food_diary", True, 126000, "上升"),
+    ("B", "旅行玩家", "洛阳", "城市观察", "@travel_go", True, 87000, "平稳"),
+    ("C", "数码前沿", "开封", "数码顾问", "@digital_now", False, 32000, "上升"),
+    ("D", "职场进阶指南", "南阳", "职场伙伴", "@career_up", True, 64000, "平稳"),
+    ("E", "本地生活研究所", "新乡", "生活向导", "@city_life", True, 189000, "上升"),
+    ("F", "年轻人理财课", "许昌", "理财顾问", "@money_young", False, 26000, "下滑"),
+    ("G", "妈妈生活志", "商丘", "家庭管家", "@mom_life", True, 221000, "平稳"),
+    ("H", "城市观察员", "焦作", "城市观察", "@city_watch", False, 13000, "上升"),
 ]
 
 TOPICS = [
@@ -40,6 +40,30 @@ TOPICS = [
     ("T007", "产品权益种草", "周末餐饮权益怎么用更划算", "聚焦餐饮场景，解释权益使用门槛和组合方式。", "餐饮权益", True),
     ("T008", "热点解读", "假期出行新规落地后需要注意什么", "用问答形式拆解近期出行相关热点规则变化。", "出行热点", False),
 ]
+
+
+def prototype_interactions(now: datetime, account_id: str, followers: int, trend: str) -> list[dict]:
+    """Create post-level demo inputs so displayed trends use the real metric rule."""
+    baseline = max(20, followers // 200)
+    recent_factor = {"上升": 1.3, "平稳": 1.0, "下滑": 0.7}.get(trend, 1.0)
+    posts = []
+    for position in range(20):
+        window_position = position % 10
+        variation = 0.94 + window_position * 0.015
+        factor = recent_factor if position < 10 else 1.0
+        interactions = int(round(baseline * factor * variation))
+        red_stars = interactions * 6 // 10
+        favorites = interactions // 4
+        published_at = now - timedelta(days=1 + position * 4)
+        posts.append({
+            "content_id": f"{account_id}-POST-{position + 1:02d}",
+            "published_at": published_at.replace(tzinfo=timezone.utc).isoformat(),
+            "title": f"近三个月互动样本第{position + 1}篇",
+            "red_star_count": red_stars,
+            "favorite_count": favorites,
+            "comment_count": interactions - red_stars - favorites,
+        })
+    return posts
 
 
 def reset_demo_planning(cursor) -> None:
@@ -117,7 +141,7 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
     account_ids: list[str] = []
     account_rows = []
     source_rows = []
-    for code, name, city, persona, handle, marketing, followers, trend, average in PROTOTYPE_ACCOUNTS:
+    for code, name, city, persona, handle, marketing, followers, trend in PROTOTYPE_ACCOUNTS:
         account_id = f"DEMO-P-{code}"
         account_ids.append(account_id)
         account_rows.append((account_id, name, city, persona, int(marketing)))
@@ -125,7 +149,7 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
             "account_id": account_id, "account_name": name, "platform": "演示平台",
             "organization": "原型演示机构", "city": city, "marketing_eligible": marketing,
             "persona": persona, "handle": handle, "certified": code in {"A", "B", "D", "E", "G"},
-            "followers": followers, "traffic_trend": trend, "traffic_average": average,
+            "followers": followers, "interaction_data": prototype_interactions(now, account_id, followers, trend),
             "enabled": True, "updated_at": now.replace(tzinfo=timezone.utc).isoformat(),
         }, ensure_ascii=False)))
     for index in range(9, 69):
@@ -142,8 +166,11 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
             "account_id": account_id, "account_name": name, "platform": "演示平台",
             "organization": "原型测试机构", "city": city, "marketing_eligible": marketing,
             "persona": persona, "handle": f"@demo_{index}", "certified": index % 3 != 0,
-            "followers": followers, "traffic_trend": "下滑" if index % 4 == 0 else "上升",
-            "traffic_average": 7000 + index * 800, "enabled": True,
+            "followers": followers,
+            "interaction_data": prototype_interactions(
+                now, account_id, followers, "下滑" if index % 4 == 0 else "上升",
+            ),
+            "enabled": True,
             "updated_at": now.replace(tzinfo=timezone.utc).isoformat(),
         }, ensure_ascii=False)))
     cursor.executemany(

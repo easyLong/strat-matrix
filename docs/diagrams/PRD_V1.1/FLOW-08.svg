@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1940" viewBox="0 0 460 485.0" role="img"><title>FLOW-08 多热点统一已规划热点槽位池分配</title>
+<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7489a2"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="163,51.0 163,71.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,107.0 163,127.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,163.0 163,183.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,219.0 163,237.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,277.0 163,295.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,331.0 163,351.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,387.0 163,407.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="234.5,313 286.0,335" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="368,355.0 368,369 228.75,369" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="91.5" y="15.0" width="143.0" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="37.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">同一任务收到多个热点</text>
+<rect x="91.5" y="71.0" width="143.0" height="36" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="93.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">读取统一已规划热点池</text>
+<rect x="83.0" y="127.0" width="160.0" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="149.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">热点×账号×槽位资格过滤</text>
+<rect x="85.75" y="183.0" width="154.5" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="205.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">合法热点与槽位随机分配</text>
+<rect x="97.25" y="237.0" width="131.5" height="40" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="253.55" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">已占槽位移出池</text>
+<text x="163" y="268.5" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">不重复、不新增槽位</text>
+<rect x="91.5" y="295.0" width="143.0" height="36" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="317.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">剩余槽位无合法热点？</text>
+<rect x="97.25" y="351.0" width="131.5" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="373.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">复核并保存当前选题</text>
+<rect x="85.75" y="407.0" width="154.5" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="429.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">更新热点进度与周期统计</text>
+<rect x="286.0" y="315.0" width="164" height="40" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="368" y="331.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">合法普通最热选题兜底</text>
+<text x="368" y="345.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">无合法兜底则异常</text>
+<rect x="177.0" y="334" width="14" height="12" rx="2" fill="white"/><text x="184" y="343" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">否</text>
+<rect x="267.0" y="307" width="14" height="12" rx="2" fill="white"/><text x="274" y="316" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">是</text>
+<text x="230" y="475.0" text-anchor="middle" font-size="7.5" fill="#76899e" font-family="Microsoft YaHei,sans-serif">候选热点不足不等于槽位空缺；合法普通兜底计已确定。</text></svg>

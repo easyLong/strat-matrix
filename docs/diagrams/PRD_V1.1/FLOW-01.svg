@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1868" viewBox="0 0 460 467.0" role="img"><title>FLOW-01 产品总体业务链路</title>
+<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7489a2"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="80,63.0 80,115.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="230,63.0 230,88 80,88 80,115.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="146.0,135 160.0,135" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="300.0,135 314.0,135" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="380,65.0 380,117.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="80,155.0 80,205.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="380,153.0 380,205.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="380,245.0 380,275 260,275 260,297.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="230,243.0 230,297.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="314.0,315 296.0,315" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="149.0,315 164.0,315" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="380,245.0 380,295.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="296.0,315 303,315 303,405 311.0,405" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="311.0,405 299.0,405" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="161.0,405 149.0,405" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="11.0,405 5,405 5,8 380,8 380,25.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="4 3"/>
+<rect x="21.0" y="27.0" width="118" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="80" y="48.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">普通选题同步</text>
+<rect x="164.0" y="27.0" width="132" height="36" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="48.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">T1-T5有效字典</text>
+<rect x="314.0" y="25.0" width="132" height="40" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="380" y="41.849999999999994" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">账号快照 / 冻结配置</text>
+<text x="380" y="55.49999999999999" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">已同步营销来源</text>
+<rect x="14.0" y="115.0" width="132" height="40" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="80" y="131.85000000000002" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">首次标签识别</text>
+<text x="80" y="145.50000000000003" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">当前画像 / 向量</text>
+<rect x="160.0" y="117.0" width="140" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="138.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">AI可匹配选题池</text>
+<rect x="314.0" y="117.0" width="132" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="380" y="138.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">周度自动策划</text>
+<rect x="11.0" y="205.0" width="138" height="40" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="80" y="221.85000000000002" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">IF-08标签查询</text>
+<text x="80" y="235.50000000000003" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">只读、不触发识别</text>
+<rect x="164.0" y="207.0" width="132" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="228.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">手动追加策划</text>
+<rect x="314.0" y="205.0" width="132" height="40" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="380" y="221.85000000000002" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">有效基础规划</text>
+<text x="380" y="235.50000000000003" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">热点保留空槽</text>
+<rect x="11.0" y="297.0" width="138" height="36" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="80" y="318.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">未发布人工替换</text>
+<rect x="164.0" y="297.0" width="132" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="318.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">当前有效结果</text>
+<rect x="314.0" y="295.0" width="132" height="40" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="380" y="311.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">热点T-1定题</text>
+<text x="380" y="325.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">合法普通兜底</text>
+<rect x="11.0" y="387.0" width="138" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="80" y="408.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">发布后互动数据</text>
+<rect x="161.0" y="387.0" width="138" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="408.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">IF-06发布回传</text>
+<rect x="311.0" y="385.0" width="138" height="40" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="380" y="401.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">IF-05查询 / 生产</text>
+<text x="380" y="415.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">发布前再次复查</text>
+<rect x="189.0" y="6" width="38" height="12" rx="2" fill="white"/><text x="208" y="15" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">下一批次</text>
+<text x="230" y="457.0" text-anchor="middle" font-size="7.5" fill="#76899e" font-family="Microsoft YaHei,sans-serif">标签查询、人工替换与手动追加各有独立入口；生产及发布由外部系统完成。</text></svg>

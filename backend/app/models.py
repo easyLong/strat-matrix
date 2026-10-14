@@ -129,11 +129,13 @@ class AccountOption(BaseModel):
 class TopicOption(BaseModel):
     topic_id: str
     topic_title: str
-    category: str
+    category: str = ""
     content_type: str = ""
     outline: str = ""
     is_marketing: bool
     status: str
+    topic_type: Literal["普通", "营销", "热点"] | None = None
+    account_id: str | None = None
 
 
 class ManualItem(BaseModel):
@@ -203,6 +205,7 @@ class ManualTaskSummary(BaseModel):
     batch_id: int | None = None
     last_error: str
     created_at: datetime
+    created_by: str
     updated_at: datetime
 
 
@@ -245,6 +248,15 @@ class BatchSummary(BaseModel):
     created_at: datetime
 
 
+class PlanningAccountSummary(BaseModel):
+    account_id: str
+    account_name: str
+    cycle_count: int
+    slot_count: int
+    latest_cycle_start: date
+    latest_cycle_updated_at: datetime | None = None
+
+
 class PlanItemResponse(BaseModel):
     id: int
     account_id: str
@@ -272,7 +284,9 @@ class BatchDetail(BatchSummary):
 
 
 class AccountPlanRecord(PlanItemResponse):
+    batch_id: int | None = None
     batch_code: str
+    batch_created_at: datetime | None = None
     plan_type: Literal["manual", "auto"]
     cycle_start: date
     cycle_end: date
@@ -303,6 +317,10 @@ class AutoCycleSummary(BaseModel):
     cycle_end: date
     batch_count: int
     account_count: int
+    base_planning_complete_accounts: int
+    all_topics_determined_accounts: int
+    planning_failed_accounts: int
+    has_execution_exception: bool
     success_accounts: int
     failed_accounts: int
     regular_slots: int
@@ -310,7 +328,7 @@ class AutoCycleSummary(BaseModel):
     hotspot_slots: int
     hotspot_submitted: int
     hotspot_pending: int
-    status: str
+    status: str | None
     updated_at: datetime
     config_version: int | None = None
     planning_days: list[int] | None = None

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1516" viewBox="0 0 460 379.0" role="img"><title>FLOW-05 生命周期到内容结构</title>
+<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7489a2"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="142.0,38 155.0,38" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="305.0,38 324.0,38" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="388,56.0 388,114.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="324.0,134 303.0,134" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="144.0,134 157.0,134" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="230,152.0 230,208.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="230,248.0 230,297.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="10.0" y="20.0" width="132" height="36" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="76" y="41.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">账号历史快照</text>
+<rect x="155.0" y="18.0" width="150" height="40" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="34.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">计算量化指标</text>
+<text x="230" y="48.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">粉丝 / 篇数 / 篇均互动</text>
+<rect x="324.0" y="20.0" width="128" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="388" y="41.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">匹配唯一阶段</text>
+<rect x="8.0" y="116.0" width="136" height="36" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="76" y="137.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">本次实际槽位N</text>
+<rect x="157.0" y="116.0" width="146" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="137.675" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">目标映射与取整</text>
+<rect x="324.0" y="114.0" width="128" height="40" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="388" y="130.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">读取阶段流量</text>
+<text x="388" y="144.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">及转化目标</text>
+<rect x="140.0" y="208.0" width="180" height="40" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="224.55" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">形成流量 / 转化</text>
+<text x="230" y="239.5" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">目标结构约束</text>
+<rect x="130.0" y="297.0" width="200" height="40" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="230" y="313.54999999999995" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">匹配编排并保留</text>
+<text x="230" y="328.49999999999994" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">历史阶段与目标快照</text>
+<text x="230" y="369.0" text-anchor="middle" font-size="7.5" fill="#76899e" font-family="Microsoft YaHei,sans-serif">新账号只计允许的剩余日期；目标数量不冒充实际经营作用。</text></svg>

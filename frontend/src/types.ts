@@ -65,6 +65,8 @@ export interface TopicOption {
   outline: string
   is_marketing: boolean
   status: string
+  topic_type?: '普通' | '营销' | '热点' | null
+  account_id?: string | null
 }
 
 export interface BatchSummary {
@@ -79,6 +81,15 @@ export interface BatchSummary {
   result_count: number
   note: string
   created_at: string
+}
+
+export interface PlanningAccountSummary {
+  account_id: string
+  account_name: string
+  cycle_count: number
+  slot_count: number
+  latest_cycle_start: string
+  latest_cycle_updated_at: string | null
 }
 
 export interface PlanItem {
@@ -108,7 +119,9 @@ export interface BatchDetail extends BatchSummary {
 }
 
 export interface AccountPlanRecord extends PlanItem {
+  batch_id: number
   batch_code: string
+  batch_created_at: string | null
   plan_type: 'manual' | 'auto'
   cycle_start: string
   cycle_end: string
@@ -178,6 +191,7 @@ export interface ManualTaskSummary {
   batch_id: number | null
   last_error: string
   created_at: string
+  created_by: string
   updated_at: string
 }
 
@@ -206,6 +220,10 @@ export interface AutoCycleSummary {
   cycle_end: string
   batch_count: number
   account_count: number
+  base_planning_complete_accounts: number
+  all_topics_determined_accounts: number
+  planning_failed_accounts: number
+  has_execution_exception: boolean
   success_accounts: number
   failed_accounts: number
   regular_slots: number
@@ -213,7 +231,7 @@ export interface AutoCycleSummary {
   hotspot_slots: number
   hotspot_submitted: number
   hotspot_pending: number
-  status: string
+  status: string | null
   updated_at: string
   config_version: number | null
   planning_days: number[] | null

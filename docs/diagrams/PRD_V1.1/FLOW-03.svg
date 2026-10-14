@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1716" viewBox="0 0 460 429.0" role="img"><title>FLOW-03 模块级历史恢复</title>
+<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7489a2"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="163,51.0 163,71.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,107.0 163,127.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,163.0 163,183.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,219.0 163,239.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,275.0 163,295.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,331.0 163,351.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="228.75,89 286.0,111" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="234.5,145 286.0,167" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="97.25" y="15.0" width="131.5" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="37.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">选择模块与历史版本</text>
+<rect x="97.25" y="71.0" width="131.5" height="36" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="93.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">确认未保存草稿处理</text>
+<rect x="91.5" y="127.0" width="143.0" height="36" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="149.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">版本与业务权限通过？</text>
+<rect x="108.75" y="183.0" width="108.5" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="205.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">只恢复所选模块</text>
+<rect x="103.0" y="239.0" width="120.0" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="261.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">创建新版本与快照</text>
+<rect x="103.0" y="295.0" width="120.0" height="36" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="317.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">旧版本和日志保留</text>
+<rect x="97.25" y="351.0" width="131.5" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="373.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">后续任务读取新版本</text>
+<rect x="286.0" y="91.0" width="164" height="40" rx="12" fill="#fdeeee" stroke="#8196b0" stroke-width="1"/>
+<text x="368" y="107.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">取消本次恢复</text>
+<text x="368" y="121.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">保留草稿</text>
+<rect x="286.0" y="147.0" width="164" height="40" rx="12" fill="#fdeeee" stroke="#8196b0" stroke-width="1"/>
+<text x="368" y="163.85000000000002" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">提示冲突或不可操作原因</text>
+<text x="368" y="177.50000000000003" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">当前版本不变</text>
+<rect x="169.0" y="110" width="30" height="12" rx="2" fill="white"/><text x="184" y="119" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">确认后</text>
+<rect x="177.0" y="166" width="14" height="12" rx="2" fill="white"/><text x="184" y="175" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">是</text>
+<rect x="255.0" y="83" width="38" height="12" rx="2" fill="white"/><text x="274" y="92" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">继续编辑</text>
+<rect x="267.0" y="139" width="14" height="12" rx="2" fill="white"/><text x="274" y="148" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">否</text>
+<text x="230" y="419.0" text-anchor="middle" font-size="7.5" fill="#76899e" font-family="Microsoft YaHei,sans-serif">恢复当前配置只重置本地草稿；本图为服务端历史恢复。</text></svg>

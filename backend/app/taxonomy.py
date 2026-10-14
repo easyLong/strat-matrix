@@ -1,6 +1,7 @@
 """Stable T1–T5 dictionary representation, including legacy name-only data."""
 
 from uuid import NAMESPACE_URL, uuid5
+import json
 
 
 DIMENSIONS = tuple(f"T{number}" for number in range(1, 6))
@@ -8,6 +9,18 @@ DIMENSIONS = tuple(f"T{number}" for number in range(1, 6))
 
 def legacy_tag_id(dimension: str, name: str) -> str:
     return f"{dimension}-{uuid5(NAMESPACE_URL, f'strat-matrix:tag:{dimension}:{name}').hex.upper()}"
+
+
+def _tag_name(value) -> str:
+    """Unwrap legacy/object-shaped names so API responses always expose text."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("name", "label", "value", "title", "text"):
+            if key in value:
+                return _tag_name(value[key])
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value) if value is not None else ""
 
 
 def normalize_taxonomy(raw: dict) -> dict[str, list[dict]]:
@@ -20,8 +33,10 @@ def normalize_taxonomy(raw: dict) -> dict[str, list[dict]]:
                 items.append({"id": legacy_tag_id(dimension, value),
                               "name": value, "enabled": True})
             else:
-                items.append({"id": value["id"], "name": value["name"],
-                              "enabled": bool(value["enabled"])})
+                name = _tag_name(value.get("name", value.get("label", value.get("value"))))
+                tag_id = value.get("id") or legacy_tag_id(dimension, name)
+                items.append({"id": tag_id, "name": name,
+                              "enabled": bool(value.get("enabled", True))})
         result[dimension] = items
     return result
 

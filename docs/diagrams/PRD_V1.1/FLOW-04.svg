@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="2388" viewBox="0 0 460 597.0" role="img"><title>FLOW-04 AI自动策划主流程</title>
+<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#7489a2"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="163,53.0 163,69.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,109.0 163,127.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,163.0 163,181.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,221.0 163,239.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,275.0 163,293.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,333.0 163,351.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,387.0 163,405.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,445.0 163,463.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="163,499.0 163,519.0" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="217.25,145 286.0,167" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="217.25,369 286.0,391" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="223.0,425 286.0,447" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="368,467.0 368,481 240.25,481" fill="none" stroke="#7489a2" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="111.0" y="13.0" width="104" height="40" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="29.549999999999997" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">周度调度触发</text>
+<text x="163" y="44.5" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">默认周二22:00</text>
+<rect x="97.25" y="69.0" width="131.5" height="40" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="85.55000000000001" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">冻结配置与账号快照</text>
+<text x="163" y="100.50000000000001" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">目标：下一自然周</text>
+<rect x="108.75" y="127.0" width="108.5" height="36" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="149.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">账号满足准入？</text>
+<rect x="103.0" y="181.0" width="120.0" height="40" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="197.55" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">生成实际N个槽位</text>
+<text x="163" y="212.5" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">热点→营销→常规</text>
+<rect x="97.25" y="239.0" width="131.5" height="36" rx="12" fill="#f3f5f8" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="261.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">生命周期与匹配准备</text>
+<rect x="85.75" y="293.0" width="154.5" height="40" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="309.54999999999995" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">普通AI匹配 / 营销绑定</text>
+<text x="163" y="324.49999999999994" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">按规则使用合法普通兜底</text>
+<rect x="108.75" y="351.0" width="108.5" height="36" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="373.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">结果校验通过？</text>
+<rect x="103.0" y="405.0" width="120.0" height="40" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="421.54999999999995" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">保存有效基础规划</text>
+<text x="163" y="436.49999999999994" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">热点先保留空槽</text>
+<rect x="85.75" y="463.0" width="154.5" height="36" rx="12" fill="#e8f1ff" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="485.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">展示周期状态与热点进度</text>
+<rect x="92.0" y="519.0" width="142.0" height="36" rx="12" fill="#e8f7ef" stroke="#8196b0" stroke-width="1"/>
+<text x="163" y="541.025" text-anchor="middle" font-size="11.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">IF-05查询 / IF-06回传</text>
+<rect x="286.0" y="147.0" width="164" height="40" rx="12" fill="#fdeeee" stroke="#8196b0" stroke-width="1"/>
+<text x="368" y="163.85000000000002" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">不满足准入</text>
+<text x="368" y="177.50000000000003" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">不计参与账号</text>
+<rect x="286.0" y="371.0" width="164" height="40" rx="12" fill="#fdeeee" stroke="#8196b0" stroke-width="1"/>
+<text x="368" y="387.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">真实异常独立提示</text>
+<text x="368" y="401.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">内部重试与补偿</text>
+<rect x="286.0" y="427.0" width="164" height="40" rx="12" fill="#fff3e2" stroke="#8196b0" stroke-width="1"/>
+<text x="368" y="443.85" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">热点触发并确定选题</text>
+<text x="368" y="457.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#293d53" font-family="Microsoft YaHei,sans-serif">合法热点 / 普通兜底</text>
+<rect x="177.0" y="166" width="14" height="12" rx="2" fill="white"/><text x="184" y="175" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">是</text>
+<rect x="177.0" y="390" width="14" height="12" rx="2" fill="white"/><text x="184" y="399" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">是</text>
+<rect x="267.0" y="139" width="14" height="12" rx="2" fill="white"/><text x="274" y="148" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">否</text>
+<rect x="267.0" y="363" width="14" height="12" rx="2" fill="white"/><text x="274" y="372" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">否</text>
+<rect x="259.0" y="419" width="30" height="12" rx="2" fill="white"/><text x="274" y="428" text-anchor="middle" fill="#63788f" font-size="8.5" font-family="Microsoft YaHei,sans-serif">T-1</text>
+<text x="230" y="587.0" text-anchor="middle" font-size="7.5" fill="#76899e" font-family="Microsoft YaHei,sans-serif">基础规划与热点分时执行；未定题空槽不进入IF-05。</text></svg>

@@ -671,7 +671,7 @@ def hotspot_sync_status() -> dict:
 
 
 def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, account_id: str,
-                      topic_id: str, publish_date: str) -> bool:
+                      topic_id: str, publish_date: str, operator: str = "system") -> bool:
     """Create local slot state; output only for synced customer facts."""
     slot_id = f"SLOT-{item_id}"
     if batch_code.startswith("DEMO-"):
@@ -694,8 +694,9 @@ def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, acco
     if not account_ready or cursor.fetchone() is None:
         return False
     cursor.execute(
-        "INSERT INTO godp_slot_state (item_id, slot_id, version, topic_id) VALUES (%s, %s, 1, %s)",
-        (item_id, slot_id, topic_id),
+        "INSERT INTO godp_slot_state "
+        "(item_id, slot_id, version, topic_id, create_by, update_by) VALUES (%s, %s, 1, %s, %s, %s)",
+        (item_id, slot_id, topic_id, operator, operator),
     )
     queue_event(cursor, "planning", "SLOT_PLAN_CREATED", {
         "planning_cycle_id": publish_date,
@@ -1243,6 +1244,7 @@ def get_tag_taxonomy() -> dict:
 
 @router.put("/api/tag-taxonomy")
 def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
+    operator = "运营人员"
     try:
         with connection() as db, db.cursor() as cursor:
             # Lock the row even when the first dictionary is being created.
@@ -1292,20 +1294,21 @@ def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
             cursor.execute(
                 "INSERT INTO godp_strategy_config "
                 "(config_key, config_json, version, create_by, update_by) "
-                "VALUES ('tag_taxonomy', %s, %s, 'system', 'system') "
+                "VALUES ('tag_taxonomy', %s, %s, %s, %s) "
                 "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), "
-                "version=VALUES(version), update_by='system', del_flag='N'",
-                (serialized, next_version),
+                "version=VALUES(version), update_by=VALUES(update_by), del_flag='N'",
+                (serialized, next_version, operator, operator),
             )
             cursor.execute(
                 "INSERT INTO godp_strategy_config_version "
                 "(config_key, version, config_json, action, create_by, update_by) "
-                "VALUES ('tag_taxonomy', %s, %s, '保存', 'system', 'system')",
-                (next_version, serialized),
+                "VALUES ('tag_taxonomy', %s, %s, '保存', %s, %s)",
+                (next_version, serialized, operator, operator),
             )
             tags = active_tag_names(next_items)
             queue_event(cursor, "topics", "TOPIC_TAXONOMY_CHANGED", {
                 "taxonomy_version": next_version, "tags": tags, "items": next_items,
+                "operator": operator,
             })
             db.commit()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:

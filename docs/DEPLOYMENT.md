@@ -60,6 +60,10 @@ ORDINARY_SCHEDULER_ENABLED=1
 HOTSPOT_SCHEDULER_ENABLED=1
 ```
 
+页面作为整体业务模块嵌入客户系统，直接进入策划配置、AI自动策划、手动策划和策划结果。登录、用户账号和角色由宿主系统负责。当前人工操作审计统一标记为“运营人员”，自动任务标记为 `system`。
+
+`/api/integrations/` 和 `/api/internal/` 下的系统接口使用 `X-Integration-Token` 机器令牌。
+
 For direct public access on Alibaba Cloud, set BACKEND_HOST and FRONTEND_HOST to 0.0.0.0 and allow TCP 930 in the security group. With Nginx, expose only ports 80/443 and keep backend port 6930 private.
 
 确认数据库账号已经拥有 `strat_matrix` 数据库及项目表的读写权限。初始化或补齐表结构：
@@ -95,14 +99,14 @@ chmod +x start.sh stop.sh status.sh
 
 `start.sh` 会完成以下工作：
 
-1. 检查 `backend/.venv`。
-2. 启动 FastAPI 后端。
-3. 执行前端生产构建；依赖不存在时执行 `npm ci`。
-4. 启动周度规则策划调度进程（默认开启，按服务端配置的北京时间执行）。
-5. 启动热点槽位调度进程（默认开启，按北京时间 T-1 22:00 确定具体选题）。
-6. 按 `.env` 开关启动普通选题标签、选题向量和批次账号向量进程（默认关闭，须先配置模型服务地址）。
-7. 启动 Vite Preview 前端。
-8. 将 PID 写入 `run/`，日志写入 `logs/`。
+1. 选择Python：显式`PYTHON_BIN`优先，其次项目`backend/.venv/bin/python`，再尝试系统`python3`/`python`；检查已启用模型进程的必要配置。
+2. 启动尚未运行的FastAPI后端。
+3. 启动周度规则策划与热点调度进程（默认开启，按服务端配置的北京时间执行）。
+4. 按`.env`开关启动标签、选题向量、账号向量及AI准备推进进程（默认关闭，按相应任务文档配置）。
+5. 默认执行前端生产构建，依赖不存在时执行`npm ci`；前端构建在前端启动前、后端启动后进行。
+6. 启动尚未运行的Vite Preview前端，将PID写入`run/`、日志写入`logs/`。
+
+`start.sh`检测到PID对应进程已运行时会跳过该服务，不能用再次运行启动脚本替代后端重启。更新后端代码或接口结构后，按第8节停止旧进程、更新代码、构建前端并重新启动；`BUILD_FRONTEND=1`只负责前端构建，不会重启已经运行的旧后端。
 
 默认端口：
 
@@ -120,6 +124,7 @@ BUILD_FRONTEND=1 ./start.sh
 如果只重启服务、不重新构建前端：
 
 ```bash
+./stop.sh
 BUILD_FRONTEND=0 ./start.sh
 ```
 
@@ -203,7 +208,7 @@ BUILD_FRONTEND=0 \
 | `FRONTEND_HOST` | `0.0.0.0` | 前端监听地址 |
 | `FRONTEND_PORT` | `930` | 前端端口 |
 | `CHECK_HOST` | `127.0.0.1` | Local health-check address when services bind to `0.0.0.0` |
-| `BUILD_FRONTEND` | `1` | 是否在启动前构建前端 |
+| `BUILD_FRONTEND` | `1` | 是否在前端启动前构建生产资源，不负责后端重启 |
 | `RUN_DIR` | `run` | PID 文件目录 |
 | `LOG_DIR` | `logs` | 日志目录 |
 | `ORDINARY_SCHEDULER_ENABLED` | `1` | 是否启动普通内容周策划调度进程；设为 `0` 后重启服务停用 |
@@ -219,7 +224,7 @@ BUILD_FRONTEND=0 \
 ```bash
 cd /opt/strat-matrix
 ./stop.sh
-git pull
+git pull --ff-only origin main
 backend/.venv/bin/pip install -r backend/requirements.txt
 (cd backend && .venv/bin/python -m app.init_db)
 BUILD_FRONTEND=1 ./start.sh
@@ -228,6 +233,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 若更新涉及数据库结构，执行初始化前先备份数据库；`app.init_db` 会按建表脚本补齐新表、字段及中文注释，并保留已有业务记录。
+
+更新后核对`/api/tag-taxonomy`：新版`tags.T1`为启用标签名称数组，`items.T1`为包含`id/name/enabled`的对象数组。若仍只有对象形式的`tags`而没有`items`，应检查后端是否仍为旧进程、代理目标是否正确；前后端必须部署对应版本。确认资源更新后再强制刷新浏览器。接口兼容细节见[标签字典契约](TAG_TAXONOMY.md)。
 
 批次账号画像版本新增 `godp_account_profile`，更新代码后须先执行上面的初始化命令，再启动策划调度器。新正式批次会同时保存账号画像与向量准备状态；旧批次不使用当前账号数据补造历史画像。内部接口、模型服务契约和账号向量进程配置见[批次账号画像与向量准备](ACCOUNT_PROFILE_VECTOR.md)。账号向量进程默认关闭；启用后启动脚本先检查 URL、令牌和超时配置，配置无效时在启动其他服务前退出。
 
