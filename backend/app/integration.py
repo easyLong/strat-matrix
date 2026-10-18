@@ -27,7 +27,7 @@ from .integration_models import (
     SyncResult,
     TopicSync,
 )
-from .taxonomy import DIMENSIONS, active_tag_names, normalize_taxonomy
+from .taxonomy import DIMENSIONS, active_tag_names, normalize_taxonomy, selectable_tags
 from .t6_tags import normalized_embedding, resolve_t6_tag
 from .topic_profile import upsert_topic_profile
 
@@ -229,7 +229,7 @@ def sync_accounts(payload: AccountSync) -> SyncResult:
                 for record in payload.records:
                     raw = source_record_json(record, {
                         "account_alias", "account_status", "certification_status",
-                        "account_persona", "account_tags", "follower_count", "interaction_data",
+                        "account_persona", "account_tags", "follower_count", "interaction_data", "region",
                     })
                     timestamp = utc_naive(record.updated_at)
                     state = source_state(cursor, "godp_account_source", "account_id", record.account_id, timestamp, raw)
@@ -255,7 +255,7 @@ def sync_accounts(payload: AccountSync) -> SyncResult:
                         "ON DUPLICATE KEY UPDATE account_name=VALUES(account_name), city=VALUES(city), "
                         "persona=VALUES(persona), marketing_eligible=VALUES(marketing_eligible), "
                         "status=VALUES(status), update_by='integration', del_flag='N'",
-                        (record.account_id, record.account_name, record.city,
+                        (record.account_id, record.account_name, record.region or record.city,
                          record.account_persona if record.account_persona is not None else record.persona,
                          record.is_marketing_account if record.is_marketing_account is not None
                          else record.marketing_eligible,
@@ -715,7 +715,7 @@ def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, acco
 
 @router.post("/api/internal/slots/{slot_id}/content-ready", dependencies=[Depends(require_integration_token)])
 def content_ready(slot_id: str, payload: ContentReadyInput) -> dict:
-    """Called by this project's planning worker after it has the complete Agent input."""
+    """IF-07: submit a planning Agent result to the content production side asynchronously."""
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
@@ -741,7 +741,9 @@ def content_ready(slot_id: str, payload: ContentReadyInput) -> dict:
                 )
                 previous = cursor.fetchone()
                 return {"slot_id": slot_id, "version": slot["version"],
-                        "event_id": previous["event_id"] if previous else None, "queued": False}
+                        "event_id": previous["event_id"] if previous else None,
+                        "production_task_id": f"{slot_id}-v{slot['version']}",
+                        "status": "已存在", "queued": False}
             event_id = queue_event(cursor, "planning", "CONTENT_READY", {
                 "planning_cycle_id": slot["publish_date"].isoformat(),
                 "planning_batch_id": slot["batch_id"],
@@ -761,14 +763,16 @@ def content_ready(slot_id: str, payload: ContentReadyInput) -> dict:
                 "UPDATE godp_slot_state SET production_status='ready' WHERE slot_id=%s", (slot_id,),
             )
             db.commit()
-            return {"slot_id": slot_id, "version": slot["version"], "event_id": event_id, "queued": True}
+            return {"slot_id": slot_id, "version": slot["version"], "event_id": event_id,
+                    "production_task_id": f"{slot_id}-v{slot['version']}",
+                    "status": "已受理", "queued": True}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
 
 
 @router.get("/api/integrations/accounts/{account_id}/current-plan", dependencies=[Depends(require_integration_token)])
 def current_producible_plan(account_id: str) -> dict:
-    """IF-05: read the current effective, unpublished results without locking them."""
+    """OP-01: read the current effective, unpublished results without locking them."""
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
     week_start = today - timedelta(days=today.weekday())
     sql = (
@@ -844,7 +848,7 @@ def current_producible_plan(account_id: str) -> dict:
 
 @router.post("/api/integrations/publication-status", dependencies=[Depends(require_integration_token)])
 def receive_publication_status(payload: PublicationStatusCallback) -> Any:
-    """IF-06: validate the effective result and persist the publication fact."""
+    """Legacy publication callback retained for compatibility with the previous contract."""
     receipt_json = as_json(payload.model_dump(mode="json"))
     try:
         with connection() as db, db.cursor() as cursor:
@@ -1035,32 +1039,42 @@ def receive_content_status(payload: ContentStatusCallback) -> dict:
 
 
 @router.get("/api/integrations/topics/{topic_id}/labels", dependencies=[Depends(require_integration_token)])
-def ordinary_topic_labels(topic_id: str) -> dict:
-    """IF-08: return saved T1-T6 labels without starting recognition."""
+def topic_labels(topic_id: str) -> dict:
+    """IF-05: return saved T1-T6 labels for any known topic without starting recognition."""
     if topic_id.startswith("DEMO-"):
-        raise HTTPException(status_code=404, detail="普通选题不存在")
+        raise HTTPException(status_code=404, detail="选题不存在")
     try:
         with connection() as db, db.cursor() as cursor:
-            cursor.execute(
+            queries = (
                 "SELECT t.is_marketing, s.payload_json, tag.tags_json, tag.label_status "
                 "FROM godp_topic t JOIN godp_topic_source s ON s.topic_id=t.topic_code "
                 "LEFT JOIN godp_topic_tag tag ON tag.topic_id=t.topic_code AND tag.del_flag='N' "
                 "WHERE t.topic_code=%s AND t.del_flag='N' AND s.del_flag='N'",
-                (topic_id,),
+                "SELECT 1 AS is_marketing, s.payload_json, tag.tags_json, tag.label_status "
+                "FROM godp_marketing_topic_source s "
+                "LEFT JOIN godp_topic_tag tag ON tag.topic_id=s.topic_id AND tag.del_flag='N' "
+                "WHERE s.topic_id=%s AND s.del_flag='N'",
+                "SELECT 0 AS is_marketing, s.payload_json, tag.tags_json, tag.label_status "
+                "FROM godp_hotspot_topic_source s "
+                "LEFT JOIN godp_topic_tag tag ON tag.topic_id=s.topic_id AND tag.del_flag='N' "
+                "WHERE s.topic_id=%s AND s.del_flag='N'",
             )
-            row = cursor.fetchone()
+            row = None
+            for query in queries:
+                cursor.execute(query, (topic_id,))
+                row = cursor.fetchone()
+                if row:
+                    break
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
-    if not row or row["is_marketing"]:
-        raise HTTPException(status_code=404, detail="普通选题不存在")
+    if not row:
+        raise HTTPException(status_code=404, detail="选题不存在")
     try:
         source = json.loads(row["payload_json"])
     except (TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=503, detail="选题来源数据不可用") from exc
     if not isinstance(source, dict):
         raise HTTPException(status_code=503, detail="选题来源数据不可用")
-    if source.get("topic_type", "normal") not in ("normal", "ordinary", "普通"):
-        raise HTTPException(status_code=404, detail="普通选题不存在")
     if not row["tags_json"]:
         return {"topic_id": topic_id, "label_status": "处理中", "labels": {}}
     try:
@@ -1076,7 +1090,7 @@ def ordinary_topic_labels(topic_id: str) -> dict:
 
 @router.post("/api/integrations/topics/official-usage/query", dependencies=[Depends(require_integration_token)])
 def official_topic_usage(payload: OfficialUsageQuery) -> dict:
-    """IF-09: only read independently maintained official-use counts."""
+    """OP-04: only read independently maintained official-use counts."""
     placeholders = ",".join(["%s"] * len(payload.topic_ids))
     try:
         with connection() as db, db.cursor() as cursor:
@@ -1165,6 +1179,9 @@ class TagTaxonomyItemInput(BaseModel):
     id: str | None = None
     name: str = Field(min_length=1, max_length=80)
     enabled: bool = True
+    node_type: str = "tag"
+    parent_id: str | None = None
+    client_id: str | None = Field(default=None, max_length=100)
 
 
 class TagTaxonomyInput(BaseModel):
@@ -1180,17 +1197,23 @@ class TagTaxonomyInput(BaseModel):
         if set(values_by_dimension) != set(DIMENSIONS):
             raise ValueError("固定标签必须包含 T1–T5")
         seen_ids = set()
-        for values in values_by_dimension.values():
-            if not 1 <= len(values) <= 100:
-                raise ValueError("每个标签维度需有 1–100 个值")
-            names = [value.name.strip() if isinstance(value, TagTaxonomyItemInput) else value.strip()
-                     for value in values]
-            if len(set(names)) != len(names) or any(not name or len(name) > 80 for name in names):
-                raise ValueError("同一维度标签名称必须唯一且不超过 80 字")
+        for dimension, values in values_by_dimension.items():
+            if not 1 <= len(values) <= 256:
+                raise ValueError("每个标签维度需有 1–256 个分类及标签")
+            names = [(value.node_type, value.name.strip()) if isinstance(value, TagTaxonomyItemInput)
+                     else ("tag", value.strip()) for value in values]
+            if len(set(names)) != len(names) or any(not name or len(name) > 80 for _, name in names):
+                raise ValueError("同一维度的分类名、标签名分别唯一且不超过80字")
             if self.items is not None:
                 if not any(value.enabled for value in values):
                     raise ValueError("每个维度至少保留一个启用标签")
                 for value in values:
+                    if value.node_type not in ("group", "tag"):
+                        raise ValueError("节点类型只能是分类或标签")
+                    if dimension in ("T1", "T2") and (value.node_type == "group" or value.parent_id):
+                        raise ValueError("T1、T2不支持分类树")
+                    if value.node_type == "group" and value.parent_id:
+                        raise ValueError("一级分类不能有父节点")
                     if value.id is not None:
                         if value.id in seen_ids:
                             raise ValueError("标签 ID 不能重复")
@@ -1267,25 +1290,46 @@ def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
             next_items = {}
             for dimension in DIMENSIONS:
                 known = {item["id"]: item for item in existing[dimension]}
-                incoming = payload.items[dimension] if payload.items is not None else [
-                    TagTaxonomyItemInput(id=next((item["id"] for item in existing[dimension]
-                                                  if item["name"] == name.strip()), None), name=name.strip())
-                    for name in payload.tags[dimension]
-                ]
+                if payload.items is not None:
+                    incoming = payload.items[dimension]
+                else:
+                    incoming = []
+                    for name in payload.tags[dimension]:
+                        previous = next((item for item in existing[dimension]
+                                         if item.get("node_type") != "group" and item["name"] == name.strip()), {})
+                        incoming.append(TagTaxonomyItemInput(id=previous.get("id"), name=name.strip(),
+                                                             parent_id=previous.get("parent_id")))
                 values = []
                 supplied_ids = set()
+                draft_ids = {}
+                for item in incoming:
+                    if item.client_id:
+                        if item.id or item.client_id in draft_ids or item.client_id in known:
+                            raise HTTPException(status_code=422, detail="新增节点临时标识重复或与已有ID冲突")
+                        draft_ids[item.client_id] = f"{dimension}-{uuid4().hex.upper()}"
                 for item in incoming:
                     if item.id and item.id not in known:
                         raise HTTPException(status_code=409, detail=f"{dimension} 标签 ID 不存在，请刷新后重试")
-                    tag_id = item.id or f"{dimension}-{uuid4().hex.upper()}"
+                    tag_id = item.id or draft_ids.get(item.client_id) or f"{dimension}-{uuid4().hex.upper()}"
                     supplied_ids.add(tag_id)
-                    values.append({"id": tag_id, "name": item.name.strip(), "enabled": item.enabled})
+                    value = {"id": tag_id, "name": item.name.strip(), "enabled": item.enabled}
+                    parent_id = draft_ids.get(item.parent_id, item.parent_id)
+                    if item.node_type == "group" or parent_id:
+                        value.update(node_type=item.node_type, parent_id=parent_id)
+                    values.append(value)
                 # Missing IDs are retained for historical references, but are disabled.
-                values.extend({**item, "enabled": False} for item in existing[dimension]
+                values.extend({**item, "enabled": item["enabled"] if payload.tags is not None and item.get("node_type") == "group" else False} for item in existing[dimension]
                               if item["id"] not in supplied_ids)
-                names = [item["name"] for item in values]
-                if len(values) > 100 or len(names) != len(set(names)):
-                    raise HTTPException(status_code=422, detail=f"{dimension} 标签名称重复或超过 100 个")
+                names = [(item.get("node_type", "tag"), item["name"]) for item in values]
+                if len(values) > 256 or len(names) != len(set(names)):
+                    raise HTTPException(status_code=422, detail=f"{dimension} 分类或标签名称重复，或节点超过256个")
+                groups = {item["id"] for item in values if item.get("node_type") == "group"}
+                if any(item.get("parent_id") and item["parent_id"] not in groups for item in values):
+                    raise HTTPException(status_code=422, detail="标签只能归属于同一维度的一级分类")
+                if any(item["id"] in known and known[item["id"]].get("node_type", "tag") != item.get("node_type", "tag") for item in values):
+                    raise HTTPException(status_code=422, detail="已有节点不能改变分类或标签类型")
+                if not selectable_tags(values):
+                    raise HTTPException(status_code=422, detail=f"{dimension} 至少保留一个有效标签及其所属分类")
                 next_items[dimension] = values
             if next_items == existing:
                 return {"version": version, "tags": active_tag_names(existing), "items": existing}
@@ -1342,8 +1386,7 @@ def resolve_topic_tag_ids(cursor, labels: dict[str, str], requested_version: int
     ids = {}
     for dimension in DIMENSIONS:
         name = labels[dimension.lower()]
-        matched = [item["id"] for item in items[dimension]
-                   if item["enabled"] and item["name"] == name]
+        matched = [item["id"] for item in selectable_tags(items[dimension]) if item["name"] == name]
         if len(matched) != 1:
             raise HTTPException(status_code=422, detail=f"{dimension} 标签不在 V{version} 启用字典中：{name}")
         ids[dimension] = matched[0]

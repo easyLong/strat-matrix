@@ -8,6 +8,9 @@ from datetime import date, datetime, timedelta, timezone
 import json
 
 from .db import connection
+from .demo_account_data import demo_account_dimensions
+from .demo_um import demo_um_no
+from .models import StrategyConfig
 from .taxonomy import normalize_taxonomy
 
 
@@ -146,7 +149,7 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
         account_ids.append(account_id)
         account_rows.append((account_id, name, city, persona, int(marketing)))
         source_rows.append((account_id, now, json.dumps({
-            "account_id": account_id, "account_name": name, "platform": "演示平台",
+            "account_id": account_id, "account_name": name, "um_no": demo_um_no(account_id), "platform": "演示平台",
             "organization": "原型演示机构", "city": city, "marketing_eligible": marketing,
             "persona": persona, "handle": handle, "certified": code in {"A", "B", "D", "E", "G"},
             "followers": followers, "interaction_data": prototype_interactions(now, account_id, followers, trend),
@@ -163,7 +166,7 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
         account_ids.append(account_id)
         account_rows.append((account_id, name, city, persona, int(marketing)))
         source_rows.append((account_id, now, json.dumps({
-            "account_id": account_id, "account_name": name, "platform": "演示平台",
+            "account_id": account_id, "account_name": name, "um_no": demo_um_no(account_id), "platform": "演示平台",
             "organization": "原型测试机构", "city": city, "marketing_eligible": marketing,
             "persona": persona, "handle": f"@demo_{index}", "certified": index % 3 != 0,
             "followers": followers,
@@ -180,25 +183,40 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
         "marketing_eligible=VALUES(marketing_eligible), status='启用', update_by='demo-seed', del_flag='N'",
         account_rows,
     )
+    cursor.execute(
+        "SELECT config_json FROM godp_strategy_config "
+        "WHERE config_key='operations' AND del_flag='N' ORDER BY version DESC LIMIT 1"
+    )
+    config = StrategyConfig.model_validate_json(cursor.fetchone()["config_json"])
+    enriched_rows = []
+    for index, (account_id, source_updated_at, payload_json) in enumerate(source_rows):
+        payload = json.loads(payload_json)
+        payload.update(demo_account_dimensions(account_id, index, now.replace(tzinfo=timezone.utc), config))
+        enriched_rows.append((account_id, source_updated_at,
+                              json.dumps(payload, ensure_ascii=False)))
     cursor.executemany(
         "INSERT INTO godp_account_source (account_id, source_updated_at, payload_json, create_by, update_by) "
         "VALUES (%s, %s, %s, 'demo-seed', 'demo-seed') "
         "ON DUPLICATE KEY UPDATE source_updated_at=VALUES(source_updated_at), payload_json=VALUES(payload_json), "
         "update_by='demo-seed', del_flag='N'",
-        source_rows,
+        enriched_rows,
     )
     topic_ids: list[str] = []
     topic_rows = []
     topic_sources = []
     content_types = {"T001": "属地推荐", "T002": "产品营销", "T003": "热点解读", "T004": "财商教育", "T005": "客群兴趣内容", "T006": "一句话讨论", "T007": "产品权益种草", "T008": "热点解读"}
+    valid_from = now - timedelta(days=30)
+    valid_to = now + timedelta(days=90)
     for code, category, title, outline, theme, marketing in TOPICS:
         topic_id = f"DEMO-P-{code}"
         topic_ids.append(topic_id)
         topic_rows.append((topic_id, title, category, int(marketing)))
-        topic_sources.append((topic_id, now, json.dumps({
+        topic_sources.append((topic_id, now, valid_from, valid_to, json.dumps({
             "topic_id": topic_id, "title": title, "summary": outline, "outline": outline,
             "source": "prototype-seed", "category": category, "content_type": content_types[code],
             "theme": theme, "is_marketing": marketing, "approval_status": "approved", "enabled": True,
+            "valid_from": valid_from.replace(tzinfo=timezone.utc).isoformat(),
+            "valid_to": valid_to.replace(tzinfo=timezone.utc).isoformat(),
             "updated_at": now.replace(tzinfo=timezone.utc).isoformat(),
         }, ensure_ascii=False)))
     cursor.executemany(
@@ -209,10 +227,11 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
         topic_rows,
     )
     cursor.executemany(
-        "INSERT INTO godp_topic_source (topic_id, source_updated_at, approval_status, payload_json, create_by, update_by) "
-        "VALUES (%s, %s, 'approved', %s, 'demo-seed', 'demo-seed') "
+        "INSERT INTO godp_topic_source (topic_id, source_updated_at, approval_status, valid_from, valid_to, payload_json, create_by, update_by) "
+        "VALUES (%s, %s, 'approved', %s, %s, %s, 'demo-seed', 'demo-seed') "
         "ON DUPLICATE KEY UPDATE source_updated_at=VALUES(source_updated_at), approval_status='approved', "
-        "payload_json=VALUES(payload_json), update_by='demo-seed', del_flag='N'",
+        "valid_from=VALUES(valid_from), valid_to=VALUES(valid_to), payload_json=VALUES(payload_json), "
+        "update_by='demo-seed', del_flag='N'",
         topic_sources,
     )
     for topic_id, tags in zip(topic_ids, (["非营销", "流量", "本地生活", "年轻客群", "周末休闲"], ["营销", "转化", "金融理财", "年轻客群", "餐饮"], ["非营销", "转化", "金融理财", "家庭客群", "居家"], ["非营销", "流量", "金融理财", "职场人群", "通勤"], ["非营销", "流量", "健康生活", "宝妈客群", "家庭消费"], ["非营销", "流量", "数码科技", "年轻客群", "通勤"], ["营销", "转化", "本地生活", "家庭客群", "餐饮"], ["非营销", "流量", "本地生活", "年轻客群", "出行"])):
@@ -312,13 +331,13 @@ def seed_batches(cursor, account_ids: list[str], topic_ids: list[str]) -> None:
         result_count = 0 if week_index == 2 else manual_count
         failure_count = manual_count if week_index == 2 else 0
         cursor.execute(
-            "INSERT INTO godp_manual_task (task_code, preview_code, publish_date, planned_account_count, result_count, failure_count, topic_count, status, failure_reason, batch_id, create_by, update_by) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, '', %s, 'demo-seed', 'demo-seed') "
-            "ON DUPLICATE KEY UPDATE preview_code=VALUES(preview_code), publish_date=VALUES(publish_date), "
+            "INSERT INTO godp_manual_task (task_code, preview_code, task_name, publish_date, planned_account_count, result_count, failure_count, topic_count, status, failure_reason, batch_id, create_by, update_by) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, '', %s, 'demo-seed', 'demo-seed') "
+            "ON DUPLICATE KEY UPDATE preview_code=VALUES(preview_code), task_name=VALUES(task_name), publish_date=VALUES(publish_date), "
             "planned_account_count=VALUES(planned_account_count), result_count=VALUES(result_count), failure_count=VALUES(failure_count), "
             "topic_count=VALUES(topic_count), status=VALUES(status), failure_reason='', batch_id=VALUES(batch_id), "
             "update_by='demo-seed', del_flag='N'",
-            (task_code, preview_code, start, manual_count, result_count, failure_count, min(manual_count, len(topic_ids)), task_status, manual_batch_id),
+            (task_code, preview_code, f"演示手动策划-{start:%Y%m%d}", start, manual_count, result_count, failure_count, min(manual_count, len(topic_ids)), task_status, manual_batch_id),
         )
 
 

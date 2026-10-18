@@ -48,6 +48,11 @@ export interface AccountOption {
   account_id: string
   account_name: string
   account_alias: string
+  um_no?: string
+  account_type?: string
+  organization?: string
+  platform?: string
+  business_line?: string
   city: string
   persona: string
   marketing_eligible: boolean
@@ -55,6 +60,12 @@ export interface AccountOption {
   certified: boolean | null
   followers: number | null
   traffic_trend: string
+  lifecycle_stage?: string
+}
+
+export interface ManualAccountAvailability {
+  publish_date: string
+  planned_account_ids: string[]
 }
 
 export interface TopicOption {
@@ -63,10 +74,20 @@ export interface TopicOption {
   category: string
   content_type: string
   outline: string
+  account_type?: string
+  related_product?: string
+  related_activity?: string
+  related_hotspot?: string
+  valid_from?: string | null
+  valid_to?: string | null
   is_marketing: boolean
   status: string
   topic_type?: '普通' | '营销' | '热点' | null
   account_id?: string | null
+  labels?: Record<string, unknown>
+  label_status?: string | null
+  label_version?: number | null
+  taxonomy_version?: number | null
 }
 
 export interface BatchSummary {
@@ -79,17 +100,27 @@ export interface BatchSummary {
   account_count: number
   content_count: number
   result_count: number
+  completed_count: number
+  failed_count: number
+  topic_count: number
   note: string
   created_at: string
+  updated_at: string | null
+  task_name: string
+  planning_status: string
+  content_status: string
 }
 
 export interface PlanningAccountSummary {
   account_id: string
   account_name: string
+  account_owner: string
   cycle_count: number
   slot_count: number
   latest_cycle_start: string
   latest_cycle_updated_at: string | null
+  latest_status: string
+  latest_batch_id: number | null
 }
 
 export interface PlanItem {
@@ -155,6 +186,7 @@ export interface ManualPlanInput {
 }
 
 export interface ManualPreviewInput {
+  task_name: string
   publish_date: string
   account_ids: string[]
   target_count?: number
@@ -171,6 +203,7 @@ export interface ManualPreviewInput {
 
 export interface ManualPreviewResponse {
   preview_id: string
+  task_name: string
   publish_date: string
   expires_at: string
   items: ManualItemInput[]
@@ -181,12 +214,15 @@ export interface ManualTaskSummary {
   id: number
   task_code: string
   preview_code: string
+  task_name: string
+  batch_code: string
   publish_date: string
   planned_account_count: number
   result_count: number
   failure_count: number
   topic_count: number
   status: string
+  content_status: string
   failure_reason: string
   batch_id: number | null
   last_error: string
@@ -211,6 +247,8 @@ export interface PlanningCycleSummary {
   unique_topics: number
   success_accounts: number
   failed_accounts: number
+  planning_status: string
+  content_status: string
   updated_at: string
 }
 

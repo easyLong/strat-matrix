@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 
 from .db import connection
+from .demo_um import demo_um_no
 from .models import StrategyConfig
 
 
@@ -143,6 +144,7 @@ def main() -> None:
             account_payload = json.dumps({
                 "account_id": account_code,
                 "account_name": account_name,
+                "um_no": demo_um_no(account_code),
                 "city": city,
                 "persona": persona,
                 "marketing_eligible": index % 3 == 0,

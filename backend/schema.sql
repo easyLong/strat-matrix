@@ -633,6 +633,7 @@ CREATE TABLE IF NOT EXISTS godp_strategy_config_version (
 CREATE TABLE IF NOT EXISTS godp_manual_preview (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '手动策划预览记录主键ID',
     preview_code VARCHAR(64) NOT NULL COMMENT '手动策划预览唯一编码',
+    task_name VARCHAR(120) NOT NULL DEFAULT '' COMMENT '手动策划任务名称',
     publish_date DATE NOT NULL COMMENT '本次策划统一投放日期',
     allocations_json LONGTEXT NOT NULL COMMENT '账号与选题的确定分配结果JSON',
     note VARCHAR(500) NOT NULL DEFAULT '' COMMENT '手动策划备注说明',
@@ -652,6 +653,7 @@ CREATE TABLE IF NOT EXISTS godp_manual_task (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '手动策划任务主键ID',
     task_code VARCHAR(64) NOT NULL COMMENT '手动策划任务唯一编码',
     preview_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '关联的手动策划预览编码',
+    task_name VARCHAR(120) NOT NULL DEFAULT '' COMMENT '手动策划任务名称',
     publish_date DATE NOT NULL COMMENT '本次任务投放日期',
     planned_account_count INT NOT NULL DEFAULT 0 COMMENT '规划账号数量',
     result_count INT NOT NULL DEFAULT 0 COMMENT '成功落库结果数量',

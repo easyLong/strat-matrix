@@ -35,15 +35,23 @@ def normalize_taxonomy(raw: dict) -> dict[str, list[dict]]:
             else:
                 name = _tag_name(value.get("name", value.get("label", value.get("value"))))
                 tag_id = value.get("id") or legacy_tag_id(dimension, name)
-                items.append({"id": tag_id, "name": name,
-                              "enabled": bool(value.get("enabled", True))})
+                item = {"id": tag_id, "name": name, "enabled": bool(value.get("enabled", True))}
+                if value.get("node_type") == "group" or value.get("parent_id"):
+                    item.update(node_type=value.get("node_type", "tag"), parent_id=value.get("parent_id"))
+                items.append(item)
         result[dimension] = items
     return result
 
 
 def active_tag_names(items: dict[str, list[dict]]) -> dict[str, list[str]]:
-    return {dimension: [item["name"] for item in items[dimension] if item["enabled"]]
+    return {dimension: [item["name"] for item in selectable_tags(items[dimension])]
             for dimension in DIMENSIONS}
+
+
+def selectable_tags(items: list[dict]) -> list[dict]:
+    groups = {item["id"]: item for item in items if item.get("node_type") == "group"}
+    return [item for item in items if item.get("node_type") != "group" and item["enabled"]
+            and (not item.get("parent_id") or groups.get(item["parent_id"], {}).get("enabled", False))]
 
 
 def tag_names_for_dimensions(tags: dict) -> dict[str, str]:
@@ -64,7 +72,8 @@ def legacy_tag_ids(tags: dict, snapshots: list[dict[str, list[dict]]]) -> dict[s
     resolved = {}
     for dimension, name in names.items():
         candidates = {item["id"] for snapshot in snapshots
-                      for item in snapshot[dimension] if item["name"] == name}
+                      for item in snapshot[dimension]
+                      if item.get("node_type") != "group" and item["name"] == name}
         if len(candidates) == 1:
             resolved[dimension] = candidates.pop()
     return resolved

@@ -50,6 +50,7 @@ class AccountFact(BaseModel):
     account_id: str = Field(min_length=1, max_length=64)
     account_name: str = Field(min_length=1, max_length=120)
     account_alias: str = Field(default="", max_length=120)
+    um_no: str = Field(default="", max_length=120)
     account_status: bool | None = None
     certification_status: bool | None = None
     account_persona: str | None = Field(default=None, max_length=500)
@@ -58,7 +59,9 @@ class AccountFact(BaseModel):
     interaction_data: list[AccountInteraction] | None = Field(default=None, max_length=1000)
     platform: str = ""
     organization: str = ""
+    business_line: str = ""
     city: str = Field(default="", max_length=50)
+    region: str = Field(default="", max_length=50)
     marketing_eligible: bool = False
     is_marketing_account: bool | None = None
     persona: str = Field(default="", max_length=80)
@@ -96,11 +99,16 @@ class TopicFact(BaseModel):
     source: str = ""
     category: str = Field(default="", max_length=50)
     content_type: str = ""
+    account_type: str = ""
+    topic_type: Literal["普通", "非营销", "营销", "热点", "normal", "marketing", "hotspot"] | None = None
     topic_heat: float = Field(default=0, ge=0)
     status: bool | None = None
     applicable_cities: list[str] = Field(default_factory=list)
     is_marketing: bool = False
     product_or_activity: str = ""
+    related_product: str = ""
+    related_activity: str = ""
+    related_hotspot: str = ""
     generated_at: datetime | None = None
     approval_status: Literal["pending", "approved", "rejected"] = "pending"
     approved_at: datetime | None = None
@@ -116,6 +124,10 @@ class TopicFact(BaseModel):
 
     @model_validator(mode="after")
     def check_validity(self):
+        if self.topic_type in ("营销", "marketing"):
+            self.is_marketing = True
+        elif self.topic_type in ("普通", "非营销", "normal"):
+            self.is_marketing = False
         if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
             raise ValueError("valid_from 不能晚于 valid_to")
         if self.is_marketing and self.approval_status == "approved" and not self.generated_at:
@@ -128,6 +140,8 @@ class TopicSync(SyncBase):
 
     @model_validator(mode="after")
     def ordinary_only_full_snapshot(self):
+        if any(record.topic_type in ("营销", "热点", "marketing", "hotspot") for record in self.records):
+            raise ValueError("IF-02 只能同步非营销普通选题；营销选题和热点选题请使用对应接口")
         if self.mode == "full" and any(record.is_marketing for record in self.records):
             raise ValueError("普通选题全量快照不能包含营销选题；营销选题请使用 IF-03")
         return self
@@ -138,6 +152,7 @@ class MarketingTopicFact(BaseModel):
     account_id: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=255)
     outline: str = ""
+    topic_heat: float = Field(default=0, ge=0)
     content_type: str = ""
     approval_status: Literal["pending", "approved", "rejected"]
     approved_at: datetime | None = None
@@ -185,10 +200,20 @@ class HotspotTopicFact(BaseModel):
     topic_id: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=255)
     outline: str = ""
+    topic_heat: float = Field(default=0, ge=0)
     content_type: str = ""
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     enabled: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_status_alias(cls, value):
+        # IF-04 对外字段叫 status；内部落库继续使用 enabled，兼容历史请求。
+        if isinstance(value, dict) and "status" in value:
+            value = dict(value)
+            value["enabled"] = value["status"]
+        return value
 
     @field_validator("valid_from", "valid_to")
     @classmethod
@@ -260,6 +285,8 @@ class SyncResult(BaseModel):
 
 
 class ContentStatusCallback(BaseModel):
+    """OP-02: content production status callback for an IF-07 task."""
+
     event_id: str = Field(min_length=1, max_length=64)
     production_task_id: str = Field(min_length=1, max_length=64)
     slot_id: str = Field(min_length=1, max_length=64)
@@ -282,7 +309,7 @@ class ContentStatusCallback(BaseModel):
 
 
 class PublicationStatusCallback(BaseModel):
-    """IF-06: publication facts, separate from content production progress."""
+    """Legacy publication callback retained for compatibility with the previous contract."""
 
     event_id: str = Field(min_length=1, max_length=64)
     planning_result_id: int = Field(ge=1)

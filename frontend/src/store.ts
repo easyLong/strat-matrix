@@ -27,6 +27,7 @@ export const defaultConfig: StrategyConfig = {
 
 export const usePlanningStore = defineStore('planning', {
   state: () => ({
+    initialized: false,
     databaseReady: false,
     connectionMessage: '正在连接服务…',
     config: structuredClone(defaultConfig) as StrategyConfig,
@@ -51,6 +52,7 @@ export const usePlanningStore = defineStore('planning', {
           this.connectionMessage = '数据库已连接，部分页面数据加载失败'
         }
       }
+      this.initialized = true
     },
     async refreshConfig() {
       const result = await api.config()

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AutoCycleSummary, AutoFailure } from '../types'
-import { addCalendarDays, businessMonday, formatBusinessTime, weeklyTrigger } from '../planningTime'
+import { addCalendarDays, businessMonday, formatBusinessTime, formatDateTime, weeklyTrigger } from '../planningTime'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -142,7 +142,6 @@ onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(ref
 <template>
   <div class="page-head">
     <div><h1>AI自动策划</h1></div>
-    <div class="page-actions"><button class="btn" type="button" :disabled="busy || !store.databaseReady" @click="refresh">{{ busy ? '刷新中…' : '刷新状态' }}</button></div>
   </div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
   <div class="auto-overview-grid">
@@ -162,18 +161,18 @@ onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(ref
     <div class="card-body"><div v-if="latest" class="auto-current-grid">
       <div class="summary-box"><div class="summary-row"><span>周度调度</span><b>{{ scheduleSummary.trigger }}</b></div><div class="summary-row"><span>每账号槽位</span><b>{{ scheduleSummary.days.split('/').length }} 个（{{ scheduleSummary.days }}）</b></div><div class="summary-row"><span>热点槽位提交</span><b>{{ hotspotStatus }}</b></div></div>
       <div class="summary-box"><div class="summary-row"><span>总槽位</span><b>{{ latest.regular_slots + latest.marketing_slots + latest.hotspot_slots }} 个</b></div><div class="summary-row"><span>普通槽位</span><b>{{ latest.regular_slots }} 个</b></div><div class="summary-row"><span>营销槽位</span><b>{{ latest.marketing_slots }} 个</b></div></div>
-      <div class="summary-box"><div class="summary-row"><span>开始时间</span><b>{{ latestAutoBatch?.created_at || '—' }}</b></div><div class="summary-row"><span>最后更新</span><b>{{ latest.updated_at || '—' }}</b></div><div class="summary-row"><span>基础规划完成账号</span><b v-if="latest.has_execution_exception">待核对</b><b v-else>{{ latest.base_planning_complete_accounts }} / {{ latest.account_count }}</b></div><div class="summary-row"><span>全部选题确定账号</span><b v-if="latest.has_execution_exception">待核对</b><b v-else>{{ latest.all_topics_determined_accounts }} / {{ latest.account_count }}</b></div><div class="summary-row"><span>周期状态</span><b>{{ statusLabel(latest.status, latest.has_execution_exception) }}</b></div><div v-if="latest.allocation_method === 'ordinary_fallback' || latest.allocation_method === 'rule_fallback'" class="summary-row"><span>分配方式</span><b>{{ latest.allocation_method === 'rule_fallback' ? '热点/营销规则 + 普通兜底' : '普通选题兜底' }}</b></div></div>
+      <div class="summary-box"><div class="summary-row"><span>开始时间</span><b>{{ formatDateTime(latestAutoBatch?.created_at) }}</b></div><div class="summary-row"><span>最后更新</span><b>{{ formatDateTime(latest.updated_at) }}</b></div><div class="summary-row"><span>基础规划完成账号</span><b v-if="latest.has_execution_exception">待核对</b><b v-else>{{ latest.base_planning_complete_accounts }} / {{ latest.account_count }}</b></div><div class="summary-row"><span>全部选题确定账号</span><b v-if="latest.has_execution_exception">待核对</b><b v-else>{{ latest.all_topics_determined_accounts }} / {{ latest.account_count }}</b></div><div class="summary-row"><span>周期状态</span><b>{{ statusLabel(latest.status, latest.has_execution_exception) }}</b></div><div v-if="latest.allocation_method === 'ordinary_fallback' || latest.allocation_method === 'rule_fallback'" class="summary-row"><span>分配方式</span><b>{{ latest.allocation_method === 'rule_fallback' ? '热点/营销规则 + 普通兜底' : '普通选题兜底' }}</b></div></div>
     </div><div v-else class="empty-state">暂无当前自动策划批次</div>
-    <div v-if="latest?.has_execution_exception" class="banner error-banner auto-exception-note"><b>检测到策划执行异常。</b>更新时间：{{ latest.updated_at }}<div v-if="exceptionReadError" class="auto-exception-item">异常明细读取失败：{{ exceptionReadError }}</div><div v-else-if="exceptionDetails.length === 0" class="auto-exception-item">当前接口没有返回账号级明细，请查看服务日志。</div><div v-for="(item, index) in exceptionDetails" :key="`${item.batch_code}-${item.account_id ?? index}`" class="auto-exception-item">{{ item.batch_code }} · {{ item.account_name }}<template v-if="item.account_id">（{{ item.account_id }}）</template>：{{ item.reason }}</div></div>
+    <div v-if="latest?.has_execution_exception" class="banner error-banner auto-exception-note"><b>检测到策划执行异常。</b>更新时间：{{ formatDateTime(latest.updated_at) }}<div v-if="exceptionReadError" class="auto-exception-item">异常明细读取失败：{{ exceptionReadError }}</div><div v-else-if="exceptionDetails.length === 0" class="auto-exception-item">当前接口没有返回账号级明细，请查看服务日志。</div><div v-for="(item, index) in exceptionDetails" :key="`${item.batch_code}-${item.account_id ?? index}`" class="auto-exception-item">{{ item.batch_code }} · {{ item.account_name }}<template v-if="item.account_id">（{{ item.account_id }}）</template>：{{ item.reason }}</div></div>
     </div>
   </section>
 
   <section class="card">
     <div class="card-head"><div><h2>自动策划批次记录</h2></div></div>
-    <div class="card-body"><div class="auto-history-toolbar"><select v-model="historyYear"><option value="all">全部年份</option><option v-for="value in historyYears" :key="value" :value="value">{{ value }} 年</option></select><select v-model="historyMonth"><option value="all">全部月份</option><option v-for="value in historyMonths" :key="value" :value="value">{{ value }} 月</option></select><span>最后更新时间：{{ latest?.updated_at || '—' }}</span></div></div>
-    <div v-if="historicalExceptionCycle" class="banner error-banner auto-exception-note"><b>{{ historicalExceptionCycle.cycle_start }} 至 {{ historicalExceptionCycle.cycle_end }} 存在策划执行异常。</b>更新时间：{{ historicalExceptionCycle.updated_at }}<div v-if="historicalExceptionBusy" class="auto-exception-item">正在读取异常明细…</div><div v-else-if="historicalExceptionReadError" class="auto-exception-item">异常明细读取失败：{{ historicalExceptionReadError }}</div><div v-else-if="historicalExceptionDetails.length === 0" class="auto-exception-item">当前接口没有返回账号级明细，请查看服务日志。</div><div v-for="(item, index) in historicalExceptionDetails" :key="`${item.batch_code}-${item.account_id ?? index}`" class="auto-exception-item">{{ item.batch_code }} · {{ item.account_name }}<template v-if="item.account_id">（{{ item.account_id }}）</template>：{{ item.reason }}</div><button class="text-btn" type="button" @click="closeCycleExceptions">收起异常详情</button></div>
+    <div class="card-body"><div class="auto-history-toolbar"><select v-model="historyYear"><option value="all">全部年份</option><option v-for="value in historyYears" :key="value" :value="value">{{ value }} 年</option></select><select v-model="historyMonth"><option value="all">全部月份</option><option v-for="value in historyMonths" :key="value" :value="value">{{ value }} 月</option></select><span>最后更新时间：{{ formatDateTime(latest?.updated_at) }}</span></div></div>
+    <div v-if="historicalExceptionCycle" class="banner error-banner auto-exception-note"><b>{{ historicalExceptionCycle.cycle_start }} 至 {{ historicalExceptionCycle.cycle_end }} 存在策划执行异常。</b>更新时间：{{ formatDateTime(historicalExceptionCycle.updated_at) }}<div v-if="historicalExceptionBusy" class="auto-exception-item">正在读取异常明细…</div><div v-else-if="historicalExceptionReadError" class="auto-exception-item">异常明细读取失败：{{ historicalExceptionReadError }}</div><div v-else-if="historicalExceptionDetails.length === 0" class="auto-exception-item">当前接口没有返回账号级明细，请查看服务日志。</div><div v-for="(item, index) in historicalExceptionDetails" :key="`${item.batch_code}-${item.account_id ?? index}`" class="auto-exception-item">{{ item.batch_code }} · {{ item.account_name }}<template v-if="item.account_id">（{{ item.account_id }}）</template>：{{ item.reason }}</div><button class="text-btn" type="button" @click="closeCycleExceptions">收起异常详情</button></div>
     <div class="table-wrap"><table><thead><tr><th>策划周期</th><th>参与账号</th><th>普通槽位</th><th>营销槽位</th><th>热点槽位</th><th>周期状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="cycle in filteredCycles" :key="cycle.cycle_id"><td><b>{{ cycle.cycle_start }} 至 {{ cycle.cycle_end }}</b></td><td>{{ cycle.account_count }}</td><td>{{ cycle.regular_slots }}</td><td>{{ cycle.marketing_slots }}</td><td>{{ cycle.hotspot_submitted }} / {{ cycle.hotspot_slots }}</td><td><span :class="['tag', statusClass(cycle.status, cycle.has_execution_exception)]">{{ statusLabel(cycle.status, cycle.has_execution_exception) }}</span></td><td>{{ cycle.updated_at }}</td><td><button v-if="cycle.has_execution_exception" class="text-btn" type="button" @click="showCycleExceptions(cycle)">查看异常</button><button class="text-btn" type="button" @click="openCycle(cycle)">查看详情</button></td></tr>
+      <tr v-for="cycle in filteredCycles" :key="cycle.cycle_id"><td><b>{{ cycle.cycle_start }} 至 {{ cycle.cycle_end }}</b></td><td>{{ cycle.account_count }}</td><td>{{ cycle.regular_slots }}</td><td>{{ cycle.marketing_slots }}</td><td>{{ cycle.hotspot_submitted }} / {{ cycle.hotspot_slots }}</td><td><span :class="['tag', statusClass(cycle.status, cycle.has_execution_exception)]">{{ statusLabel(cycle.status, cycle.has_execution_exception) }}</span></td><td>{{ formatDateTime(cycle.updated_at) }}</td><td><button v-if="cycle.has_execution_exception" class="text-btn" type="button" @click="showCycleExceptions(cycle)">查看异常</button><button class="text-btn" type="button" @click="openCycle(cycle)">查看详情</button></td></tr>
       <tr v-if="filteredCycles.length === 0"><td colspan="8"><div class="empty-state">暂无周度运行结果</div></td></tr>
     </tbody></table></div>
   </section>
@@ -181,9 +180,9 @@ onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(ref
 
 <style scoped>
 .auto-schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.auto-schedule-row p { margin: 5px 0 0; color: #5e6b85; font-size: 13px; }
+.auto-schedule-row p { margin: 5px 0 0; color: var(--neutral-500); font-size: 13px; }
 .auto-exception-note { margin: 0 18px 18px; }
 .auto-exception-item { margin-top: 6px; overflow-wrap: anywhere; }
-.auto-exception-note > .text-btn { color: #ad3035; margin-top: 8px; }
+.auto-exception-note > .text-btn { color: var(--danger-hover); margin-top: 8px; }
 </style>
 

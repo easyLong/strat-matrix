@@ -2,6 +2,20 @@
 const DAY = 86400000
 const SHANGHAI_OFFSET = 8 * 3600000
 
+/** Display timestamps to seconds; timestamps without an offset are business wall time. */
+export function formatDateTime(value: string | null | undefined): string {
+  const text = value?.trim()
+  if (!text) return '\u2014'
+  const parts = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i.exec(text)
+  if (!parts) return text
+  if (parts[4]) {
+    const instant = Date.parse(text.replace(' ', 'T'))
+    if (!Number.isFinite(instant)) return text
+    return new Date(instant + SHANGHAI_OFFSET).toISOString().slice(0, 19).replace('T', ' ')
+  }
+  return `${parts[1]} ${parts[2]}:${parts[3] ?? '00'}`
+}
+
 export function businessMonday(instant: number): string {
   const local = new Date(instant + SHANGHAI_OFFSET)
   local.setUTCDate(local.getUTCDate() - (local.getUTCDay() + 6) % 7)

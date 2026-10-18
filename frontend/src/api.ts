@@ -1,6 +1,11 @@
 import type { AccountOption, AccountPlanRecord, AdjustmentRecord, AutoCycleSummary, AutoFailure, BatchDetail, BatchSummary, ConfigResponse, ConfigVersionSummary, ManualPlanInput, ManualPreviewInput, ManualPreviewResponse, ManualTaskSummary, PlanningAccountSummary, PlanningCycleSummary, StrategyConfig, TopicOption } from './types'
 
-export interface TagTaxonomyItem { id: string | null; name: string; enabled: boolean }
+export interface TagTaxonomyItem {
+  id: string | null; name: string; enabled: boolean
+  node_type?: 'group' | 'tag'
+  parent_id?: string | null
+  client_id?: string
+}
 export interface TagTaxonomyResponse {
   version: number
   tags: Record<string, string[]>
@@ -32,11 +37,13 @@ function normalizeTagTaxonomy(value: unknown): TagTaxonomyResponse {
         id: typeof item.id === 'string' ? item.id : null,
         name: tagNameText(item.name ?? item.label ?? item.value),
         enabled: typeof item.enabled === 'boolean' ? item.enabled : true,
+        node_type: item.node_type === 'group' ? 'group' as const : 'tag' as const,
+        parent_id: typeof item.parent_id === 'string' ? item.parent_id : null,
       }
     }).filter(item => item.name.length > 0)
   }
   const tags = Object.fromEntries(Object.entries(items).map(([dimension, values]) => [
-    dimension, values.filter(item => item.enabled).map(item => item.name),
+    dimension, values.filter(item => item.enabled && item.node_type !== 'group').map(item => item.name),
   ]))
   return {
     version: typeof response.version === 'number' ? response.version : 0,
@@ -82,10 +89,12 @@ export const api = {
   restoreConfigModule: (module: 'marketing' | 'strategy', version: number, expectedVersion: number) =>
     request<ConfigResponse>(`/config/modules/${module}/versions/${version}/restore?expected_version=${expectedVersion}`, { method: 'POST' }),
   tagTaxonomy: async () => normalizeTagTaxonomy(await request<unknown>('/tag-taxonomy')),
-  saveTagTaxonomy: (items: Record<string, TagTaxonomyItem[]>, expectedVersion: number) =>
-    request<TagTaxonomyResponse>('/tag-taxonomy', { method: 'PUT', body: JSON.stringify({ items, expected_version: expectedVersion }) }),
-  accounts: () => request<AccountOption[]>('/accounts'),
+  saveTagTaxonomy: async (items: Record<string, TagTaxonomyItem[]>, expectedVersion: number) =>
+    normalizeTagTaxonomy(await request<unknown>('/tag-taxonomy', { method: 'PUT', body: JSON.stringify({ items, expected_version: expectedVersion }) })),
+  accounts: (limit = 1000, includeDisabled = false) => request<AccountOption[]>(`/accounts?limit=${limit}&include_disabled=${includeDisabled}`),
+  manualAccountAvailability: (publishDate: string) => request<import('./types').ManualAccountAvailability>(`/manual-plans/account-availability?publish_date=${encodeURIComponent(publishDate)}`),
   topics: () => request<TopicOption[]>('/topics?limit=1000'),
+  topicDetail: (topicId: string, topicType?: string | null) => request<TopicOption>(`/topics/${encodeURIComponent(topicId)}/detail${topicType ? `?topic_type=${encodeURIComponent(topicType)}` : ''}`),
   batches: (type?: 'manual' | 'auto', limit = 200) =>
     request<BatchSummary[]>(`/batches?limit=${limit}${type ? `&plan_type=${type}` : ''}`),
   batch: (id: number) => request<BatchDetail>(`/batches/${id}`),

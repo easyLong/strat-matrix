@@ -170,6 +170,17 @@ def main() -> None:
                 "ALTER TABLE godp_topic_tag_history ADD COLUMN t6_tag_id BIGINT NULL "
                 "COMMENT '该版本关联的T6用户需求标签稳定ID；旧历史未解析时为空'"
             )
+        for table in ("godp_manual_preview", "godp_manual_task"):
+            cursor.execute(
+                "SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND COLUMN_NAME='task_name'",
+                (table,),
+            )
+            if cursor.fetchone()["column_count"] == 0:
+                cursor.execute(
+                    f"ALTER TABLE `{table}` ADD COLUMN task_name VARCHAR(120) NOT NULL "
+                    "DEFAULT '' COMMENT '手动策划任务名称' AFTER preview_code"
+                )
         for table, description in (
             ("godp_account_source", "账号来源记录当前是否有效：1有效0已被全量快照停用"),
             ("godp_topic_source", "普通选题来源记录当前是否有效：1有效0已被全量快照停用"),

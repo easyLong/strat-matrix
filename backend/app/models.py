@@ -1,7 +1,7 @@
 """API contracts. Business rules will grow with the approved PRD."""
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -117,6 +117,11 @@ class AccountOption(BaseModel):
     account_id: str
     account_name: str
     account_alias: str = ""
+    um_no: str = ""
+    account_type: str = ""
+    organization: str = ""
+    platform: str = ""
+    business_line: str = ""
     city: str
     persona: str
     marketing_eligible: bool
@@ -124,6 +129,7 @@ class AccountOption(BaseModel):
     certified: bool | None = None
     followers: int | None = None
     traffic_trend: str = "数据不足"
+    lifecycle_stage: str = ""
 
 
 class TopicOption(BaseModel):
@@ -132,10 +138,21 @@ class TopicOption(BaseModel):
     category: str = ""
     content_type: str = ""
     outline: str = ""
+    account_type: str = ""
+    related_product: str = ""
+    related_activity: str = ""
+    related_hotspot: str = ""
+    valid_from: str | None = None
+    valid_to: str | None = None
     is_marketing: bool
     status: str
     topic_type: Literal["普通", "营销", "热点"] | None = None
     account_id: str | None = None
+    labels: dict[str, Any] = Field(default_factory=dict)
+    label_status: str | None = None
+    label_version: int | None = None
+    taxonomy_version: int | None = None
+    applicable_cities: list[str] = Field(default_factory=list)
 
 
 class ManualItem(BaseModel):
@@ -160,6 +177,7 @@ class ManualPlanCreate(BaseModel):
 
 
 class ManualPreviewInput(BaseModel):
+    task_name: str = Field(min_length=1, max_length=120)
     publish_date: date
     account_ids: list[str] = Field(default_factory=list, max_length=1000)
     target_count: int | None = Field(default=None, ge=1, le=1000)
@@ -173,6 +191,14 @@ class ManualPreviewInput(BaseModel):
     followers_max: int | None = Field(default=None, ge=0)
     traffic_trend: str = ""
 
+    @field_validator("task_name")
+    @classmethod
+    def clean_task_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("策划任务名称不能为空")
+        return value
+
     @field_validator("account_ids", "topic_ids")
     @classmethod
     def unique_ids(cls, values: list[str]) -> list[str]:
@@ -183,8 +209,14 @@ class ManualPreviewInput(BaseModel):
         return values
 
 
+class ManualAccountAvailability(BaseModel):
+    publish_date: date
+    planned_account_ids: list[str]
+
+
 class ManualPreviewResponse(BaseModel):
     preview_id: str
+    task_name: str
     publish_date: date
     expires_at: datetime
     items: list[ManualItem]
@@ -195,12 +227,15 @@ class ManualTaskSummary(BaseModel):
     id: int
     task_code: str
     preview_code: str
+    task_name: str
+    batch_code: str = ""
     publish_date: date
     planned_account_count: int
     result_count: int
     failure_count: int
     topic_count: int
     status: str
+    content_status: str = "待策划完成"
     failure_reason: str
     batch_id: int | None = None
     last_error: str
@@ -244,17 +279,27 @@ class BatchSummary(BaseModel):
     account_count: int
     content_count: int
     result_count: int = 0
+    completed_count: int = 0
+    failed_count: int = 0
+    topic_count: int = 0
     note: str
     created_at: datetime
+    updated_at: datetime | None = None
+    task_name: str = ""
+    planning_status: str = ""
+    content_status: str = ""
 
 
 class PlanningAccountSummary(BaseModel):
     account_id: str
     account_name: str
+    account_owner: str = ""
     cycle_count: int
     slot_count: int
     latest_cycle_start: date
     latest_cycle_updated_at: datetime | None = None
+    latest_status: str = ""
+    latest_batch_id: int | None = None
 
 
 class PlanItemResponse(BaseModel):
@@ -308,6 +353,8 @@ class PlanningCycleSummary(BaseModel):
     unique_topics: int
     success_accounts: int
     failed_accounts: int
+    planning_status: str
+    content_status: str
     updated_at: datetime
 
 

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import json
 
 from .db import connection
+from .demo_um import demo_um_no
 
 
 CITY_PERSONAS = [
@@ -60,6 +61,7 @@ def account_rows(now: datetime) -> tuple[list[tuple], list[tuple]]:
             account_id, now, json.dumps({
                 "account_id": account_id,
                 "account_name": account_name,
+                "um_no": demo_um_no(account_id),
                 "platform": "演示平台",
                 "organization": f"演示机构{(index - 1) % 8 + 1}",
                 "city": city,

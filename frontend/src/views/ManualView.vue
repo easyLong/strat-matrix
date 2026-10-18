@@ -1,244 +1,760 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import TagCascader from '../components/TagCascader.vue'
+import TopicDetailDrawer from '../components/TopicDetailDrawer.vue'
+import { emptyLabelFilters, matchesLabelFilters, tagGroups, tagNames, type TaxonomyItems } from '../topicTaxonomy'
+import AccountTypeBadge from '../components/AccountTypeBadge.vue'
+import ListPagination from '../components/ListPagination.vue'
+import LoadingSkeleton from '../components/LoadingSkeleton.vue'
+import { useDebouncedFields } from '../composables/useDebouncedFields'
+import { statusTone } from '../ui/status'
+import { formatDateTime } from '../planningTime'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
 
 const store = usePlanningStore()
 const router = useRouter()
-const tomorrow = new Date()
-tomorrow.setDate(tomorrow.getDate() + 1)
-const publishDate = ref(`${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`)
-const targetCount = ref(30)
-const followerRange = ref('')
+const mode = ref<'list' | 'create'>('list')
+const step = ref(1)
+const stepperRef = ref<HTMLElement | null>(null)
+const accountListRef = ref<HTMLElement | null>(null)
+const topicListRef = ref<HTMLElement | null>(null)
+const accountSelectionMode = ref<'filter' | 'upload'>('filter')
+const taskName = ref('')
+const publishDate = ref('')
+const targetCount = ref<number | ''>('')
+const keyword = ref('')
+const accountTypeFilter = ref('')
+const umNoFilter = ref('')
+const organizationFilter = ref('')
 const platformFilter = ref('')
-const accountKeyword = ref('')
+const businessLineFilter = ref('')
 const cityFilter = ref('')
-const personaFilter = ref('')
-const marketingFilter = ref('')
-const statusFilter = ref('')
-const trendFilter = ref('')
-const certifiedFilter = ref('')
+const lifecycleFilter = ref('')
 const followersMin = ref<number | null>(null)
 const followersMax = ref<number | null>(null)
-const queried = ref(true)
-const sampledIds = ref<string[]>([])
-const topicQuery = ref('')
-const contentType = ref('')
-const selectedTopicIds = ref<string[]>([])
 const accounts = ref<AccountOption[]>([])
 const topics = ref<TopicOption[]>([])
-const note = ref('')
+const taxonomyItems = ref<TaxonomyItems>({})
+const labelFilters = ref(emptyLabelFilters())
+const topicFiltersExpanded = ref(false)
+const detailTopic = ref<TopicOption | null>(null)
+const tasks = ref<ManualTaskSummary[]>([])
+const productionRequestStorageKey = 'strat-matrix.manual-production-requests'
+function readProductionRequestIds() {
+  try {
+    const values = JSON.parse(localStorage.getItem(productionRequestStorageKey) || '[]')
+    return new Set<number>(Array.isArray(values) ? values.filter((value): value is number => Number.isInteger(value)) : [])
+  } catch { return new Set<number>() }
+}
+const productionRequestIds = ref(readProductionRequestIds())
+const sampledIds = ref<string[]>([])
+const selectedTopicIds = ref<string[]>([])
+const topicIdFilter = ref('')
+const topicQuery = ref('')
+const topicMarketingFilter = ref('')
+const contentType = ref('')
+const relatedProduct = ref('')
+const relatedActivity = ref('')
+const relatedHotspot = ref('')
+const topicPage = ref(1)
+const topicPageSize = ref(20)
+const submitAccountPage = ref(1)
+const submitTopicPage = ref(1)
+const submitAccountPageSize = ref(10)
+const submitTopicPageSize = ref(10)
 const busy = ref(false)
+const tasksLoading = ref(false)
+const catalogLoading = ref(false)
+const { terms: searchTerms, flush: flushSearch } = useDebouncedFields({ keyword, umNoFilter, topicIdFilter, topicQuery })
 const error = ref('')
 const notice = ref('')
-const topicSelectorOpen = ref(false)
-const topicDraftIds = ref<string[]>([])
-
-const followerBounds = computed(() => {
-  switch (followerRange.value) {
-    case 'lt1k': return { min: null, max: 999 }
-    case '1k_10k': return { min: 1000, max: 9999 }
-    case '10k_100k': return { min: 10000, max: 99999 }
-    case '100k_500k': return { min: 100000, max: 499999 }
-    case 'gte500k': return { min: 500000, max: null }
-    default: return { min: followersMin.value, max: followersMax.value }
-  }
-})
-
-const eligibleAccounts = computed(() => accounts.value.filter(account =>
-  (!accountKeyword.value.trim() || `${account.account_id} ${account.account_name} ${account.account_alias}`.toLowerCase().includes(accountKeyword.value.trim().toLowerCase())) &&
-  (!cityFilter.value || account.city === cityFilter.value) &&
-  (!personaFilter.value || account.persona === personaFilter.value) &&
-  (!marketingFilter.value || account.marketing_eligible === (marketingFilter.value === 'yes')) &&
-  (!statusFilter.value || account.status === statusFilter.value) &&
-  (!trendFilter.value || account.traffic_trend === trendFilter.value) &&
-  (certifiedFilter.value === '' || account.certified === (certifiedFilter.value === 'yes')) &&
-  (followerBounds.value.min === null || (account.followers !== null && account.followers >= followerBounds.value.min)) &&
-  (followerBounds.value.max === null || (account.followers !== null && account.followers <= followerBounds.value.max)),
-))
-const cityOptions = computed(() => [...new Set(accounts.value.map(account => account.city).filter(Boolean))])
-const personaOptions = computed(() => [...new Set(accounts.value.map(account => account.persona).filter(Boolean))])
-const trendOptions = computed(() => ['上升', '平稳', '下滑', '数据不足'])
-const statusOptions = computed(() => [...new Set(accounts.value.map(account => account.status).filter(Boolean))])
-const shortfall = computed(() => Math.max(0, targetCount.value - eligibleAccounts.value.length))
-const selectionReady = computed(() => sampledIds.value.length === targetCount.value)
-const sampledAccounts = computed(() => sampledIds.value.map(id => accounts.value.find(account => account.account_id === id)).filter((account): account is AccountOption => !!account))
-const contentTypes = computed(() => [...new Set(topics.value.map(topic => topic.content_type).filter(Boolean))])
-const filteredTopics = computed(() => topics.value.filter(topic =>
-  (!topicQuery.value.trim() || topic.topic_title.includes(topicQuery.value.trim())) &&
-  (!contentType.value || topic.content_type === contentType.value),
-))
-const tasks = ref<ManualTaskSummary[]>([])
+const eligibilityNotice = ref('')
+const accountReview = ref(false)
+const topicReview = ref(false)
+const importMatchedCount = ref(0)
+const importedAccountIds = ref<string[]>([])
+const importUnknownUmNos = ref<string[]>([])
+const plannedAccountIds = ref<string[]>([])
+const availabilityDate = ref('')
+const availabilityLoading = ref(false)
+const availabilityError = ref('')
+const accountPage = ref(1)
+const accountPageSize = ref(20)
+const plannedAccountTooltip = ref<{ accountId: string; left: number; top: number } | null>(null)
+let availabilityRequest = 0
+const importFileInput = ref<HTMLInputElement | null>(null)
 let refreshTimer: number | undefined
-
-watch([publishDate, targetCount, followerRange, platformFilter, accountKeyword, cityFilter, personaFilter, marketingFilter, statusFilter, trendFilter, certifiedFilter, followersMin, followersMax], () => {
-  queried.value = false
-  sampledIds.value = []
+const availabilityReady = computed(() => !!publishDate.value && availabilityDate.value === publishDate.value && !availabilityLoading.value && !availabilityError.value)
+const plannedAccountSet = computed(() => new Set(plannedAccountIds.value))
+const importedAccounts = computed(() => {
+  const ids = new Set(importedAccountIds.value)
+  return accounts.value.filter(account => ids.has(account.account_id))
 })
+function isAccountPlanned(accountId: string) { return !!publishDate.value && availabilityDate.value === publishDate.value && plannedAccountSet.value.has(accountId) }
+
+async function revealStepProgress() {
+  await nextTick()
+  stepperRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function resetSelectionListScroll(target: 'accounts' | 'topics') {
+  await nextTick()
+  const list = target === 'accounts' ? accountListRef.value : topicListRef.value
+  if (list) {
+    list.scrollTop = 0
+    list.scrollLeft = 0
+  }
+}
+
+const eligibleAccounts = computed(() => accounts.value.filter(account => {
+  const search = searchTerms.value.keyword.trim().toLocaleLowerCase()
+  const accountType = account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '')
+  return (!search || `${account.account_name} ${account.account_alias} ${account.account_id}`.toLocaleLowerCase().includes(search)) &&
+    (!accountTypeFilter.value || accountType === accountTypeFilter.value) &&
+    (!searchTerms.value.umNoFilter.trim() || (account.um_no || '').toLocaleLowerCase().includes(searchTerms.value.umNoFilter.trim().toLocaleLowerCase())) &&
+    (!organizationFilter.value || account.organization === organizationFilter.value) &&
+    (!platformFilter.value || account.platform === platformFilter.value) &&
+    (!businessLineFilter.value || account.business_line === businessLineFilter.value) &&
+    (!cityFilter.value || account.city === cityFilter.value) &&
+    (!lifecycleFilter.value || account.lifecycle_stage === lifecycleFilter.value) &&
+    (followersMin.value === null || (account.followers !== null && account.followers >= followersMin.value)) &&
+    (followersMax.value === null || (account.followers !== null && account.followers <= followersMax.value))
+}))
+const visibleAccounts = computed(() => {
+  const pinned = sampledIds.value.map(id => accounts.value.find(item => item.account_id === id)).filter((item): item is AccountOption => !!item)
+  const candidates = accountSelectionMode.value === 'filter'
+    ? eligibleAccounts.value.filter(item => !sampledIds.value.includes(item.account_id))
+    : importedAccounts.value.filter(item => !sampledIds.value.includes(item.account_id))
+  return [...pinned, ...candidates].sort((a, b) => {
+  const selectedOrder = Number(sampledIds.value.includes(b.account_id)) - Number(sampledIds.value.includes(a.account_id))
+    return selectedOrder || (b.followers ?? -1) - (a.followers ?? -1) || a.account_name.localeCompare(b.account_name, 'zh-CN')
+  }).filter((item, index, rows) => rows.findIndex(row => row.account_id === item.account_id) === index)
+})
+const accountPageCount = computed(() => Math.max(1, Math.ceil(visibleAccounts.value.length / accountPageSize.value)))
+const pagedAccounts = computed(() => visibleAccounts.value.slice((accountPage.value - 1) * accountPageSize.value, accountPage.value * accountPageSize.value))
+watch([pagedAccounts, publishDate, availabilityReady], () => { plannedAccountTooltip.value = null }, { flush: 'sync' })
+
+function showPlannedAccountTooltip(accountId: string, event: MouseEvent | FocusEvent) {
+  if (!availabilityReady.value || !isAccountPlanned(accountId)) return
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const x = 'clientX' in event ? event.clientX : Math.max(0, rect.left) + 32
+  const y = 'clientY' in event ? event.clientY : rect.bottom
+  const width = Math.min(304, window.innerWidth - 24)
+  const height = 72
+  plannedAccountTooltip.value = {
+    accountId,
+    left: Math.max(12, Math.min(x + 12, window.innerWidth - width - 12)),
+    top: Math.max(12, y + height + 14 > window.innerHeight ? y - height - 12 : y + 14),
+  }
+}
+const matchingAccounts = computed(() => accountSelectionMode.value === 'upload' ? importedAccounts.value : eligibleAccounts.value)
+const plannedMatchingCount = computed(() => matchingAccounts.value.filter(account => isAccountPlanned(account.account_id)).length)
+const availableMatchingCount = computed(() => availabilityReady.value ? matchingAccounts.value.length - plannedMatchingCount.value : 0)
+const organizationOptions = computed(() => [...new Set(accounts.value.map(item => item.organization).filter(Boolean))].sort())
+const platformOptions = computed(() => [...new Set(accounts.value.map(item => item.platform).filter(Boolean))].sort())
+const businessLineOptions = computed(() => [...new Set(accounts.value.map(item => item.business_line).filter(Boolean))].sort())
+const cityOptions = computed(() => [...new Set(accounts.value.map(item => item.city).filter(Boolean))].sort())
+const lifecycleOptions = computed(() => [...new Set(accounts.value.map(item => item.lifecycle_stage).filter(Boolean))])
+const contentTypes = computed(() => [...new Set(topics.value.map(item => item.content_type).filter(Boolean))].sort())
+const relatedProducts = computed(() => [...new Set(topics.value.map(item => item.related_product).filter(Boolean))].sort())
+const relatedActivities = computed(() => [...new Set(topics.value.map(item => item.related_activity).filter(Boolean))].sort())
+const relatedHotspots = computed(() => [...new Set(topics.value.map(item => item.related_hotspot).filter(Boolean))].sort())
+const filteredTopics = computed(() => topics.value.filter(topic =>
+  (!searchTerms.value.topicIdFilter.trim() || topic.topic_id === searchTerms.value.topicIdFilter.trim()) &&
+  (!searchTerms.value.topicQuery.trim() || topic.topic_title.toLocaleLowerCase().includes(searchTerms.value.topicQuery.trim().toLocaleLowerCase())) &&
+  (!topicMarketingFilter.value || String(topic.is_marketing) === topicMarketingFilter.value) &&
+  (!contentType.value || topic.content_type === contentType.value) &&
+  (!relatedProduct.value || topic.related_product === relatedProduct.value) &&
+  (!relatedActivity.value || topic.related_activity === relatedActivity.value) &&
+  (!relatedHotspot.value || topic.related_hotspot === relatedHotspot.value) &&
+  matchesLabelFilters(topic, labelFilters.value, taxonomyItems.value),
+))
+const topicPageCount = computed(() => Math.max(1, Math.ceil(filteredTopics.value.length / topicPageSize.value)))
+const orderedTopics = computed(() => topicReview.value
+  ? [...filteredTopics.value].sort((a, b) => Number(selectedTopicIds.value.includes(b.topic_id)) - Number(selectedTopicIds.value.includes(a.topic_id)))
+  : filteredTopics.value)
+const pagedTopics = computed(() => orderedTopics.value.slice((topicPage.value - 1) * topicPageSize.value, topicPage.value * topicPageSize.value))
+const selectedAccounts = computed(() => sampledIds.value.map(id => accounts.value.find(item => item.account_id === id)).filter((item): item is AccountOption => !!item))
+const selectedTopics = computed(() => selectedTopicIds.value.map(id => topics.value.find(item => item.topic_id === id)).filter((item): item is TopicOption => !!item))
+const submitAccountsPage = computed(() => selectedAccounts.value.slice((submitAccountPage.value - 1) * submitAccountPageSize.value, submitAccountPage.value * submitAccountPageSize.value))
+const submitTopicsPage = computed(() => selectedTopics.value.slice((submitTopicPage.value - 1) * submitTopicPageSize.value, submitTopicPage.value * submitTopicPageSize.value))
+const accountSelectionPool = computed(() => availabilityReady.value ? matchingAccounts.value.filter(account => !isAccountPlanned(account.account_id)) : [])
+const allAccountsSelected = computed(() => accountSelectionPool.value.length > 0 && accountSelectionPool.value.every(account => sampledIds.value.includes(account.account_id)))
+const someAccountsSelected = computed(() => !allAccountsSelected.value && accountSelectionPool.value.some(account => sampledIds.value.includes(account.account_id)))
+const allTopicsSelected = computed(() => filteredTopics.value.length > 0 && filteredTopics.value.every(topic => selectedTopicIds.value.includes(topic.topic_id)))
+const someTopicsSelected = computed(() => !allTopicsSelected.value && filteredTopics.value.some(topic => selectedTopicIds.value.includes(topic.topic_id)))
+const canSubmit = computed(() => store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && publishDate.value !== '' && targetCount.value !== '' && Number.isInteger(targetCount.value) && targetCount.value >= 1 && targetCount.value <= 1000 && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0)
+const targetCountError = computed(() => targetCount.value !== '' && (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) ? '数量须为 1 至 1000 之间的整数' : '')
+
+watch(labelFilters, () => { topicPage.value = 1 }, { deep: true })
+watch([topicIdFilter, topicQuery, topicMarketingFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, topicPageSize], () => { topicPage.value = 1 })
+watch(topicPageCount, count => { topicPage.value = Math.min(topicPage.value, count) })
+watch(selectedAccounts, () => { submitAccountPage.value = 1 })
+watch(selectedTopics, () => { submitTopicPage.value = 1 })
+
+function applyDefaultAccountSelection() {
+  if (accountSelectionMode.value !== 'filter') return
+  const count = targetCount.value
+  if (count === '' || !Number.isInteger(count) || count < 1 || count > 1000) {
+    sampledIds.value = []
+    return
+  }
+  const ordered = [...accountSelectionPool.value].sort((a, b) => (b.followers ?? -1) - (a.followers ?? -1))
+  sampledIds.value = ordered.slice(0, Math.min(count, ordered.length)).map(item => item.account_id)
+}
+
+watch(eligibleAccounts, () => { accountPage.value = 1; applyDefaultAccountSelection() }, { flush: 'sync' })
+watch(accountPageSize, () => { accountPage.value = 1 })
+watch(accountPageCount, count => { accountPage.value = Math.min(accountPage.value, count) })
+watch(targetCount, () => {
+  if (accountSelectionMode.value === 'filter') applyDefaultAccountSelection()
+}, { flush: 'sync' })
+
+watch([publishDate, () => store.databaseReady], () => {
+  sampledIds.value = []
+  accountPage.value = 1
+  accountReview.value = false
+  void loadAccountAvailability(true)
+}, { immediate: true, flush: 'sync' })
+
+async function loadAccountAvailability(reselect = false): Promise<boolean> {
+  const request = ++availabilityRequest
+  const selectedDate = publishDate.value
+  availabilityDate.value = ''
+  availabilityError.value = ''
+  availabilityLoading.value = !!selectedDate && store.databaseReady
+  if (!selectedDate || !store.databaseReady) {
+    plannedAccountIds.value = []
+    return false
+  }
+  try {
+    const result = await api.manualAccountAvailability(selectedDate)
+    if (request !== availabilityRequest || selectedDate !== publishDate.value) return false
+    if (result.publish_date !== selectedDate) throw new Error('账号策划日期校验失败，请重试')
+    plannedAccountIds.value = result.planned_account_ids
+    availabilityDate.value = selectedDate
+    availabilityLoading.value = false
+    sampledIds.value = sampledIds.value.filter(id => !isAccountPlanned(id))
+    if (reselect) {
+      if (accountSelectionMode.value === 'filter') applyDefaultAccountSelection()
+      else sampledIds.value = importedAccountIds.value.filter(id => !isAccountPlanned(id))
+    }
+    return true
+  } catch (exc) {
+    if (request === availabilityRequest) availabilityError.value = exc instanceof Error ? exc.message : '读取当日策划账号失败'
+    return false
+  } finally {
+    if (request === availabilityRequest) availabilityLoading.value = false
+  }
+}
 
 async function loadCatalog() {
+  catalogLoading.value = true
   try {
-    const [loadedAccounts, loadedTopics] = await Promise.all([api.accounts(), api.topics()])
-    accounts.value = loadedAccounts
-    topics.value = loadedTopics
+    const [accountRows, topicRows, taxonomy] = await Promise.all([api.accounts(), api.topics(), api.tagTaxonomy()])
+    taxonomyItems.value = taxonomy.items
+    accounts.value = accountRows
+    topics.value = topicRows
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取账号和选题失败' }
+  finally { catalogLoading.value = false }
 }
+
 async function loadTasks() {
-  try { tasks.value = await api.manualTasks() }
-  catch (exc) { error.value = exc instanceof Error ? exc.message : '读取手动任务失败' }
+  tasksLoading.value = true
+  try {
+    const rows = await api.manualTasks()
+    const pending = new Set(productionRequestIds.value)
+    tasks.value = rows.map(task => {
+      if (!pending.has(task.id)) return task
+      if (task.content_status === '\u5df2\u5b8c\u6210' || task.content_status === '\u751f\u4ea7\u5f02\u5e38') {
+        pending.delete(task.id)
+        return task
+      }
+      return { ...task, content_status: '\u751f\u4ea7\u4e2d' }
+    })
+    productionRequestIds.value = pending
+    localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
+    error.value = ''
+  } catch (exc) { error.value = exc instanceof Error ? exc.message : '\u8bfb\u53d6\u624b\u52a8\u7b56\u5212\u4efb\u52a1\u5931\u8d25' }
+  finally { tasksLoading.value = false }
 }
-watch(() => store.databaseReady, ready => { if (ready) void loadCatalog() }, { immediate: true })
-watch(() => store.databaseReady, ready => { if (ready) void loadTasks() }, { immediate: true })
-onMounted(() => { refreshTimer = window.setInterval(() => { if (store.databaseReady && tasks.value.some(task => task.status === '执行中')) void loadTasks() }, 2000) })
-onBeforeUnmount(() => { if (refreshTimer !== undefined) window.clearInterval(refreshTimer) })
 
-function queryAccounts() {
-  error.value = ''
-  if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) {
-    error.value = '本次规划数量应为 1–1000 的整数'
-    return
-  }
-  if (followerBounds.value.min !== null && followerBounds.value.max !== null && followerBounds.value.min > followerBounds.value.max) {
-    error.value = '粉丝量下限不能大于上限'
-    return
-  }
-  queried.value = true
+function openTaskDetails(task: ManualTaskSummary) {
+  if (!task.batch_id) return
+  void router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual' } })
+}
+
+function startTaskProduction(task: ManualTaskSummary) {
+  if (!task.batch_id || task.status !== '\u5df2\u5b8c\u6210' || task.content_status !== '\u5f85\u751f\u4ea7') return
+  const pending = new Set(productionRequestIds.value)
+  pending.add(task.id)
+  productionRequestIds.value = pending
+  localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
+  task.content_status = '\u751f\u4ea7\u4e2d'
+}
+
+watch(() => store.databaseReady, ready => {
+  if (ready) { void loadCatalog(); void loadTasks() }
+}, { immediate: true })
+onMounted(() => {
+  refreshTimer = window.setInterval(() => {
+    if (store.databaseReady && tasks.value.some(task => ['执行中', '进行中'].includes(task.status) || task.content_status === '生产中')) void loadTasks()
+  }, 3000)
+})
+onBeforeUnmount(() => {
+  if (refreshTimer !== undefined) window.clearInterval(refreshTimer)
+})
+
+function startCreate() {
+  publishDate.value = ''
+  targetCount.value = ''
+  step.value = 1
+  accountSelectionMode.value = 'filter'
+  taskName.value = ''
   sampledIds.value = []
+  importMatchedCount.value = 0
+  importedAccountIds.value = []
+  importUnknownUmNos.value = []
+  selectedTopicIds.value = []
+  topicIdFilter.value = ''
+  topicQuery.value = ''
+  topicMarketingFilter.value = ''
+  contentType.value = ''
+  relatedProduct.value = ''
+  relatedActivity.value = ''
+  relatedHotspot.value = ''
+  topicPage.value = 1
+  accountReview.value = false
+  topicReview.value = false
+  error.value = ''
+  notice.value = ''
+  eligibilityNotice.value = ''
+  mode.value = 'create'
 }
 
-function randomAccounts() {
-  if (!queried.value || shortfall.value > 0) return
-  const pool = eligibleAccounts.value.map(account => account.account_id)
-  for (let index = pool.length - 1; index > 0; index--) {
-    const value = new Uint32Array(1)
-    crypto.getRandomValues(value)
-    const other = value[0] % (index + 1)
-    ;[pool[index], pool[other]] = [pool[other], pool[index]]
-  }
-  sampledIds.value = pool.slice(0, targetCount.value)
-  notice.value = `已从 ${eligibleAccounts.value.length} 个符合条件的账号中随机抽取 ${sampledIds.value.length} 个`
-}
-
-function toggleSampledAccount(accountId: string, event: Event) {
+function toggleAccount(accountId: string, event: Event) {
   const checked = (event.target as HTMLInputElement).checked
-  if (checked) {
-    if (sampledIds.value.length < targetCount.value && !sampledIds.value.includes(accountId)) {
-      sampledIds.value = [...sampledIds.value, accountId]
-    }
-  } else {
-    sampledIds.value = sampledIds.value.filter(id => id !== accountId)
+  setAccountSelected(accountId, checked)
+}
+
+function setAccountSelected(accountId: string, checked: boolean) {
+  if (checked && (!availabilityReady.value || isAccountPlanned(accountId))) return
+  if (checked && !sampledIds.value.includes(accountId)) {
+    error.value = ''
+    sampledIds.value = [...sampledIds.value, accountId]
   }
+  if (!checked) sampledIds.value = sampledIds.value.filter(id => id !== accountId)
+  accountReview.value = false
 }
 
-function openTopicSelector() {
-  topicDraftIds.value = [...selectedTopicIds.value]
-  topicSelectorOpen.value = true
+function interactiveRowTarget(event: Event) {
+  return event.target instanceof Element && Boolean(event.target.closest('input, button, a, select, textarea, label'))
 }
 
-function confirmTopicSelector() {
-  selectedTopicIds.value = [...topicDraftIds.value]
-  topicSelectorOpen.value = false
+function toggleAccountRow(accountId: string, event: Event) {
+  if (interactiveRowTarget(event) || !availabilityReady.value || isAccountPlanned(accountId)) return
+  setAccountSelected(accountId, !sampledIds.value.includes(accountId))
 }
 
-function closeTopicSelector() {
-  topicSelectorOpen.value = false
+function toggleTopicRow(topicId: string, event: Event) {
+  if (interactiveRowTarget(event)) return
+  selectedTopicIds.value = selectedTopicIds.value.includes(topicId) ? selectedTopicIds.value.filter(id => id !== topicId) : [...selectedTopicIds.value, topicId]
+  topicReview.value = false
 }
 
-async function submit() {
-  if (!store.databaseReady || !queried.value || !selectionReady.value || !selectedTopicIds.value.length || !publishDate.value || shortfall.value > 0 || busy.value) return
-  busy.value = true
+function selectAllAccounts(event: Event) {
+  flushSearch()
+  if (!availabilityReady.value) return
+  const ids = accountSelectionPool.value.map(account => account.account_id)
+  sampledIds.value = (event.target as HTMLInputElement).checked ? [...new Set([...sampledIds.value, ...ids])] : sampledIds.value.filter(id => !ids.includes(id))
+  accountReview.value = false
+}
+
+function selectAllTopics(event: Event) {
+  flushSearch()
+  const ids = filteredTopics.value.map(topic => topic.topic_id)
+  selectedTopicIds.value = (event.target as HTMLInputElement).checked ? [...new Set([...selectedTopicIds.value, ...ids])] : selectedTopicIds.value.filter(id => !ids.includes(id))
+  topicReview.value = false
+}
+
+function returnToStep(next: number) {
+  if (next >= step.value || busy.value) return
+  step.value = next
+  if (next === 1) accountReview.value = false
+  if (next === 2) topicReview.value = false
+  void revealStepProgress()
+}
+
+function setAccountSelectionMode(next: 'filter' | 'upload') {
+  accountSelectionMode.value = next
+  error.value = ''
+  notice.value = ''
+  accountPage.value = 1
+  if (next === 'filter') applyDefaultAccountSelection()
+  else sampledIds.value = availabilityReady.value ? importedAccountIds.value.filter(id => !isAccountPlanned(id)) : []
+}
+
+function downloadUmTemplate() {
+  const csv = `\uFEFFUM号\r\n`
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '手动策划账号导入模板.csv'
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') { cell += '"'; index++ }
+      else quoted = !quoted
+    } else if (char === ',' && !quoted) {
+      row.push(cell.trim()); cell = ''
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[index + 1] === '\n') index++
+      row.push(cell.trim()); cell = ''
+      if (row.some(value => value !== '')) rows.push(row)
+      row = []
+    } else cell += char
+  }
+  row.push(cell.trim())
+  if (row.some(value => value !== '')) rows.push(row)
+  return rows
+}
+
+async function importAccountsByUm(file?: File) {
+  if (!file) return
   error.value = ''
   notice.value = ''
   try {
-    const preview = await api.previewManual({
-      publish_date: publishDate.value,
-      account_ids: sampledIds.value,
-      topic_ids: selectedTopicIds.value,
-      note: note.value.trim(),
-      certified: certifiedFilter.value ? certifiedFilter.value === 'yes' : null,
-      followers_min: followerBounds.value.min,
-      followers_max: followerBounds.value.max,
-      city: cityFilter.value || undefined,
-      persona: personaFilter.value || undefined,
-      keyword: accountKeyword.value.trim() || undefined,
-      traffic_trend: trendFilter.value || undefined,
-    })
-    const task = await api.submitManualPreview(preview.preview_id)
-    tasks.value = [task, ...tasks.value.filter(existing => existing.id !== task.id)]
-    notice.value = '手动策划已提交，当前状态：进行中'
-  } catch (exc) { error.value = exc instanceof Error ? exc.message : '发起手动策划失败' }
-  finally { busy.value = false }
+    const bytes = await file.arrayBuffer()
+    let text = new TextDecoder('utf-8').decode(bytes)
+    if (text.includes('\uFFFD')) text = new TextDecoder('gb18030').decode(bytes)
+    const rows = parseCsvRows(text.replace(/^\uFEFF/, ''))
+    if (!rows.length) { error.value = '模板中没有可导入的 UM 号'; return }
+    const first = rows[0].map(value => value.toLocaleLowerCase())
+    const umColumn = first.findIndex(value => value.includes('um号') || value === 'um_no' || value === 'um number')
+    const column = umColumn >= 0 ? umColumn : 0
+    const start = umColumn >= 0 ? 1 : 0
+    const umNos = [...new Set(rows.slice(start).map(row => (row[column] || '').trim()).filter(Boolean))]
+    if (!umNos.length) { error.value = '模板中没有可导入的 UM 号'; return }
+    const accountsByUm = new Map<string, AccountOption>()
+    for (const account of accounts.value) {
+      const umNo = account.um_no?.trim().toLocaleLowerCase()
+      if (umNo && !accountsByUm.has(umNo)) accountsByUm.set(umNo, account)
+    }
+    const matched: AccountOption[] = []
+    const unknown: string[] = []
+    for (const umNo of umNos) {
+      const account = accountsByUm.get(umNo.toLocaleLowerCase())
+      if (account) matched.push(account)
+      else unknown.push(umNo)
+    }
+    accountSelectionMode.value = 'upload'
+    importedAccountIds.value = [...new Set(matched.map(item => item.account_id))]
+    sampledIds.value = availabilityReady.value ? importedAccountIds.value.filter(id => !isAccountPlanned(id)) : []
+    accountPage.value = 1
+    importMatchedCount.value = importedAccountIds.value.length
+    importUnknownUmNos.value = unknown
+    if (matched.length) notice.value = ''
+    else error.value = '没有匹配到账号，请检查 UM 号或确认账号数据已同步'
+  } catch {
+    error.value = '文件读取失败，请使用下载的 CSV 模板填写后再导入'
+  } finally {
+    if (importFileInput.value) importFileInput.value.value = ''
+  }
 }
 
-function taskStatusLabel(status: string) {
-  return status === '执行中' ? '进行中' : status
+async function saveAccountStep() {
+  error.value = ''
+  if (!taskName.value.trim()) { error.value = '请输入策划任务名称'; return }
+  if (!publishDate.value) { error.value = '请选择投放日期'; return }
+  if (targetCount.value === '') { error.value = '请输入计划账号数量'; return }
+  if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) { error.value = '计划账号数量须为 1 至 1000 之间的整数'; return }
+  if (!sampledIds.value.length) { error.value = '请先选择账号'; return }
+  if (!await loadAccountAvailability()) return
+  if (!sampledIds.value.length) { error.value = '所选账号当日已手动策划，请重新选择'; return }
+  accountPage.value = 1
+  accountReview.value = true
+  void resetSelectionListScroll('accounts')
+}
+
+function nextStep() {
+  error.value = ''
+  if (!selectedTopicIds.value.length) { error.value = '请至少选择一个选题'; return }
+  step.value = 3
+}
+
+function saveTopicStep() {
+  error.value = ''
+  if (!selectedTopicIds.value.length) { error.value = '请至少选择一个选题'; return }
+  topicPage.value = 1
+  topicReview.value = true
+  void resetSelectionListScroll('topics')
+}
+
+function confirmAccountReview() {
+  if (!availabilityReady.value || !sampledIds.value.length) {
+    accountReview.value = false
+    error.value = '请重新确认可策划账号后再继续'
+    return
+  }
+  accountReview.value = true
+  step.value = 2
+  void revealStepProgress()
+}
+
+function confirmTopicReview() {
+  if (!selectedTopicIds.value.length) {
+    topicReview.value = false
+    error.value = '请选择至少一个选题'
+    return
+  }
+  topicReview.value = true
+  step.value = 3
+  void revealStepProgress()
+}
+
+async function submit() {
+  if (!canSubmit.value) return
+  busy.value = true
+  error.value = ''
+  notice.value = ''
+  eligibilityNotice.value = ''
+  try {
+    const selectedCount = sampledIds.value.length
+    if (!await loadAccountAvailability()) return
+    if (sampledIds.value.length !== selectedCount) {
+      step.value = 1
+      error.value = '部分账号当日已手动策划，已移除，请重新确认账号数量'
+      return
+    }
+    const preview = await api.previewManual({
+      task_name: taskName.value.trim(),
+      publish_date: publishDate.value,
+      account_ids: sampledIds.value,
+      target_count: Number(targetCount.value),
+      topic_ids: selectedTopicIds.value,
+      note: '',
+      city: cityFilter.value || undefined,
+      keyword: keyword.value.trim() || undefined,
+    })
+    await api.submitManualPreview(preview.preview_id)
+    await loadTasks()
+    notice.value = '手动策划已提交，当前状态：进行中'
+    mode.value = 'list'
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : '提交手动策划失败'
+    if (error.value.includes('不具备所选营销选题资格')) eligibilityNotice.value = error.value
+  } finally {
+    busy.value = false
+  }
+}
+
+function closeEligibilityNotice(returnToSelection = false) {
+  eligibilityNotice.value = ''
+  if (returnToSelection) {
+    error.value = ''
+    accountReview.value = false
+    topicReview.value = false
+    step.value = 1
+    void revealStepProgress()
+  }
 }
 
 function taskStatusClass(status: string) {
-  return status.includes('失败') ? 'red' : status === '执行中' || status === '进行中' ? 'orange' : 'green'
+  return statusTone(status)
 }
 </script>
 
 <template>
-  <div class="page-head"><div><h1>手动策划</h1></div></div>
+  <div class="page-head manual-page-head">
+    <div><h1>手动策划</h1></div>
+    <div class="manual-head-actions">
+      <button v-if="mode === 'create'" class="btn" type="button" @click="mode = 'list'; error = ''">返回任务列表</button>
+      <button v-else class="btn primary" type="button" :disabled="!store.databaseReady" @click="startCreate">新建手动策划</button>
+    </div>
+  </div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
   <div v-if="notice" class="banner success-banner" role="status">{{ notice }}</div>
+  <div v-if="availabilityError && mode === 'create'" class="banner error-banner manual-availability-error" role="alert">{{ availabilityError }}</div>
 
-  <section class="card">
-    <div class="card-head"><div><h2>1. 本次策划规划数量</h2></div></div>
-    <div class="card-body">
-      <div class="manual-quantity-row">
-        <label class="field"><span>计划账号数量 <em>*</em></span><div class="number-control"><button class="btn" type="button" @click="targetCount = Math.max(1, targetCount - 1)">−</button><input v-model.number="targetCount" type="number" min="1" max="1000" /><button class="btn" type="button" @click="targetCount = Math.min(1000, targetCount + 1)">＋</button></div></label>
-        <span class="unit">个账号</span>
+  <section v-if="mode === 'list'" class="card manual-task-card">
+    <div class="card-head"><div><h2>&#x624B;&#x52A8;&#x7B56;&#x5212;&#x4EFB;&#x52A1;</h2></div></div>
+    <LoadingSkeleton v-if="!store.initialized || (tasksLoading && !tasks.length)" /><div v-else class="table-wrap"><table><thead><tr><th>&#x6279;&#x6B21;</th><th>&#x6295;&#x653E;&#x65E5;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th>&#x5185;&#x5BB9;&#x72B6;&#x6001;</th><th>&#x53D1;&#x8D77;&#x65F6;&#x95F4;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
+      <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }"><td><div class="account-name-cell"><b>{{ task.task_name || '\u2014' }}</b><small>&#x6279;&#x6B21;&#x53F7; {{ task.batch_code || '\u2014' }}</small></div></td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td class="manual-task-count" :class="{ completed: task.result_count > 0 }">{{ task.result_count }}</td><td class="manual-task-count" :class="{ failed: task.failure_count > 0 }">{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.status)]">{{ task.status === '\u6267\u884c\u4e2d' ? '\u8fdb\u884c\u4e2d' : task.status }}</span></td><td><span :class="['tag', taskStatusClass(task.content_status)]">{{ task.content_status }}</span></td><td>{{ formatDateTime(task.created_at) }}</td><td>{{ formatDateTime(task.updated_at) }}</td><td><div class="page-actions"><button v-if="task.batch_id" class="text-btn" type="button" @click="openTaskDetails(task)">&#x8BE6;&#x60C5;</button><button v-if="task.batch_id && task.status === '\u5df2\u5b8c\u6210' && task.content_status === '\u5f85\u751f\u4ea7'" class="text-btn" type="button" @click="startTaskProduction(task)">&#x53BB;&#x751F;&#x4EA7;&#x5185;&#x5BB9;</button><button v-else-if="task.content_status === '\u751f\u4ea7\u4e2d'" class="text-btn" type="button" disabled>&#x8FD0;&#x884C;&#x4E2D;</button><span v-else-if="task.content_status === '\u5df2\u5b8c\u6210'">&#x5DF2;&#x5B8C;&#x6210;</span><span v-else-if="task.content_status === '\u751f\u4ea7\u5f02\u5e38'">&#x751F;&#x4EA7;&#x5F02;&#x5E38;</span><span v-else-if="task.batch_id">&#x5904;&#x7406;&#x4E2D;</span><span v-else>?</span></div></td></tr>
+      <tr v-if="tasks.length === 0"><td colspan="11"><div class="empty-state">暂无手动策划任务</div></td></tr>
+    </tbody></table></div>
+  </section>
+
+  <template v-else>
+    <div ref="stepperRef" class="manual-stepper" aria-label="手动策划流程">
+      <button v-for="(label, index) in ['选择账号', '选择选题', '提交']" :key="label" :class="['manual-step', { active: step === index + 1, done: step > index + 1 }]" type="button" :disabled="index + 1 > step || busy" :aria-current="step === index + 1 ? 'step' : undefined" @click="returnToStep(index + 1)">
+        <span>{{ step > index + 1 ? '✓' : index + 1 }}</span><b>{{ label }}</b>
+      </button>
+    </div>
+
+    <Transition name="manual-step-change" mode="out-in">
+    <section v-if="step === 1" key="manual-step-accounts" class="card">
+      <div class="card-head"><div><h2>选择账号</h2></div><span class="manual-selected-count">已选 {{ sampledIds.length }} 个</span></div>
+      <div class="card-body">
+        <div class="manual-create-meta">
+          <label class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" required /></label>
+          <label class="field"><span>策划任务名称 <em>*</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入本次策划任务名称" required /></label>
+          <label class="field"><span>计划账号数量 <em>*</em></span><input v-model.number="targetCount" type="number" min="1" max="1000" placeholder="请输入计划账号数量" :aria-invalid="Boolean(targetCountError)" :aria-describedby="targetCountError ? 'manual-target-count-error' : undefined" required /><small v-if="targetCountError" id="manual-target-count-error" class="field-error" role="alert">{{ targetCountError }}</small></label>
+          <button class="text-btn" type="button" :disabled="!sampledIds.length" @click="sampledIds = []">清空选择</button>
+        </div>
+        <div class="manual-selection-modes" role="tablist" aria-label="账号选择方式">
+          <button :class="['manual-mode-tab', { active: accountSelectionMode === 'filter' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'filter'" @click="setAccountSelectionMode('filter')">筛选选择</button>
+          <button :class="['manual-mode-tab', { active: accountSelectionMode === 'upload' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'upload'" @click="setAccountSelectionMode('upload')">模板导入</button>
+        </div>
+        <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters">
+          <label class="field"><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="keyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" @keydown.enter.prevent="flushSearch" /></label>
+          <label class="field"><span>&#x5C5E;&#x4E3B; UM &#x53F7;</span><input v-model="umNoFilter" type="search" placeholder="&#x8F93;&#x5165;&#x5C5E;&#x4E3B; UM &#x53F7;" @keydown.enter.prevent="flushSearch" /></label>
+          <label class="field"><span>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</span><select v-model="accountTypeFilter"><option value="">&#x5168;&#x90E8;</option><option value="&#x8BA4;&#x8BC1;">&#x8BA4;&#x8BC1;</option><option value="&#x975E;&#x8BA4;&#x8BC1;">&#x975E;&#x8BA4;&#x8BC1;</option></select></label>
+          <label class="field"><span>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</span><select v-model="organizationFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field"><span>&#x5E73;&#x53F0;</span><select v-model="platformFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field"><span>&#x4E1A;&#x52A1;&#x7EBF;</span><select v-model="businessLineFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in businessLineOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field"><span>&#x5730;&#x57DF;</span><select v-model="cityFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in cityOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field"><span>&#x751F;&#x547D;&#x5468;&#x671F;</span><select v-model="lifecycleFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field manual-follower-field"><span>&#x7C89;&#x4E1D;&#x91CF;</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" min="0" placeholder="&#x8D77;&#x59CB;&#x7C89;&#x4E1D;&#x91CF;" /><i>&#x81F3;</i><input v-model.number="followersMax" type="number" min="0" placeholder="&#x622A;&#x6B62;&#x7C89;&#x4E1D;&#x91CF;" /></div></label>
+        </div>
+        <div v-else class="manual-upload-panel">
+          <div><b>按 UM 号导入账号</b><p>下载 CSV 模板，填写 UM 号后上传；匹配到的账号会自动勾选。</p></div>
+          <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadUmTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByUm(($event.target as HTMLInputElement).files?.[0])" /><button class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
+          <div v-if="importMatchedCount || importUnknownUmNos.length" class="manual-import-result"><b>识别成功 {{ importMatchedCount }} 个</b><div v-if="importUnknownUmNos.length"><span>未匹配 UM 号（{{ importUnknownUmNos.length }}）</span><div class="manual-unknown-list">{{ importUnknownUmNos.join('、') }}</div></div></div>
+        </div>
+        <div class="manual-account-list-meta"><div class="manual-account-counts"><b>{{ accountSelectionMode === 'filter' ? '符合条件' : '导入识别' }} {{ matchingAccounts.length }} 个</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span><span>已选 <strong>{{ sampledIds.length }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
+        <LoadingSkeleton v-if="catalogLoading || !store.initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="&#x5168;&#x9009;&#x5F53;&#x524D;&#x7B5B;&#x9009;&#x4E0B;&#x7684;&#x53EF;&#x7B56;&#x5212;&#x8D26;&#x53F7;&#xFF08;&#x8DE8;&#x9875;&#xFF09;" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x8D26;&#x53F7;&#x6635;&#x79F0;</th><th>&#x8D26;&#x53F7; ID</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x4E1A;&#x52A1;&#x7EBF;</th><th>&#x5E73;&#x53F0;</th><th>&#x5730;&#x57DF;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x6570;</th></tr></thead><tbody>
+          <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td>{{ account.account_id }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.business_line || '\u2014' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.city || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
+          <tr v-if="visibleAccounts.length === 0"><td colspan="11"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
+        </tbody></table></div>
+        <ListPagination v-model:page="accountPage" v-model:page-size="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
+        <div class="footer-actions"><div v-if="accountReview" class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>本次选择了 <em>{{ sampledIds.length }}</em> 个账号进行策划，如需调整，请返回调整</strong><button class="btn" type="button" @click="accountReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmAccountReview">下一步</button></div><button v-else class="btn primary" type="button" :disabled="!sampledIds.length || !availabilityReady || busy" @click="saveAccountStep">{{ availabilityLoading ? '查询中…' : '保存' }}</button></div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="card">
-    <div class="card-head"><div><h2>2. 筛选账号</h2></div><button class="btn" type="button" @click="certifiedFilter = ''; followerRange = ''; trendFilter = ''; queried = false; sampledIds = []">重置筛选</button></div>
-    <div class="card-body">
-      <div class="manual-filter-grid">
-        <label class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" /></label>
-        <label class="field"><span>认证状态</span><select v-model="certifiedFilter"><option value="">全部</option><option value="yes">已认证</option><option value="no">未认证</option></select></label>
-        <label class="field"><span>粉丝量</span><select v-model="followerRange"><option value="">全部</option><option value="lt1k">千粉以下</option><option value="1k_10k">1千–1万</option><option value="10k_100k">1万–10万</option><option value="100k_500k">10万–50万</option><option value="gte500k">50万以上</option></select></label>
-        <label class="field"><span>流量趋势</span><select v-model="trendFilter"><option value="">全部</option><option v-for="value in trendOptions" :key="value" :value="value">{{ value }}</option></select></label>
-        <div class="manual-filter-action"><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !publishDate" @click="queryAccounts">查询账号</button></div>
+    <section v-else-if="step === 2" key="manual-step-topics" class="card manual-topic-step">
+      <div class="card-head"><div><h2>选择选题</h2></div><span class="manual-selected-count">已选 {{ selectedTopicIds.length }} 个</span></div>
+      <div class="card-body">
+        <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters" @click="topicFiltersExpanded = !topicFiltersExpanded">筛选条件 <span>{{ topicFiltersExpanded ? '⌃' : '⌄' }}</span></button></div>
+        <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters">
+          <label class="field"><span class="field-label-with-tip">选题 ID <span class="field-help-tip" tabindex="0" title="输入完整选题 ID，进行精确匹配">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="输入完整选题 ID" @keydown.enter.prevent="flushSearch" /></label>
+          <label class="field"><span class="field-label-with-tip">选题标题 <span class="field-help-tip" tabindex="0" title="输入标题关键词，进行模糊搜索">?</span></span><input v-model="topicQuery" type="search" placeholder="输入选题标题关键词" @keydown.enter.prevent="flushSearch" /></label>
+          <label class="field"><span>选题类型</span><select v-model="topicMarketingFilter"><option value="">全部</option><option value="true">营销</option><option value="false">非营销</option></select></label>
+          <label class="field"><span>内容类型</span><select v-model="contentType"><option value="">全部</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+          <label class="field"><span>关联产品</span><select v-model="relatedProduct"><option value="">全部</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
+          <label class="field"><span>关联活动</span><select v-model="relatedActivity"><option value="">全部</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
+          <label class="field"><span>关联属地热点</span><select v-model="relatedHotspot"><option value="">全部</option><option v-for="value in relatedHotspots" :key="value" :value="value">{{ value }}</option></select></label>
+          <div v-for="dimension in (['T3', 'T4', 'T5'] as const)" :key="dimension" class="field"><span>{{ tagNames[dimension] }}</span><TagCascader v-model="labelFilters[dimension]" :groups="tagGroups(taxonomyItems, dimension)" :label="tagNames[dimension]" /></div>
+          <div class="manual-topic-filter-actions"><button class="text-btn" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''; labelFilters = emptyLabelFilters()">清空筛选</button><button class="text-btn" type="button" :disabled="!selectedTopicIds.length" @click="selectedTopicIds = []">清空选择</button></div>
+        </div>
+        <div class="manual-topic-list-meta"><b>符合条件 {{ filteredTopics.length }} 个</b><span>可跨页选择，已选 {{ selectedTopicIds.length }} 个</span></div>
+        <LoadingSkeleton v-if="catalogLoading || !store.initialized" /><div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th><input type="checkbox" aria-label="全选当前筛选选题（跨页）" :checked="allTopicsSelected" :indeterminate="someTopicsSelected" :disabled="!filteredTopics.length" @change="selectAllTopics" /></th><th>选题 ID</th><th>选题标题</th><th>选题类型</th><th>内容类型</th><th>关联产品</th><th>关联活动</th><th>关联属地热点</th><th>有效期</th></tr></thead><tbody>
+          <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" @click="toggleTopicRow(topic.topic_id, $event)" @keydown.enter.self.prevent="toggleTopicRow(topic.topic_id, $event)" @keydown.space.self.prevent="toggleTopicRow(topic.topic_id, $event)"><td><input v-model="selectedTopicIds" type="checkbox" :value="topic.topic_id" :aria-label="`选择选题 ${topic.topic_title}`" /></td><td>{{ topic.topic_id }}</td><td><button class="topic-title-link" type="button" @click.stop="detailTopic = topic">{{ topic.topic_title }}</button><small class="manual-topic-outline"><i>选题大纲</i>{{ topic.outline || '暂无选题大纲' }}</small></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '—' }}</td><td>{{ topic.related_product || '—' }}</td><td>{{ topic.related_activity || '—' }}</td><td>{{ topic.related_hotspot || '—' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '不限' }}<i>至</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '不限' }}</span></td></tr>
+          <tr v-if="filteredTopics.length === 0"><td colspan="9"><div class="empty-state">没有符合条件的可用选题</div></td></tr>
+        </tbody></table></div>
+        <ListPagination v-model:page="topicPage" v-model:page-size="topicPageSize" :total="filteredTopics.length" unit="个选题" :page-size-options="[20, 50, 100]" class="manual-topic-pagination" />
+        <div class="footer-actions"><template v-if="topicReview"><div class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>本次选择了 <em>{{ selectedTopicIds.length }}</em> 个选题进行策划，如需调整，请返回调整</strong><button class="btn" type="button" @click="topicReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmTopicReview">下一步</button></div></template><template v-else><button class="btn" type="button" @click="returnToStep(1)">上一步</button><button class="btn primary" type="button" :disabled="!selectedTopicIds.length" @click="saveTopicStep">保存</button></template></div>
       </div>
-      <div v-if="queried" class="selection-summary manual-selection-summary">
-        <div class="manual-summary-stat"><span>筛选命中</span><b>{{ eligibleAccounts.length }} <small>个账号</small></b></div>
-        <div class="manual-summary-stat"><span>规划数量</span><b>{{ targetCount }} <small>个账号</small></b></div>
-        <div :class="['manual-summary-stat', shortfall > 0 ? 'danger' : 'success']"><span>数量状态</span><b>{{ shortfall > 0 ? `还差 ${shortfall} 个` : '数量充足' }}</b></div>
-        <div class="manual-summary-stat"><span>当前已选</span><b>{{ sampledIds.length }} <small>/ {{ targetCount }}</small></b></div>
-        <button class="btn primary manual-random-button" type="button" :disabled="busy || shortfall > 0" @click="randomAccounts">{{ sampledIds.length ? '重新随机选取' : '随机选取' }} {{ targetCount }} 个</button>
+    </section>
+
+    <section v-else key="manual-step-submit" class="card">
+      <div class="card-head"><div><h2>确认并提交</h2></div></div>
+      <div class="card-body">
+        <div class="manual-submit-summary">
+          <div><span>策划任务名称</span><b>{{ taskName }}</b></div><div><span>投放日期</span><b>{{ publishDate }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个</small></b></div><div><span>选题</span><b class="manual-review-total">{{ selectedTopics.length }} <small>个</small></b></div>
+        </div>
+        <div class="manual-submit-groups">
+          <section class="manual-submit-group"><div class="manual-submit-group-head"><h3>本次策划账号</h3><span>{{ selectedAccounts.length }} 个</span></div><div class="manual-review-items manual-submit-items"><div v-for="account in submitAccountsPage" :key="account.account_id" class="manual-review-item"><b>{{ account.account_name }}</b></div></div><ListPagination v-model:page="submitAccountPage" v-model:page-size="submitAccountPageSize" :total="selectedAccounts.length" unit="个账号" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" /></section>
+          <section class="manual-submit-group"><div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div><div class="manual-review-items manual-submit-items"><div v-for="topic in submitTopicsPage" :key="topic.topic_id" class="manual-review-item"><b>{{ topic.topic_title }}</b></div></div><ListPagination v-model:page="submitTopicPage" v-model:page-size="submitTopicPageSize" :total="selectedTopics.length" unit="个选题" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" /></section>
+        </div>        <div class="footer-actions"><button class="btn" type="button" @click="returnToStep(2)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交手动策划' }}</button></div>
       </div>
-      <p v-if="queried && shortfall > 0" class="inline-error">筛选账号不足，还差 {{ shortfall }} 个，请调整筛选条件或规划数量。</p>
-      <div v-if="queried" class="manual-account-list-head"><b>筛选结果</b><span>已选 {{ sampledIds.length }} / {{ targetCount }} 个账号</span></div>
-      <div v-if="queried" class="table-wrap manual-account-table"><table><thead><tr><th></th><th>账号</th><th>认证状态</th><th>粉丝量</th><th>流量趋势</th><th>本次投放日期</th></tr></thead><tbody><tr v-for="account in eligibleAccounts" :key="account.account_id"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="busy || (!sampledIds.includes(account.account_id) && sampledIds.length >= targetCount)" @change="toggleSampledAccount(account.account_id, $event)" /></td><td><b>{{ account.account_name }}</b><small>{{ account.account_alias ? `${account.account_alias} · ` : '' }}{{ account.account_id }}</small></td><td><span :class="['tag', account.certified ? 'blue' : 'gray']">{{ account.certified ? '已认证' : '未认证' }}</span></td><td>{{ account.followers ?? '—' }}</td><td>{{ account.traffic_trend || '—' }}</td><td><span class="tag blue">{{ publishDate }}</span></td></tr><tr v-if="eligibleAccounts.length === 0"><td colspan="6"><div class="empty-state">当前筛选条件下暂无账号</div></td></tr></tbody></table></div>
-    </div>
-  </section>
+    </section>
+    </Transition>
+  </template>
 
-  <section class="card">
-    <div class="card-head"><div><div class="card-title"><h2>3. 选择选题</h2></div></div><button class="btn primary" type="button" @click="openTopicSelector">＋ 选择选题</button></div>
-    <div class="card-body">
-      <div class="topic-selection-summary"><div><b>已选 {{ selectedTopicIds.length }} 个选题</b></div><button class="btn" type="button" :disabled="!selectedTopicIds.length" @click="selectedTopicIds = []">清空已选</button></div>
-      <div v-if="selectedTopicIds.length" class="topic-picked"><div v-for="topicId in selectedTopicIds" :key="topicId" class="topic-pick-card"><span class="tag blue">{{ topics.find(topic => topic.topic_id === topicId)?.content_type || '选题' }}</span><div><b>{{ topics.find(topic => topic.topic_id === topicId)?.topic_title || topicId }}</b><small>{{ topics.find(topic => topic.topic_id === topicId)?.outline || '暂无选题大纲' }}</small></div><button class="remove-topic" type="button" title="移除" @click="selectedTopicIds = selectedTopicIds.filter(id => id !== topicId)">×</button></div></div>
-      <div v-else class="empty-state">尚未选择选题，请点击“选择选题”。</div>
-    </div>
-  </section>
+  <Teleport to="body">
+    <Transition name="manual-planned-tooltip">
+      <div v-if="plannedAccountTooltip" id="manual-planned-account-tooltip" class="manual-planned-tooltip" role="tooltip" :style="{ left: `${plannedAccountTooltip.left}px`, top: `${plannedAccountTooltip.top}px` }">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.4" /><path d="M10 9v4m0-7v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
+        <span>{{ publishDate }} 已手动策划，不可重复选择</span>
+      </div>
+    </Transition>
+  </Teleport>
 
-  <section class="card">
-    <div class="card-body">
-      <label class="field manual-note-field"><span>备注（可选）</span><input v-model="note" type="text" maxlength="500" /></label>
-      <div class="footer-actions"><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !queried || !selectionReady || shortfall > 0 || !selectedTopicIds.length || !publishDate" @click="submit">{{ busy ? '正在提交…' : '生成手动策划' }}</button></div>
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="card-head"><div><h2>最近手动策划任务</h2></div><button class="btn" type="button" :disabled="busy || !store.databaseReady" @click="loadTasks">刷新任务</button></div>
-    <div class="table-wrap"><table><thead><tr><th>发起时间</th><th>操作人</th><th>投放日期</th><th>规划账号数</th><th>成功结果</th><th>失败结果</th><th>选题数</th><th>状态</th><th>最后更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="task in tasks" :key="task.id"><td>{{ task.created_at }}</td><td>{{ task.created_by }}</td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td>{{ task.result_count }}</td><td>{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.status)]">{{ taskStatusLabel(task.status) }}</span><small v-if="task.failure_reason">{{ task.failure_reason }}</small></td><td>{{ task.updated_at }}</td><td><button v-if="task.batch_id" class="text-btn" type="button" @click="router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual' } })">查看结果</button><span v-else>—</span></td></tr><tr v-if="tasks.length === 0"><td colspan="10"><div class="empty-state">暂无手动策划任务</div></td></tr></tbody></table></div>
-  </section>
-
-  <div v-if="topicSelectorOpen" class="drawer-mask show" @click.self="closeTopicSelector"><div class="drawer topic-selector-modal"><div class="drawer-head"><div><div class="drawer-title">选择选题</div></div><button class="drawer-close" type="button" @click="closeTopicSelector">×</button></div><div class="drawer-body"><div class="catalog-filters"><input v-model="topicQuery" type="search" /><select v-model="contentType"><option value="">全部内容类型</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></div><div class="topic-result-meta"><span>搜索结果 <b>{{ filteredTopics.length }}</b> 个</span><span class="muted">已选择 <b>{{ topicDraftIds.length }}</b> 个</span></div><div class="topic-selector-list"><label v-for="topic in filteredTopics" :key="topic.topic_id" class="topic-check"><input v-model="topicDraftIds" type="checkbox" :value="topic.topic_id" /><span><b>{{ topic.topic_title }}</b><small>{{ topic.content_type || '暂无内容类型' }}<template v-if="topic.outline"> · {{ topic.outline }}</template></small></span></label><div v-if="filteredTopics.length === 0" class="empty-state">没有符合条件的可用选题</div></div></div><div class="drawer-foot"><button class="btn" type="button" @click="closeTopicSelector">取消</button><button class="btn primary" type="button" @click="confirmTopicSelector">确认选择</button></div></div></div>
+  <Teleport to="body">
+    <Transition name="manual-eligibility-modal">
+      <div v-if="eligibilityNotice" class="manual-eligibility-mask" @click.self="closeEligibilityNotice()">
+        <section class="manual-eligibility-dialog" role="alertdialog" aria-modal="true" aria-labelledby="manual-eligibility-title" aria-describedby="manual-eligibility-description">
+          <span class="manual-eligibility-icon" aria-hidden="true">!</span>
+          <h2 id="manual-eligibility-title">选题资格不匹配</h2>
+          <p id="manual-eligibility-description">{{ eligibilityNotice }}</p>
+          <div class="manual-eligibility-actions"><button class="btn" type="button" @click="closeEligibilityNotice()">知道了</button><button class="btn primary" type="button" @click="closeEligibilityNotice(true)">返回修改选择</button></div>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
+  <TopicDetailDrawer v-if="detailTopic" :topic="detailTopic" :items="taxonomyItems" @close="detailTopic = null" />
 </template>
+
+<style scoped>
+.manual-stepper{display:flex;gap:0;align-items:center;min-height:64px;padding:10px 24px;margin-bottom:20px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--neutral-50);scroll-margin-top:88px}
+.manual-step{display:flex;flex:1;align-items:center;gap:8px;min-height:44px;padding:0;border:0;background:transparent;color:var(--neutral-400);font-size:14px;font-weight:500;text-align:left}
+.manual-step b{font-weight:500}
+.manual-step:not(:last-child)::after{content:'';flex:1;height:1px;margin:0 16px;background:var(--neutral-200)}
+.manual-step>span{display:grid;place-items:center;flex:none;width:28px;height:28px;border:1px solid var(--neutral-200);border-radius:50%;background:var(--surface);color:var(--neutral-400);font-size:13px;font-variant-numeric:tabular-nums}
+.manual-step.active{color:var(--neutral-900)}
+.manual-step.active>span{border-color:var(--primary-600);background:var(--primary-600);color:var(--surface)}
+.manual-step.done{color:var(--neutral-700)}
+.manual-step.done>span{background:var(--primary-50);border-color:var(--primary-200);color:var(--primary-600)}
+.manual-step:disabled{opacity:1;cursor:default}
+.manual-eligibility-mask{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;background:var(--mask)}
+.manual-eligibility-dialog{width:min(440px,100%);padding:24px;border:1px solid var(--neutral-200);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-4)}
+.manual-eligibility-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--danger-bg);color:var(--danger);font-size:18px;font-weight:700}
+.manual-eligibility-dialog h2{margin:16px 0 8px;color:var(--neutral-900);font-size:18px;line-height:26px}
+.manual-eligibility-dialog p{margin:0;color:var(--neutral-600);font-size:14px;line-height:22px}
+.manual-eligibility-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px}
+.manual-eligibility-modal-enter-active,.manual-eligibility-modal-leave-active{transition:opacity .16s ease}
+.manual-eligibility-modal-enter-from,.manual-eligibility-modal-leave-to{opacity:0}
+.manual-task-card .card-head{padding:20px 24px}
+.manual-task-card table{min-width:1220px}
+.manual-task-card th{padding:13px 16px;background:var(--neutral-50);color:var(--neutral-500);font-weight:500}
+.manual-task-card td{height:52px;padding:12px 16px;color:var(--neutral-600);font-size:14px;line-height:22px;font-variant-numeric:tabular-nums}
+.manual-task-card tbody tr:nth-child(even){background:var(--surface)}
+.manual-task-card tbody tr:hover{background:var(--hover-bg)}
+.manual-task-card tbody tr.has-failures{background:var(--processing-row)}
+.manual-task-card tbody tr.has-failures:hover{background:var(--processing-bg)}
+.manual-task-card th:nth-child(n+3):nth-child(-n+6),.manual-task-card td:nth-child(n+3):nth-child(-n+6){text-align:center;white-space:nowrap}
+.manual-task-card td:first-child{min-width:150px;max-width:220px;color:var(--neutral-700);font-weight:500;overflow-wrap:anywhere}
+.manual-task-card th:last-child,.manual-task-card td:last-child{position:sticky;right:0;min-width:148px;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-200)}
+.manual-task-card th:last-child{z-index:2;background:var(--neutral-50)}
+.manual-task-card tr:hover td:last-child{background:var(--hover-bg)}
+.manual-task-card tr.has-failures td:last-child{background:var(--surface)}
+.manual-task-card td:nth-child(2){white-space:nowrap}
+.manual-task-card td:nth-child(9),.manual-task-card td:nth-child(10){font-size:13px;line-height:20px;color:var(--neutral-500);white-space:nowrap}
+.manual-task-card .page-actions{flex-wrap:nowrap;gap:12px;white-space:nowrap}
+.manual-task-card .tag{padding:3px 8px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap}
+.manual-task-card td:nth-child(8) .tag.gray{padding:0;background:transparent;color:var(--neutral-400);font-weight:400}
+.manual-task-card td.manual-task-count{color:var(--neutral-400);font-size:13px;font-weight:400}
+.manual-task-card td.manual-task-count.completed{color:var(--success);font-weight:600}
+.manual-task-card td.manual-task-count.failed{color:var(--danger);font-weight:600}
+.topic-type-badge{display:inline-flex;align-items:center;min-height:22px;padding:1px 7px;border-radius:5px;font-size:12px;line-height:18px;white-space:nowrap}.topic-type-badge.marketing{background:var(--primary-50);color:var(--primary-600)}.topic-type-badge.non-marketing{background:var(--neutral-100);color:var(--neutral-600)}
+.manual-page-head{align-items:center}.manual-head-actions{display:flex;align-items:center;gap:8px}.manual-stepper{display:flex;align-items:center;gap:0;margin:0 0 18px;padding:16px 22px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface);scroll-margin-top:76px}.manual-step{display:flex;align-items:center;gap:9px;flex:1;color:var(--neutral-400);font-size:13px}.manual-step:not(:last-child)::after{content:'';height:1px;flex:1;margin:0 16px;background:#e5e9f0}.manual-step span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--neutral-100);font-weight:600}.manual-step.active{color:var(--primary-600)}.manual-step.active span,.manual-step.done span{background:var(--primary-600);color:var(--surface)}.manual-step.done{color:var(--neutral-700)}.manual-create-meta{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}.manual-create-meta .field{min-width:180px}.manual-account-filters,.manual-topic-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;margin-bottom:18px}.manual-account-filters .field,.manual-topic-filters .field{min-width:0}.manual-account-filters input,.manual-account-filters select,.manual-topic-filters input,.manual-topic-filters select{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:var(--neutral-900)}.manual-follower-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface)}.manual-follower-range input{width:50%;min-width:0;height:32px;padding:0;border:0;border-radius:0;outline:0}.manual-follower-range i,.manual-topic-validity i{color:var(--neutral-400);font-size:12px;font-style:normal;white-space:nowrap}.manual-selection-modes{display:flex;gap:4px;width:max-content;margin:0 0 16px;padding:4px;border-radius:8px;background:var(--neutral-100)}.manual-mode-tab{min-width:104px;padding:8px 14px;border:0;border-radius:6px;background:transparent;color:var(--neutral-500);cursor:pointer}.manual-mode-tab.active{background:var(--surface);color:var(--primary-600);box-shadow:0 1px 3px #1018281a;font-weight:600}.manual-upload-panel{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:16px;border:1px dashed var(--neutral-300);border-radius:9px;background:var(--neutral-50)}.manual-upload-panel p{margin:6px 0 0;color:var(--neutral-400);font-size:12px}.manual-upload-actions{display:flex;gap:8px}.manual-file-input{display:none}.manual-import-result{grid-column:1/-1;padding-top:12px;border-top:1px solid var(--neutral-200);color:var(--success);font-size:13px}.manual-import-result span{color:var(--processing)}.manual-unknown-list{margin-top:5px;max-height:90px;overflow:auto;color:var(--processing);font-size:12px;line-height:1.6}.manual-account-counts{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.manual-account-counts strong{color:var(--neutral-700);font-weight:600}.manual-account-counts .manual-planned-count,.manual-account-counts .manual-planned-count strong{color:var(--processing)}.manual-account-list-meta,.manual-topic-list-meta{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:13px}.manual-account-list-meta span,.manual-topic-list-meta span{color:var(--neutral-400);font-size:12px}.manual-account-table,.manual-topic-table{max-height:430px;overflow:auto;border:1px solid var(--neutral-200);border-radius:8px}.manual-account-table table{min-width:1120px}.manual-topic-table table{min-width:1160px}.manual-account-table thead th,.manual-topic-table thead th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}.manual-account-table tbody tr:hover,.manual-account-table tbody tr.selected,.manual-topic-table tbody tr:hover,.manual-topic-table tbody tr.selected{background:var(--primary-50)}.manual-account-table input,.manual-topic-table input{accent-color:var(--primary-600)}.manual-account-table tbody tr.already-planned,.manual-account-table tbody tr.already-planned:hover{background:var(--neutral-50);color:var(--neutral-400);cursor:not-allowed}.manual-account-table tbody tr.already-planned input{pointer-events:none}.manual-account-pagination,.manual-topic-pagination{margin:14px 0 18px}.manual-topic-outline{display:block;max-width:360px;margin-top:4px;color:var(--neutral-400);font-size:11px;line-height:1.5;white-space:normal}.manual-topic-validity{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px}.manual-step-change-enter-active,.manual-step-change-leave-active{transition:opacity .2s ease,transform .2s ease}.manual-step-change-enter-from{opacity:0;transform:translateY(8px)}.manual-step-change-leave-to{opacity:0;transform:translateY(-5px)}.manual-step-review{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--primary-100);border-radius:8px;background:var(--primary-50)}.manual-step-review-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:14px;font-weight:700}.manual-step-review>strong{flex:1;min-width:0;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.5}.manual-step-review>strong em{display:inline-block;margin:0 2px;color:var(--primary-600);font-size:20px;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-1px}.manual-submit-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.manual-submit-summary>div{display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--neutral-200);border-radius:8px}.manual-submit-summary span,.manual-submit-group-head h3{color:var(--neutral-400);font-size:12px}.manual-submit-groups{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.manual-submit-group{min-width:0;padding:14px;border:1px solid var(--neutral-200);border-radius:9px;background:var(--surface)}.manual-submit-group-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.manual-submit-group-head h3{margin:0;color:var(--neutral-700);font-size:13px}.manual-submit-group-head>span{color:var(--primary-600);font-size:12px;font-weight:600}.manual-review-total{color:var(--primary-600);font-size:22px;font-variant-numeric:tabular-nums}.manual-review-total small{font-size:12px;font-weight:500}.manual-review-items{display:flex;flex-direction:column;max-height:300px;overflow:auto;border-top:1px solid var(--neutral-200)}.manual-submit-items{height:300px;overflow-y:scroll;scrollbar-gutter:stable}.manual-submit-pagination{margin-top:10px}.manual-review-item{display:flex;flex-direction:column;gap:4px;padding:9px 2px;border-bottom:1px solid var(--neutral-100)}.manual-review-item:last-child{border-bottom:0}.manual-review-item>b{color:var(--neutral-700);font-size:13px;line-height:1.45;overflow-wrap:anywhere}.manual-review-item>small{color:var(--neutral-400);font-size:11px;line-height:1.4;overflow-wrap:anywhere}.manual-task-card .table-wrap{max-height:calc(100vh - 260px);overflow:auto}.manual-planned-tooltip{position:fixed;z-index:80;display:flex;align-items:center;gap:8px;width:min(304px,calc(100vw - 24px));padding:10px 12px;border:1px solid #ffffff12;border-radius:8px;background:var(--neutral-950);color:var(--surface);box-shadow:0 6px 20px #11223d26;font-size:12px;line-height:1.6;white-space:nowrap;pointer-events:none}.manual-planned-tooltip svg{flex:none;width:16px;height:16px;color:var(--neutral-300)}.manual-planned-tooltip-enter-active,.manual-planned-tooltip-leave-active{transition:opacity .12s ease}.manual-planned-tooltip-enter-from,.manual-planned-tooltip-leave-to{opacity:0}.manual-selected-count{color:var(--primary-600);font-weight:600}.manual-availability-error{display:flex;align-items:center;justify-content:space-between;gap:12px}
+@media(max-width:900px){.manual-account-filters,.manual-topic-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.manual-submit-groups{grid-template-columns:1fr}}
+@media(max-width:580px){.manual-account-filters,.manual-topic-filters,.manual-submit-summary{grid-template-columns:1fr}.manual-topic-list-meta{align-items:flex-start;gap:6px;flex-direction:column}.manual-stepper{padding:12px;scroll-margin-top:124px}.manual-step{gap:5px;font-size:11px}.manual-step:not(:last-child)::after{margin:0 7px}.manual-step span{width:22px;height:22px}.manual-create-meta{align-items:stretch;flex-direction:column}.manual-create-meta .field{min-width:0}.manual-step-review{flex-wrap:wrap}.manual-step-review>strong{flex-basis:calc(100% - 36px)}.manual-step-review .btn{flex:1}.manual-upload-panel{grid-template-columns:1fr}.manual-upload-actions{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.manual-step-change-enter-active,.manual-step-change-leave-active{transition:none}}
+</style>
+
+<style scoped>
+.topic-filters-toggle{display:flex;justify-content:flex-end;margin-bottom:12px}.topic-title-link{padding:0;border:0;background:transparent;color:var(--primary-600);font-size:13px;font-weight:500;text-align:left;line-height:1.6}.topic-title-link:hover{text-decoration:underline}.manual-topic-filters .field{width:100%}.manual-topic-filters :deep(.cascader-trigger){width:100%}
+</style>
