@@ -213,13 +213,20 @@ class ManualPreviewInput(BaseModel):
             raise ValueError("策划任务名称不能为空")
         return value
 
-    @field_validator("account_ids", "topic_ids")
+    @field_validator("account_ids")
     @classmethod
     def unique_ids(cls, values: list[str]) -> list[str]:
         if len(values) != len(set(values)):
-            raise ValueError("账号或选题不能重复选择")
+            raise ValueError("\u8d26\u53f7 ID \u4e0d\u80fd\u91cd\u590d\u9009\u62e9")
         if any(not value.strip() for value in values):
-            raise ValueError("账号或选题 ID 不能为空")
+            raise ValueError("\u8d26\u53f7 ID \u4e0d\u80fd\u4e3a\u7a7a")
+        return values
+
+    @field_validator("topic_ids")
+    @classmethod
+    def nonempty_topic_ids(cls, values: list[str]) -> list[str]:
+        if any(not value.strip() for value in values):
+            raise ValueError("\u9009\u9898 ID \u4e0d\u80fd\u4e3a\u7a7a")
         return values
 
 

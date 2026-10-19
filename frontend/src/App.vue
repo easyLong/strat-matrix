@@ -7,8 +7,8 @@ const store = usePlanningStore()
 const route = useRoute()
 onMounted(() => { void store.initialize() })
 const nav = [
-  { to: '/config', icon: 'M4 6h16M4 12h16M4 18h16M9 3v6m6 0v6m-7 0v6', label: '策划配置' },
-  { to: '/manual', icon: 'm15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z', label: '手动策划' },
+  { to: '/config', icon: 'M4 6h16M4 12h16M4 18h16M9 3v6m6 0v6m-7 0v6', label: 'AI策划配置' },
+  { to: '/manual', icon: 'm15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z', label: '人工策划' },
   { to: '/results', icon: 'M4 4h16v16H4zM9 4v16M4 10h16M13 14h3m-3 3h3', label: '策划结果' },
 ]
 </script>

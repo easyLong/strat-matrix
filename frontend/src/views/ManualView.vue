@@ -35,6 +35,7 @@ const cityFilter = ref('')
 const lifecycleFilter = ref('')
 const followersMin = ref<number | null>(null)
 const followersMax = ref<number | null>(null)
+const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', organization: '', platform: '', businessLine: '', city: '', lifecycle: '', followersMin: null as number | null, followersMax: null as number | null })
 const accounts = ref<AccountOption[]>([])
 const topics = ref<TopicOption[]>([])
 const taxonomyItems = ref<TaxonomyItems>({})
@@ -59,6 +60,7 @@ const contentType = ref('')
 const relatedProduct = ref('')
 const relatedActivity = ref('')
 const relatedHotspot = ref('')
+const appliedTopicFilters = ref({ topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '', labels: emptyLabelFilters() })
 const topicPage = ref(1)
 const topicPageSize = ref(20)
 const submitAccountPage = ref(1)
@@ -110,19 +112,31 @@ async function resetSelectionListScroll(target: 'accounts' | 'topics') {
 }
 
 const eligibleAccounts = computed(() => accounts.value.filter(account => {
-  const search = searchTerms.value.keyword.trim().toLocaleLowerCase()
-  const accountType = account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '')
+  const filters = appliedAccountFilters.value
+  const search = filters.keyword.trim().toLocaleLowerCase()
+  const accountType = account.account_type || (account.certified === true ? '\u8ba4\u8bc1' : account.certified === false ? '\u975e\u8ba4\u8bc1' : '')
   return (!search || `${account.account_name} ${account.account_alias} ${account.account_id}`.toLocaleLowerCase().includes(search)) &&
-    (!accountTypeFilter.value || accountType === accountTypeFilter.value) &&
-    (!searchTerms.value.umNoFilter.trim() || (account.um_no || '').toLocaleLowerCase().includes(searchTerms.value.umNoFilter.trim().toLocaleLowerCase())) &&
-    (!organizationFilter.value || account.organization === organizationFilter.value) &&
-    (!platformFilter.value || account.platform === platformFilter.value) &&
-    (!businessLineFilter.value || account.business_line === businessLineFilter.value) &&
-    (!cityFilter.value || account.city === cityFilter.value) &&
-    (!lifecycleFilter.value || account.lifecycle_stage === lifecycleFilter.value) &&
-    (followersMin.value === null || (account.followers !== null && account.followers >= followersMin.value)) &&
-    (followersMax.value === null || (account.followers !== null && account.followers <= followersMax.value))
+    (!filters.accountType || accountType === filters.accountType) &&
+    (!filters.umNo.trim() || (account.um_no || '').toLocaleLowerCase().includes(filters.umNo.trim().toLocaleLowerCase())) &&
+    (!filters.organization || account.organization === filters.organization) &&
+    (!filters.platform || account.platform === filters.platform) &&
+    (!filters.businessLine || account.business_line === filters.businessLine) &&
+    (!filters.city || account.city === filters.city) &&
+    (!filters.lifecycle || account.lifecycle_stage === filters.lifecycle) &&
+    (filters.followersMin === null || (account.followers !== null && account.followers >= filters.followersMin)) &&
+    (filters.followersMax === null || (account.followers !== null && account.followers <= filters.followersMax))
 }))
+function applyAccountFilters() {
+  flushSearch()
+  appliedAccountFilters.value = { keyword: keyword.value, accountType: accountTypeFilter.value, umNo: umNoFilter.value, organization: organizationFilter.value, platform: platformFilter.value, businessLine: businessLineFilter.value, city: cityFilter.value, lifecycle: lifecycleFilter.value, followersMin: followersMin.value, followersMax: followersMax.value }
+  accountPage.value = 1
+  applyDefaultAccountSelection()
+}
+function applyTopicFilters() {
+  flushSearch()
+  appliedTopicFilters.value = { topicId: topicIdFilter.value, query: topicQuery.value, marketing: topicMarketingFilter.value, contentType: contentType.value, product: relatedProduct.value, activity: relatedActivity.value, hotspot: relatedHotspot.value, labels: JSON.parse(JSON.stringify(labelFilters.value)) }
+  topicPage.value = 1
+}
 const visibleAccounts = computed(() => {
   const pinned = sampledIds.value.map(id => accounts.value.find(item => item.account_id === id)).filter((item): item is AccountOption => !!item)
   const candidates = accountSelectionMode.value === 'filter'
@@ -163,20 +177,17 @@ const relatedProducts = computed(() => [...new Set(topics.value.map(item => item
 const relatedActivities = computed(() => [...new Set(topics.value.map(item => item.related_activity).filter(Boolean))].sort())
 const relatedHotspots = computed(() => [...new Set(topics.value.map(item => item.related_hotspot).filter(Boolean))].sort())
 const filteredTopics = computed(() => topics.value.filter(topic =>
-  (!searchTerms.value.topicIdFilter.trim() || topic.topic_id === searchTerms.value.topicIdFilter.trim()) &&
-  (!searchTerms.value.topicQuery.trim() || topic.topic_title.toLocaleLowerCase().includes(searchTerms.value.topicQuery.trim().toLocaleLowerCase())) &&
-  (!topicMarketingFilter.value || String(topic.is_marketing) === topicMarketingFilter.value) &&
-  (!contentType.value || topic.content_type === contentType.value) &&
-  (!relatedProduct.value || topic.related_product === relatedProduct.value) &&
-  (!relatedActivity.value || topic.related_activity === relatedActivity.value) &&
-  (!relatedHotspot.value || topic.related_hotspot === relatedHotspot.value) &&
-  matchesLabelFilters(topic, labelFilters.value, taxonomyItems.value),
+  (!appliedTopicFilters.value.topicId.trim() || topic.topic_id === appliedTopicFilters.value.topicId.trim()) &&
+  (!appliedTopicFilters.value.query.trim() || topic.topic_title.toLocaleLowerCase().includes(appliedTopicFilters.value.query.trim().toLocaleLowerCase())) &&
+  (!appliedTopicFilters.value.marketing || String(topic.is_marketing) === appliedTopicFilters.value.marketing) &&
+  (!appliedTopicFilters.value.contentType || topic.content_type === appliedTopicFilters.value.contentType) &&
+  (!appliedTopicFilters.value.product || topic.related_product === appliedTopicFilters.value.product) &&
+  (!appliedTopicFilters.value.activity || topic.related_activity === appliedTopicFilters.value.activity) &&
+  (!appliedTopicFilters.value.hotspot || topic.related_hotspot === appliedTopicFilters.value.hotspot) &&
+  matchesLabelFilters(topic, appliedTopicFilters.value.labels, taxonomyItems.value),
 ))
 const topicPageCount = computed(() => Math.max(1, Math.ceil(filteredTopics.value.length / topicPageSize.value)))
-const orderedTopics = computed(() => topicReview.value
-  ? [...filteredTopics.value].sort((a, b) => Number(selectedTopicIds.value.includes(b.topic_id)) - Number(selectedTopicIds.value.includes(a.topic_id)))
-  : filteredTopics.value)
-const pagedTopics = computed(() => orderedTopics.value.slice((topicPage.value - 1) * topicPageSize.value, topicPage.value * topicPageSize.value))
+const pagedTopics = computed(() => filteredTopics.value.slice((topicPage.value - 1) * topicPageSize.value, topicPage.value * topicPageSize.value))
 const selectedAccounts = computed(() => sampledIds.value.map(id => accounts.value.find(item => item.account_id === id)).filter((item): item is AccountOption => !!item))
 const selectedTopics = computed(() => selectedTopicIds.value.map(id => topics.value.find(item => item.topic_id === id)).filter((item): item is TopicOption => !!item))
 const submitAccountsPage = computed(() => selectedAccounts.value.slice((submitAccountPage.value - 1) * submitAccountPageSize.value, submitAccountPage.value * submitAccountPageSize.value))
@@ -184,13 +195,10 @@ const submitTopicsPage = computed(() => selectedTopics.value.slice((submitTopicP
 const accountSelectionPool = computed(() => availabilityReady.value ? matchingAccounts.value.filter(account => !isAccountPlanned(account.account_id)) : [])
 const allAccountsSelected = computed(() => accountSelectionPool.value.length > 0 && accountSelectionPool.value.every(account => sampledIds.value.includes(account.account_id)))
 const someAccountsSelected = computed(() => !allAccountsSelected.value && accountSelectionPool.value.some(account => sampledIds.value.includes(account.account_id)))
-const allTopicsSelected = computed(() => filteredTopics.value.length > 0 && filteredTopics.value.every(topic => selectedTopicIds.value.includes(topic.topic_id)))
-const someTopicsSelected = computed(() => !allTopicsSelected.value && filteredTopics.value.some(topic => selectedTopicIds.value.includes(topic.topic_id)))
 const canSubmit = computed(() => store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && publishDate.value !== '' && targetCount.value !== '' && Number.isInteger(targetCount.value) && targetCount.value >= 1 && targetCount.value <= 1000 && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0)
 const targetCountError = computed(() => targetCount.value !== '' && (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) ? '数量须为 1 至 1000 之间的整数' : '')
 
-watch(labelFilters, () => { topicPage.value = 1 }, { deep: true })
-watch([topicIdFilter, topicQuery, topicMarketingFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, topicPageSize], () => { topicPage.value = 1 })
+watch(topicPageSize, () => { topicPage.value = 1 })
 watch(topicPageCount, count => { topicPage.value = Math.min(topicPage.value, count) })
 watch(selectedAccounts, () => { submitAccountPage.value = 1 })
 watch(selectedTopics, () => { submitTopicPage.value = 1 })
@@ -206,12 +214,9 @@ function applyDefaultAccountSelection() {
   sampledIds.value = ordered.slice(0, Math.min(count, ordered.length)).map(item => item.account_id)
 }
 
-watch(eligibleAccounts, () => { accountPage.value = 1; applyDefaultAccountSelection() }, { flush: 'sync' })
+watch(eligibleAccounts, () => { accountPage.value = 1 }, { flush: 'sync' })
 watch(accountPageSize, () => { accountPage.value = 1 })
 watch(accountPageCount, count => { accountPage.value = Math.min(accountPage.value, count) })
-watch(targetCount, () => {
-  if (accountSelectionMode.value === 'filter') applyDefaultAccountSelection()
-}, { flush: 'sync' })
 
 watch([publishDate, () => store.databaseReady], () => {
   sampledIds.value = []
@@ -341,6 +346,7 @@ function toggleAccount(accountId: string, event: Event) {
 }
 
 function setAccountSelected(accountId: string, checked: boolean) {
+  if (accountReview.value) return
   if (checked && (!availabilityReady.value || isAccountPlanned(accountId))) return
   if (checked && !sampledIds.value.includes(accountId)) {
     error.value = ''
@@ -355,36 +361,56 @@ function interactiveRowTarget(event: Event) {
 }
 
 function toggleAccountRow(accountId: string, event: Event) {
-  if (interactiveRowTarget(event) || !availabilityReady.value || isAccountPlanned(accountId)) return
+  if (accountReview.value || interactiveRowTarget(event) || !availabilityReady.value || isAccountPlanned(accountId)) return
   setAccountSelected(accountId, !sampledIds.value.includes(accountId))
 }
 
-function toggleTopicRow(topicId: string, event: Event) {
+function addTopicFromRow(topicId: string, event: Event) {
   if (interactiveRowTarget(event)) return
-  selectedTopicIds.value = selectedTopicIds.value.includes(topicId) ? selectedTopicIds.value.filter(id => id !== topicId) : [...selectedTopicIds.value, topicId]
+  addTopic(topicId)
+}
+
+function addTopic(topicId: string) {
+  if (topicReview.value || selectedTopicIds.value.length >= 100) return
+  selectedTopicIds.value = [...selectedTopicIds.value, topicId]
+  error.value = ''
+}
+
+function removeTopic(index: number) {
+  if (topicReview.value) return
+  selectedTopicIds.value = selectedTopicIds.value.filter((_, itemIndex) => itemIndex !== index)
   topicReview.value = false
+}
+
+function topicTooltip(topic: TopicOption) {
+  const dash = '\u2014'
+  const validity = `${topic.valid_from?.slice(0, 10) || dash} - ${topic.valid_to?.slice(0, 10) || dash}`
+  return [
+    `\u9009\u9898 ID: ${topic.topic_id}`,
+    `\u9009\u9898\u6807\u9898: ${topic.topic_title}`,
+    `\u9009\u9898\u5927\u7eb2: ${topic.outline || dash}`,
+    `\u5185\u5bb9\u7c7b\u578b: ${topic.content_type || dash}`,
+    `\u9009\u9898\u7c7b\u578b: ${topic.is_marketing ? '\u8425\u9500' : '\u975e\u8425\u9500'}`,
+    `\u5173\u8054\u4ea7\u54c1: ${topic.related_product || dash}`,
+    `\u5173\u8054\u6d3b\u52a8: ${topic.related_activity || dash}`,
+    `\u5173\u8054\u5c5e\u5730\u70ed\u70b9: ${topic.related_hotspot || dash}`,
+    `\u6709\u6548\u671f: ${validity}`,
+  ].join('\n')
 }
 
 function selectAllAccounts(event: Event) {
   flushSearch()
-  if (!availabilityReady.value) return
+  if (accountReview.value || !availabilityReady.value) return
   const ids = accountSelectionPool.value.map(account => account.account_id)
   sampledIds.value = (event.target as HTMLInputElement).checked ? [...new Set([...sampledIds.value, ...ids])] : sampledIds.value.filter(id => !ids.includes(id))
   accountReview.value = false
 }
 
-function selectAllTopics(event: Event) {
-  flushSearch()
-  const ids = filteredTopics.value.map(topic => topic.topic_id)
-  selectedTopicIds.value = (event.target as HTMLInputElement).checked ? [...new Set([...selectedTopicIds.value, ...ids])] : selectedTopicIds.value.filter(id => !ids.includes(id))
-  topicReview.value = false
-}
-
 function returnToStep(next: number) {
   if (next >= step.value || busy.value) return
   step.value = next
-  if (next === 1) accountReview.value = false
-  if (next === 2) topicReview.value = false
+  if (next <= 2) accountReview.value = false
+  if (next <= 3) topicReview.value = false
   void revealStepProgress()
 }
 
@@ -393,8 +419,7 @@ function setAccountSelectionMode(next: 'filter' | 'upload') {
   error.value = ''
   notice.value = ''
   accountPage.value = 1
-  if (next === 'filter') applyDefaultAccountSelection()
-  else sampledIds.value = availabilityReady.value ? importedAccountIds.value.filter(id => !isAccountPlanned(id)) : []
+  if (next === 'upload') sampledIds.value = availabilityReady.value ? importedAccountIds.value.filter(id => !isAccountPlanned(id)) : []
 }
 
 function downloadUmTemplate() {
@@ -474,9 +499,17 @@ async function importAccountsByUm(file?: File) {
   }
 }
 
+function savePlanStep() {
+  error.value = ''
+  if (!taskName.value.trim()) { error.value = '请输入任务名称'; return }
+  if (!publishDate.value) { error.value = '请选择投放日期'; return }
+  step.value = 2
+  void revealStepProgress()
+}
+
 async function saveAccountStep() {
   error.value = ''
-  if (!taskName.value.trim()) { error.value = '请输入策划任务名称'; return }
+  if (!taskName.value.trim()) { error.value = '请输入任务名称'; return }
   if (!publishDate.value) { error.value = '请选择投放日期'; return }
   if (targetCount.value === '') { error.value = '请输入计划账号数量'; return }
   if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) { error.value = '计划账号数量须为 1 至 1000 之间的整数'; return }
@@ -491,7 +524,7 @@ async function saveAccountStep() {
 function nextStep() {
   error.value = ''
   if (!selectedTopicIds.value.length) { error.value = '请至少选择一个选题'; return }
-  step.value = 3
+  step.value = 4
 }
 
 function saveTopicStep() {
@@ -509,7 +542,7 @@ function confirmAccountReview() {
     return
   }
   accountReview.value = true
-  step.value = 2
+  step.value = 3
   void revealStepProgress()
 }
 
@@ -520,7 +553,7 @@ function confirmTopicReview() {
     return
   }
   topicReview.value = true
-  step.value = 3
+  step.value = 4
   void revealStepProgress()
 }
 
@@ -534,7 +567,7 @@ async function submit() {
     const selectedCount = sampledIds.value.length
     if (!await loadAccountAvailability()) return
     if (sampledIds.value.length !== selectedCount) {
-      step.value = 1
+      step.value = 2
       error.value = '部分账号当日已手动策划，已移除，请重新确认账号数量'
       return
     }
@@ -578,10 +611,9 @@ function taskStatusClass(status: string) {
 
 <template>
   <div class="page-head manual-page-head">
-    <div><h1>手动策划</h1></div>
     <div class="manual-head-actions">
       <button v-if="mode === 'create'" class="btn" type="button" @click="mode = 'list'; error = ''">返回任务列表</button>
-      <button v-else class="btn primary" type="button" :disabled="!store.databaseReady" @click="startCreate">新建手动策划</button>
+      <button v-else class="btn primary" type="button" :disabled="!store.databaseReady" @click="startCreate">新建人工策划</button>
     </div>
   </div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
@@ -589,45 +621,43 @@ function taskStatusClass(status: string) {
   <div v-if="availabilityError && mode === 'create'" class="banner error-banner manual-availability-error" role="alert">{{ availabilityError }}</div>
 
   <section v-if="mode === 'list'" class="card manual-task-card">
-    <div class="card-head"><div><h2>&#x624B;&#x52A8;&#x7B56;&#x5212;&#x4EFB;&#x52A1;</h2></div></div>
-    <LoadingSkeleton v-if="!store.initialized || (tasksLoading && !tasks.length)" /><div v-else class="table-wrap"><table><thead><tr><th>&#x6279;&#x6B21;</th><th>&#x6295;&#x653E;&#x65E5;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th>&#x5185;&#x5BB9;&#x72B6;&#x6001;</th><th>&#x53D1;&#x8D77;&#x65F6;&#x95F4;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
-      <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }"><td><div class="account-name-cell"><b>{{ task.task_name || '\u2014' }}</b><small>&#x6279;&#x6B21;&#x53F7; {{ task.batch_code || '\u2014' }}</small></div></td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td class="manual-task-count" :class="{ completed: task.result_count > 0 }">{{ task.result_count }}</td><td class="manual-task-count" :class="{ failed: task.failure_count > 0 }">{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.status)]">{{ task.status === '\u6267\u884c\u4e2d' ? '\u8fdb\u884c\u4e2d' : task.status }}</span></td><td><span :class="['tag', taskStatusClass(task.content_status)]">{{ task.content_status }}</span></td><td>{{ formatDateTime(task.created_at) }}</td><td>{{ formatDateTime(task.updated_at) }}</td><td><div class="page-actions"><button v-if="task.batch_id" class="text-btn" type="button" @click="openTaskDetails(task)">&#x8BE6;&#x60C5;</button><button v-if="task.batch_id && task.status === '\u5df2\u5b8c\u6210' && task.content_status === '\u5f85\u751f\u4ea7'" class="text-btn" type="button" @click="startTaskProduction(task)">&#x53BB;&#x751F;&#x4EA7;&#x5185;&#x5BB9;</button><button v-else-if="task.content_status === '\u751f\u4ea7\u4e2d'" class="text-btn" type="button" disabled>&#x8FD0;&#x884C;&#x4E2D;</button><span v-else-if="task.content_status === '\u5df2\u5b8c\u6210'">&#x5DF2;&#x5B8C;&#x6210;</span><span v-else-if="task.content_status === '\u751f\u4ea7\u5f02\u5e38'">&#x751F;&#x4EA7;&#x5F02;&#x5E38;</span><span v-else-if="task.batch_id">&#x5904;&#x7406;&#x4E2D;</span><span v-else>?</span></div></td></tr>
-      <tr v-if="tasks.length === 0"><td colspan="11"><div class="empty-state">暂无手动策划任务</div></td></tr>
+    <div class="card-head"><div><h2>策划任务列表</h2></div></div>
+    <LoadingSkeleton v-if="!store.initialized || (tasksLoading && !tasks.length)" /><div v-else class="table-wrap"><table><thead><tr><th>批次名称</th><th>&#x6295;&#x653E;&#x65E5;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th>&#x5185;&#x5BB9;&#x72B6;&#x6001;</th><th>批次号</th><th>&#x53D1;&#x8D77;&#x65F6;&#x95F4;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
+      <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }"><td><b>{{ task.task_name || '\u2014' }}</b></td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td class="manual-task-count" :class="{ completed: task.result_count > 0 }">{{ task.result_count }}</td><td class="manual-task-count" :class="{ failed: task.failure_count > 0 }">{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.status)]">{{ task.status === '\u6267\u884c\u4e2d' ? '\u8fdb\u884c\u4e2d' : task.status }}</span></td><td><span :class="['tag', taskStatusClass(task.content_status)]">{{ task.content_status }}</span></td><td>{{ task.batch_code || '\u2014' }}</td><td>{{ formatDateTime(task.created_at) }}</td><td>{{ formatDateTime(task.updated_at) }}</td><td><div class="page-actions"><button v-if="task.batch_id" class="text-btn" type="button" @click="openTaskDetails(task)">&#x8BE6;&#x60C5;</button><button v-if="task.batch_id && task.status === '\u5df2\u5b8c\u6210' && task.content_status === '\u5f85\u751f\u4ea7'" class="text-btn" type="button" @click="startTaskProduction(task)">&#x53BB;&#x751F;&#x4EA7;&#x5185;&#x5BB9;</button><button v-else-if="task.content_status === '\u751f\u4ea7\u4e2d'" class="text-btn" type="button" disabled>&#x8FD0;&#x884C;&#x4E2D;</button><span v-else-if="task.content_status === '\u5df2\u5b8c\u6210'">&#x5DF2;&#x5B8C;&#x6210;</span><span v-else-if="task.content_status === '\u751f\u4ea7\u5f02\u5e38'">&#x751F;&#x4EA7;&#x5F02;&#x5E38;</span><span v-else-if="task.batch_id">&#x5904;&#x7406;&#x4E2D;</span><span v-else>?</span></div></td></tr>
+      <tr v-if="tasks.length === 0"><td colspan="12"><div class="empty-state">暂无手动策划任务</div></td></tr>
     </tbody></table></div>
   </section>
 
   <template v-else>
     <div ref="stepperRef" class="manual-stepper" aria-label="手动策划流程">
-      <button v-for="(label, index) in ['选择账号', '选择选题', '提交']" :key="label" :class="['manual-step', { active: step === index + 1, done: step > index + 1 }]" type="button" :disabled="index + 1 > step || busy" :aria-current="step === index + 1 ? 'step' : undefined" @click="returnToStep(index + 1)">
+      <button v-for="(label, index) in ['创建策划', '选择账号', '选择选题', '确认策划']" :key="label" :class="['manual-step', { active: step === index + 1, done: step > index + 1 }]" type="button" :disabled="index + 1 > step || busy" :aria-current="step === index + 1 ? 'step' : undefined" @click="returnToStep(index + 1)">
         <span>{{ step > index + 1 ? '✓' : index + 1 }}</span><b>{{ label }}</b>
       </button>
     </div>
 
     <Transition name="manual-step-change" mode="out-in">
-    <section v-if="step === 1" key="manual-step-accounts" class="card">
-      <div class="card-head"><div><h2>选择账号</h2></div><span class="manual-selected-count">已选 {{ sampledIds.length }} 个</span></div>
-      <div class="card-body">
+    <section v-if="step === 1" key="manual-step-plan" class="card">
+      <div class="card-head"><div><h2>创建策划</h2></div></div>
+      <div class="card-body manual-step-body">
         <div class="manual-create-meta">
+          <label class="field"><span>任务名称 <em>*</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入任务名称" required /></label>
           <label class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" required /></label>
-          <label class="field"><span>策划任务名称 <em>*</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入本次策划任务名称" required /></label>
+        </div>
+        <div class="footer-actions manual-step-actions"><button class="btn primary" type="button" :disabled="busy" @click="savePlanStep">下一步</button></div>
+      </div>
+    </section>
+    <section v-else-if="step === 2" key="manual-step-accounts" class="card">
+      <div class="card-head"><div><h2>选择账号</h2></div><span class="manual-selected-count">已选 {{ sampledIds.length }} 个</span></div>
+      <div class="card-body manual-step-body">
+        <fieldset class="manual-selection-lock" :disabled="accountReview">
+        <div class="manual-account-mode-row">
           <label class="field"><span>计划账号数量 <em>*</em></span><input v-model.number="targetCount" type="number" min="1" max="1000" placeholder="请输入计划账号数量" :aria-invalid="Boolean(targetCountError)" :aria-describedby="targetCountError ? 'manual-target-count-error' : undefined" required /><small v-if="targetCountError" id="manual-target-count-error" class="field-error" role="alert">{{ targetCountError }}</small></label>
-          <button class="text-btn" type="button" :disabled="!sampledIds.length" @click="sampledIds = []">清空选择</button>
+          <div class="manual-selection-modes" role="tablist" aria-label="账号选择方式">
+            <button :class="['manual-mode-tab', { active: accountSelectionMode === 'filter' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'filter'" @click="setAccountSelectionMode('filter')">筛选选择</button>
+            <button :class="['manual-mode-tab', { active: accountSelectionMode === 'upload' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'upload'" @click="setAccountSelectionMode('upload')">模板导入</button>
+          </div>
         </div>
-        <div class="manual-selection-modes" role="tablist" aria-label="账号选择方式">
-          <button :class="['manual-mode-tab', { active: accountSelectionMode === 'filter' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'filter'" @click="setAccountSelectionMode('filter')">筛选选择</button>
-          <button :class="['manual-mode-tab', { active: accountSelectionMode === 'upload' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'upload'" @click="setAccountSelectionMode('upload')">模板导入</button>
-        </div>
-        <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters">
-          <label class="field"><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="keyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" @keydown.enter.prevent="flushSearch" /></label>
-          <label class="field"><span>&#x5C5E;&#x4E3B; UM &#x53F7;</span><input v-model="umNoFilter" type="search" placeholder="&#x8F93;&#x5165;&#x5C5E;&#x4E3B; UM &#x53F7;" @keydown.enter.prevent="flushSearch" /></label>
-          <label class="field"><span>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</span><select v-model="accountTypeFilter"><option value="">&#x5168;&#x90E8;</option><option value="&#x8BA4;&#x8BC1;">&#x8BA4;&#x8BC1;</option><option value="&#x975E;&#x8BA4;&#x8BC1;">&#x975E;&#x8BA4;&#x8BC1;</option></select></label>
-          <label class="field"><span>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</span><select v-model="organizationFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label>
-          <label class="field"><span>&#x5E73;&#x53F0;</span><select v-model="platformFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label>
-          <label class="field"><span>&#x4E1A;&#x52A1;&#x7EBF;</span><select v-model="businessLineFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in businessLineOptions" :key="item" :value="item">{{ item }}</option></select></label>
-          <label class="field"><span>&#x5730;&#x57DF;</span><select v-model="cityFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in cityOptions" :key="item" :value="item">{{ item }}</option></select></label>
-          <label class="field"><span>&#x751F;&#x547D;&#x5468;&#x671F;</span><select v-model="lifecycleFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label>
-          <label class="field manual-follower-field"><span>&#x7C89;&#x4E1D;&#x91CF;</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" min="0" placeholder="&#x8D77;&#x59CB;&#x7C89;&#x4E1D;&#x91CF;" /><i>&#x81F3;</i><input v-model.number="followersMax" type="number" min="0" placeholder="&#x622A;&#x6B62;&#x7C89;&#x4E1D;&#x91CF;" /></div></label>
-        </div>
+        <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters"><label class="field"><span>&#x751F;&#x547D;&#x5468;&#x671F;</span><select v-model="lifecycleFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field manual-follower-field"><span>&#x7C89;&#x4E1D;&#x91CF;</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" min="0" placeholder="&#x8D77;&#x59CB;&#x7C89;&#x4E1D;&#x91CF;" /><i>&#x81F3;</i><input v-model.number="followersMax" type="number" min="0" placeholder="&#x622A;&#x6B62;&#x7C89;&#x4E1D;&#x91CF;" /></div></label><label class="field"><span>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</span><select v-model="accountTypeFilter"><option value="">&#x5168;&#x90E8;</option><option value="&#x8BA4;&#x8BC1;">&#x8BA4;&#x8BC1;</option><option value="&#x975E;&#x8BA4;&#x8BC1;">&#x975E;&#x8BA4;&#x8BC1;</option></select></label><label class="field"><span>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</span><select v-model="organizationFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x5E73;&#x53F0;</span><select v-model="platformFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x4E1A;&#x52A1;&#x7EBF;</span><select v-model="businessLineFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in businessLineOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x5730;&#x57DF;</span><select v-model="cityFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in cityOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="keyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" /></label><label class="field"><span>&#x5C5E;&#x4E3B; UM &#x53F7;</span><input v-model="umNoFilter" type="search" placeholder="&#x8F93;&#x5165;&#x5C5E;&#x4E3B; UM &#x53F7;" /></label><div class="manual-filter-actions"><button class="btn primary" type="button" @click="applyAccountFilters">&#x67E5;&#x8BE2;</button></div></div>
         <div v-else class="manual-upload-panel">
           <div><b>按 UM 号导入账号</b><p>下载 CSV 模板，填写 UM 号后上传；匹配到的账号会自动勾选。</p></div>
           <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadUmTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByUm(($event.target as HTMLInputElement).files?.[0])" /><button class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
@@ -639,45 +669,59 @@ function taskStatusClass(status: string) {
           <tr v-if="visibleAccounts.length === 0"><td colspan="11"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
         </tbody></table></div>
         <ListPagination v-model:page="accountPage" v-model:page-size="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
-        <div class="footer-actions"><div v-if="accountReview" class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>本次选择了 <em>{{ sampledIds.length }}</em> 个账号进行策划，如需调整，请返回调整</strong><button class="btn" type="button" @click="accountReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmAccountReview">下一步</button></div><button v-else class="btn primary" type="button" :disabled="!sampledIds.length || !availabilityReady || busy" @click="saveAccountStep">{{ availabilityLoading ? '查询中…' : '保存' }}</button></div>
+        </fieldset>
+        <div class="footer-actions manual-step-actions"><div v-if="accountReview" class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>&#x8BA1;&#x5212;&#x8D26;&#x53F7;&#x6570; <em>{{ targetCount }}</em> &#x4E2A;&#xFF0C;&#x5B9E;&#x9645;&#x9009;&#x62E9; <em>{{ sampledIds.length }}</em> &#x4E2A;</strong><span v-if="Number(targetCount) !== sampledIds.length" class="manual-count-difference">{{ sampledIds.length < Number(targetCount) ? '未达计划' : '超出计划' }} {{ Math.abs(Number(targetCount) - sampledIds.length) }} 个</span><button class="btn" type="button" @click="accountReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmAccountReview">下一步</button></div><button v-else class="btn primary" type="button" :disabled="!sampledIds.length || !availabilityReady || busy" @click="saveAccountStep">{{ availabilityLoading ? '查询中…' : '保存' }}</button></div>
       </div>
     </section>
 
-    <section v-else-if="step === 2" key="manual-step-topics" class="card manual-topic-step">
+    <section v-else-if="step === 3" key="manual-step-topics" class="card manual-topic-step">
       <div class="card-head"><div><h2>选择选题</h2></div><span class="manual-selected-count">已选 {{ selectedTopicIds.length }} 个</span></div>
-      <div class="card-body">
-        <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters" @click="topicFiltersExpanded = !topicFiltersExpanded">筛选条件 <span>{{ topicFiltersExpanded ? '⌃' : '⌄' }}</span></button></div>
-        <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters">
-          <label class="field"><span class="field-label-with-tip">选题 ID <span class="field-help-tip" tabindex="0" title="输入完整选题 ID，进行精确匹配">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="输入完整选题 ID" @keydown.enter.prevent="flushSearch" /></label>
-          <label class="field"><span class="field-label-with-tip">选题标题 <span class="field-help-tip" tabindex="0" title="输入标题关键词，进行模糊搜索">?</span></span><input v-model="topicQuery" type="search" placeholder="输入选题标题关键词" @keydown.enter.prevent="flushSearch" /></label>
-          <label class="field"><span>选题类型</span><select v-model="topicMarketingFilter"><option value="">全部</option><option value="true">营销</option><option value="false">非营销</option></select></label>
-          <label class="field"><span>内容类型</span><select v-model="contentType"><option value="">全部</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
-          <label class="field"><span>关联产品</span><select v-model="relatedProduct"><option value="">全部</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
-          <label class="field"><span>关联活动</span><select v-model="relatedActivity"><option value="">全部</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
-          <label class="field"><span>关联属地热点</span><select v-model="relatedHotspot"><option value="">全部</option><option v-for="value in relatedHotspots" :key="value" :value="value">{{ value }}</option></select></label>
-          <div v-for="dimension in (['T3', 'T4', 'T5'] as const)" :key="dimension" class="field"><span>{{ tagNames[dimension] }}</span><TagCascader v-model="labelFilters[dimension]" :groups="tagGroups(taxonomyItems, dimension)" :label="tagNames[dimension]" /></div>
-          <div class="manual-topic-filter-actions"><button class="text-btn" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''; labelFilters = emptyLabelFilters()">清空筛选</button><button class="text-btn" type="button" :disabled="!selectedTopicIds.length" @click="selectedTopicIds = []">清空选择</button></div>
+      <div class="card-body manual-step-body">
+        <div class="manual-topic-picker">
+          <aside class="manual-topic-picked">
+            <div class="manual-topic-picked-head"><b>&#x5DF2;&#x9009;&#x9009;&#x9898;</b><span>{{ selectedTopics.length }} / 100</span></div>
+            <div v-if="selectedTopics.length" class="manual-topic-picked-list">
+              <article v-for="(topic, index) in selectedTopics" :key="`${index}-${topic.topic_id}`" class="manual-topic-picked-item" tabindex="0" :title="topicTooltip(topic)"><div><small>{{ topic.topic_id }}</small><b>{{ topic.topic_title }}</b><p>{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</p><small>{{ topic.content_type || '\u2014' }}</small></div><button class="remove-topic" type="button" :disabled="topicReview" aria-label="&#x79FB;&#x9664;&#x9009;&#x9898;" @click="removeTopic(index)">&#x00D7;</button></article>
+            </div>
+            <div v-else class="manual-topic-picked-empty">&#x8BF7;&#x4ECE;&#x53F3;&#x4FA7;&#x9009;&#x9898;&#x5E93;&#x6DFB;&#x52A0;</div>
+          </aside>
+          <section class="manual-topic-picker-available">
+            <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters">&#x7B5B;&#x9009;&#x6761;&#x4EF6; <span>{{ topicFiltersExpanded ? '\u2303' : '\u2304' }}</span></button></div>
+            <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters">
+              <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898; ID <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID;&#x8FDB;&#x884C;&#x7CBE;&#x786E;&#x5339;&#x914D;">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID" /></label>
+              <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898;&#x6807;&#x9898; <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;;&#x8FDB;&#x884C;&#x6A21;&#x7CCA;&#x641C;&#x7D22;">?</span></span><input v-model="topicQuery" type="search" placeholder="&#x8F93;&#x5165;&#x9009;&#x9898;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;" /></label>
+              <label class="field"><span>&#x9009;&#x9898;&#x7C7B;&#x578B;</span><select v-model="topicMarketingFilter"><option value="">&#x5168;&#x90E8;</option><option value="true">&#x8425;&#x9500;</option><option value="false">&#x975E;&#x8425;&#x9500;</option></select></label>
+              <label class="field"><span>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</span><select v-model="contentType"><option value="">&#x5168;&#x90E8;</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+              <label class="field"><span>&#x5173;&#x8054;&#x4EA7;&#x54C1;</span><select v-model="relatedProduct"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
+              <label class="field"><span>&#x5173;&#x8054;&#x6D3B;&#x52A8;</span><select v-model="relatedActivity"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
+              <label class="field"><span>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</span><select v-model="relatedHotspot"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedHotspots" :key="value" :value="value">{{ value }}</option></select></label>
+              <div v-for="dimension in (['T3', 'T4', 'T5'] as const)" :key="dimension" class="field"><span>{{ tagNames[dimension] }}</span><TagCascader v-model="labelFilters[dimension]" :groups="tagGroups(taxonomyItems, dimension)" :label="tagNames[dimension]" /></div>
+              <button class="btn primary filter-query-inline" type="button" @click="applyTopicFilters">&#x67E5;&#x8BE2;</button>
+              <button class="text-btn manual-topic-clear-filters" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''; labelFilters = emptyLabelFilters()">&#x6E05;&#x7A7A;&#x7B5B;&#x9009;</button>
+            </div>
+            <div class="manual-topic-list-meta"><b>&#x7B26;&#x5408;&#x6761;&#x4EF6; {{ filteredTopics.length }} &#x4E2A;</b></div>
+            <LoadingSkeleton v-if="catalogLoading || !store.initialized" />
+            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th>&#x9009;&#x9898; ID</th><th>&#x9009;&#x9898;&#x6807;&#x9898;</th><th>&#x9009;&#x9898;&#x5927;&#x7EB2;</th><th>&#x9009;&#x9898;&#x7C7B;&#x578B;</th><th>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</th><th>&#x5173;&#x8054;&#x4EA7;&#x54C1;</th><th>&#x5173;&#x8054;&#x6D3B;&#x52A8;</th><th>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</th><th>&#x6709;&#x6548;&#x671F;</th></tr></thead><tbody>
+              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-label="`双击添加选题 ${topic.topic_title}`" @dblclick="addTopicFromRow(topic.topic_id, $event)" @keydown.enter.self.prevent="addTopic(topic.topic_id)"><td>{{ topic.topic_id }}</td><td><button class="topic-title-link manual-topic-title-value" type="button" :title="topic.topic_title" @click.stop="detailTopic = topic">{{ topic.topic_title }}</button></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '\u8425\u9500' : '\u975e\u8425\u9500' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '&#x4E0D;&#x9650;' }}<i>&#x81F3;</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '&#x4E0D;&#x9650;' }}</span></td></tr>
+              <tr v-if="filteredTopics.length === 0"><td colspan="9"><div class="empty-state">&#x6CA1;&#x6709;&#x7B26;&#x5408;&#x6761;&#x4EF6;&#x7684;&#x53EF;&#x7528;&#x9009;&#x9898;</div></td></tr>
+            </tbody></table></div>
+            <ListPagination v-model:page="topicPage" v-model:page-size="topicPageSize" :total="filteredTopics.length" unit="&#x4E2A;&#x9009;&#x9898;" :page-size-options="[20, 50, 100]" class="manual-topic-pagination" />
+          </section>
         </div>
-        <div class="manual-topic-list-meta"><b>符合条件 {{ filteredTopics.length }} 个</b><span>可跨页选择，已选 {{ selectedTopicIds.length }} 个</span></div>
-        <LoadingSkeleton v-if="catalogLoading || !store.initialized" /><div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th><input type="checkbox" aria-label="全选当前筛选选题（跨页）" :checked="allTopicsSelected" :indeterminate="someTopicsSelected" :disabled="!filteredTopics.length" @change="selectAllTopics" /></th><th>选题 ID</th><th>选题标题</th><th>选题类型</th><th>内容类型</th><th>关联产品</th><th>关联活动</th><th>关联属地热点</th><th>有效期</th></tr></thead><tbody>
-          <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" @click="toggleTopicRow(topic.topic_id, $event)" @keydown.enter.self.prevent="toggleTopicRow(topic.topic_id, $event)" @keydown.space.self.prevent="toggleTopicRow(topic.topic_id, $event)"><td><input v-model="selectedTopicIds" type="checkbox" :value="topic.topic_id" :aria-label="`选择选题 ${topic.topic_title}`" /></td><td>{{ topic.topic_id }}</td><td><button class="topic-title-link" type="button" @click.stop="detailTopic = topic">{{ topic.topic_title }}</button><small class="manual-topic-outline"><i>选题大纲</i>{{ topic.outline || '暂无选题大纲' }}</small></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '—' }}</td><td>{{ topic.related_product || '—' }}</td><td>{{ topic.related_activity || '—' }}</td><td>{{ topic.related_hotspot || '—' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '不限' }}<i>至</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '不限' }}</span></td></tr>
-          <tr v-if="filteredTopics.length === 0"><td colspan="9"><div class="empty-state">没有符合条件的可用选题</div></td></tr>
-        </tbody></table></div>
-        <ListPagination v-model:page="topicPage" v-model:page-size="topicPageSize" :total="filteredTopics.length" unit="个选题" :page-size-options="[20, 50, 100]" class="manual-topic-pagination" />
-        <div class="footer-actions"><template v-if="topicReview"><div class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>本次选择了 <em>{{ selectedTopicIds.length }}</em> 个选题进行策划，如需调整，请返回调整</strong><button class="btn" type="button" @click="topicReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmTopicReview">下一步</button></div></template><template v-else><button class="btn" type="button" @click="returnToStep(1)">上一步</button><button class="btn primary" type="button" :disabled="!selectedTopicIds.length" @click="saveTopicStep">保存</button></template></div>
+        <div class="footer-actions manual-step-actions"><template v-if="topicReview"><div class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>本次选择了 <em>{{ selectedTopicIds.length }}</em> 个选题进行策划，如需调整，请返回调整</strong><button class="btn" type="button" @click="topicReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmTopicReview">下一步</button></div></template><template v-else><button class="btn" type="button" @click="returnToStep(2)">上一步</button><button class="btn primary" type="button" :disabled="!selectedTopicIds.length" @click="saveTopicStep">保存</button></template></div>
       </div>
     </section>
 
     <section v-else key="manual-step-submit" class="card">
-      <div class="card-head"><div><h2>确认并提交</h2></div></div>
-      <div class="card-body">
+      <div class="card-head"><div><h2>确认策划</h2></div></div>
+      <div class="card-body manual-step-body">
         <div class="manual-submit-summary">
-          <div><span>策划任务名称</span><b>{{ taskName }}</b></div><div><span>投放日期</span><b>{{ publishDate }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个</small></b></div><div><span>选题</span><b class="manual-review-total">{{ selectedTopics.length }} <small>个</small></b></div>
+          <div><span>任务名称</span><b>{{ taskName }}</b></div><div><span>投放日期</span><b>{{ publishDate }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个</small></b></div><div><span>选题</span><b class="manual-review-total">{{ selectedTopics.length }} <small>个</small></b></div>
         </div>
         <div class="manual-submit-groups">
           <section class="manual-submit-group"><div class="manual-submit-group-head"><h3>本次策划账号</h3><span>{{ selectedAccounts.length }} 个</span></div><div class="manual-review-items manual-submit-items"><div v-for="account in submitAccountsPage" :key="account.account_id" class="manual-review-item"><b>{{ account.account_name }}</b></div></div><ListPagination v-model:page="submitAccountPage" v-model:page-size="submitAccountPageSize" :total="selectedAccounts.length" unit="个账号" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" /></section>
           <section class="manual-submit-group"><div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div><div class="manual-review-items manual-submit-items"><div v-for="topic in submitTopicsPage" :key="topic.topic_id" class="manual-review-item"><b>{{ topic.topic_title }}</b></div></div><ListPagination v-model:page="submitTopicPage" v-model:page-size="submitTopicPageSize" :total="selectedTopics.length" unit="个选题" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" /></section>
-        </div>        <div class="footer-actions"><button class="btn" type="button" @click="returnToStep(2)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交手动策划' }}</button></div>
+        </div>        <div class="footer-actions manual-step-actions"><button class="btn" type="button" @click="returnToStep(3)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交手动策划' }}</button></div>
       </div>
     </section>
     </Transition>
@@ -756,5 +800,20 @@ function taskStatusClass(status: string) {
 </style>
 
 <style scoped>
+.manual-head-actions{margin-left:auto}
 .topic-filters-toggle{display:flex;justify-content:flex-end;margin-bottom:12px}.topic-title-link{padding:0;border:0;background:transparent;color:var(--primary-600);font-size:13px;font-weight:500;text-align:left;line-height:1.6}.topic-title-link:hover{text-decoration:underline}.manual-topic-filters .field{width:100%}.manual-topic-filters :deep(.cascader-trigger){width:100%}
+.manual-topic-table table{min-width:1280px}.manual-topic-table td:nth-child(2){width:220px;max-width:220px}.manual-topic-table td:nth-child(3){width:300px;max-width:300px}.manual-topic-title-value,.manual-topic-outline-value{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.manual-topic-outline-value{color:var(--neutral-600);font-size:12px}
+.manual-account-mode-row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}.manual-account-mode-row>.field{min-width:180px;margin:0}.manual-account-mode-row .manual-selection-modes{align-self:flex-end;margin:0}
+@media(max-width:580px){.manual-account-mode-row{align-items:stretch;flex-direction:column;gap:10px}.manual-account-mode-row>.field{min-width:0}.manual-account-mode-row .manual-selection-modes{width:100%}.manual-account-mode-row .manual-mode-tab{flex:1}}
+</style>
+
+<style scoped>
+.manual-filter-actions{display:flex;align-self:end;justify-self:start}.manual-topic-filter-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px}.filter-query-inline{align-self:end;justify-self:start}
+.manual-selection-lock{min-width:0;margin:0;padding:0;border:0}.manual-selection-lock:disabled{opacity:.78}.manual-count-difference{flex:none;padding:3px 8px;border-radius:5px;background:#fff4e5;color:#b54708;font-size:12px;font-weight:600}
+.manual-topic-picker{display:grid;grid-template-columns:minmax(250px,300px) minmax(0,1fr);gap:16px;align-items:start}.manual-topic-picker-available{min-width:0}.manual-topic-picker-available .manual-topic-pagination{margin-bottom:0}.manual-topic-picked{position:sticky;top:16px;min-width:0;overflow:hidden;border:1px solid var(--neutral-200);border-radius:9px;background:var(--surface)}.manual-topic-picked-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-bottom:1px solid var(--neutral-100);color:var(--neutral-700);font-size:13px}.manual-topic-picked-head span{color:var(--primary-600);font-size:12px;font-variant-numeric:tabular-nums;font-weight:600}.manual-topic-picked-list{max-height:480px;overflow:auto;padding:0 14px}.manual-topic-picked-item{display:flex;align-items:flex-start;gap:8px;padding:11px 0;border-bottom:1px solid var(--neutral-100)}.manual-topic-picked-item:last-child{border-bottom:0}.manual-topic-picked-item>div{flex:1;min-width:0}.manual-topic-picked-item b{display:block;color:var(--neutral-800);font-size:13px;line-height:1.45;overflow-wrap:anywhere}.manual-topic-picked-item small{display:block;margin-top:4px;color:var(--neutral-400);font-size:11px}.manual-topic-picked-item .remove-topic{flex:none;margin-top:-3px}.manual-topic-picked-empty{display:grid;min-height:110px;place-items:center;color:var(--neutral-400);font-size:12px}
+.manual-step-body{padding-bottom:104px}.manual-step-actions{position:fixed;z-index:35;right:0;bottom:0;left:var(--sidebar-width);display:flex;align-items:center;justify-content:flex-end;min-height:68px;margin:0;padding:12px 32px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--neutral-200);background:color-mix(in srgb,var(--surface) 94%,transparent);box-shadow:0 -6px 20px #1018280a;backdrop-filter:blur(10px)}
+@media(max-width:900px){.manual-topic-picker{grid-template-columns:240px minmax(0,1fr);gap:12px}}
+@media(max-width:780px){.manual-step-actions{padding-right:24px;padding-left:24px}}
+@media(max-width:700px){.manual-topic-picker{grid-template-columns:1fr}.manual-topic-picked{position:static;grid-row:1}.manual-topic-picked-list{max-height:240px}}
+@media(max-width:580px){.manual-step-body{padding-bottom:124px}.manual-step-actions{min-height:76px;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}.manual-step-actions .manual-step-review{width:100%;flex-wrap:wrap}.manual-step-actions .manual-step-review>strong{flex-basis:calc(100% - 36px)}.manual-step-actions .manual-step-review .btn{flex:1}}
 </style>

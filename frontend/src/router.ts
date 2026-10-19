@@ -7,9 +7,9 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/config' },
-    { path: '/config', component: ConfigView, meta: { title: '策划配置' } },
+    { path: '/config', component: ConfigView, meta: { title: 'AI策划配置' } },
     { path: '/auto', redirect: '/results' },
-    { path: '/manual', component: ManualView, meta: { title: '手动策划' } },
+    { path: '/manual', component: ManualView, meta: { title: '人工策划' } },
     { path: '/results', component: ResultsView, meta: { title: '策划结果' } },
   ],
 })
