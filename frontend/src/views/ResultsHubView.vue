@@ -9,6 +9,7 @@ import { formatDateTime } from '../planningTime'
 import { usePlanningStore } from '../store'
 import type { BatchSummary } from '../types'
 import { statusTone } from '../ui/status'
+import CycleDetailView from './CycleDetailView.vue'
 import LegacyResultsView from './ResultsView.vue'
 
 type ResultDimension = 'account' | 'period'
@@ -33,6 +34,7 @@ const batches = ref<BatchSummary[]>([])
 const loading = ref(false)
 const error = ref('')
 const filtersExpanded = ref(false)
+const expandedPeriod = ref<string | null>(null)
 const year = ref('all')
 const month = ref('all')
 const week = ref('all')
@@ -128,19 +130,21 @@ const periods = computed(() => allPeriods.value.filter(period =>
 
 const pagedPeriods = computed(() => periods.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const selectedPeriod = computed(() => allPeriods.value.find(period => period.cycleStart === requestedCycle.value) ?? null)
-const periodModeGroups = computed(() => selectedPeriod.value ? [
-  { key: 'auto', label: 'AI 自动策划', batches: selectedPeriod.value.autoBatches },
-  { key: 'manual', label: '人工策划', batches: selectedPeriod.value.manualBatches },
-] : [])
 
 function switchDimension(next: ResultDimension) {
   if (next === dimension.value && !showingBatchDetail.value && !showingPeriodDetail.value) return
+  expandedPeriod.value = null
   void router.push({ path: '/results', query: next === 'period' ? { dimension: 'period' } : {} })
 }
 
 function applyFilters() {
   appliedFilters.value = { year: year.value, month: month.value, week: week.value }
+  expandedPeriod.value = null
   page.value = 1
+}
+
+function togglePeriod(cycleStart: string) {
+  expandedPeriod.value = expandedPeriod.value === cycleStart ? null : cycleStart
 }
 
 function openPeriod(period: PeriodSummary) {
@@ -210,54 +214,15 @@ watch([() => store.databaseReady, dimension], ([ready, currentDimension]) => {
       <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
       <section v-if="loading || !store.initialized" class="card"><LoadingSkeleton /></section>
 
-      <section v-else-if="showingPeriodDetail" class="card period-detail-card">
-        <div class="card-head">
-          <div>
-            <h2>周期详情</h2>
-            <small v-if="selectedPeriod">{{ cyclePeriodLabel(selectedPeriod.cycleStart) }} · {{ selectedPeriod.cycleStart }} 至 {{ selectedPeriod.cycleEnd }}</small>
-          </div>
-          <button class="btn" type="button" @click="returnToPeriodList">返回周期列表</button>
-        </div>
-
-        <template v-if="selectedPeriod">
-          <section class="period-dashboard" aria-label="周期概览">
-            <div class="period-dashboard-item"><small>批次数</small><strong>{{ selectedPeriod.batches.length }}</strong></div>
-            <div class="period-dashboard-item"><small>策划总数</small><strong>{{ selectedPeriod.planningCount }}</strong></div>
-            <div class="period-dashboard-item"><small>AI 自动策划</small><strong>{{ modePlanningCount(selectedPeriod.autoBatches) }}</strong></div>
-            <div class="period-dashboard-item"><small>人工策划</small><strong>{{ modePlanningCount(selectedPeriod.manualBatches) }}</strong></div>
-            <div class="period-dashboard-item"><small>完成数</small><strong>{{ selectedPeriod.completedCount }}</strong></div>
-            <div class="period-dashboard-item"><small>失败数</small><strong>{{ selectedPeriod.failedCount }}</strong></div>
-          </section>
-
-          <section v-for="group in periodModeGroups" :key="group.key" class="period-mode-section">
-            <div class="period-mode-head">
-              <h3>{{ group.label }}</h3>
-              <span>{{ group.batches.length }} 个批次 · {{ modePlanningCount(group.batches) }} 条策划</span>
-            </div>
-            <div v-if="group.batches.length" class="table-wrap">
-              <table>
-                <thead><tr><th>批次</th><th>批次周期</th><th>账号数</th><th>完成数</th><th>失败数</th><th>选题数</th><th>策划状态</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>更新时间</th><th>操作</th></tr></thead>
-                <tbody>
-                  <tr v-for="batch in group.batches" :key="batch.id">
-                    <td><div class="account-name-cell"><b>{{ batch.task_name || '—' }}</b><small>ID {{ batch.batch_code }}</small></div></td>
-                    <td>{{ batch.cycle_start }} 至 {{ batch.cycle_end }}</td>
-                    <td>{{ batch.account_count }}</td>
-                    <td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td>
-                    <td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td>
-                    <td>{{ batch.topic_count }}</td>
-                    <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
-                    <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
-                    <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
-                    <td><button class="text-btn" type="button" @click="openBatch(batch, selectedPeriod.cycleStart)">查看批次</button></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-else class="empty-state"><b>暂无{{ group.label }}批次</b></div>
-          </section>
-        </template>
-        <div v-else class="empty-state"><b>未找到该策划周期</b></div>
-      </section>
+      <CycleDetailView
+        v-else-if="showingPeriodDetail && selectedPeriod"
+        :cycle-start="selectedPeriod.cycleStart"
+        :cycle-end="selectedPeriod.cycleEnd"
+        :batches="selectedPeriod.batches"
+        @back="returnToPeriodList"
+        @open-batch="batch => openBatch(batch, selectedPeriod?.cycleStart)"
+      />
+      <section v-else-if="showingPeriodDetail" class="card"><div class="empty-state"><b>未找到该策划周期</b></div></section>
 
       <section v-else class="card period-result-card">
         <div class="card-body batch-dimension-filters">
@@ -279,17 +244,50 @@ watch([() => store.databaseReady, dimension], ([ready, currentDimension]) => {
           <table class="period-summary-table">
             <thead><tr><th>策划周期</th><th>批次构成</th><th>AI 自动策划</th><th>人工策划</th><th>策划总数</th><th>完成数</th><th>失败数</th><th>最后更新</th><th>操作</th></tr></thead>
             <tbody>
-              <tr v-for="period in pagedPeriods" :key="period.cycleStart" class="period-summary-row">
-                <td><div class="account-name-cell"><b>{{ cyclePeriodLabel(period.cycleStart) }}</b><small>{{ period.cycleStart }} 至 {{ period.cycleEnd }}</small></div></td>
-                <td><span class="tag blue">{{ period.batches.length }} 个批次</span></td>
-                <td><div class="period-type-stat"><b>{{ period.autoBatches.length }} 批</b><small>{{ modePlanningCount(period.autoBatches) }} 条策划</small></div></td>
-                <td><div class="period-type-stat"><b>{{ period.manualBatches.length }} 批</b><small>{{ modePlanningCount(period.manualBatches) }} 条策划</small></div></td>
-                <td><b>{{ period.planningCount }}</b></td>
-                <td class="batch-count" :class="{ completed: period.completedCount > 0 }">{{ period.completedCount }}</td>
-                <td class="batch-count" :class="{ failed: period.failedCount > 0 }">{{ period.failedCount }}</td>
-                <td>{{ formatDateTime(period.updatedAt) }}</td>
-                <td><button class="text-btn" type="button" @click="openPeriod(period)">查看详情</button></td>
-              </tr>
+              <template v-for="period in pagedPeriods" :key="period.cycleStart">
+                <tr class="period-summary-row">
+                  <td><div class="account-name-cell"><b>{{ cyclePeriodLabel(period.cycleStart) }}</b><small>{{ period.cycleStart }} 至 {{ period.cycleEnd }}</small></div></td>
+                  <td><span class="tag blue">{{ period.batches.length }} 个批次</span></td>
+                  <td><div class="period-type-stat"><b>{{ period.autoBatches.length }} 批</b><small>{{ modePlanningCount(period.autoBatches) }} 条策划</small></div></td>
+                  <td><div class="period-type-stat"><b>{{ period.manualBatches.length }} 批</b><small>{{ modePlanningCount(period.manualBatches) }} 条策划</small></div></td>
+                  <td><b>{{ period.planningCount }}</b></td>
+                  <td class="batch-count" :class="{ completed: period.completedCount > 0 }">{{ period.completedCount }}</td>
+                  <td class="batch-count" :class="{ failed: period.failedCount > 0 }">{{ period.failedCount }}</td>
+                  <td>{{ formatDateTime(period.updatedAt) }}</td>
+                  <td>
+                    <div class="period-actions">
+                      <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
+                      <button class="text-btn" type="button" @click="openPeriod(period)">周期详情</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="expandedPeriod === period.cycleStart" class="period-expansion-row">
+                  <td colspan="9">
+                    <div class="period-batch-panel">
+                      <div class="table-wrap">
+                        <table>
+                          <thead><tr><th>批次</th><th>策划方式</th><th>批次周期</th><th>账号数</th><th>完成数</th><th>失败数</th><th>选题数</th><th>策划状态</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>更新时间</th><th>操作</th></tr></thead>
+                          <tbody>
+                            <tr v-for="batch in period.batches" :key="batch.id">
+                              <td><div class="account-name-cell"><b>{{ batch.task_name || '—' }}</b><small>ID {{ batch.batch_code }}</small></div></td>
+                              <td>{{ batch.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</td>
+                              <td>{{ batch.cycle_start }} 至 {{ batch.cycle_end }}</td>
+                              <td>{{ batch.account_count }}</td>
+                              <td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td>
+                              <td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td>
+                              <td>{{ batch.topic_count }}</td>
+                              <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
+                              <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
+                              <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
+                              <td><button class="text-btn" type="button" @click="openBatch(batch)">查看详情</button></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
               <tr v-if="periods.length === 0"><td colspan="9"><div class="empty-state"><b>暂无策划周期</b></div></td></tr>
             </tbody>
           </table>
@@ -306,16 +304,9 @@ watch([() => store.databaseReady, dimension], ([ready, currentDimension]) => {
 .period-type-stat{display:flex;flex-direction:column;gap:3px;white-space:nowrap}
 .period-type-stat b{color:var(--neutral-700);font-size:13px}
 .period-type-stat small{color:var(--neutral-400);font-size:11px}
-.period-dashboard{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;margin:16px 20px 20px;border:1px solid var(--neutral-200);border-radius:12px;overflow:hidden;background:var(--neutral-200)}
-.period-dashboard-item{display:flex;flex-direction:column;gap:8px;min-height:76px;padding:14px 16px;background:var(--surface)}
-.period-dashboard-item small{color:var(--neutral-500);font-size:12px;white-space:nowrap}
-.period-dashboard-item strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
-.period-mode-section{margin:0 20px 20px;border:1px solid var(--neutral-200);border-radius:10px;overflow:hidden;background:var(--surface)}
-.period-mode-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-bottom:1px solid var(--neutral-200);background:var(--neutral-50)}
-.period-mode-head h3{margin:0;color:var(--neutral-800);font-size:14px}
-.period-mode-head span{color:var(--neutral-500);font-size:12px}
-.period-mode-section>.table-wrap{margin:0}
-.period-mode-section>.empty-state{margin:0;border:0;border-radius:0}
-@media(max-width:980px){.period-summary-table{min-width:980px}.period-dashboard{grid-template-columns:repeat(3,minmax(0,1fr))}.period-mode-section{margin:0 12px 16px}}
-@media(max-width:580px){.period-dashboard{grid-template-columns:repeat(2,minmax(0,1fr));margin:12px}.period-dashboard-item{min-height:68px;padding:12px}.period-dashboard-item strong{font-size:20px}.period-mode-head{align-items:flex-start;flex-direction:column;gap:4px}}
+.period-actions{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.period-expansion-row>td{padding:0!important;background:var(--neutral-50)}
+.period-batch-panel{padding:12px 18px 18px;border-top:1px solid var(--neutral-200);border-bottom:1px solid var(--neutral-200)}
+.period-batch-panel>.table-wrap{margin:0;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface)}
+@media(max-width:980px){.period-summary-table{min-width:980px}.period-batch-panel{padding:12px}}
 </style>
