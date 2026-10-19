@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { api } from './api'
 import { usePlanningStore } from './store'
+import type { AccountOption } from './types'
 
 const store = usePlanningStore()
 const route = useRoute()
-let sourceBadgeObserver: MutationObserver | undefined
+let resultsUiObserver: MutationObserver | undefined
+let profileRequest: Promise<void> | undefined
+const accountProfiles = new Map<string, AccountOption>()
 
 function compactPlanningSourceBadges() {
   document.querySelectorAll<HTMLElement>('.account-week-plan-tags .tag.gray').forEach(badge => {
@@ -27,13 +31,121 @@ function compactPlanningSourceBadges() {
   })
 }
 
+function accountTypeLabel(profile?: AccountOption) {
+  return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—')
+}
+
+function ensureAccountProfiles() {
+  if (profileRequest) return profileRequest
+  profileRequest = api.accounts(1000, true)
+    .then(accounts => {
+      accountProfiles.clear()
+      accounts.forEach(account => accountProfiles.set(account.account_id, account))
+    })
+    .catch(() => { profileRequest = undefined })
+  return profileRequest
+}
+
+function createMetaSpan(text: string, className?: string) {
+  const span = document.createElement('span')
+  if (className) span.className = className
+  span.textContent = text
+  return span
+}
+
+function enhanceBatchAccountCards() {
+  const cards = document.querySelectorAll<HTMLElement>('.planning-account-groups .planning-account-group')
+  if (!cards.length) return
+
+  cards.forEach(card => {
+    card.classList.add('ux-account-card')
+    const head = card.querySelector<HTMLElement>('.planning-account-group-head')
+    const nameRow = head?.querySelector<HTMLElement>('.batch-account-name')
+    const titleButton = nameRow?.querySelector<HTMLButtonElement>('.account-detail-link')
+    const idTag = nameRow?.querySelector<HTMLElement>('.tag.gray')
+    const actions = head?.querySelector<HTMLElement>('.batch-account-head-actions')
+    const expandButton = actions?.querySelector<HTMLButtonElement>('.batch-account-expand')
+    if (!head || !nameRow || !titleButton || !idTag || !actions || !expandButton) return
+
+    const accountId = idTag.textContent?.trim() || ''
+    const accountName = titleButton.textContent?.trim() || accountId
+    const profile = accountProfiles.get(accountId)
+    const identityWrap = nameRow.parentElement as HTMLElement
+
+    identityWrap.classList.add('ux-account-identity')
+    nameRow.classList.add('ux-account-title-row')
+    idTag.classList.add('ux-original-account-id')
+
+    let avatar = head.querySelector<HTMLElement>('.ux-account-avatar')
+    if (!avatar) {
+      avatar = document.createElement('div')
+      avatar.className = 'ux-account-avatar'
+      avatar.setAttribute('aria-hidden', 'true')
+      identityWrap.parentElement?.insertBefore(avatar, identityWrap)
+    }
+    avatar.textContent = (accountName || '账').slice(0, 1).toLocaleUpperCase()
+    identityWrap.parentElement?.classList.add('ux-account-main')
+
+    let typeTag = nameRow.querySelector<HTMLElement>('.ux-account-type')
+    if (!typeTag) {
+      typeTag = document.createElement('span')
+      typeTag.className = 'ux-account-type'
+      titleButton.insertAdjacentElement('afterend', typeTag)
+    }
+    typeTag.textContent = accountTypeLabel(profile)
+
+    let meta = identityWrap.querySelector<HTMLElement>('.ux-account-meta')
+    if (!meta) {
+      meta = document.createElement('div')
+      meta.className = 'ux-account-meta'
+      nameRow.insertAdjacentElement('afterend', meta)
+    }
+    meta.replaceChildren(createMetaSpan(accountId, 'ux-account-id'))
+    if (profile?.organization) meta.append(createMetaSpan(profile.organization))
+    if (profile?.um_no) meta.append(createMetaSpan(`UM ${profile.um_no}`))
+    if (profile?.platform) meta.append(createMetaSpan(profile.platform))
+
+    let persona = identityWrap.querySelector<HTMLElement>('.ux-account-persona')
+    if (!persona) {
+      persona = document.createElement('div')
+      persona.className = 'ux-account-persona'
+      persona.innerHTML = '<small>人设</small><span></span>'
+      meta.insertAdjacentElement('afterend', persona)
+    }
+    const personaValue = persona.querySelector<HTMLElement>('span')
+    if (personaValue) personaValue.textContent = profile?.persona || '未配置'
+
+    const countTag = actions.querySelector<HTMLElement>('.tag.blue')
+    if (countTag) {
+      countTag.classList.add('ux-plan-count')
+      const count = countTag.textContent?.match(/\d+/)?.[0]
+      if (count) countTag.textContent = `${count} 条策划`
+    }
+
+    let buttonLabel = expandButton.querySelector<HTMLElement>('.ux-expand-label')
+    if (!buttonLabel) {
+      buttonLabel = document.createElement('span')
+      buttonLabel.className = 'ux-expand-label'
+      expandButton.insertBefore(buttonLabel, expandButton.firstChild)
+    }
+    buttonLabel.textContent = expandButton.getAttribute('aria-expanded') === 'true' ? '收起计划' : '查看计划'
+  })
+
+  if (accountProfiles.size === 0) void ensureAccountProfiles().then(() => enhanceBatchAccountCards())
+}
+
+function enhanceResultsUi() {
+  compactPlanningSourceBadges()
+  enhanceBatchAccountCards()
+}
+
 onMounted(() => {
   void store.initialize()
-  compactPlanningSourceBadges()
-  sourceBadgeObserver = new MutationObserver(() => compactPlanningSourceBadges())
-  sourceBadgeObserver.observe(document.body, { childList: true, subtree: true })
+  enhanceResultsUi()
+  resultsUiObserver = new MutationObserver(() => enhanceResultsUi())
+  resultsUiObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-expanded'] })
 })
-onBeforeUnmount(() => sourceBadgeObserver?.disconnect())
+onBeforeUnmount(() => resultsUiObserver?.disconnect())
 
 const nav = [
   { to: '/config', icon: 'M4 6h16M4 12h16M4 18h16M9 3v6m6 0v6m-7 0v6', label: 'AI策划配置' },
@@ -71,4 +183,47 @@ const nav = [
 .account-week-plan-tags .tag.gray[data-source-hint]::after{position:absolute;z-index:1300;bottom:calc(100% + 8px);left:50%;width:max-content;max-width:220px;padding:7px 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);content:attr(data-source-hint);font-size:12px;font-weight:400;line-height:18px;opacity:0;pointer-events:none;transform:translate(-50%,4px);transition:opacity .12s ease,transform .12s ease;white-space:nowrap}
 .account-week-plan-tags .tag.gray[data-source-hint]:hover::after,.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible::after{opacity:1;transform:translate(-50%,0)}
 .account-week-plan-tags .tag.gray[data-source-hint]:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px}
+
+.planning-account-groups{display:grid!important;gap:14px!important;padding:0 20px 20px!important}
+.planning-account-groups .planning-account-group.ux-account-card{overflow:hidden;margin:0!important;border:1px solid var(--neutral-200)!important;border-radius:14px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgba(15,23,42,.03);transition:border-color .16s ease,box-shadow .16s ease}
+.planning-account-groups .planning-account-group.ux-account-card:hover{border-color:var(--neutral-300)!important;box-shadow:0 7px 24px rgba(15,23,42,.055)}
+.planning-account-groups .ux-account-card .planning-account-group-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:22px!important;min-height:0!important;padding:18px 20px!important;background:var(--surface)!important}
+.planning-account-groups .ux-account-main{display:flex!important;align-items:flex-start!important;gap:14px!important;min-width:0!important;flex:1 1 auto}
+.planning-account-groups .ux-account-avatar{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:var(--primary-50);color:var(--primary-600);font-size:16px;font-weight:700}
+.planning-account-groups .ux-account-identity{display:flex!important;flex-direction:column;gap:7px!important;min-width:0}
+.planning-account-groups .ux-account-title-row{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:8px!important}
+.planning-account-groups .ux-account-title-row .account-detail-link{color:var(--neutral-900)!important;font-size:15px!important;font-weight:650!important;line-height:22px!important}
+.planning-account-groups .ux-account-title-row .account-detail-link:hover{color:var(--primary-600)!important}
+.planning-account-groups .ux-original-account-id{display:none!important}
+.planning-account-groups .ux-account-type{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid var(--primary-100);border-radius:6px;background:var(--primary-50);color:var(--primary-600);font-size:11px;font-weight:500;line-height:20px;white-space:nowrap}
+.planning-account-groups .ux-account-meta{display:flex;align-items:center;flex-wrap:wrap;color:var(--neutral-400);font-size:11px;line-height:18px}
+.planning-account-groups .ux-account-meta span{display:inline-flex;align-items:center}
+.planning-account-groups .ux-account-meta span+span::before{width:1px;height:11px;margin:0 9px;background:var(--neutral-200);content:''}
+.planning-account-groups .ux-account-id{font-variant-numeric:tabular-nums}
+.planning-account-groups .ux-account-persona{display:flex;align-items:center;gap:7px;min-width:0}
+.planning-account-groups .ux-account-persona small{flex:none;padding:2px 6px;border-radius:5px;background:var(--neutral-100);color:var(--neutral-500);font-size:10px;line-height:16px}
+.planning-account-groups .ux-account-persona span{max-width:520px;overflow:hidden;color:var(--neutral-600);font-size:12px;line-height:18px;text-overflow:ellipsis;white-space:nowrap}
+.planning-account-groups .ux-account-card .batch-account-head-actions{display:flex!important;align-items:center!important;gap:10px!important;flex:none}
+.planning-account-groups .ux-plan-count{height:24px;padding:0 9px!important;border-radius:6px!important;font-size:11px!important;line-height:24px!important}
+.planning-account-groups .ux-account-card .batch-account-expand{display:inline-flex!important;align-items:center!important;gap:6px!important;width:auto!important;height:34px!important;padding:0 10px!important;border-color:var(--neutral-200)!important;border-radius:8px!important;color:var(--neutral-600)!important}
+.planning-account-groups .ux-account-card .batch-account-expand:hover{border-color:var(--primary-200)!important;background:var(--primary-50)!important;color:var(--primary-600)!important}
+.planning-account-groups .ux-expand-label{font-size:12px;line-height:18px;white-space:nowrap}
+.planning-account-groups .ux-account-card>.account-week-carousel{margin:0!important;padding:16px 18px 18px!important;border-top:1px solid var(--neutral-100);background:linear-gradient(180deg,var(--neutral-50),var(--surface) 76px)}
+.planning-account-groups .ux-account-card .account-week-calendar{padding:0!important}
+.planning-account-groups .ux-account-card .account-week-day{border-radius:10px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgba(15,23,42,.025)}
+.planning-account-groups .ux-account-card .account-week-plan-card{border-radius:8px!important;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}
+.planning-account-groups .ux-account-card .account-week-plan-card:hover{border-color:var(--primary-200)!important;box-shadow:0 5px 16px rgba(15,23,42,.06);transform:translateY(-1px)}
+
+@media(max-width:900px){
+  .planning-account-groups{padding:0 12px 16px!important}
+  .planning-account-groups .ux-account-card .planning-account-group-head{align-items:flex-start!important;flex-direction:column!important;padding:16px!important}
+  .planning-account-groups .ux-account-card .batch-account-head-actions{width:100%;justify-content:space-between!important}
+  .planning-account-groups .ux-account-persona span{max-width:420px}
+}
+@media(max-width:580px){
+  .planning-account-groups .ux-account-main{gap:10px!important}
+  .planning-account-groups .ux-account-avatar{width:36px;height:36px;flex-basis:36px;border-radius:10px}
+  .planning-account-groups .ux-account-persona span{max-width:230px}
+  .planning-account-groups .ux-account-card>.account-week-carousel{padding:12px 8px 14px!important}
+}
 </style>
