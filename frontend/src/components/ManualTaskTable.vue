@@ -80,13 +80,12 @@ function canGenerate(task: ManualTaskSummary) {
     <table class="manual-task-table">
       <thead>
         <tr>
-          <th>批次名称</th>
+          <th>批次号</th>
           <th>投放日期</th>
           <th>账号数</th>
           <th>选题数</th>
           <th>策划状态</th>
           <th>内容状态</th>
-          <th>批次号</th>
           <th>发起时间</th>
           <th>更新时间</th>
           <th>操作</th>
@@ -94,7 +93,12 @@ function canGenerate(task: ManualTaskSummary) {
       </thead>
       <tbody>
         <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }">
-          <td><b>{{ task.task_name || '—' }}</b></td>
+          <td>
+            <div class="manual-batch-identity">
+              <b>{{ task.batch_code || '—' }}</b>
+              <small v-if="task.task_name">{{ task.task_name }}</small>
+            </div>
+          </td>
           <td>{{ task.publish_date }}</td>
           <td class="numeric">{{ task.planned_account_count }}</td>
           <td class="numeric">{{ task.topic_count }}</td>
@@ -105,7 +109,6 @@ function canGenerate(task: ManualTaskSummary) {
               <small v-if="contentProgress(task)">{{ contentProgress(task) }}</small>
             </div>
           </td>
-          <td class="identifier">{{ task.batch_code || '—' }}</td>
           <td class="date-cell">{{ formatDateTime(task.created_at) }}</td>
           <td class="date-cell">{{ formatDateTime(task.updated_at) }}</td>
           <td class="action-cell">
@@ -117,7 +120,7 @@ function canGenerate(task: ManualTaskSummary) {
             </div>
           </td>
         </tr>
-        <tr v-if="tasks.length === 0"><td colspan="10"><div class="empty-state">暂无人工策划任务</div></td></tr>
+        <tr v-if="tasks.length === 0"><td colspan="9"><div class="empty-state">暂无人工策划任务</div></td></tr>
       </tbody>
     </table>
   </div>
@@ -125,15 +128,18 @@ function canGenerate(task: ManualTaskSummary) {
 
 <style scoped>
 .manual-task-table-wrap{max-height:calc(100vh - 260px);overflow:auto}
-.manual-task-table{width:100%;min-width:1080px;border-collapse:collapse}
+.manual-task-table{width:100%;min-width:1040px;border-collapse:collapse}
 .manual-task-table th{position:sticky;top:0;z-index:2;padding:12px 14px;background:var(--neutral-50);color:var(--neutral-500);font-size:12px;font-weight:500;line-height:20px;text-align:left;white-space:nowrap}
 .manual-task-table td{height:56px;padding:10px 14px;border-top:1px solid var(--neutral-100);color:var(--neutral-600);font-size:13px;line-height:20px;vertical-align:middle}
 .manual-task-table tbody tr:hover{background:var(--hover-bg)}
 .manual-task-table tbody tr.has-failures{background:var(--processing-row)}
 .manual-task-table tbody tr.has-failures:hover{background:var(--processing-bg)}
-.manual-task-table td:first-child{min-width:150px;max-width:220px;color:var(--neutral-800);font-weight:500;overflow-wrap:anywhere}
+.manual-task-table td:first-child{min-width:260px;max-width:340px;color:var(--neutral-800)}
+.manual-batch-identity{display:flex;min-width:0;flex-direction:column;gap:3px}
+.manual-batch-identity b{overflow:hidden;color:var(--neutral-800);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
+.manual-batch-identity small{display:block;overflow:hidden;max-width:320px;margin:0;color:var(--neutral-400);font-size:11px;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
 .manual-task-table .numeric{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
-.manual-task-table .identifier,.manual-task-table .date-cell{color:var(--neutral-500);font-variant-numeric:tabular-nums;white-space:nowrap}
+.manual-task-table .date-cell{color:var(--neutral-500);font-variant-numeric:tabular-nums;white-space:nowrap}
 .manual-task-table .tag{display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}
 .manual-content-status{display:flex;align-items:center;gap:8px;min-width:118px;white-space:nowrap}
 .manual-content-status small{color:var(--neutral-400);font-size:11px;font-variant-numeric:tabular-nums}
@@ -147,5 +153,5 @@ tr.has-failures:hover .action-cell{background:var(--processing-bg)}
 .manual-content-flow-link{color:var(--neutral-600)}
 .manual-content-flow-link:hover{color:var(--primary-600)}
 .manual-action-empty{color:var(--neutral-300)}
-@media(max-width:900px){.manual-task-table{min-width:980px}.action-cell{min-width:216px}.manual-task-actions{gap:10px}}
+@media(max-width:900px){.manual-task-table{min-width:960px}.manual-task-table td:first-child{min-width:230px}.action-cell{min-width:216px}.manual-task-actions{gap:10px}}
 </style>

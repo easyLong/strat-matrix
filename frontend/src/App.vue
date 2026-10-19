@@ -47,6 +47,23 @@ function compactAccountHistoryPeriodLabels() {
   })
 }
 
+function enhancePlanTopicDetailTriggers() {
+  document.querySelectorAll<HTMLElement>('.account-week-plan-card').forEach(card => {
+    const title = card.querySelector<HTMLElement>('h3')
+    if (!title) return
+    const topicTitle = title.textContent?.trim() || '未命名选题'
+    card.setAttribute('aria-label', `查看策划详情：${topicTitle}`)
+    title.classList.add('ux-topic-detail-trigger')
+    if (title.dataset.planDetailTrigger === 'true') return
+
+    title.dataset.planDetailTrigger = 'true'
+    title.addEventListener('click', event => {
+      event.stopPropagation()
+      card.click()
+    })
+  })
+}
+
 function accountTypeLabel(profile?: AccountOption) {
   return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—')
 }
@@ -167,6 +184,7 @@ function enhanceBatchAccountCards() {
 function enhanceResultsUi() {
   compactPlanningSourceBadges()
   compactAccountHistoryPeriodLabels()
+  enhancePlanTopicDetailTriggers()
   enhanceBatchAccountCards()
 }
 
@@ -216,6 +234,10 @@ const nav = [
 .ux-account-period-label[data-period-range]::after{content:attr(data-period-range)}
 .account-week-plan-tags .tag.gray[data-source-hint]:hover::after,.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible::after,.ux-account-period-label[data-period-range]:hover::after,.ux-account-period-label[data-period-range]:focus-visible::after{opacity:1;transform:translate(-50%,0)}
 .account-week-plan-tags .tag.gray[data-source-hint]:focus-visible,.ux-account-period-label[data-period-range]:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px;border-radius:4px}
+
+.account-week-plan-card .ux-topic-detail-trigger{position:relative;cursor:pointer;transition:color .14s ease}
+.account-week-plan-card .ux-topic-detail-trigger::after{margin-left:6px;color:var(--primary-600);content:'查看详情';font-size:10px;font-weight:500;opacity:.62;white-space:nowrap}
+.account-week-plan-card .ux-topic-detail-trigger:hover{color:var(--primary-600)}
 
 .planning-account-groups{display:grid!important;gap:14px!important;padding:0 20px 20px!important}
 .planning-account-groups .planning-account-group.ux-account-card{overflow:hidden;margin:0!important;border:1px solid var(--neutral-200)!important;border-radius:14px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgba(15,23,42,.03);transition:border-color .16s ease,box-shadow .16s ease}
