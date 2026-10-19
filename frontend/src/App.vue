@@ -14,15 +14,14 @@ function compactPlanningSourceBadges() {
     let hint = ''
     if (label === '手动策划' || label === '人工策划') {
       compactLabel = '人'
-      hint = '人：人工策划'
+      hint = '人：手动策划'
     } else if (label === '自动策划' || label === 'AI 自动策划') {
       compactLabel = 'AI'
-      hint = 'AI：AI 自动策划'
+      hint = 'AI：自动策划'
     } else return
 
     badge.textContent = compactLabel
     badge.dataset.sourceHint = hint
-    badge.title = hint
     badge.tabIndex = 0
     badge.setAttribute('aria-label', hint)
   })
