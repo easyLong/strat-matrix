@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import TagCascader from '../components/TagCascader.vue'
 import TopicDetailDrawer from '../components/TopicDetailDrawer.vue'
-import { emptyLabelFilters, matchesLabelFilters, tagGroups, tagNames, type TaxonomyItems } from '../topicTaxonomy'
+import type { TaxonomyItems } from '../topicTaxonomy'
 import AccountTypeBadge from '../components/AccountTypeBadge.vue'
+import HoverHint from '../components/HoverHint.vue'
 import ListPagination from '../components/ListPagination.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
+import ContentProgress from '../components/ContentProgress.vue'
 import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { statusTone } from '../ui/status'
 import { formatDateTime } from '../planningTime'
@@ -39,7 +40,6 @@ const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', orga
 const accounts = ref<AccountOption[]>([])
 const topics = ref<TopicOption[]>([])
 const taxonomyItems = ref<TaxonomyItems>({})
-const labelFilters = ref(emptyLabelFilters())
 const topicFiltersExpanded = ref(false)
 const detailTopic = ref<TopicOption | null>(null)
 const tasks = ref<ManualTaskSummary[]>([])
@@ -60,7 +60,7 @@ const contentType = ref('')
 const relatedProduct = ref('')
 const relatedActivity = ref('')
 const relatedHotspot = ref('')
-const appliedTopicFilters = ref({ topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '', labels: emptyLabelFilters() })
+const appliedTopicFilters = ref({ topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '' })
 const topicPage = ref(1)
 const topicPageSize = ref(20)
 const submitAccountPage = ref(1)
@@ -134,7 +134,7 @@ function applyAccountFilters() {
 }
 function applyTopicFilters() {
   flushSearch()
-  appliedTopicFilters.value = { topicId: topicIdFilter.value, query: topicQuery.value, marketing: topicMarketingFilter.value, contentType: contentType.value, product: relatedProduct.value, activity: relatedActivity.value, hotspot: relatedHotspot.value, labels: JSON.parse(JSON.stringify(labelFilters.value)) }
+  appliedTopicFilters.value = { topicId: topicIdFilter.value, query: topicQuery.value, marketing: topicMarketingFilter.value, contentType: contentType.value, product: relatedProduct.value, activity: relatedActivity.value, hotspot: relatedHotspot.value }
   topicPage.value = 1
 }
 const visibleAccounts = computed(() => {
@@ -183,8 +183,7 @@ const filteredTopics = computed(() => topics.value.filter(topic =>
   (!appliedTopicFilters.value.contentType || topic.content_type === appliedTopicFilters.value.contentType) &&
   (!appliedTopicFilters.value.product || topic.related_product === appliedTopicFilters.value.product) &&
   (!appliedTopicFilters.value.activity || topic.related_activity === appliedTopicFilters.value.activity) &&
-  (!appliedTopicFilters.value.hotspot || topic.related_hotspot === appliedTopicFilters.value.hotspot) &&
-  matchesLabelFilters(topic, appliedTopicFilters.value.labels, taxonomyItems.value),
+  (!appliedTopicFilters.value.hotspot || topic.related_hotspot === appliedTopicFilters.value.hotspot),
 ))
 const topicPageCount = computed(() => Math.max(1, Math.ceil(filteredTopics.value.length / topicPageSize.value)))
 const pagedTopics = computed(() => filteredTopics.value.slice((topicPage.value - 1) * topicPageSize.value, topicPage.value * topicPageSize.value))
@@ -274,11 +273,11 @@ async function loadTasks() {
     const pending = new Set(productionRequestIds.value)
     tasks.value = rows.map(task => {
       if (!pending.has(task.id)) return task
-      if (task.content_status === '\u5df2\u5b8c\u6210' || task.content_status === '\u751f\u4ea7\u5f02\u5e38') {
+      if (task.content_status === '\u5df2\u5b8c\u6210' || task.content_status === '\u751f\u6210\u5931\u8d25') {
         pending.delete(task.id)
         return task
       }
-      return { ...task, content_status: '\u751f\u4ea7\u4e2d' }
+      return { ...task, content_status: '\u751f\u6210\u4e2d' }
     })
     productionRequestIds.value = pending
     localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
@@ -298,7 +297,7 @@ function startTaskProduction(task: ManualTaskSummary) {
   pending.add(task.id)
   productionRequestIds.value = pending
   localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
-  task.content_status = '\u751f\u4ea7\u4e2d'
+  task.content_status = '\u751f\u6210\u4e2d'
 }
 
 watch(() => store.databaseReady, ready => {
@@ -306,7 +305,7 @@ watch(() => store.databaseReady, ready => {
 }, { immediate: true })
 onMounted(() => {
   refreshTimer = window.setInterval(() => {
-    if (store.databaseReady && tasks.value.some(task => ['执行中', '进行中'].includes(task.status) || task.content_status === '生产中')) void loadTasks()
+    if (store.databaseReady && tasks.value.some(task => ['执行中', '进行中'].includes(task.status) || task.content_status === '\u751f\u6210\u4e2d')) void loadTasks()
   }, 3000)
 })
 onBeforeUnmount(() => {
@@ -583,7 +582,7 @@ async function submit() {
     })
     await api.submitManualPreview(preview.preview_id)
     await loadTasks()
-    notice.value = '手动策划已提交，当前状态：进行中'
+    notice.value = '手动策划已提交，当前状态：生成中'
     mode.value = 'list'
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : '提交手动策划失败'
@@ -622,8 +621,8 @@ function taskStatusClass(status: string) {
 
   <section v-if="mode === 'list'" class="card manual-task-card">
     <div class="card-head"><div><h2>策划任务列表</h2></div></div>
-    <LoadingSkeleton v-if="!store.initialized || (tasksLoading && !tasks.length)" /><div v-else class="table-wrap"><table><thead><tr><th>批次名称</th><th>&#x6295;&#x653E;&#x65E5;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th>&#x5185;&#x5BB9;&#x72B6;&#x6001;</th><th>批次号</th><th>&#x53D1;&#x8D77;&#x65F6;&#x95F4;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
-      <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }"><td><b>{{ task.task_name || '\u2014' }}</b></td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td class="manual-task-count" :class="{ completed: task.result_count > 0 }">{{ task.result_count }}</td><td class="manual-task-count" :class="{ failed: task.failure_count > 0 }">{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.status)]">{{ task.status === '\u6267\u884c\u4e2d' ? '\u8fdb\u884c\u4e2d' : task.status }}</span></td><td><span :class="['tag', taskStatusClass(task.content_status)]">{{ task.content_status }}</span></td><td>{{ task.batch_code || '\u2014' }}</td><td>{{ formatDateTime(task.created_at) }}</td><td>{{ formatDateTime(task.updated_at) }}</td><td><div class="page-actions"><button v-if="task.batch_id" class="text-btn" type="button" @click="openTaskDetails(task)">&#x8BE6;&#x60C5;</button><button v-if="task.batch_id && task.status === '\u5df2\u5b8c\u6210' && task.content_status === '\u5f85\u751f\u4ea7'" class="text-btn" type="button" @click="startTaskProduction(task)">&#x53BB;&#x751F;&#x4EA7;&#x5185;&#x5BB9;</button><button v-else-if="task.content_status === '\u751f\u4ea7\u4e2d'" class="text-btn" type="button" disabled>&#x8FD0;&#x884C;&#x4E2D;</button><span v-else-if="task.content_status === '\u5df2\u5b8c\u6210'">&#x5DF2;&#x5B8C;&#x6210;</span><span v-else-if="task.content_status === '\u751f\u4ea7\u5f02\u5e38'">&#x751F;&#x4EA7;&#x5F02;&#x5E38;</span><span v-else-if="task.batch_id">&#x5904;&#x7406;&#x4E2D;</span><span v-else>?</span></div></td></tr>
+    <LoadingSkeleton v-if="!store.initialized || (tasksLoading && !tasks.length)" /><div v-else class="table-wrap"><table><thead><tr><th>批次名称</th><th>&#x6295;&#x653E;&#x65E5;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>批次号</th><th>&#x53D1;&#x8D77;&#x65F6;&#x95F4;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
+      <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }"><td><b>{{ task.task_name || '\u2014' }}</b></td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td class="manual-task-count" :class="{ completed: task.result_count > 0 }">{{ task.result_count }}</td><td class="manual-task-count" :class="{ failed: task.failure_count > 0 }">{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.planning_status)]">{{ task.planning_status }}</span></td><td><ContentProgress :completed="task.content_completed_account_count" :total="task.planned_account_count" /></td><td>{{ task.batch_code || '\u2014' }}</td><td>{{ formatDateTime(task.created_at) }}</td><td>{{ formatDateTime(task.updated_at) }}</td><td><div class="page-actions"><button v-if="task.batch_id" class="text-btn" type="button" @click="openTaskDetails(task)">&#x8BE6;&#x60C5;</button><button v-if="task.batch_id && task.status === '\u5df2\u5b8c\u6210' && task.content_status === '\u5f85\u751f\u4ea7'" class="text-btn" type="button" @click="startTaskProduction(task)">&#x53BB;&#x751F;&#x4EA7;&#x5185;&#x5BB9;</button><button v-else-if="task.content_status === '\u751f\u4ea7\u4e2d'" class="text-btn" type="button" disabled>&#x8FD0;&#x884C;&#x4E2D;</button><span v-else-if="task.content_status === '\u5df2\u5b8c\u6210'">&#x5DF2;&#x5B8C;&#x6210;</span><span v-else-if="task.content_status === '\u751f\u4ea7\u5f02\u5e38'">&#x751F;&#x4EA7;&#x5F02;&#x5E38;</span><span v-else-if="task.batch_id">&#x5904;&#x7406;&#x4E2D;</span><span v-else>—</span></div></td></tr>
       <tr v-if="tasks.length === 0"><td colspan="12"><div class="empty-state">暂无手动策划任务</div></td></tr>
     </tbody></table></div>
   </section>
@@ -686,7 +685,7 @@ function taskStatusClass(status: string) {
             <div v-else class="manual-topic-picked-empty">&#x8BF7;&#x4ECE;&#x53F3;&#x4FA7;&#x9009;&#x9898;&#x5E93;&#x6DFB;&#x52A0;</div>
           </aside>
           <section class="manual-topic-picker-available">
-            <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters">&#x7B5B;&#x9009;&#x6761;&#x4EF6; <span>{{ topicFiltersExpanded ? '\u2303' : '\u2304' }}</span></button></div>
+            <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters" @click="topicFiltersExpanded = !topicFiltersExpanded">&#x7B5B;&#x9009;&#x6761;&#x4EF6; <span>{{ topicFiltersExpanded ? '\u2303' : '\u2304' }}</span></button></div>
             <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters">
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898; ID <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID;&#x8FDB;&#x884C;&#x7CBE;&#x786E;&#x5339;&#x914D;">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID" /></label>
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898;&#x6807;&#x9898; <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;;&#x8FDB;&#x884C;&#x6A21;&#x7CCA;&#x641C;&#x7D22;">?</span></span><input v-model="topicQuery" type="search" placeholder="&#x8F93;&#x5165;&#x9009;&#x9898;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;" /></label>
@@ -695,9 +694,8 @@ function taskStatusClass(status: string) {
               <label class="field"><span>&#x5173;&#x8054;&#x4EA7;&#x54C1;</span><select v-model="relatedProduct"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x6D3B;&#x52A8;</span><select v-model="relatedActivity"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</span><select v-model="relatedHotspot"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedHotspots" :key="value" :value="value">{{ value }}</option></select></label>
-              <div v-for="dimension in (['T3', 'T4', 'T5'] as const)" :key="dimension" class="field"><span>{{ tagNames[dimension] }}</span><TagCascader v-model="labelFilters[dimension]" :groups="tagGroups(taxonomyItems, dimension)" :label="tagNames[dimension]" /></div>
               <button class="btn primary filter-query-inline" type="button" @click="applyTopicFilters">&#x67E5;&#x8BE2;</button>
-              <button class="text-btn manual-topic-clear-filters" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''; labelFilters = emptyLabelFilters()">&#x6E05;&#x7A7A;&#x7B5B;&#x9009;</button>
+              <button class="text-btn manual-topic-clear-filters" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''">&#x6E05;&#x7A7A;&#x7B5B;&#x9009;</button>
             </div>
             <div class="manual-topic-list-meta"><b>&#x7B26;&#x5408;&#x6761;&#x4EF6; {{ filteredTopics.length }} &#x4E2A;</b></div>
             <LoadingSkeleton v-if="catalogLoading || !store.initialized" />
@@ -719,8 +717,37 @@ function taskStatusClass(status: string) {
           <div><span>任务名称</span><b>{{ taskName }}</b></div><div><span>投放日期</span><b>{{ publishDate }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个</small></b></div><div><span>选题</span><b class="manual-review-total">{{ selectedTopics.length }} <small>个</small></b></div>
         </div>
         <div class="manual-submit-groups">
-          <section class="manual-submit-group"><div class="manual-submit-group-head"><h3>本次策划账号</h3><span>{{ selectedAccounts.length }} 个</span></div><div class="manual-review-items manual-submit-items"><div v-for="account in submitAccountsPage" :key="account.account_id" class="manual-review-item"><b>{{ account.account_name }}</b></div></div><ListPagination v-model:page="submitAccountPage" v-model:page-size="submitAccountPageSize" :total="selectedAccounts.length" unit="个账号" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" /></section>
-          <section class="manual-submit-group"><div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div><div class="manual-review-items manual-submit-items"><div v-for="topic in submitTopicsPage" :key="topic.topic_id" class="manual-review-item"><b>{{ topic.topic_title }}</b></div></div><ListPagination v-model:page="submitTopicPage" v-model:page-size="submitTopicPageSize" :total="selectedTopics.length" unit="个选题" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" /></section>
+          <section class="manual-submit-group">
+            <div class="manual-submit-group-head"><h3>本次策划账号</h3><span>{{ selectedAccounts.length }} 个</span></div>
+            <div class="manual-submit-items manual-submit-table">
+              <table class="manual-submit-account-table">
+                <colgroup><col style="width:45%" /><col style="width:32%" /><col style="width:23%" /></colgroup>
+                <thead><tr><th>账号名称</th><th>属主 UM 号</th><th>账号类型</th></tr></thead>
+                <tbody><tr v-for="account in submitAccountsPage" :key="account.account_id">
+                  <td><HoverHint :text="account.account_name" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate account-name">{{ account.account_name }}</span></HoverHint></td>
+                  <td><HoverHint :text="account.um_no || '—'" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate identifier">{{ account.um_no || '—' }}</span></HoverHint></td>
+                  <td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '')" /></td>
+                </tr></tbody>
+              </table>
+            </div>
+            <ListPagination v-model:page="submitAccountPage" v-model:page-size="submitAccountPageSize" :total="selectedAccounts.length" unit="个账号" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" />
+          </section>
+          <section class="manual-submit-group">
+            <div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div>
+            <div class="manual-submit-items manual-submit-table">
+              <table class="manual-submit-topic-table">
+                <colgroup><col style="width:21%" /><col style="width:27%" /><col style="width:34%" /><col style="width:18%" /></colgroup>
+                <thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>内容类型</th></tr></thead>
+                <tbody><tr v-for="(topic, index) in submitTopicsPage" :key="`${(submitTopicPage - 1) * submitTopicPageSize + index}-${topic.topic_id}`">
+                  <td><HoverHint :text="topic.topic_id" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate identifier">{{ topic.topic_id }}</span></HoverHint></td>
+                  <td><HoverHint :text="topic.topic_title" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate topic-title">{{ topic.topic_title }}</span></HoverHint></td>
+                  <td><HoverHint :text="topic.outline || '暂无选题大纲'" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate topic-outline">{{ topic.outline || '暂无选题大纲' }}</span></HoverHint></td>
+                  <td><HoverHint :text="topic.content_type || '—'" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate">{{ topic.content_type || '—' }}</span></HoverHint></td>
+                </tr></tbody>
+              </table>
+            </div>
+            <ListPagination v-model:page="submitTopicPage" v-model:page-size="submitTopicPageSize" :total="selectedTopics.length" unit="个选题" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" />
+          </section>
         </div>        <div class="footer-actions manual-step-actions"><button class="btn" type="button" @click="returnToStep(3)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交手动策划' }}</button></div>
       </div>
     </section>
@@ -801,7 +828,16 @@ function taskStatusClass(status: string) {
 
 <style scoped>
 .manual-head-actions{margin-left:auto}
-.topic-filters-toggle{display:flex;justify-content:flex-end;margin-bottom:12px}.topic-title-link{padding:0;border:0;background:transparent;color:var(--primary-600);font-size:13px;font-weight:500;text-align:left;line-height:1.6}.topic-title-link:hover{text-decoration:underline}.manual-topic-filters .field{width:100%}.manual-topic-filters :deep(.cascader-trigger){width:100%}
+.topic-filters-toggle{display:flex;justify-content:flex-end;margin-bottom:12px}.topic-title-link{padding:0;border:0;background:transparent;color:var(--primary-600);font-size:13px;font-weight:500;text-align:left;line-height:1.6}.topic-title-link:hover{text-decoration:underline}.manual-topic-filters .field{width:100%}
+.manual-submit-table{overflow:auto;border:1px solid var(--neutral-200);border-radius:6px}
+.manual-submit-table table{width:100%;min-width:0;table-layout:fixed}
+.manual-submit-table th,.manual-submit-table td{padding:10px 8px;text-align:left;font-size:12px}
+.manual-submit-table th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}
+.manual-submit-table :deep(.manual-submit-tooltip){width:100%;min-width:0;text-align:left;font-size:12px;color:var(--neutral-700)}
+.manual-submit-truncate{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.manual-submit-truncate.account-name,.manual-submit-truncate.topic-title{font-weight:500;color:var(--neutral-800)}
+.manual-submit-truncate.identifier{font-variant-numeric:tabular-nums;color:var(--neutral-500)}
+.manual-submit-truncate.topic-outline{color:var(--neutral-600)}
 .manual-topic-table table{min-width:1280px}.manual-topic-table td:nth-child(2){width:220px;max-width:220px}.manual-topic-table td:nth-child(3){width:300px;max-width:300px}.manual-topic-title-value,.manual-topic-outline-value{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.manual-topic-outline-value{color:var(--neutral-600);font-size:12px}
 .manual-account-mode-row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}.manual-account-mode-row>.field{min-width:180px;margin:0}.manual-account-mode-row .manual-selection-modes{align-self:flex-end;margin:0}
 @media(max-width:580px){.manual-account-mode-row{align-items:stretch;flex-direction:column;gap:10px}.manual-account-mode-row>.field{min-width:0}.manual-account-mode-row .manual-selection-modes{width:100%}.manual-account-mode-row .manual-mode-tab{flex:1}}

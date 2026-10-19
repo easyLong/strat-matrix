@@ -109,6 +109,10 @@ export interface BatchSummary {
   task_name: string
   planning_status: string
   content_status: string
+  content_failed_count: number
+  content_completed_count: number
+  content_total_count: number
+  content_completed_account_count: number
 }
 
 export interface PlanningAccountSummary {
@@ -223,6 +227,11 @@ export interface ManualTaskSummary {
   topic_count: number
   status: string
   content_status: string
+  planning_status: string
+  content_failed_count: number
+  content_completed_count: number
+  content_total_count: number
+  content_completed_account_count: number
   failure_reason: string
   batch_id: number | null
   last_error: string

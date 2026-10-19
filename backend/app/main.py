@@ -22,6 +22,7 @@ from .ai_preparation_api import router as ai_preparation_router
 from .matching_execution_api import router as matching_execution_router
 from .ordinary_planning import PlanningError, lifecycle_stage, load_accounts
 from .manual_availability import ensure_manual_accounts_available, planned_manual_accounts
+from .planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, PRODUCTION_STATUS_SQL, planning_status_label, production_status
 from .models import (
     AccountOption,
     AccountPlanRecord,
@@ -132,13 +133,14 @@ def enrich_plan_item(row: dict, plan_type: str | None = None) -> dict:
             source.get("is_marketing") or row.get("source_is_marketing") else "普通"
         )
     row["content_role"] = row.get("content_role") or infer_content_role(row, source if source_payload else {})
+    row["production_status"] = production_status(row)
     published_at = row.get("published_at")
     block_reason = replacement_block_reason(row, plan_type)
     allow = not block_reason
     publish_status = ("待确定选题" if not row.get("topic_id") else
                       "已发布" if (published_at or row.get("status") == "已发布"
                                    or row.get("production_status") in ("published", "已发布"))
-                      else "未发布" if row.get("slot_id") else "状态未知")
+                      else "未发布")
     row["publish_status"] = publish_status
     row["allow_replace"] = allow
     row["replace_block_reason"] = block_reason
@@ -653,12 +655,14 @@ def list_batches(plan_type: str | None = None, limit: int = 200) -> list[dict]:
             cursor.execute(
                 "SELECT i.batch_id, COUNT(*) AS item_count, "
                 "COUNT(DISTINCT i.account_id) AS account_item_count, "
-                "COUNT(DISTINCT CASE WHEN i.status LIKE '%%失败%%' OR i.status LIKE '%%异常%%' "
-                "OR i.status LIKE '%%错误%%' THEN i.account_id END) AS planning_failed_count, "
+                "COUNT(DISTINCT CASE WHEN (i.status LIKE '%%失败%%' OR i.status LIKE '%%异常%%' "
+                "OR i.status LIKE '%%错误%%') AND COALESCE(s.production_status, '') <> 'failed' "
+                "AND i.status NOT IN ('生成失败','生产失败','生产异常') THEN i.account_id END) AS planning_failed_count, "
                 "COUNT(DISTINCT NULLIF(i.topic_id,'')) AS selected_topic_count, "
-                "SUM(CASE WHEN s.production_status IN ('generated','published') THEN 1 ELSE 0 END) AS production_completed_count, "
-                "SUM(CASE WHEN s.production_status='ready' THEN 1 ELSE 0 END) AS ready_count, "
-                "SUM(CASE WHEN s.production_status='failed' THEN 1 ELSE 0 END) AS failed_count "
+                f"{COMPLETED_ACCOUNT_COUNT_SQL} AS completed_account_count, "
+                f"SUM(CASE WHEN {PRODUCTION_STATUS_SQL} IN ('generated','published') THEN 1 ELSE 0 END) AS production_completed_count, "
+                f"SUM(CASE WHEN {PRODUCTION_STATUS_SQL}='ready' THEN 1 ELSE 0 END) AS ready_count, "
+                f"SUM(CASE WHEN {PRODUCTION_STATUS_SQL}='failed' THEN 1 ELSE 0 END) AS failed_count "
                 "FROM godp_planning_item i LEFT JOIN godp_slot_state s "
                 "ON s.item_id=i.id AND s.del_flag='N' "
                 "WHERE i.del_flag='N' AND i.batch_id IN (" + placeholders + ") "
@@ -682,12 +686,16 @@ def list_batches(plan_type: str | None = None, limit: int = 200) -> list[dict]:
                     "\u5df2\u5b8c\u6210" if row["plan_type"] == "manual" else row["status"]
                 )
                 row["content_status"] = (
-                    "\u751f\u4ea7\u5f02\u5e38" if production_failed_count else
+                    "\u751f\u6210\u5931\u8d25" if production_failed_count else
                     "\u5df2\u5b8c\u6210" if slot_count and production_completed_count == slot_count else
-                    "\u751f\u4ea7\u4e2d" if ready_count or production_completed_count else
+                    "\u751f\u6210\u4e2d" if ready_count or production_completed_count else
                     "\u5f85\u751f\u4ea7"
                 )
                 row["result_count"] = slot_count
+                row["content_failed_count"] = production_failed_count
+                row["content_completed_count"] = production_completed_count
+                row["content_total_count"] = slot_count
+                row["content_completed_account_count"] = counts_for_batch.get("completed_account_count", 0)
                 if row["plan_type"] == "manual" and task:
                     row["completed_count"] = task.get("task_completed_count") or 0
                     row["failed_count"] = task.get("task_failed_count") or 0
@@ -701,6 +709,11 @@ def list_batches(plan_type: str | None = None, limit: int = 200) -> list[dict]:
                         0, min(row["account_count"], counts_for_batch.get("account_item_count", 0) - failed_accounts)
                     )
                     row["topic_count"] = counts_for_batch.get("selected_topic_count", 0)
+                # Content callbacks can mark a batch as unfinished without a planning failure.
+                if (row["planning_status"] in ("未完成", "生成失败", "生产失败", "生产异常")
+                        and production_failed_count and not row["failed_count"]):
+                    row["planning_status"] = "已完成"
+                row["planning_status"] = planning_status_label(row["planning_status"], row["failed_count"])
             return rows
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise database_error() from exc
@@ -1346,27 +1359,35 @@ def list_manual_tasks(limit: int = 20) -> list[dict]:
             cursor.execute(
                 "SELECT id, task_code, preview_code, task_name, publish_date, planned_account_count, "
                 "result_count, failure_count, topic_count, status, failure_reason, t.batch_id, "
-                "CASE WHEN status IN ('执行中','进行中') THEN '待策划完成' "
-                "WHEN status <> '已完成' THEN '策划未完成' "
+                "CASE WHEN status IN ('执行中','进行中') THEN '待生产' "
+                "WHEN status <> '已完成' THEN '待生产' "
                 "WHEN t.batch_id IS NULL OR COALESCE(cs.slot_count, 0)=0 THEN '待生产' "
-                "WHEN cs.failed_count > 0 THEN '存在异常' "
+                "WHEN cs.failed_count > 0 THEN '生成失败' "
                 "WHEN cs.completed_count=cs.slot_count THEN '已完成' "
-                "WHEN cs.ready_count > 0 OR cs.completed_count > 0 THEN '生产中' "
+                "WHEN cs.ready_count > 0 OR cs.completed_count > 0 THEN '生成中' "
                 "ELSE '待生产' END AS content_status, "
+                "COALESCE(cs.failed_count, 0) AS content_failed_count, "
+                "COALESCE(cs.completed_count, 0) AS content_completed_count, "
+                "COALESCE(cs.slot_count, 0) AS content_total_count, "
+                "COALESCE(cs.completed_account_count, 0) AS content_completed_account_count, "
                 "COALESCE((SELECT batch_code FROM godp_planning_batch WHERE id=t.batch_id AND del_flag='N'), '') AS batch_code, "
                 "last_error, create_time AS created_at, create_by AS created_by, "
                 "update_time AS updated_at "
                 "FROM godp_manual_task t "
                 "LEFT JOIN (SELECT i.batch_id, COUNT(*) AS slot_count, "
-                "SUM(CASE WHEN s.production_status IN ('generated','published') THEN 1 ELSE 0 END) AS completed_count, "
-                "SUM(CASE WHEN s.production_status='ready' THEN 1 ELSE 0 END) AS ready_count, "
-                "SUM(CASE WHEN s.production_status='failed' THEN 1 ELSE 0 END) AS failed_count "
+                f"{COMPLETED_ACCOUNT_COUNT_SQL} AS completed_account_count, "
+                f"SUM(CASE WHEN {PRODUCTION_STATUS_SQL} IN ('generated','published') THEN 1 ELSE 0 END) AS completed_count, "
+                f"SUM(CASE WHEN {PRODUCTION_STATUS_SQL}='ready' THEN 1 ELSE 0 END) AS ready_count, "
+                f"SUM(CASE WHEN {PRODUCTION_STATUS_SQL}='failed' THEN 1 ELSE 0 END) AS failed_count "
                 "FROM godp_planning_item i LEFT JOIN godp_slot_state s "
                 "ON s.item_id=i.id AND s.del_flag='N' "
                 "WHERE i.del_flag='N' GROUP BY i.batch_id) cs ON cs.batch_id=t.batch_id "
                 "WHERE t.del_flag='N' ORDER BY t.id DESC LIMIT %s", (limit,),
             )
-            return cursor.fetchall()
+            rows = cursor.fetchall()
+            for row in rows:
+                row["planning_status"] = planning_status_label(row["status"], row["failure_count"])
+            return rows
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise database_error() from exc
 

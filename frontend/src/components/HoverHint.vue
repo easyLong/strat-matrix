@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
-defineProps<{ text: string }>()
+const props = withDefaults(defineProps<{ text: string; showIcon?: boolean; overflowOnly?: boolean }>(), {
+  showIcon: true,
+  overflowOnly: false,
+})
 defineOptions({ inheritAttrs: false })
 
 const tooltipId = useId()
@@ -29,6 +32,10 @@ function place() {
 }
 
 async function show() {
+  if (props.overflowOnly) {
+    const content = trigger.value?.firstElementChild
+    if (!content || content.scrollWidth <= content.clientWidth) { close(); return }
+  }
   clearTimeout(closeTimer)
   if (!open.value) position.value.visibility = 'hidden'
   open.value = true
@@ -72,7 +79,7 @@ onBeforeUnmount(() => {
     @mouseenter="hovered = true; show()" @mouseleave="hovered = false; scheduleClose()"
     @focus="focused = true; show()" @blur="focused = false; scheduleClose()" @click="show">
     <slot />
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v5m0-9v1" /></svg>
+    <svg v-if="showIcon" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v5m0-9v1" /></svg>
   </button>
   <Teleport to="body">
     <div v-if="open" :id="tooltipId" ref="tooltip" class="hover-hint-tooltip" :style="position" role="tooltip"
@@ -86,4 +93,8 @@ onBeforeUnmount(() => {
 .hover-hint:focus-visible{outline:2px solid var(--primary-600);outline-offset:3px;border-radius:4px}
 .hover-hint svg{flex-shrink:0}
 .hover-hint-tooltip{position:fixed;z-index:1200;box-sizing:border-box;width:max-content;max-width:min(320px,calc(100vw - 24px));padding:10px 12px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);font-size:13px;line-height:20px;white-space:normal;overflow-wrap:anywhere}
+</style>
+
+<style scoped>
+.hover-hint-tooltip{max-height:min(360px,calc(100vh - 24px));overflow-y:auto;overscroll-behavior:contain;white-space:pre-wrap}
 </style>

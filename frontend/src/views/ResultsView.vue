@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import TagCascader from '../components/TagCascader.vue'
 import TopicDetailDrawer from '../components/TopicDetailDrawer.vue'
-import { emptyLabelFilters, matchesLabelFilters, tagGroups, tagNames, topicLabels, type TaxonomyItems } from '../topicTaxonomy'
+import { topicLabels, type TaxonomyItems } from '../topicTaxonomy'
 import AccountTypeBadge from '../components/AccountTypeBadge.vue'
 import ListPagination from '../components/ListPagination.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
+import ContentProgress from '../components/ContentProgress.vue'
+import FloatingTableScrollbar from '../components/FloatingTableScrollbar.vue'
 import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { statusTone } from '../ui/status'
 import { formatDateTime } from '../planningTime'
@@ -20,6 +21,7 @@ type SlotOperationLog = { key: string; createdAt: string; action: string; actor:
 const store = usePlanningStore()
 const route = useRoute()
 const pane = ref<'period' | 'detail' | 'account'>('account')
+const accountTableScroll = ref<HTMLElement | null>(null)
 const accountFiltersExpanded = ref(false)
 const batchFiltersExpanded = ref(false)
 const accountDetailFiltersExpanded = ref(false)
@@ -54,6 +56,7 @@ const batchWeek = ref('all')
 const appliedBatchFilters = ref({ year: 'all', month: 'all', week: 'all' })
 const cycleItems = ref<AccountPlanRecord[]>([])
 const selectedBatch = ref<BatchSummary | null>(null)
+const expandedBatchAccountIds = ref(new Set<string>())
 const cyclePage = ref(1)
 const cyclePageSize = ref(10)
 const cycleAccountKeyword = ref('')
@@ -71,6 +74,7 @@ const visibleError = computed(() => error.value
   .join('\uFF1B'))
 const busy = ref(false)
 const replaceTarget = ref<AccountPlanRecord | null>(null)
+const planDrawerBody = ref<HTMLElement | null>(null)
 const drawerMode = ref<'view' | 'replace' | 'history'>('replace')
 const planTopicDetail = ref<TopicOption | null>(null)
 const planDetailLoading = ref(false)
@@ -78,7 +82,6 @@ const planOperationsLoading = ref(false)
 const planOperationsError = ref('')
 const replacementTopics = ref<TopicOption[]>([])
 const taxonomyItems = ref<TaxonomyItems>({})
-const labelFilters = ref(emptyLabelFilters())
 const detailTopic = ref<TopicOption | null>(null)
 const replacementFiltersExpanded = ref(false)
 const replacementQuery = ref('')
@@ -88,13 +91,15 @@ const replacementContentType = ref('')
 const replacementProduct = ref('')
 const replacementActivity = ref('')
 const replacementHotspot = ref('')
-const appliedReplacementFilters = ref({ topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '', labels: emptyLabelFilters() })
+const appliedReplacementFilters = ref({ topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '' })
 const { terms: searchTerms, flush: flushSearch } = useDebouncedFields({ historyAccountKeyword, historyUmNo, replacementQuery, replacementTopicIdFilter })
 const replacementTopicId = ref('')
 const replacementReason = ref('')
 const adjustmentHistory = ref<AdjustmentRecord[]>([])
 const replaceBusy = ref(false)
 let planDetailRequest = 0
+let replacementReturnsToDetails = false
+let replacementReturnScrollTop = 0
 function monthWeekOf(date: string) {
   const monday = new Date(`${cycleWeekStart(date)}T00:00:00Z`)
   return Math.floor((monday.getUTCDate() - 1) / 7) + 1
@@ -173,6 +178,19 @@ function groupAccountRecords(items: AccountPlanRecord[]): AccountGroup[] {
   return [...groups.values()]
 }
 const groupedCycleItems = computed(() => groupAccountRecords(filteredCycleItems.value))
+const batchDashboard = computed(() => {
+  const items = cycleItems.value
+  const isHotspot = (item: AccountPlanRecord) => item.slot_type === 'hotspot'
+  const isMarketing = (item: AccountPlanRecord) => item.slot_type === 'marketing_priority'
+  return {
+    accountCount: new Set(items.map(item => item.account_id)).size,
+    totalPlanningCount: items.length,
+    hotspotCount: items.filter(isHotspot).length,
+    marketingCount: items.filter(isMarketing).length,
+    regularCount: items.filter(item => !isHotspot(item) && !isMarketing(item)).length,
+    hotspotPendingCount: items.filter(item => isHotspot(item) && !item.topic_id).length,
+  }
+})
 const cyclePageCount = computed(() => Math.max(1, Math.ceil(groupedCycleItems.value.length / cyclePageSize.value)))
 const pagedGroupedCycleItems = computed(() => {
   const start = (cyclePage.value - 1) * cyclePageSize.value
@@ -331,7 +349,12 @@ function topicTypeLabel(item: AccountPlanRecord) {
   return item.slot_type === 'hotspot' ? '\u70ed\u70b9' : item.slot_type === 'marketing_priority' ? '\u8425\u9500' : '\u666e\u901a'
 }
 function productionStatusLabel(item: AccountPlanRecord) {
-  return ({ ready: '\u751f\u4ea7\u4e2d', generated: '\u5df2\u751f\u6210', published: '\u5df2\u53d1\u5e03', failed: '\u751f\u4ea7\u5931\u8d25' } as Record<string, string>)[item.production_status ?? ''] ?? item.publish_status
+  if (!item.topic_id) return '待生产'
+  const states: Record<string, string> = { planned: '待生产', ready: '生成中', generated: '已完成', published: '已完成', failed: '生成失败' }
+  return states[item.production_status ?? ''] ?? ({
+    '已生成': '已完成', '已发布': '已完成', '生成中': '生成中', '生产中': '生成中',
+    '生成失败': '生成失败', '生产失败': '生成失败', '生产异常': '生成失败',
+  } as Record<string, string>)[item.status] ?? '待生产'
 }
 function weekdayLabel(date: string) {
   return new Intl.DateTimeFormat('zh-CN', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`))
@@ -362,22 +385,24 @@ const replacementCandidates = computed(() => replacementTopics.value.filter(topi
   (!appliedReplacementFilters.value.contentType || topic.content_type === appliedReplacementFilters.value.contentType) &&
   (!appliedReplacementFilters.value.product || topic.related_product === appliedReplacementFilters.value.product) &&
   (!appliedReplacementFilters.value.activity || topic.related_activity === appliedReplacementFilters.value.activity) &&
-  (!appliedReplacementFilters.value.hotspot || topic.related_hotspot === appliedReplacementFilters.value.hotspot) &&
-  matchesLabelFilters(topic, appliedReplacementFilters.value.labels, taxonomyItems.value),
+  (!appliedReplacementFilters.value.hotspot || topic.related_hotspot === appliedReplacementFilters.value.hotspot),
 ))
 function applyReplacementFilters() {
   flushSearch()
-  appliedReplacementFilters.value = { topicId: replacementTopicIdFilter.value, query: replacementQuery.value, marketing: replacementMarketingFilter.value, contentType: replacementContentType.value, product: replacementProduct.value, activity: replacementActivity.value, hotspot: replacementHotspot.value, labels: JSON.parse(JSON.stringify(labelFilters.value)) }
+  appliedReplacementFilters.value = { topicId: replacementTopicIdFilter.value, query: replacementQuery.value, marketing: replacementMarketingFilter.value, contentType: replacementContentType.value, product: replacementProduct.value, activity: replacementActivity.value, hotspot: replacementHotspot.value }
 }
 function replacementTopicType(topic: TopicOption) {
   return topic.topic_type || (topic.is_marketing ? '\u8425\u9500' : '\u666e\u901a')
 }
 async function openReplacement(item: AccountPlanRecord) {
+  const request = ++planDetailRequest
+  replacementReturnsToDetails = drawerMode.value === 'view' && replaceTarget.value?.id === item.id
+  replacementReturnScrollTop = planDrawerBody.value?.scrollTop ?? 0
+  error.value = ''
   drawerMode.value = 'replace'
   replaceTarget.value = item
   replacementFiltersExpanded.value = false
-  labelFilters.value = emptyLabelFilters()
-  appliedReplacementFilters.value = { topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '', labels: emptyLabelFilters() }
+  appliedReplacementFilters.value = { topicId: '', query: '', marketing: '', contentType: '', product: '', activity: '', hotspot: '' }
   replacementQuery.value = ''
   replacementTopicIdFilter.value = ''
   replacementMarketingFilter.value = ''
@@ -387,26 +412,28 @@ async function openReplacement(item: AccountPlanRecord) {
   replacementHotspot.value = ''
   replacementTopicId.value = ''
   replacementReason.value = ''
+  replacementTopics.value = []
   adjustmentHistory.value = []
   try {
     const [topics, history, taxonomy] = await Promise.all([api.replacementCandidates(item.id), api.adjustments(item.id), api.tagTaxonomy()])
+    if (request !== planDetailRequest) return
     taxonomyItems.value = taxonomy.items
     replacementTopics.value = topics
     adjustmentHistory.value = history
-  } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取替换信息失败' }
+  } catch (exc) { if (request === planDetailRequest) error.value = exc instanceof Error ? exc.message : '读取替换信息失败' }
 }
 async function showCurrentTopicDetails(item: AccountPlanRecord) {
   detailTopic.value = topicCatalog.value.find(topic => topic.topic_id === item.topic_id) ?? { topic_id: item.topic_id, topic_title: item.topic_title, outline: item.outline, content_type: item.content_type, category: '', is_marketing: item.topic_type === '营销', status: '可用', topic_type: item.topic_type === '营销' ? '营销' : item.topic_type === '热点' ? '热点' : '普通' }
   try { taxonomyItems.value = (await api.tagTaxonomy()).items } catch { /* Existing topic paths remain readable. */ }
 }
-async function openPlanDetails(item: AccountPlanRecord) {
+async function openPlanDetails(item: AccountPlanRecord, known?: { topic?: TopicOption; adjustments?: AdjustmentRecord[] }) {
   const request = ++planDetailRequest
   drawerMode.value = 'view'
   replaceTarget.value = item
-  adjustmentHistory.value = []
+  adjustmentHistory.value = known?.adjustments ?? []
   planOperationsError.value = ''
-  planOperationsLoading.value = true
-  const catalogTopic = topicCatalog.value.find(topic => topic.topic_id === item.topic_id) ?? null
+  planOperationsLoading.value = !known?.adjustments
+  const catalogTopic = known?.topic ?? topicCatalog.value.find(topic => topic.topic_id === item.topic_id) ?? null
   planTopicDetail.value = catalogTopic ?? {
     topic_id: item.topic_id,
     topic_title: item.topic_title,
@@ -419,7 +446,7 @@ async function openPlanDetails(item: AccountPlanRecord) {
   }
   planDetailLoading.value = !catalogTopic && Boolean(item.topic_id)
   const [operationsResult, topicResult] = await Promise.allSettled([
-    api.adjustments(item.id),
+    known?.adjustments ? Promise.resolve(known.adjustments) : api.adjustments(item.id),
     !catalogTopic && item.topic_id ? api.topicDetail(item.topic_id, topicTypeLabel(item)) : Promise.resolve(catalogTopic),
   ])
   if (request !== planDetailRequest) return
@@ -444,7 +471,11 @@ async function openAdjustmentHistory(item: AccountPlanRecord) {
 }
 function closeReplacement() { planDetailRequest++; replaceTarget.value = null; planDetailLoading.value = false; planOperationsLoading.value = false }
 async function confirmReplacement() {
-  if (!replaceTarget.value || !replacementTopicId.value || replaceTarget.value.result_version === null) return
+  if (replaceBusy.value || !replaceTarget.value || !replacementTopicId.value || replaceTarget.value.result_version == null) return
+  const request = planDetailRequest
+  const returnToDetails = replacementReturnsToDetails
+  const returnScrollTop = replacementReturnScrollTop
+  const topic = replacementTopics.value.find(topic => topic.topic_id === replacementTopicId.value)
   replaceBusy.value = true
   error.value = ''
   try {
@@ -452,9 +483,14 @@ async function confirmReplacement() {
     const update = (rows: AccountPlanRecord[]) => rows.map(row => row.id === result.item.id ? result.item : row)
     cycleItems.value = update(cycleItems.value)
     if (selectedAccount.value) selectedAccount.value = { ...selectedAccount.value, items: update(selectedAccount.value.items) }
-    replaceTarget.value = result.item
-    adjustmentHistory.value = await api.adjustments(result.item.id)
+    if (request !== planDetailRequest || replaceTarget.value?.id !== result.item.id || drawerMode.value !== 'replace') return
+    const adjustments = [result.adjustment, ...adjustmentHistory.value.filter(row => row.id !== result.adjustment.id)]
     replacementTopicId.value = ''
+    if (returnToDetails) {
+      void openPlanDetails(result.item, { topic, adjustments })
+      await nextTick()
+      if (planDrawerBody.value) planDrawerBody.value.scrollTop = returnScrollTop
+    } else closeReplacement()
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '替换失败，当前结果未改变' }
   finally { replaceBusy.value = false }
 }
@@ -488,6 +524,7 @@ async function loadBatch(batchId: number) {
   try {
     const batch = await api.batch(batchId)
     selectedBatch.value = batch
+    expandedBatchAccountIds.value = new Set()
     batchDetailFiltersExpanded.value = false
     cyclePage.value = 1
     cycleAccountKeyword.value = ''
@@ -505,6 +542,12 @@ async function loadBatch(batchId: number) {
     pane.value = 'detail'
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '\u8bfb\u53d6\u6279\u6b21\u5931\u8d25' }
   finally { busy.value = false }
+}
+function toggleBatchAccount(accountId: string) {
+  const expanded = new Set(expandedBatchAccountIds.value)
+  if (expanded.has(accountId)) expanded.delete(accountId)
+  else expanded.add(accountId)
+  expandedBatchAccountIds.value = expanded
 }
 async function loadAccountHistory(group: AccountGroup | PlanningAccountSummary) {
   accountDetailFiltersExpanded.value = false
@@ -630,8 +673,8 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
         </div>
       </div>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>&#x6279;&#x6B21;</th><th>&#x7B56;&#x5212;&#x65B9;&#x5F0F;</th><th>&#x6279;&#x6B21;&#x5468;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th>&#x5185;&#x5BB9;&#x72B6;&#x6001;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
-      <tr v-for="batch in pagedBatches" :key="batch.id"><td><div class="account-name-cell"><b>{{ batch.task_name || '\u2014' }}</b><small>ID {{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '\u624b\u52a8\u7b56\u5212' : '\u81ea\u52a8\u7b56\u5212' }}</td><td>{{ batch.cycle_start }} &#x81F3; {{ batch.cycle_end }}</td><td>{{ batch.account_count }}</td><td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td><td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td><td>{{ batch.topic_count }}</td><td><span :class="['tag', statusTagClass(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td><td><span :class="['tag', statusTagClass(batch.content_status)]">{{ batch.content_status || '\u2014' }}</span></td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="loadBatch(batch.id)">&#x67E5;&#x770B;&#x8BE6;&#x60C5;</button></td></tr>
+    <div class="table-wrap"><table><thead><tr><th>&#x6279;&#x6B21;</th><th>&#x7B56;&#x5212;&#x65B9;&#x5F0F;</th><th>&#x6279;&#x6B21;&#x5468;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
+      <tr v-for="batch in pagedBatches" :key="batch.id"><td><div class="account-name-cell"><b>{{ batch.task_name || '\u2014' }}</b><small>ID {{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '\u624b\u52a8\u7b56\u5212' : '\u81ea\u52a8\u7b56\u5212' }}</td><td>{{ batch.cycle_start }} &#x81F3; {{ batch.cycle_end }}</td><td>{{ batch.account_count }}</td><td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td><td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td><td>{{ batch.topic_count }}</td><td><span :class="['tag', statusTagClass(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td><td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="loadBatch(batch.id)">&#x67E5;&#x770B;&#x8BE6;&#x60C5;</button></td></tr>
       <tr v-if="visibleCycles.length === 0"><td colspan="11"><div class="empty-state"><b>&#x6682;&#x65E0;&#x7B56;&#x5212;&#x6279;&#x6B21;</b></div></td></tr>
     </tbody></table></div>
     <ListPagination v-model:page="batchListPage" v-model:page-size="batchListPageSize" :total="visibleCycles.length" unit="个批次" class="list-pagination-inset" />
@@ -640,6 +683,14 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
     <div class="card-head"><div><h2>&#x6279;&#x6B21;&#x8BE6;&#x60C5;</h2><small v-if="selectedBatch">{{ selectedBatch.batch_code }} &#xB7; {{ selectedBatch.cycle_start }} &#x81F3; {{ selectedBatch.cycle_end }}</small></div><button class="btn" type="button" @click="pane = 'period'">&#x8FD4;&#x56DE;&#x6279;&#x6B21;&#x7EF4;&#x5EA6;</button></div>
     <LoadingSkeleton v-if="busy" :rows="8" />
     <template v-else-if="selectedBatch">
+    <section class="batch-dashboard" aria-label="批次看板">
+      <div class="batch-dashboard-item"><small>账号数</small><strong>{{ batchDashboard.accountCount }}</strong></div>
+      <div class="batch-dashboard-item"><small>总策划条数</small><strong>{{ batchDashboard.totalPlanningCount }}</strong></div>
+      <div class="batch-dashboard-item"><small>热点策划条数</small><strong>{{ batchDashboard.hotspotCount }}</strong></div>
+      <div class="batch-dashboard-item"><small>营销策划条数</small><strong>{{ batchDashboard.marketingCount }}</strong></div>
+      <div class="batch-dashboard-item"><small>普通策划条数</small><strong>{{ batchDashboard.regularCount }}</strong></div>
+      <div class="batch-dashboard-item pending"><small>热点待填充条数</small><strong>{{ batchDashboard.hotspotPendingCount }}</strong></div>
+    </section>
     <div class="card-body filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="batch-detail-filter-fields" :aria-expanded="batchDetailFiltersExpanded" @click="batchDetailFiltersExpanded = !batchDetailFiltersExpanded"><span>&#x7B5B;&#x9009;&#x6761;&#x4EF6;</span><svg :class="{ expanded: batchDetailFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
     <div id="batch-detail-filter-fields" v-show="batchDetailFiltersExpanded" class="card-body detail-filter-fields">
       <label><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="cycleAccountKeyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" /></label>
@@ -651,9 +702,9 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
       <article v-for="group in pagedGroupedCycleItems" :key="group.account_id" class="batch-account-card planning-account-group">
         <div class="batch-account-head planning-account-group-head">
           <div><div class="batch-account-name"><button class="account-detail-link" type="button" @click="openAccountDetail(group)">{{ group.account_name }}</button><span class="tag gray">{{ group.account_id }}</span><span v-if="group.lifecycle_stage && group.lifecycle_stage !== ''" class="tag purple">{{ group.lifecycle_stage }}</span></div></div>
-          <div class="batch-account-head-actions"><span class="tag blue">{{ group.items.length }} &#x6761;&#x7B56;&#x5212;</span></div>
+          <div class="batch-account-head-actions"><span class="tag blue">{{ group.items.length }} &#x6761;&#x7B56;&#x5212;</span><button class="batch-account-expand" type="button" :aria-expanded="expandedBatchAccountIds.has(group.account_id)" :aria-label="`${expandedBatchAccountIds.has(group.account_id) ? '收起' : '展开'}${group.account_name}的策划详情`" @click="toggleBatchAccount(group.account_id)"><svg :class="{ expanded: expandedBatchAccountIds.has(group.account_id) }" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
         </div>
-        <div class="account-week-carousel"><button class="account-week-scroll-control previous" type="button" aria-label="&#x5411;&#x5DE6;&#x6ED1;&#x52A8;&#x5468;&#x5386;" @click="scrollAccountWeek($event, -1)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><div class="account-week-scroll"><div class="account-week-calendar">
+        <div v-if="expandedBatchAccountIds.has(group.account_id)" class="account-week-carousel"><button class="account-week-scroll-control previous" type="button" aria-label="&#x5411;&#x5DE6;&#x6ED1;&#x52A8;&#x5468;&#x5386;" @click="scrollAccountWeek($event, -1)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><div class="account-week-scroll"><div class="account-week-calendar">
           <section v-for="day in accountWeekDays({ cycle_start: selectedBatch.cycle_start, items: group.items })" :key="day.date" class="account-week-day">
             <header class="account-week-day-head"><div><b>{{ day.dateLabel }}</b><small>{{ day.weekday }}</small></div><span>{{ day.items.length }} 条</span></header>
             <div v-if="day.items.length" class="account-week-day-items">
@@ -721,8 +772,8 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
         <button class="btn primary" type="button" @click="applyAccountFilters">&#x67E5;&#x8BE2;</button>
       </div>
 
-      <div class="table-wrap"><table><thead><tr><th>&#x8D26;&#x53F7;</th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x4E1A;&#x52A1;&#x7EBF;</th><th>&#x5E73;&#x53F0;</th><th>&#x5730;&#x57DF;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x91CF;</th><th>&#x7B56;&#x5212;&#x7ED3;&#x679C;</th><th>&#x8D26;&#x53F7;&#x72B6;&#x6001;</th></tr></thead><tbody>
-        <tr v-for="account in pagedPlanningAccounts" :key="account.account_id"><td><div class="account-name-cell"><b>{{ account.account_name }}</b><small>{{ account.account_id }}</small></div></td><td><AccountTypeBadge :type="accountTypeLabel(account.account_id)" /></td><td>{{ getAccountProfile(account.account_id)?.um_no || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.organization || account.account_owner || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.business_line || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.platform || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.city || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.lifecycle_stage || '\u2014' }}</td><td>{{ followersLabel(account.account_id) }}</td><td><button class="text-btn" type="button" @click="openPlanningAccount(account)">&#x67E5;&#x770B;&#x7B56;&#x5212;&#x7ED3;&#x679C;</button></td><td><span :class="['tag', getAccountProfile(account.account_id)?.status === '\u542f\u7528' ? 'green' : 'gray']">{{ getAccountProfile(account.account_id)?.status || '\u2014' }}</span></td></tr>
+      <div ref="accountTableScroll" class="table-wrap account-dimension-table-scroll" tabindex="0" role="region" aria-label="&#x8D26;&#x53F7;&#x5217;&#x8868;"><table><thead><tr><th>&#x8D26;&#x53F7;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x4E1A;&#x52A1;&#x7EBF;</th><th>&#x5E73;&#x53F0;</th><th>&#x5730;&#x57DF;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x91CF;</th><th>&#x8D26;&#x53F7;&#x72B6;&#x6001;</th><th>&#x7B56;&#x5212;&#x7ED3;&#x679C;</th></tr></thead><tbody>
+        <tr v-for="account in pagedPlanningAccounts" :key="account.account_id"><td><div class="account-name-cell"><b>{{ account.account_name }}</b><small>{{ account.account_id }}</small></div></td><td>{{ getAccountProfile(account.account_id)?.um_no || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.organization || account.account_owner || '\u2014' }}</td><td><AccountTypeBadge :type="accountTypeLabel(account.account_id)" /></td><td>{{ getAccountProfile(account.account_id)?.business_line || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.platform || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.city || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.lifecycle_stage || '\u2014' }}</td><td>{{ followersLabel(account.account_id) }}</td><td><span :class="['tag', getAccountProfile(account.account_id)?.status === '\u542f\u7528' ? 'green' : 'gray']">{{ getAccountProfile(account.account_id)?.status || '\u2014' }}</span></td><td><button class="text-btn" type="button" @click="openPlanningAccount(account)">&#x67E5;&#x770B;&#x7B56;&#x5212;&#x7ED3;&#x679C;</button></td></tr>
         <tr v-if="visiblePlanningAccounts.length === 0"><td colspan="11"><div class="empty-state">{{ planningAccounts.length ? '\u6ca1\u6709\u5339\u914d\u7684\u8d26\u53f7' : '\u6682\u65e0\u53c2\u4e0e\u7b56\u5212\u7684\u8d26\u53f7' }}</div></td></tr>
       </tbody></table></div>
       <ListPagination v-model:page="accountListPage" v-model:page-size="accountListPageSize" :total="visiblePlanningAccounts.length" unit="个账号" class="list-pagination-inset" />
@@ -731,9 +782,10 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
   <div v-if="replaceTarget" class="drawer-mask" @click.self="closeReplacement">
     <aside class="drawer" role="dialog" aria-modal="true" :aria-label="drawerMode === 'view' ? String.fromCharCode(35745,21010,35814,24773) : drawerMode === 'replace' ? String.fromCharCode(26367,25442,36873,39064) : String.fromCharCode(26597,30475,35843,25972,35760,24405)">
       <div class="drawer-head"><div><small>{{ drawerMode === 'view' ? String.fromCharCode(35745,21010,35814,24773) : drawerMode === 'replace' ? String.fromCharCode(26367,25442,36873,39064) : String.fromCharCode(26597,30475,35843,25972,35760,24405) }}</small><h2>{{ replaceTarget.account_name }}</h2></div><button class="icon-btn" type="button" aria-label="&#20851;&#38381;" @click="closeReplacement">&times;</button></div>
-      <div class="drawer-body">
+      <div ref="planDrawerBody" class="drawer-body">
+        <div v-if="error && drawerMode === 'replace'" class="banner error-banner" role="alert">{{ error }}</div>
         <template v-if="drawerMode === 'view'">
-          <section class="slot-detail-section"><h3>策划信息</h3><div class="slot-detail-grid"><div><small>投放日期</small><b>{{ replaceTarget.publish_date }} · {{ weekdayLabel(replaceTarget.publish_date) }}</b></div><div><small>批次周期</small><b>{{ replaceTarget.cycle_start }} 至 {{ replaceTarget.cycle_end }}</b></div><div><small>批次编号</small><b>{{ replaceTarget.batch_code || '—' }}</b></div><div><small>槽位类型</small><b>{{ slotLabel(replaceTarget.slot_type, replaceTarget.plan_type) }}</b></div><div><small>策划方式</small><b>{{ replaceTarget.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</b></div><div><small>经营阶段</small><b>{{ replaceTarget.lifecycle_stage || '—' }}</b></div><div><small>经营作用</small><b>{{ replaceTarget.content_role || '—' }}</b></div><div><small>生产状态</small><b>{{ productionStatusLabel(replaceTarget) }}</b></div><div><small>发布状态</small><b>{{ replaceTarget.publish_status || '—' }}</b></div></div></section>
+          <section class="slot-detail-section"><h3>策划信息</h3><div class="slot-detail-grid"><div><small>投放日期</small><b>{{ replaceTarget.publish_date }} · {{ weekdayLabel(replaceTarget.publish_date) }}</b></div><div><small>批次周期</small><b>{{ replaceTarget.cycle_start }} 至 {{ replaceTarget.cycle_end }}</b></div><div><small>批次编号</small><b>{{ replaceTarget.batch_code || '—' }}</b></div><div><small>策划方式</small><b>{{ replaceTarget.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</b></div><div><small>经营阶段</small><b>{{ replaceTarget.lifecycle_stage || '—' }}</b></div><div><small>经营作用</small><b>{{ replaceTarget.content_role || '—' }}</b></div><div><small>内容状态</small><b>{{ productionStatusLabel(replaceTarget) }}</b></div></div></section>
           <section class="slot-detail-section"><h3>账号信息</h3><div class="slot-detail-grid"><div><small>用户 UM 号</small><b>{{ getAccountProfile(replaceTarget.account_id)?.um_no || '—' }}</b></div><div><small>账号昵称</small><b>{{ replaceTarget.account_name || '—' }}</b></div><div><small>账号 ID</small><b>{{ replaceTarget.account_id || '—' }}</b></div><div><small>账号类型</small><b>{{ accountTypeLabel(replaceTarget.account_id) }}</b></div><div><small>所属分行</small><b>{{ getAccountProfile(replaceTarget.account_id)?.organization || '—' }}</b></div><div><small>人设标签</small><b>{{ getAccountProfile(replaceTarget.account_id)?.persona || '—' }}</b></div></div></section>
           <section class="slot-detail-section"><div class="slot-detail-section-head"><h3>选题信息</h3><button v-if="replaceTarget.allow_replace" class="btn primary" type="button" @click="openReplacement(replaceTarget)">&#x66FF;&#x6362;&#x9009;&#x9898;</button></div><div v-if="planDetailLoading" class="slot-detail-loading">正在读取选题信息…</div><template v-else-if="planTopicDetail"><div class="slot-detail-grid"><div><small>内容类型</small><b>{{ planTopicDetail.content_type || replaceTarget.content_type || '—' }}</b></div><div><small>选题 ID</small><b>{{ planTopicDetail.topic_id || '—' }}</b></div><div class="slot-detail-wide"><small>选题标题</small><b>{{ planTopicDetail.topic_title || replaceTarget.topic_title || '—' }}</b></div><div class="slot-detail-wide"><small>选题大纲</small><b class="slot-detail-outline">{{ planTopicDetail.outline || replaceTarget.outline || '—' }}</b></div><div class="slot-detail-wide"><small>选题有效期</small><b>{{ planTopicDetail.valid_from?.slice(0, 10) || '不限' }} 至 {{ planTopicDetail.valid_to?.slice(0, 10) || '不限' }}</b></div></div><div class="slot-topic-label-groups"><div v-for="group in planTopicTagGroups" :key="group.name"><small>{{ group.name }}</small><div v-if="group.values.length" class="slot-topic-labels"><span v-for="label in group.values" :key="label">{{ label }}</span></div><b v-else class="slot-topic-label-empty">未识别</b></div></div></template><div v-else class="empty-state">暂无选题信息</div></section>
           <section class="slot-detail-section"><h3>操作记录</h3><div v-if="planOperationsLoading" class="slot-detail-loading">正在读取操作记录…</div><div v-else-if="planOperationsError" class="detail-note" role="alert">{{ planOperationsError }}</div><div v-else-if="planOperationLogs.length" class="slot-operation-list"><article v-for="log in planOperationLogs" :key="log.key" class="slot-operation-item"><span class="slot-operation-dot" aria-hidden="true"/><div class="slot-operation-content"><div><b>{{ log.action }}</b><time>{{ formatDateTime(log.createdAt) }}</time></div><p>{{ log.detail }}</p><small>操作方：{{ log.actor }}</small></div></article></div><div v-else class="empty-state">暂无操作记录</div></section>
@@ -751,9 +803,8 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
             <label class="field"><span>关联产品</span><select v-model="replacementProduct"><option value="">全部</option><option v-for="value in replacementProducts" :key="value" :value="value">{{ value }}</option></select></label>
             <label class="field"><span>关联活动</span><select v-model="replacementActivity"><option value="">全部</option><option v-for="value in replacementActivities" :key="value" :value="value">{{ value }}</option></select></label>
             <label class="field"><span>关联属地热点</span><select v-model="replacementHotspot"><option value="">全部</option><option v-for="value in replacementHotspots" :key="value" :value="value">{{ value }}</option></select></label>
-            <div v-for="dimension in (['T3', 'T4', 'T5'] as const)" :key="dimension" class="field"><span>{{ tagNames[dimension] }}</span><TagCascader v-model="labelFilters[dimension]" :groups="tagGroups(taxonomyItems, dimension)" :label="tagNames[dimension]" /></div>
             <button class="btn primary" type="button" @click="applyReplacementFilters">&#x67E5;&#x8BE2;</button>
-            <button class="text-btn replacement-filter-clear" type="button" @click="replacementTopicIdFilter = ''; replacementQuery = ''; replacementMarketingFilter = ''; replacementContentType = ''; replacementProduct = ''; replacementActivity = ''; replacementHotspot = ''; labelFilters = emptyLabelFilters()">清空筛选</button>
+            <button class="text-btn replacement-filter-clear" type="button" @click="replacementTopicIdFilter = ''; replacementQuery = ''; replacementMarketingFilter = ''; replacementContentType = ''; replacementProduct = ''; replacementActivity = ''; replacementHotspot = ''">清空筛选</button>
           </div>
           <div class="replacement-topic-count">符合条件 {{ replacementCandidates.length }} 个选题</div>
           <div class="topic-check-list"><label v-for="topic in replacementCandidates" :key="topic.topic_id" class="topic-check"><input v-model="replacementTopicId" type="radio" :value="topic.topic_id" name="replacement-topic" /><span><button class="topic-title-link" type="button" @click.prevent.stop="detailTopic = topic">{{ topic.topic_title }}</button><small>{{ topic.topic_id }}<template v-if="topic.content_type"> · {{ topic.content_type }}</template><template v-if="topic.valid_to"> · 有效至 {{ topic.valid_to.slice(0, 10) }}</template></small><small class="replacement-topic-outline"><b>选题大纲</b>{{ topic.outline || '暂无选题大纲' }}</small></span></label></div>
@@ -771,10 +822,31 @@ watch(() => store.databaseReady, ready => { if (ready) void refresh() }, { immed
     </aside>
   </div>
   <TopicDetailDrawer v-if="detailTopic" :topic="detailTopic" :items="taxonomyItems" @close="detailTopic = null" />
+  <FloatingTableScrollbar :target="accountTableScroll" :hidden="!!replaceTarget || !!detailTopic" />
 </template>
 
 <style scoped>
+.account-dimension-table-scroll{max-width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none}
+.account-dimension-table-scroll table{width:max-content;min-width:100%}
+.account-dimension-table-scroll th,.account-dimension-table-scroll td{min-width:112px;white-space:nowrap}
+.account-dimension-table-scroll th:first-child,.account-dimension-table-scroll td:first-child{min-width:220px}
+.account-dimension-table-scroll:focus-visible{outline:2px solid var(--primary-300);outline-offset:-2px}
+.account-dimension-table-scroll::-webkit-scrollbar{display:none}
+.batch-dashboard{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;margin:16px 20px 0;border:1px solid var(--neutral-200);border-radius:12px;overflow:hidden;background:var(--neutral-200)}
+.batch-dashboard-item{display:flex;flex-direction:column;gap:8px;min-height:76px;padding:14px 16px;background:var(--surface)}
+.batch-dashboard-item small{color:var(--neutral-500);font-size:12px;white-space:nowrap}
+.batch-dashboard-item strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.batch-dashboard-item.pending strong{color:var(--warning,#d97706)}
+.batch-topic-total{display:flex;align-items:baseline;gap:8px;min-width:150px;padding-right:24px;border-right:1px solid var(--neutral-200)}
+.planning-account-group-head{min-height:58px}
+.batch-account-expand{display:grid;place-items:center;width:32px;height:32px;padding:0;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface);color:var(--neutral-500);cursor:pointer;transition:background .16s ease,color .16s ease,transform .16s ease}
+.batch-account-expand:hover{background:var(--primary-50);color:var(--primary-600)}
+.batch-account-expand svg{transition:transform .16s ease}
+.batch-account-expand svg.expanded{transform:rotate(180deg)}
+.batch-account-expand:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px}
 .topic-title-link{padding:0;border:0;background:transparent;color:var(--primary-600);font-size:13px;font-weight:500;text-align:left;line-height:1.6}.topic-title-link:hover{text-decoration:underline}.plan-detail-topic>.text-btn{float:right;font-size:12px}.replacement-topic-filters .field{width:100%}
+@media(max-width:980px){.batch-dashboard{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:580px){.batch-dashboard{grid-template-columns:repeat(2,minmax(0,1fr));margin:12px 12px 0}.batch-dashboard-item{min-height:68px;padding:12px}.batch-dashboard-item strong{font-size:20px}}
 </style>
 
 <style scoped>

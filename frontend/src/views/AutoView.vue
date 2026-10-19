@@ -43,7 +43,7 @@ const upcomingPlan = computed(() => {
   const trigger = weeklyTrigger(currentMonday.value, store.config.schedule_day, store.config.schedule_time)
   const cycle = cycles.value.find(item => item.cycle_start === start)
   return { start, end, cycle, trigger: formatBusinessTime(trigger),
-    status: cycle?.has_execution_exception ? '执行异常' : cycle ? '已规划' : now.value < trigger ? '待调度' : '等待策划结果',
+    status: cycle?.has_execution_exception ? '生成失败' : cycle ? '已完成' : '生成中',
     hint: cycle?.has_execution_exception ? '下周批次存在执行异常，请查看异常原因和更新时间。'
       : cycle ? '下周策划已生成，进入执行周期后开始填充热点槽位。'
       : now.value < trigger ? '尚未到调度时间，当前尚未生成下周批次。' : '已到调度时间，尚未收到下周策划结果。' }
@@ -102,15 +102,15 @@ let refreshTimer: number | undefined
 
 function statusClass(status: string | null, hasExecutionException = false) {
   if (hasExecutionException) return 'red'
-  if (status === '已规划') return 'blue'
-  if (status === '热点空槽待填充') return 'orange'
+  if (status === '生成失败') return 'red'
+  if (status === '生成中' || status === '已规划' || status === '热点空槽待填充') return 'blue'
   return status === '已完成' ? 'green' : 'gray'
 }
 
 function statusLabel(status: string | null, hasExecutionException = false) {
-  if (hasExecutionException) return '执行异常'
-  if (status === '已规划' || status === '热点空槽待填充' || status === '已完成') return status
-  return '状态待确认'
+  if (hasExecutionException) return '生成失败'
+  if (status === '已完成' || status === '生成中' || status === '生成失败') return status
+  return '生成中'
 }
 
 async function refresh() {

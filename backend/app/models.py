@@ -256,7 +256,12 @@ class ManualTaskSummary(BaseModel):
     failure_count: int
     topic_count: int
     status: str
-    content_status: str = "待策划完成"
+    content_status: str = "待生产"
+    planning_status: str = ""
+    content_failed_count: int = 0
+    content_completed_count: int = 0
+    content_total_count: int = 0
+    content_completed_account_count: int = 0
     failure_reason: str
     batch_id: int | None = None
     last_error: str
@@ -309,6 +314,10 @@ class BatchSummary(BaseModel):
     task_name: str = ""
     planning_status: str = ""
     content_status: str = ""
+    content_failed_count: int = 0
+    content_completed_count: int = 0
+    content_total_count: int = 0
+    content_completed_account_count: int = 0
 
 
 class PlanningAccountSummary(BaseModel):
