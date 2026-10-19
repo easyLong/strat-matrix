@@ -7,10 +7,8 @@ import AccountTypeBadge from '../components/AccountTypeBadge.vue'
 import HoverHint from '../components/HoverHint.vue'
 import ListPagination from '../components/ListPagination.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
-import ContentProgress from '../components/ContentProgress.vue'
+import ManualTaskTable from '../components/ManualTaskTable.vue'
 import { useDebouncedFields } from '../composables/useDebouncedFields'
-import { statusTone } from '../ui/status'
-import { formatDateTime } from '../planningTime'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
@@ -292,12 +290,19 @@ function openTaskDetails(task: ManualTaskSummary) {
 }
 
 function startTaskProduction(task: ManualTaskSummary) {
-  if (!task.batch_id || task.status !== '\u5df2\u5b8c\u6210' || task.content_status !== '\u5f85\u751f\u4ea7') return
+  const planningStatus = task.planning_status || task.status
+  if (!task.batch_id || !/完成|成功/.test(planningStatus) || !/待生产|待生成|未生成/.test(task.content_status || '')) return
   const pending = new Set(productionRequestIds.value)
   pending.add(task.id)
   productionRequestIds.value = pending
   localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
   task.content_status = '\u751f\u6210\u4e2d'
+  notice.value = `已发起「${task.task_name || task.batch_code}」内容生成，可在内容状态查看进度`
+}
+
+function openContentFlow(task: ManualTaskSummary) {
+  if (!task.batch_id) return
+  notice.value = `内容流水入口已预留（批次 ${task.batch_code || task.batch_id}），外部页面接入后将从这里跳转`
 }
 
 watch(() => store.databaseReady, ready => {
@@ -602,10 +607,6 @@ function closeEligibilityNotice(returnToSelection = false) {
     void revealStepProgress()
   }
 }
-
-function taskStatusClass(status: string) {
-  return statusTone(status)
-}
 </script>
 
 <template>
@@ -621,10 +622,14 @@ function taskStatusClass(status: string) {
 
   <section v-if="mode === 'list'" class="card manual-task-card">
     <div class="card-head"><div><h2>策划任务列表</h2></div></div>
-    <LoadingSkeleton v-if="!store.initialized || (tasksLoading && !tasks.length)" /><div v-else class="table-wrap"><table><thead><tr><th>批次名称</th><th>&#x6295;&#x653E;&#x65E5;&#x671F;</th><th>&#x8D26;&#x53F7;&#x6570;</th><th>&#x5B8C;&#x6210;&#x6570;</th><th>&#x5931;&#x8D25;&#x6570;</th><th>&#x9009;&#x9898;&#x6570;</th><th>&#x7B56;&#x5212;&#x72B6;&#x6001;</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>批次号</th><th>&#x53D1;&#x8D77;&#x65F6;&#x95F4;</th><th>&#x66F4;&#x65B0;&#x65F6;&#x95F4;</th><th>&#x64CD;&#x4F5C;</th></tr></thead><tbody>
-      <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }"><td><b>{{ task.task_name || '\u2014' }}</b></td><td>{{ task.publish_date }}</td><td>{{ task.planned_account_count }}</td><td class="manual-task-count" :class="{ completed: task.result_count > 0 }">{{ task.result_count }}</td><td class="manual-task-count" :class="{ failed: task.failure_count > 0 }">{{ task.failure_count }}</td><td>{{ task.topic_count }}</td><td><span :class="['tag', taskStatusClass(task.planning_status)]">{{ task.planning_status }}</span></td><td><ContentProgress :completed="task.content_completed_account_count" :total="task.planned_account_count" /></td><td>{{ task.batch_code || '\u2014' }}</td><td>{{ formatDateTime(task.created_at) }}</td><td>{{ formatDateTime(task.updated_at) }}</td><td><div class="page-actions"><button v-if="task.batch_id" class="text-btn" type="button" @click="openTaskDetails(task)">&#x8BE6;&#x60C5;</button><button v-if="task.batch_id && task.status === '\u5df2\u5b8c\u6210' && task.content_status === '\u5f85\u751f\u4ea7'" class="text-btn" type="button" @click="startTaskProduction(task)">&#x53BB;&#x751F;&#x4EA7;&#x5185;&#x5BB9;</button><button v-else-if="task.content_status === '\u751f\u4ea7\u4e2d'" class="text-btn" type="button" disabled>&#x8FD0;&#x884C;&#x4E2D;</button><span v-else-if="task.content_status === '\u5df2\u5b8c\u6210'">&#x5DF2;&#x5B8C;&#x6210;</span><span v-else-if="task.content_status === '\u751f\u4ea7\u5f02\u5e38'">&#x751F;&#x4EA7;&#x5F02;&#x5E38;</span><span v-else-if="task.batch_id">&#x5904;&#x7406;&#x4E2D;</span><span v-else>—</span></div></td></tr>
-      <tr v-if="tasks.length === 0"><td colspan="12"><div class="empty-state">暂无手动策划任务</div></td></tr>
-    </tbody></table></div>
+    <ManualTaskTable
+      :tasks="tasks"
+      :loading="tasksLoading"
+      :initialized="store.initialized"
+      @plan-details="openTaskDetails"
+      @generate-content="startTaskProduction"
+      @content-flow="openContentFlow"
+    />
   </section>
 
   <template v-else>
@@ -700,7 +705,7 @@ function taskStatusClass(status: string) {
             <div class="manual-topic-list-meta"><b>&#x7B26;&#x5408;&#x6761;&#x4EF6; {{ filteredTopics.length }} &#x4E2A;</b></div>
             <LoadingSkeleton v-if="catalogLoading || !store.initialized" />
             <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th>&#x9009;&#x9898; ID</th><th>&#x9009;&#x9898;&#x6807;&#x9898;</th><th>&#x9009;&#x9898;&#x5927;&#x7EB2;</th><th>&#x9009;&#x9898;&#x7C7B;&#x578B;</th><th>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</th><th>&#x5173;&#x8054;&#x4EA7;&#x54C1;</th><th>&#x5173;&#x8054;&#x6D3B;&#x52A8;</th><th>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</th><th>&#x6709;&#x6548;&#x671F;</th></tr></thead><tbody>
-              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-label="`双击添加选题 ${topic.topic_title}`" @dblclick="addTopicFromRow(topic.topic_id, $event)" @keydown.enter.self.prevent="addTopic(topic.topic_id)"><td>{{ topic.topic_id }}</td><td><button class="topic-title-link manual-topic-title-value" type="button" :title="topic.topic_title" @click.stop="detailTopic = topic">{{ topic.topic_title }}</button></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '\u8425\u9500' : '\u975e\u8425\u9500' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '&#x4E0D;&#x9650;' }}<i>&#x81F3;</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '&#x4E0D;&#x9650;' }}</span></td></tr>
+              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-label="`双击添加选题 ${topic.topic_title}`" @dblclick="addTopicFromRow(topic.topic_id, $event)" @keydown.enter.self.prevent="addTopic(topic.topic_id)"><td>{{ topic.topic_id }}</td><td><button class="topic-title-link manual-topic-title-value" type="button" :title="topic.topic_title" @click.stop="detailTopic = topic">{{ topic.topic_title }}</button></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '&#x4E0D;&#x9650;' }}<i>&#x81F3;</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '&#x4E0D;&#x9650;' }}</span></td></tr>
               <tr v-if="filteredTopics.length === 0"><td colspan="9"><div class="empty-state">&#x6CA1;&#x6709;&#x7B26;&#x5408;&#x6761;&#x4EF6;&#x7684;&#x53EF;&#x7528;&#x9009;&#x9898;</div></td></tr>
             </tbody></table></div>
             <ListPagination v-model:page="topicPage" v-model:page-size="topicPageSize" :total="filteredTopics.length" unit="&#x4E2A;&#x9009;&#x9898;" :page-size-options="[20, 50, 100]" class="manual-topic-pagination" />
