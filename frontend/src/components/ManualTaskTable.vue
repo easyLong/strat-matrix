@@ -2,7 +2,6 @@
 import LoadingSkeleton from './LoadingSkeleton.vue'
 import type { ManualTaskSummary } from '../types'
 import { formatDateTime } from '../planningTime'
-import { statusTone } from '../ui/status'
 
 defineProps<{
   tasks: ManualTaskSummary[]
@@ -20,6 +19,15 @@ function planningLabel(task: ManualTaskSummary) {
   return task.planning_status || task.status || '—'
 }
 
+function planningTone(task: ManualTaskSummary) {
+  const label = planningLabel(task)
+  if (/部分失败/.test(label)) return 'orange'
+  if (/失败|异常|错误/.test(label)) return 'red'
+  if (/进行中|执行中|处理中|策划中|生成中/.test(label)) return 'blue'
+  if (/完成|成功/.test(label)) return 'green'
+  return 'gray'
+}
+
 function contentLabel(task: ManualTaskSummary) {
   const raw = (task.content_status || '').trim()
   const hasCompleted = task.content_completed_count > 0 || task.content_completed_account_count > 0
@@ -32,6 +40,16 @@ function contentLabel(task: ManualTaskSummary) {
   if (/失败|异常|错误/.test(raw)) return '生成失败'
   if (!raw && !task.batch_id) return '—'
   return raw || '待生成'
+}
+
+function contentTone(task: ManualTaskSummary) {
+  const label = contentLabel(task)
+  if (label === '待生成' || label === '—') return 'gray'
+  if (label === '生成中') return 'blue'
+  if (label === '已完成') return 'green'
+  if (label === '部分失败') return 'orange'
+  if (label === '生成失败') return 'red'
+  return 'gray'
 }
 
 function contentProgress(task: ManualTaskSummary) {
@@ -80,10 +98,10 @@ function canGenerate(task: ManualTaskSummary) {
           <td>{{ task.publish_date }}</td>
           <td class="numeric">{{ task.planned_account_count }}</td>
           <td class="numeric">{{ task.topic_count }}</td>
-          <td><span :class="['tag', statusTone(planningLabel(task))]">{{ planningLabel(task) }}</span></td>
+          <td><span :class="['tag', planningTone(task)]">{{ planningLabel(task) }}</span></td>
           <td>
             <div class="manual-content-status">
-              <span :class="['tag', statusTone(contentLabel(task))]">{{ contentLabel(task) }}</span>
+              <span :class="['tag', contentTone(task)]">{{ contentLabel(task) }}</span>
               <small v-if="contentProgress(task)">{{ contentProgress(task) }}</small>
             </div>
           </td>
