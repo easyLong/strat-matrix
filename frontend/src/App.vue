@@ -1,11 +1,40 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { usePlanningStore } from './store'
 
 const store = usePlanningStore()
 const route = useRoute()
-onMounted(() => { void store.initialize() })
+let sourceBadgeObserver: MutationObserver | undefined
+
+function compactPlanningSourceBadges() {
+  document.querySelectorAll<HTMLElement>('.account-week-plan-tags .tag.gray').forEach(badge => {
+    const label = badge.textContent?.trim()
+    let compactLabel = ''
+    let hint = ''
+    if (label === '手动策划' || label === '人工策划') {
+      compactLabel = '人'
+      hint = '人：手动策划'
+    } else if (label === '自动策划' || label === 'AI 自动策划') {
+      compactLabel = 'AI'
+      hint = 'AI：自动策划'
+    } else return
+
+    badge.textContent = compactLabel
+    badge.dataset.sourceHint = hint
+    badge.tabIndex = 0
+    badge.setAttribute('aria-label', hint)
+  })
+}
+
+onMounted(() => {
+  void store.initialize()
+  compactPlanningSourceBadges()
+  sourceBadgeObserver = new MutationObserver(() => compactPlanningSourceBadges())
+  sourceBadgeObserver.observe(document.body, { childList: true, subtree: true })
+})
+onBeforeUnmount(() => sourceBadgeObserver?.disconnect())
+
 const nav = [
   { to: '/config', icon: 'M4 6h16M4 12h16M4 18h16M9 3v6m6 0v6m-7 0v6', label: 'AI策划配置' },
   { to: '/manual', icon: 'm15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z', label: '人工策划' },
@@ -37,3 +66,9 @@ const nav = [
   </div>
 </template>
 
+<style>
+.account-week-plan-tags .tag.gray[data-source-hint]{position:relative;cursor:help}
+.account-week-plan-tags .tag.gray[data-source-hint]::after{position:absolute;z-index:1300;bottom:calc(100% + 8px);left:50%;width:max-content;max-width:220px;padding:7px 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);content:attr(data-source-hint);font-size:12px;font-weight:400;line-height:18px;opacity:0;pointer-events:none;transform:translate(-50%,4px);transition:opacity .12s ease,transform .12s ease;white-space:nowrap}
+.account-week-plan-tags .tag.gray[data-source-hint]:hover::after,.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px}
+</style>
