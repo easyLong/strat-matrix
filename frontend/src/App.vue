@@ -31,6 +31,22 @@ function compactPlanningSourceBadges() {
   })
 }
 
+function compactAccountHistoryPeriodLabels() {
+  document.querySelectorAll<HTMLElement>('.account-history-batch-head b').forEach(label => {
+    if (label.dataset.periodRange) return
+    const value = label.textContent?.trim() || ''
+    const match = value.match(/^(.*?周)\s*·\s*(\d{4}-\d{2}-\d{2})\s*至\s*(\d{4}-\d{2}-\d{2})$/)
+    if (!match) return
+    const [, periodLabel, start, end] = match
+    const range = `${start} 至 ${end}`
+    label.textContent = periodLabel
+    label.dataset.periodRange = range
+    label.classList.add('ux-account-period-label')
+    label.tabIndex = 0
+    label.setAttribute('aria-label', `${periodLabel}，${range}`)
+  })
+}
+
 function accountTypeLabel(profile?: AccountOption) {
   return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—')
 }
@@ -150,6 +166,7 @@ function enhanceBatchAccountCards() {
 
 function enhanceResultsUi() {
   compactPlanningSourceBadges()
+  compactAccountHistoryPeriodLabels()
   enhanceBatchAccountCards()
 }
 
@@ -193,10 +210,12 @@ const nav = [
 </template>
 
 <style>
-.account-week-plan-tags .tag.gray[data-source-hint]{position:relative;cursor:help}
-.account-week-plan-tags .tag.gray[data-source-hint]::after{position:absolute;z-index:1300;bottom:calc(100% + 8px);left:50%;width:max-content;max-width:220px;padding:7px 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);content:attr(data-source-hint);font-size:12px;font-weight:400;line-height:18px;opacity:0;pointer-events:none;transform:translate(-50%,4px);transition:opacity .12s ease,transform .12s ease;white-space:nowrap}
-.account-week-plan-tags .tag.gray[data-source-hint]:hover::after,.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible::after{opacity:1;transform:translate(-50%,0)}
-.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px}
+.account-week-plan-tags .tag.gray[data-source-hint],.ux-account-period-label[data-period-range]{position:relative;cursor:help}
+.account-week-plan-tags .tag.gray[data-source-hint]::after,.ux-account-period-label[data-period-range]::after{position:absolute;z-index:1300;bottom:calc(100% + 8px);left:50%;width:max-content;max-width:240px;padding:7px 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);font-size:12px;font-weight:400;line-height:18px;opacity:0;pointer-events:none;transform:translate(-50%,4px);transition:opacity .12s ease,transform .12s ease;white-space:nowrap}
+.account-week-plan-tags .tag.gray[data-source-hint]::after{content:attr(data-source-hint)}
+.ux-account-period-label[data-period-range]::after{content:attr(data-period-range)}
+.account-week-plan-tags .tag.gray[data-source-hint]:hover::after,.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible::after,.ux-account-period-label[data-period-range]:hover::after,.ux-account-period-label[data-period-range]:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+.account-week-plan-tags .tag.gray[data-source-hint]:focus-visible,.ux-account-period-label[data-period-range]:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px;border-radius:4px}
 
 .planning-account-groups{display:grid!important;gap:14px!important;padding:0 20px 20px!important}
 .planning-account-groups .planning-account-group.ux-account-card{overflow:hidden;margin:0!important;border:1px solid var(--neutral-200)!important;border-radius:14px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgba(15,23,42,.03);transition:border-color .16s ease,box-shadow .16s ease}
