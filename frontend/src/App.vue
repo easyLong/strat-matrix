@@ -71,55 +71,68 @@ function enhanceBatchAccountCards() {
     const accountName = titleButton.textContent?.trim() || accountId
     const profile = accountProfiles.get(accountId)
     const identityWrap = nameRow.parentElement as HTMLElement
+    const profileSignature = [
+      accountId,
+      accountName,
+      accountTypeLabel(profile),
+      profile?.organization || '',
+      profile?.um_no || '',
+      profile?.platform || '',
+      profile?.persona || '',
+    ].join('|')
 
     identityWrap.classList.add('ux-account-identity')
     nameRow.classList.add('ux-account-title-row')
     idTag.classList.add('ux-original-account-id')
-
-    let avatar = head.querySelector<HTMLElement>('.ux-account-avatar')
-    if (!avatar) {
-      avatar = document.createElement('div')
-      avatar.className = 'ux-account-avatar'
-      avatar.setAttribute('aria-hidden', 'true')
-      identityWrap.parentElement?.insertBefore(avatar, identityWrap)
-    }
-    avatar.textContent = (accountName || '账').slice(0, 1).toLocaleUpperCase()
     identityWrap.parentElement?.classList.add('ux-account-main')
 
-    let typeTag = nameRow.querySelector<HTMLElement>('.ux-account-type')
-    if (!typeTag) {
-      typeTag = document.createElement('span')
-      typeTag.className = 'ux-account-type'
-      titleButton.insertAdjacentElement('afterend', typeTag)
-    }
-    typeTag.textContent = accountTypeLabel(profile)
+    if (card.dataset.profileSignature !== profileSignature) {
+      let avatar = head.querySelector<HTMLElement>('.ux-account-avatar')
+      if (!avatar) {
+        avatar = document.createElement('div')
+        avatar.className = 'ux-account-avatar'
+        avatar.setAttribute('aria-hidden', 'true')
+        identityWrap.parentElement?.insertBefore(avatar, identityWrap)
+      }
+      avatar.textContent = (accountName || '账').slice(0, 1).toLocaleUpperCase()
 
-    let meta = identityWrap.querySelector<HTMLElement>('.ux-account-meta')
-    if (!meta) {
-      meta = document.createElement('div')
-      meta.className = 'ux-account-meta'
-      nameRow.insertAdjacentElement('afterend', meta)
-    }
-    meta.replaceChildren(createMetaSpan(accountId, 'ux-account-id'))
-    if (profile?.organization) meta.append(createMetaSpan(profile.organization))
-    if (profile?.um_no) meta.append(createMetaSpan(`UM ${profile.um_no}`))
-    if (profile?.platform) meta.append(createMetaSpan(profile.platform))
+      let typeTag = nameRow.querySelector<HTMLElement>('.ux-account-type')
+      if (!typeTag) {
+        typeTag = document.createElement('span')
+        typeTag.className = 'ux-account-type'
+        titleButton.insertAdjacentElement('afterend', typeTag)
+      }
+      typeTag.textContent = accountTypeLabel(profile)
 
-    let persona = identityWrap.querySelector<HTMLElement>('.ux-account-persona')
-    if (!persona) {
-      persona = document.createElement('div')
-      persona.className = 'ux-account-persona'
-      persona.innerHTML = '<small>人设</small><span></span>'
-      meta.insertAdjacentElement('afterend', persona)
+      let meta = identityWrap.querySelector<HTMLElement>('.ux-account-meta')
+      if (!meta) {
+        meta = document.createElement('div')
+        meta.className = 'ux-account-meta'
+        nameRow.insertAdjacentElement('afterend', meta)
+      }
+      meta.replaceChildren(createMetaSpan(accountId, 'ux-account-id'))
+      if (profile?.organization) meta.append(createMetaSpan(profile.organization))
+      if (profile?.um_no) meta.append(createMetaSpan(`UM ${profile.um_no}`))
+      if (profile?.platform) meta.append(createMetaSpan(profile.platform))
+
+      let persona = identityWrap.querySelector<HTMLElement>('.ux-account-persona')
+      if (!persona) {
+        persona = document.createElement('div')
+        persona.className = 'ux-account-persona'
+        persona.innerHTML = '<small>人设</small><span></span>'
+        meta.insertAdjacentElement('afterend', persona)
+      }
+      const personaValue = persona.querySelector<HTMLElement>('span')
+      if (personaValue) personaValue.textContent = profile?.persona || '未配置'
+      card.dataset.profileSignature = profileSignature
     }
-    const personaValue = persona.querySelector<HTMLElement>('span')
-    if (personaValue) personaValue.textContent = profile?.persona || '未配置'
 
     const countTag = actions.querySelector<HTMLElement>('.tag.blue')
     if (countTag) {
       countTag.classList.add('ux-plan-count')
       const count = countTag.textContent?.match(/\d+/)?.[0]
-      if (count) countTag.textContent = `${count} 条策划`
+      const nextCountLabel = count ? `${count} 条策划` : countTag.textContent?.trim() || ''
+      if (countTag.textContent?.trim() !== nextCountLabel) countTag.textContent = nextCountLabel
     }
 
     let buttonLabel = expandButton.querySelector<HTMLElement>('.ux-expand-label')
@@ -128,7 +141,8 @@ function enhanceBatchAccountCards() {
       buttonLabel.className = 'ux-expand-label'
       expandButton.insertBefore(buttonLabel, expandButton.firstChild)
     }
-    buttonLabel.textContent = expandButton.getAttribute('aria-expanded') === 'true' ? '收起计划' : '查看计划'
+    const nextButtonLabel = expandButton.getAttribute('aria-expanded') === 'true' ? '收起计划' : '查看计划'
+    if (buttonLabel.textContent !== nextButtonLabel) buttonLabel.textContent = nextButtonLabel
   })
 
   if (accountProfiles.size === 0) void ensureAccountProfiles().then(() => enhanceBatchAccountCards())
