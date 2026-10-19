@@ -1,12 +1,34 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 import { api } from './api'
 import { usePlanningStore } from './store'
 import type { AccountOption } from './types'
 
 const store = usePlanningStore()
 const route = useRoute()
+const fromManualTask = computed(() => route.path === '/results' && route.query.from === 'manual' && Boolean(route.query.batch))
+const activeNav = computed(() => fromManualTask.value ? '/manual' : route.path)
+const breadcrumbs = computed<{ label: string; to?: RouteLocationRaw }[]>(() => {
+  if (fromManualTask.value) return [
+    { label: '人工策划', to: '/manual' },
+    { label: '策划任务列表', to: '/manual' },
+    { label: '查看策划' },
+  ]
+  if (route.path === '/results') {
+    const account = Boolean(route.query.account) && !route.query.batch
+    const period = !account && (route.query.dimension === 'period' || Boolean(route.query.batch || route.query.cycle))
+    const detail = Boolean(route.query.account || route.query.batch || route.query.cycle)
+    const detailTitle = account ? '账号策划详情' : route.query.batch ? '批次策划详情' : '周期策划详情'
+    const view = { label: period ? '周期视图' : '账号视图', to: { path: '/results', query: period ? { dimension: 'period' } : {} } }
+    return detail
+      ? [{ label: '策划结果', to: '/results' }, view, { label: detailTitle }]
+      : [{ label: '策划结果', to: '/results' }, { label: view.label }]
+  }
+  if (route.path === '/manual') return [{ label: '人工策划', to: '/manual' }, { label: '策划任务列表' }]
+  return [{ label: '运营工作台' }, { label: String(route.meta.title || '') }]
+})
 let resultsUiObserver: MutationObserver | undefined
 let profileRequest: Promise<void> | undefined
 const accountProfiles = new Map<string, AccountOption>()
@@ -52,7 +74,7 @@ function enhancePlanTopicDetailTriggers() {
     const title = card.querySelector<HTMLElement>('h3')
     if (!title) return
     const topicTitle = title.textContent?.trim() || '未命名选题'
-    card.setAttribute('aria-label', `查看策划详情：${topicTitle}`)
+    card.setAttribute('aria-label', `查看单条策划：${topicTitle}`)
     title.classList.add('ux-topic-detail-trigger')
     if (title.dataset.planDetailTrigger === 'true') return
 
@@ -209,14 +231,14 @@ const nav = [
         <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m6 18 9-9m-5-4 1-3 1 3 3 1-3 1-1 3-1-3-3-1zM17 14l1-2 1 2 2 1-2 1-1 2-1-2-2-1z" /></svg></span><strong>多账号智能策划</strong></div>
         <div class="sidebar-title">运营工作台</div>
         <nav aria-label="一级功能导航">
-          <RouterLink v-for="item in nav" :key="item.to" :to="item.to" class="nav-item">
+          <RouterLink v-for="item in nav" :key="item.to" :to="item.to" active-class="" exact-active-class="" :class="['nav-item', { 'router-link-active': item.to === activeNav }]" :aria-current="item.to === activeNav ? 'page' : undefined">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path :d="item.icon" /></svg><span>{{ item.label }}</span>
           </RouterLink>
         </nav>
         <div class="sidebar-foot"><span :class="['status-dot', { online: store.databaseReady }]" />{{ store.connectionMessage }}</div>
       </aside>
     <div class="app-main-shell">
-      <header class="topbar"><nav class="breadcrumb" aria-label="当前位置"><span>运营工作台</span><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg><span aria-current="page">{{ route.meta.title }}</span></nav></header>
+      <header class="topbar"><nav class="breadcrumb" aria-label="当前位置"><template v-for="(item, index) in breadcrumbs" :key="`${index}-${item.label}`"><svg v-if="index" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index === breadcrumbs.length - 1 ? 'page' : undefined">{{ item.label }}</span></template></nav></header>
       <main class="main">
         <div v-if="store.initialized && !store.databaseReady" class="banner warning-banner" role="status">
           {{ store.connectionMessage }}
@@ -228,6 +250,7 @@ const nav = [
 </template>
 
 <style>
+.breadcrumb a{color:inherit;text-decoration:none}.breadcrumb a:hover{color:var(--primary-600)}
 .account-week-plan-tags .tag.gray[data-source-hint],.ux-account-period-label[data-period-range]{position:relative;cursor:help}
 .account-week-plan-tags .tag.gray[data-source-hint]::after,.ux-account-period-label[data-period-range]::after{position:absolute;z-index:1300;bottom:calc(100% + 8px);left:50%;width:max-content;max-width:240px;padding:7px 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);font-size:12px;font-weight:400;line-height:18px;opacity:0;pointer-events:none;transform:translate(-50%,4px);transition:opacity .12s ease,transform .12s ease;white-space:nowrap}
 .account-week-plan-tags .tag.gray[data-source-hint]::after{content:attr(data-source-hint)}

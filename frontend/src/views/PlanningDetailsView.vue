@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import AccountTypeBadge from '../components/AccountTypeBadge.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
+import ListPagination from '../components/ListPagination.vue'
+import HoverHint from '../components/HoverHint.vue'
+import ResultsView from './ResultsView.vue'
 import { api } from '../api'
 import type { AccountOption, AccountPlanRecord, BatchDetail, BatchSummary } from '../types'
 import { statusTone } from '../ui/status'
 
-type DetailMode = 'batch' | 'cycle'
+type DetailMode = 'batch' | 'cycle' | 'account'
+type PlanningWeek = { start: string; end: string; items: AccountPlanRecord[] }
 type AccountGroup = {
   account_id: string
   account_name: string
@@ -20,28 +24,64 @@ const props = withDefaults(defineProps<{
   cycleStart: string
   cycleEnd: string
   batches: BatchSummary[]
-}>(), { mode: 'cycle' })
+  accountId?: string
+  returnLabel?: string
+}>(), { mode: 'cycle', accountId: '', returnLabel: '' })
 
 const emit = defineEmits<{
   back: []
-  openBatch: [batch: BatchSummary]
 }>()
 
 const loading = ref(false)
 const error = ref('')
 const details = ref<BatchDetail[]>([])
+const historyItems = ref<AccountPlanRecord[]>([])
 const accountCatalog = ref<AccountOption[]>([])
 const expandedAccounts = ref(new Set<string>())
 const filtersExpanded = ref(false)
 const accountKeyword = ref('')
-const planType = ref<'all' | 'auto' | 'manual'>('all')
 const contentType = ref('all')
+const selectedPlan = ref<AccountPlanRecord | null>(null)
+const cycleFilter = ref('all')
+const appliedFilters = ref({ account: '', cycle: 'all', batch: 'all', planType: 'all', contentType: 'all' })
+const page = ref(1)
+const pageSize = ref(20)
+const historyPage = ref(1)
+const historyPageSize = ref(10)
+let loadRequest = 0
 
 const isBatchMode = computed(() => props.mode === 'batch')
+const isAccountMode = computed(() => props.mode === 'account')
+const detailTitle = computed(() => isAccountMode.value ? '账号策划详情' : isBatchMode.value ? '批次策划详情' : '周期策划详情')
 const currentBatch = computed(() => isBatchMode.value ? props.batches[0] ?? null : null)
-const detailTitle = computed(() => isBatchMode.value ? '批次详情' : '周期详情')
-const backLabel = computed(() => isBatchMode.value ? '返回上一层' : '返回周期列表')
+const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号视图' : '返回周期视图'))
 const fixedPlanType = computed<'auto' | 'manual' | null>(() => isBatchMode.value ? currentBatch.value?.plan_type ?? null : null)
+const scopeLabel = computed(() => {
+  if (isAccountMode.value) return `${accountProfile(props.accountId)?.account_name || historyItems.value[0]?.account_name || props.accountId} · ${props.accountId}`
+  if (currentBatch.value) return [currentBatch.value.task_name, currentBatch.value.batch_code].filter(Boolean).join(' · ')
+  return cyclePeriodLabel(props.cycleStart)
+})
+const scopePlanType = computed(() => {
+  return fixedPlanType.value === 'manual' ? '人工策划' : 'AI 自动策划'
+})
+
+function weekStart(value: string) {
+  const date = new Date(`${value}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7)
+  return date.toISOString().slice(0, 10)
+}
+
+function weekEnd(value: string) {
+  const date = new Date(`${weekStart(value)}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + 6)
+  return date.toISOString().slice(0, 10)
+}
+
+function cyclePeriodLabel(value: string) {
+  if (!value) return '全部周期'
+  const date = new Date(`${weekStart(value)}T00:00:00Z`)
+  return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月第${Math.floor((date.getUTCDate() - 1) / 7) + 1}周`
+}
 
 function accountProfile(accountId: string) {
   return accountCatalog.value.find(account => account.account_id === accountId)
@@ -80,7 +120,7 @@ function sourceHint(item: AccountPlanRecord) {
   return item.plan_type === 'manual' ? '人：人工策划' : 'AI：自动策划'
 }
 
-const allItems = computed<AccountPlanRecord[]>(() => details.value.flatMap(batch => batch.items.map(item => ({
+const allItems = computed<AccountPlanRecord[]>(() => isAccountMode.value ? historyItems.value : details.value.flatMap(batch => batch.items.map(item => ({
   ...item,
   batch_id: batch.id,
   batch_code: batch.batch_code,
@@ -91,12 +131,16 @@ const allItems = computed<AccountPlanRecord[]>(() => details.value.flatMap(batch
 }))))
 
 const contentTypes = computed(() => [...new Set(allItems.value.map(item => item.content_type).filter(Boolean))].sort())
+const cycleOptions = computed(() => [...new Set(allItems.value.map(item => weekStart(item.publish_date)))].sort().reverse())
 const filteredItems = computed(() => {
-  const keyword = accountKeyword.value.trim().toLocaleLowerCase()
+  const filters = appliedFilters.value
+  const keyword = filters.account.trim().toLocaleLowerCase()
   return allItems.value.filter(item =>
     (!keyword || `${item.account_name} ${item.account_id}`.toLocaleLowerCase().includes(keyword)) &&
-    (planType.value === 'all' || item.plan_type === planType.value) &&
-    (contentType.value === 'all' || item.content_type === contentType.value),
+    (filters.cycle === 'all' || weekStart(item.publish_date) === filters.cycle) &&
+    (filters.batch === 'all' || String(item.batch_id) === filters.batch) &&
+    (filters.planType === 'all' || item.plan_type === filters.planType) &&
+    (filters.contentType === 'all' || item.content_type === filters.contentType),
   )
 })
 
@@ -119,15 +163,34 @@ const accountGroups = computed<AccountGroup[]>(() => {
 })
 
 const dashboard = computed(() => ({
-  accounts: new Set(allItems.value.map(item => item.account_id)).size,
-  batches: props.batches.length,
-  plans: allItems.value.length,
-  autoPlans: allItems.value.filter(item => item.plan_type === 'auto').length,
-  manualPlans: allItems.value.filter(item => item.plan_type === 'manual').length,
+  accounts: new Set(filteredItems.value.map(item => item.account_id)).size,
+  batches: new Set(filteredItems.value.map(item => item.batch_id)).size,
+  topics: new Set(filteredItems.value.map(item => item.topic_id).filter(Boolean)).size,
+  plans: filteredItems.value.length,
+  autoPlans: filteredItems.value.filter(item => item.plan_type === 'auto').length,
+  manualPlans: filteredItems.value.filter(item => item.plan_type === 'manual').length,
 }))
 
-function daysFor(group: AccountGroup) {
-  const start = new Date(`${props.cycleStart}T00:00:00Z`)
+const pagedAccountGroups = computed(() => accountGroups.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+
+function weeksFor(group: AccountGroup): PlanningWeek[] {
+  const weeks = new Map<string, AccountPlanRecord[]>()
+  for (const item of group.items) {
+    const key = weekStart(item.publish_date)
+    const items = weeks.get(key)
+    if (items) items.push(item)
+    else weeks.set(key, [item])
+  }
+  return [...weeks].map(([start, items]) => ({ start, end: weekEnd(start), items })).sort((a, b) => b.start.localeCompare(a.start))
+}
+
+function pagedWeeksFor(group: AccountGroup) {
+  const weeks = weeksFor(group)
+  return isAccountMode.value ? weeks.slice((historyPage.value - 1) * historyPageSize.value, historyPage.value * historyPageSize.value) : weeks
+}
+
+function daysFor(week: PlanningWeek) {
+  const start = new Date(`${week.start}T00:00:00Z`)
   return Array.from({ length: 7 }, (_, offset) => {
     const date = new Date(start)
     date.setUTCDate(start.getUTCDate() + offset)
@@ -136,7 +199,7 @@ function daysFor(group: AccountGroup) {
       date: value,
       label: value.slice(5),
       weekday: weekdayLabel(value),
-      items: group.items.filter(item => item.publish_date === value),
+      items: week.items.filter(item => item.publish_date === value),
     }
   })
 }
@@ -148,40 +211,61 @@ function toggleAccount(accountId: string) {
   expandedAccounts.value = next
 }
 
-function openItemBatch(item: AccountPlanRecord) {
-  if (isBatchMode.value) return
-  const batch = props.batches.find(candidate => candidate.id === item.batch_id)
-  if (batch) emit('openBatch', batch)
+function updatePlan(item: AccountPlanRecord) {
+  historyItems.value = historyItems.value.map(record => record.id === item.id ? { ...record, ...item } : record)
+  details.value = details.value.map(batch => ({
+    ...batch,
+    items: batch.items.map(record => record.id === item.id ? { ...record, ...item } : record),
+  }))
 }
 
 async function load() {
-  if (!props.batches.length) {
-    details.value = []
-    return
-  }
+  const request = ++loadRequest
   loading.value = true
   error.value = ''
   try {
-    const [batchDetails, accounts] = await Promise.all([
-      Promise.all(props.batches.map(batch => api.batch(batch.id))),
+    const [records, accounts] = await Promise.allSettled([
+      isAccountMode.value ? api.accountItems(props.accountId) : Promise.all(props.batches.map(batch => api.batch(batch.id))),
       api.accounts(1000, true),
     ])
-    details.value = batchDetails
-    accountCatalog.value = accounts
+    if (request !== loadRequest) return
+    if (records.status === 'rejected') throw records.reason
+    if (isAccountMode.value) historyItems.value = records.value as AccountPlanRecord[]
+    else details.value = records.value as BatchDetail[]
+    if (accounts.status === 'fulfilled') accountCatalog.value = accounts.value
+    if (isAccountMode.value) expandedAccounts.value = new Set([props.accountId])
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : '读取策划详情失败'
+    if (request === loadRequest) error.value = exc instanceof Error ? exc.message : '读取策划明细失败'
   } finally {
-    loading.value = false
+    if (request === loadRequest) loading.value = false
   }
 }
 
-watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], () => {
+function applyFilters() {
+  appliedFilters.value = {
+    account: isAccountMode.value ? '' : accountKeyword.value,
+    cycle: isAccountMode.value ? cycleFilter.value : 'all',
+    batch: isBatchMode.value ? String(currentBatch.value?.id) : 'all',
+    planType: fixedPlanType.value ?? 'all',
+    contentType: contentType.value,
+  }
+  page.value = 1
+  historyPage.value = 1
+}
+
+watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => props.batches.map(batch => batch.id).join(',')], () => {
   accountKeyword.value = ''
   contentType.value = 'all'
-  planType.value = fixedPlanType.value ?? 'all'
+  cycleFilter.value = isAccountMode.value ? props.cycleStart || 'all' : props.cycleStart
+  filtersExpanded.value = false
+  applyFilters()
   expandedAccounts.value = new Set()
+  selectedPlan.value = null
   void load()
 }, { immediate: true })
+watch(pageSize, () => { page.value = 1 })
+watch(historyPageSize, () => { historyPage.value = 1 })
+onBeforeUnmount(() => { loadRequest++ })
 </script>
 
 <template>
@@ -189,8 +273,16 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
     <div class="card-head">
       <div>
         <h2>{{ detailTitle }}</h2>
-        <small v-if="currentBatch">{{ currentBatch.task_name || currentBatch.batch_code }} · {{ currentBatch.batch_code }} · {{ cycleStart }} 至 {{ cycleEnd }}</small>
-        <small v-else>{{ cycleStart }} 至 {{ cycleEnd }} · {{ batches.length }} 个批次</small>
+        <div v-if="isBatchMode" class="planning-detail-scope planning-batch-scope">
+          <HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ cyclePeriodLabel(cycleStart) }}</HoverHint>
+          <HoverHint text="策划方式" :show-icon="false" :class="['tag', 'planning-context-tag', fixedPlanType === 'manual' ? 'orange' : 'blue']">{{ scopePlanType }}</HoverHint>
+          <HoverHint text="批次号" :show-icon="false" class="tag gray planning-context-tag"><span class="planning-batch-code">{{ currentBatch?.batch_code || '—' }}</span></HoverHint>
+        </div>
+        <div v-else-if="isAccountMode" class="planning-detail-scope">
+          <HoverHint text="账号" :show-icon="false" class="tag gray planning-context-tag"><span class="planning-scope-label">{{ scopeLabel }}</span></HoverHint>
+          <HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ appliedFilters.cycle === 'all' ? '全部周期' : cyclePeriodLabel(appliedFilters.cycle) }}</HoverHint>
+        </div>
+        <div v-else class="planning-detail-scope"><HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ scopeLabel }}</HoverHint></div>
       </div>
       <button class="btn" type="button" @click="emit('back')">{{ backLabel }}</button>
     </div>
@@ -200,7 +292,7 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
     <template v-else>
       <section class="planning-dashboard" aria-label="策划概览">
         <div><small>账号数</small><strong>{{ dashboard.accounts }}</strong></div>
-        <div><small>批次数</small><strong>{{ dashboard.batches }}</strong></div>
+        <div><small>{{ isBatchMode ? '选题数' : '批次数' }}</small><strong>{{ isBatchMode ? dashboard.topics : dashboard.batches }}</strong></div>
         <div><small>策划总数</small><strong>{{ dashboard.plans }}</strong></div>
         <div><small>AI 策划</small><strong>{{ dashboard.autoPlans }}</strong></div>
         <div><small>人工策划</small><strong>{{ dashboard.manualPlans }}</strong></div>
@@ -212,20 +304,15 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
           <svg :class="{ expanded: filtersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
         </button>
         <div v-show="filtersExpanded" class="detail-filter-fields">
-          <label><span>账号 ID 或昵称</span><input v-model="accountKeyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
-          <label><span>策划方式</span>
-            <select v-model="planType" :disabled="isBatchMode">
-              <option v-if="!isBatchMode" value="all">全部策划方式</option>
-              <option v-if="!isBatchMode || fixedPlanType === 'auto'" value="auto">AI 自动策划</option>
-              <option v-if="!isBatchMode || fixedPlanType === 'manual'" value="manual">人工策划</option>
-            </select>
-          </label>
+          <label v-if="!isAccountMode"><span>账号 ID 或昵称</span><input v-model="accountKeyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
+          <label v-if="isAccountMode"><span>周期</span><select v-model="cycleFilter"><option value="all">全部周期</option><option v-for="value in cycleOptions" :key="value" :value="value">{{ cyclePeriodLabel(value) }}</option></select></label>
           <label><span>内容类型</span><select v-model="contentType"><option value="all">全部内容类型</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+          <button class="btn primary detail-query-btn" type="button" @click="applyFilters">查询</button>
         </div>
       </div>
 
       <div v-if="accountGroups.length" class="planning-account-list">
-        <article v-for="group in accountGroups" :key="group.account_id" :class="['planning-account-card', { expanded: expandedAccounts.has(group.account_id) }]">
+        <article v-for="group in pagedAccountGroups" :key="group.account_id" :class="['planning-account-card', { expanded: expandedAccounts.has(group.account_id) }]">
           <header class="planning-account-head">
             <div class="planning-account-main">
               <div class="planning-account-identity">
@@ -252,12 +339,15 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
             </div>
           </header>
 
-          <div v-if="expandedAccounts.has(group.account_id)" class="planning-week-wrap">
+          <template v-if="expandedAccounts.has(group.account_id)">
+          <div v-for="week in pagedWeeksFor(group)" :key="week.start" class="planning-week-section">
+            <div class="planning-week-heading"><HoverHint :text="`${week.start} 至 ${week.end}`" :show-icon="false">{{ cyclePeriodLabel(week.start) }}</HoverHint><span>{{ week.items.length }} 条策划</span></div>
+          <div class="planning-week-wrap">
             <div class="planning-week-grid">
-              <section v-for="day in daysFor(group)" :key="day.date" class="planning-day">
+              <section v-for="day in daysFor(week)" :key="day.date" class="planning-day">
                 <header><div><b>{{ day.label }}</b><small>{{ day.weekday }}</small></div><span>{{ day.items.length }} 条</span></header>
                 <div v-if="day.items.length" class="planning-day-items">
-                  <button v-for="item in day.items" :key="item.id" type="button" class="planning-plan-card" :class="{ navigable: !isBatchMode }" @click="openItemBatch(item)">
+                  <button v-for="item in day.items" :key="item.id" type="button" class="planning-plan-card navigable" :aria-label="`查看计划详情：${item.topic_title || '待确定选题'}`" @click="selectedPlan = item">
                     <div class="account-week-plan-tags">
                       <span :class="['tag', 'gray', 'planning-source-badge', item.plan_type === 'manual' ? 'source-manual' : 'source-ai']" :data-source-hint="sourceHint(item)" :aria-label="sourceHint(item)" tabindex="0">{{ sourceLabel(item) }}</span>
                       <span :class="['tag', statusTone(productionStatusLabel(item))]">{{ productionStatusLabel(item) }}</span>
@@ -271,14 +361,22 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
               </section>
             </div>
           </div>
+          </div>
+          <ListPagination v-if="isAccountMode" v-model:page="historyPage" v-model:page-size="historyPageSize" :total="weeksFor(group).length" unit="个周期" class="list-pagination-inset" />
+          </template>
         </article>
       </div>
       <div v-else class="empty-state"><b>当前筛选条件下暂无策划结果</b></div>
+      <ListPagination v-if="!isAccountMode && accountGroups.length" v-model:page="page" v-model:page-size="pageSize" :total="accountGroups.length" unit="个账号" class="list-pagination-inset" />
     </template>
   </section>
+  <ResultsView v-if="selectedPlan" detail-only :plan="selectedPlan" :profiles="accountCatalog" @close-plan="selectedPlan = null" @plan-updated="updatePlan" />
 </template>
 
 <style scoped>
+.planning-detail-card>.card-head>div{flex:1;min-width:0}.planning-detail-scope .planning-context-tag{min-width:0;max-width:100%;min-height:24px;padding:3px 8px;border-radius:6px;background:var(--neutral-100);color:var(--neutral-500);font-size:12px;line-height:18px;font-weight:500}.planning-batch-code{min-width:0;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.planning-batch-scope .planning-context-tag.orange{background:var(--processing-bg);color:var(--processing)}.planning-batch-scope .planning-context-tag.blue{background:var(--primary-50);color:var(--primary-600)}
+.planning-detail-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px;min-width:0}.planning-scope-label{max-width:560px;overflow:hidden;text-overflow:ellipsis;font-size:12px}.planning-week-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--neutral-200);background:var(--neutral-50)}.planning-week-heading>span{color:var(--neutral-400);font-size:11px}.detail-query-btn{align-self:end;justify-self:start}
 .planning-dashboard{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:16px 20px 16px;border:1px solid var(--neutral-200);border-radius:12px;overflow:hidden;background:var(--neutral-200)}
 .planning-dashboard>div{display:flex;flex-direction:column;gap:8px;min-height:74px;padding:14px 16px;background:var(--surface)}
 .planning-dashboard small{color:var(--neutral-500);font-size:12px}.planning-dashboard strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}

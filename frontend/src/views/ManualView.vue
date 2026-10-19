@@ -286,7 +286,7 @@ async function loadTasks() {
 
 function openTaskDetails(task: ManualTaskSummary) {
   if (!task.batch_id) return
-  void router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual' } })
+  void router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual', from: 'manual' } })
 }
 
 function startTaskProduction(task: ManualTaskSummary) {
