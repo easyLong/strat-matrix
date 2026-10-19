@@ -6,7 +6,7 @@
 
 `items`新增可选字段：`node_type`（`group`分类或`tag`叶子）、`parent_id`（所属分类ID）。新增节点可提交`client_id`临时标识，服务端在同一次保存中分配正式ID并解析父子引用。分类本身不会进入旧版`tags`候选名称列表；父分类停用后，其后代不再作为可选标签。旧的平铺字典和已有标签ID继续兼容。
 
-部署首次升级可在backend目录执行 `python -m app.upgrade_tag_taxonomy`。初始化使用 `frontend/src/data/topicTaxonomy.json` 中20个建议分类、127个叶子，已有标签保留原ID；无法按名称准确归类的放入“待归类”。已有分类树时重复执行不修改数据。初始化通过正常版本化保存留痕，不重写历史选题识别结果。
+部署升级可在backend目录执行 `python -m app.upgrade_tag_taxonomy`。初始化使用 `frontend/src/data/topicTaxonomy.json` 中20个建议分类、127个叶子，已有标签保留原ID；无法按名称准确归类的旧标签放入已停用的“待归类”存档。配置页和共用级联筛选均不展示“待归类”及其子标签。对已有分类树执行时，仅停用尚未清理的“待归类”及其子标签，通过正常版本化保存留痕；后续重复执行不增加版本。历史选题识别结果保留。
 
 新增运营页面读取接口 `GET /api/topics/{topic_id}/detail?topic_type=普通`，提供标题、大纲、有效期、已有标签及其状态/版本；类型参数可区分普通、营销、热点来源，同ID多来源且未指定类型时返回409。它不触发识别。
 

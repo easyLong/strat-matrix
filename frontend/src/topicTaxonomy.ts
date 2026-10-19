@@ -19,7 +19,8 @@ export function tagGroups(items: TaxonomyItems, dimension: string, includeDisabl
     tags: values.filter(tag => isLeaf(tag) && tag.parent_id === tagKey(item) && (includeDisabled || tag.enabled)) }))
   const unassigned = values.filter(tag => isLeaf(tag) && !groups.some(group => group.id === tag.parent_id) && (includeDisabled || tag.enabled))
   if (unassigned.length) groups.push({ id: 'unassigned', name: '待归类', enabled: true, tags: unassigned })
-  return groups.filter(group => includeDisabled || group.enabled)
+  // Migration leftovers are retained for historical references, not current configuration.
+  return groups.filter(group => group.name !== '待归类' && (includeDisabled || group.enabled))
 }
 export function newTaxonomyItem(name: string, nodeType: 'group' | 'tag', parentId: string | null = null): TagTaxonomyItem {
   const key = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
