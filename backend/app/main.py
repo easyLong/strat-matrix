@@ -1169,8 +1169,9 @@ def preview_manual_plan(payload: ManualPreviewInput) -> dict:
         candidates = secrets.SystemRandom().sample(candidates, target)
     try:
         with connection() as db, db.cursor() as cursor:
-            topics = available_topics(cursor, payload.topic_ids)
-            if len(topics) != len(payload.topic_ids):
+            unique_topic_ids = list(dict.fromkeys(payload.topic_ids))
+            topics = available_topics(cursor, unique_topic_ids)
+            if len(topics) != len(unique_topic_ids):
                 raise HTTPException(status_code=422, detail="所选选题包含不可用、未审核或已过期的选题")
             items = []
             for account in candidates:

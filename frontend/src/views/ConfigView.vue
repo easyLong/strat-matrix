@@ -38,6 +38,7 @@ const tagVersion = ref(0)
 const tagItems = ref<Record<string, TagTaxonomyItem[]>>({ T1: [], T2: [], T3: [], T4: [], T5: [] })
 const tagBaseline = ref('')
 const editing = ref(false)
+const historyView = ref(false)
 const confirmation = ref<{ title: string; message: string; confirmLabel: string; cancelLabel: string; danger?: boolean; safePrimary?: boolean } | null>(null)
 const confirmationPanel = ref<HTMLElement | null>(null)
 const confirmationSafeAction = ref<HTMLButtonElement | null>(null)
@@ -116,18 +117,18 @@ const versionChanges = computed(() => {
 
 function configDetailRows(config: StrategyConfig) {
   const rows: { key: string; group: string; label: string; value: string }[] = [
-    { key: 'planning_days', group: '账号与自动策划配置', label: '每周策划日', value: config.planning_days.map(day => ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] ?? `周${day}`).join('、') },
-    { key: 'schedule', group: '账号与自动策划配置', label: '自动策划调度时间', value: `每周${['一', '二', '三', '四', '五', '六', '日'][config.schedule_day - 1]} ${config.schedule_time}` },
-    { key: 'marketing_max', group: '账号与自动策划配置', label: '营销内容周上限', value: `${config.marketing_max} 条 / 营销账号 / 周` },
-    { key: 'hotspot_ratio', group: '账号与自动策划配置', label: '热点选题占比', value: `${config.hotspot_ratio}%` },
-    { key: 'rolling_posts', group: '账号经营策略配置', label: '滚动统计窗口', value: `${config.rolling_posts} 篇` },
+    { key: 'planning_days', group: '内容策划配置', label: '每周策划日', value: config.planning_days.map(day => ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] ?? `周${day}`).join('、') },
+    { key: 'schedule', group: '内容策划配置', label: '自动策划调度时间', value: `每周${['一', '二', '三', '四', '五', '六', '日'][config.schedule_day - 1]} ${config.schedule_time}` },
+    { key: 'marketing_max', group: '内容策划配置', label: '营销内容周上限', value: `${config.marketing_max} 条 / 营销账号 / 周` },
+    { key: 'hotspot_ratio', group: '内容策划配置', label: '热点选题占比', value: `${config.hotspot_ratio}%` },
+    { key: 'rolling_posts', group: '策划规则配置', label: '滚动统计窗口', value: `${config.rolling_posts} 篇` },
   ]
   for (const stage of config.stage_targets) {
-    rows.push({ key: `stage:${stage.name}:traffic`, group: '账号经营策略配置', label: `${stage.name} · 流量目标`, value: `${stage.traffic}%` })
-    rows.push({ key: `stage:${stage.name}:conversion`, group: '账号经营策略配置', label: `${stage.name} · 转化目标`, value: `${stage.conversion}%` })
+    rows.push({ key: `stage:${stage.name}:traffic`, group: '策划规则配置', label: `${stage.name} · 流量目标`, value: `${stage.traffic}%` })
+    rows.push({ key: `stage:${stage.name}:conversion`, group: '策划规则配置', label: `${stage.name} · 转化目标`, value: `${stage.conversion}%` })
   }
   for (const rule of config.lifecycle_rules) {
-    rows.push({ key: `lifecycle:${rule.name}`, group: '账号生命周期阶段定义', label: rule.name, value: lifecycleRuleSummary(rule, config.lifecycle_rules) })
+    rows.push({ key: `lifecycle:${rule.name}`, group: '策划规则配置', label: rule.name, value: lifecycleRuleSummary(rule, config.lifecycle_rules) })
   }
   return rows
 }
@@ -378,7 +379,7 @@ async function saveAll() {
 }
 
 async function restoreVersion(version: ConfigVersionSummary) {
-  if (!editing.value) return
+  if (busy.value || version.version === versions.value[0]?.version) return
   const visibleVersion = displayVersionNumber(version)
   if (!await requestConfirmation({ title: `恢复总配置 V${visibleVersion}？`, message: '恢复后将以该快照创建新的总配置版本，并覆盖当前账号配置与经营策略。', confirmLabel: '确认恢复', cancelLabel: '返回查看', danger: true })) return
   busy.value = true
@@ -401,9 +402,23 @@ function startEditing() {
   notice.value = ''
 }
 
+async function openHistory() {
+  if (loading.value || busy.value || !store.databaseReady) return
+  historyView.value = true
+  versionDetail.value = null
+  error.value = ''
+  await loadVersions()
+}
+
+function closeHistory() {
+  historyView.value = false
+  versionDetail.value = null
+  error.value = ''
+}
+
 async function cancelEditing() {
   if (!editing.value) return
-  if (!await requestConfirmation({ title: '取消编辑', message: '当前配置修改尚未保存。取消后，本次修改内容将被放弃。', confirmLabel: '确认取消', cancelLabel: '继续编辑', danger: true })) return
+  if (!await requestConfirmation({ title: '取消编辑', message: '当前配置修改尚未保存。取消后，本次修改内容将被放弃。', confirmLabel: '确认取消', cancelLabel: '继续编辑', danger: true, safePrimary: true })) return
   confirmCancelEditing()
 }
 
@@ -424,10 +439,13 @@ function confirmCancelEditing() {
 </script>
 
 <template>
-  <div class="page-head">
-    <div><h1>策划配置</h1></div>
+  <div class="page-head config-page-head">
     <div class="page-actions">
-      <button v-if="!editing" class="btn primary" type="button" :disabled="loading || busy || !store.databaseReady" @click="startEditing">编辑配置</button>
+      <template v-if="!editing && !historyView">
+        <button class="btn primary" type="button" :disabled="loading || busy || !store.databaseReady" @click="startEditing">编辑配置</button>
+        <button class="btn" type="button" :disabled="loading || busy || !store.databaseReady" @click="openHistory">历史配置</button>
+      </template>
+      <button v-else-if="historyView" class="btn" type="button" @click="closeHistory">返回配置</button>
       <template v-else>
         <button class="btn" type="button" :disabled="busy || !store.databaseReady" @click="restore">恢复当前配置</button>
         <button class="btn danger-outline" type="button" :disabled="busy" @click="cancelEditing">取消编辑</button>
@@ -444,7 +462,7 @@ function confirmCancelEditing() {
   <template v-if="editing && !loading && store.initialized">
   <fieldset class="form-fieldset config-stack" :disabled="!store.databaseReady || busy || loading">
     <section class="card">
-      <div class="card-head"><div><h2>账号与自动策划配置</h2></div></div>
+      <div class="card-head"><div><h2>内容策划配置</h2></div></div>
       <div class="card-body">
         <div class="form-grid config-control-grid">
           <div class="field"><span>每周策划日</span><div class="day-picker"><button v-for="day in [{ n: 1, label: '周一' }, { n: 2, label: '周二' }, { n: 3, label: '周三' }, { n: 4, label: '周四' }, { n: 5, label: '周五' }, { n: 6, label: '周六' }, { n: 7, label: '周日' }]" :key="day.n" class="day-chip" :class="{ active: planningDays.includes(day.n) }" type="button" :aria-pressed="planningDays.includes(day.n)" @keydown="movePlanningDay($event, day.n - 1)" @click="togglePlanningDay(day.n)">{{ day.label }}</button></div></div>
@@ -454,13 +472,16 @@ function confirmCancelEditing() {
         </div>
 
         <p v-if="editing && !marketingValid" class="inline-error">请检查每周策划日、调度时间、营销上限和热点占比。</p>
+
       </div>
     </section>
 
     <section class="card">
-      <div class="card-head"><div><h2>账号经营策略配置</h2></div></div>
+      <div class="card-head"><div><h2>策划规则配置</h2></div></div>
       <div class="card-body">
-        <label class="field rolling-field"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" type="number" min="1" max="100" /><span>篇</span></div></label>
+        <div class="lifecycle-definition-head"><div><b>生命周期阶段判定</b></div></div>
+        <div class="lifecycle-definition-list"><div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition" :class="{ 'is-catch-all': rule.catchAll }"><div class="lifecycle-stage-name"><b>{{ rule.name }}</b></div><div v-if="rule.catchAll" class="lifecycle-catch-all">{{ coldStartDefinition }}</div><div v-else class="lifecycle-condition-list"><div v-for="(condition, index) in rule.conditions" :key="`${rule.name}-${index}`" class="lifecycle-condition-row"><select v-model="condition.field" :disabled="!lifecycleEditing" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><select v-model="condition.operator" :disabled="!lifecycleEditing" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model.number="condition.value" :disabled="!lifecycleEditing" type="number" step="1" aria-label="阈值" /><span class="condition-unit">{{ metricUnit(condition.field) }}</span><select v-if="index > 0" v-model="condition.join" :disabled="!lifecycleEditing" class="condition-join" aria-label="条件关系"><option value="AND">且</option><option value="OR">或</option></select><button v-if="lifecycleEditing && rule.conditions.length > 1" class="icon-btn condition-remove" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, index)">×</button></div><button v-if="lifecycleEditing" class="text-btn condition-add" type="button" @click="addLifecycleCondition(rule)">＋ 添加条件</button></div></div></div>
+        <div class="lifecycle-definition-head"><div><b>阶段经营目标</b></div></div>
         <div class="stage-table-wrap">
           <table class="stage-table"><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th><th>合计</th></tr></thead>
             <tbody><tr v-for="stage in draft.stage_targets" :key="stage.name">
@@ -471,21 +492,17 @@ function confirmCancelEditing() {
             </tr></tbody>
           </table>
         </div>
-        <div class="lifecycle-definition-head"><div><b>账号生命周期阶段定义</b></div></div>
-
-        <div class="lifecycle-definition-list"><div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition" :class="{ 'is-catch-all': rule.catchAll }"><div class="lifecycle-stage-name"><b>{{ rule.name }}</b></div><div v-if="rule.catchAll" class="lifecycle-catch-all">{{ coldStartDefinition }}</div><div v-else class="lifecycle-condition-list"><div v-for="(condition, index) in rule.conditions" :key="`${rule.name}-${index}`" class="lifecycle-condition-row"><select v-model="condition.field" :disabled="!lifecycleEditing" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><select v-model="condition.operator" :disabled="!lifecycleEditing" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model.number="condition.value" :disabled="!lifecycleEditing" type="number" step="1" aria-label="阈值" /><span class="condition-unit">{{ metricUnit(condition.field) }}</span><select v-if="index > 0" v-model="condition.join" :disabled="!lifecycleEditing" class="condition-join" aria-label="条件关系"><option value="AND">且</option><option value="OR">或</option></select><button v-if="lifecycleEditing && rule.conditions.length > 1" class="icon-btn condition-remove" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, index)">×</button></div><button v-if="lifecycleEditing" class="text-btn condition-add" type="button" @click="addLifecycleCondition(rule)">＋ 添加条件</button></div></div></div>
+        <label class="field rolling-field"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" type="number" min="1" max="100" /><span>篇</span></div></label>
+        <div class="lifecycle-definition-head"><div><b>选题标签配置</b></div></div>
+        <TaxonomyPanel v-model="tagItems" :editing="editing" :disabled="busy || !store.databaseReady" />
         <p v-if="editing && !strategyValid" class="inline-error">请检查滚动窗口、生命周期进入条件；每个阶段的流量与转化目标之和必须为 100%。</p>
       </div>
     </section>
   </fieldset>
-  <section class="card">
-    <div class="card-head"><h2>选题标签配置</h2></div>
-    <TaxonomyPanel v-model="tagItems" :editing="editing" :disabled="busy || !store.databaseReady" />
-  </section>
   </template>
-  <template v-else-if="!loading && store.initialized">
+  <template v-else-if="!historyView && !loading && store.initialized">
   <section class="card config-overview-card">
-    <div class="card-head"><div><h2>策划配置详情</h2></div></div>
+    <div class="card-head"><div><h2>内容策划配置</h2></div></div>
     <div class="card-body config-overview-body">
       <div class="config-at-glance">
         <div class="config-glance-item config-glance-days"><span>每周策划日</span><div class="config-glance-days-list"><b v-for="day in planningDays" :key="day">{{ ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] }}</b></div></div>
@@ -493,31 +510,44 @@ function confirmCancelEditing() {
         <div class="config-glance-item"><span>营销内容周上限</span><b>{{ draft.marketing_max }} 条 / 营销账号</b></div>
         <div class="config-glance-item"><span>热点选题占比</span><b>{{ draft.hotspot_ratio }}%</b></div>
       </div>
-      <div class="config-readonly-columns">
-        <section class="config-readonly-panel">
-          <div class="config-readonly-panel-head"><h3>账号经营策略配置</h3><span>滚动统计窗口 <b>{{ draft.rolling_posts }} 篇</b></span></div>
-          <div class="stage-table-wrap">
-            <table class="stage-table config-readonly-stage-table"><thead><tr><th>经营阶段</th><th>流量</th><th>转化</th><th>阶段定义</th></tr></thead>
-              <tbody><tr v-for="stage in draft.stage_targets" :key="stage.name">
-                <td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td>
-                <td>{{ lifecycleRuleSummary(lifecycleRules.find(rule => rule.name === stage.name) ?? { name: stage.name, conditions: [], catchAll: true }, lifecycleRules) }}</td>
-              </tr></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="config-readonly-panel config-readonly-tag-panel">
-          <div class="config-readonly-panel-head"><h3>选题标签配置</h3></div>
-          <TaxonomyPanel :model-value="tagItems" />
-        </section>
-      </div>
+    </div>
+  </section>
+  <section class="card config-overview-card">
+    <div class="card-head"><div><h2>策划规则配置</h2></div></div>
+    <div class="card-body config-overview-body">
+      <section class="config-readonly-panel">
+        <div class="config-readonly-panel-head"><h3>生命周期阶段判定</h3></div>
+        <div class="stage-table-wrap">
+          <table class="stage-table config-readonly-stage-table"><thead><tr><th>阶段</th><th>进入条件</th></tr></thead>
+            <tbody><tr v-for="rule in lifecycleRules" :key="rule.name">
+              <td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, lifecycleRules) }}</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="config-readonly-panel">
+        <div class="config-readonly-panel-head"><h3>阶段经营目标</h3></div>
+        <div class="stage-table-wrap">
+          <table class="stage-table config-readonly-stage-table"><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th></tr></thead>
+            <tbody><tr v-for="stage in draft.stage_targets" :key="stage.name">
+              <td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="config-readonly-panel">
+        <div class="config-readonly-panel-head"><h3>滚动统计窗口</h3><span><b>{{ draft.rolling_posts }} 篇</b></span></div>
+      </section>
+      <section class="config-readonly-panel config-readonly-tag-panel">
+        <div class="config-readonly-panel-head"><h3>选题标签配置</h3></div>
+        <TaxonomyPanel :model-value="tagItems" />
+      </section>
     </div>
   </section>
   </template>
-  <section v-if="!loading && store.initialized" class="card">
-    <div class="card-head"><div><h2>配置历史</h2></div></div>
+  <section v-if="historyView && !loading && store.initialized" class="card">
     <div class="table-wrap"><table><thead><tr><th>版本</th><th>生成时间</th><th>配置摘要</th><th>操作人</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>每周 {{ version.config.planning_days.length }} 天 · 营销上限 {{ version.config.marketing_max }} · 滚动 {{ version.config.rolling_posts }} 篇 · 五阶段目标与定义</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="editing" class="text-btn" type="button" :disabled="busy || version.version === versions[0]?.version" @click="restoreVersion(version)">恢复此版本</button></div></td></tr>
+      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>每周 {{ version.config.planning_days.length }} 天 · 营销上限 {{ version.config.marketing_max }} · 滚动 {{ version.config.rolling_posts }} 篇 · 五阶段目标与定义</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version" class="text-btn" type="button" :disabled="busy" @click="restoreVersion(version)">恢复此版本</button></div></td></tr>
       <tr v-if="versions.length === 0"><td colspan="5"><div class="empty-state">暂无配置记录</div></td></tr>
     </tbody></table></div>
   </section>
@@ -532,15 +562,18 @@ function confirmCancelEditing() {
         <div v-else class="detail-note">{{ versionPrevious ? '该版本与上一版本配置内容相同。' : '没有更早的模块版本可供比较。' }}</div>
         <h3>完整配置</h3>
         <div class="config-version-group">
-          <b>账号与自动策划配置</b>
-          <div class="table-wrap"><table><tbody><tr v-for="row in versionDetailRows.filter(item => item.group === '账号与自动策划配置')" :key="row.key"><th>{{ row.label }}</th><td>{{ row.value }}</td></tr></tbody></table></div>
+          <b>内容策划配置</b>
+          <div class="table-wrap"><table><tbody><tr v-for="row in versionDetailRows.filter(item => item.group === '内容策划配置')" :key="row.key"><th>{{ row.label }}</th><td>{{ row.value }}</td></tr></tbody></table></div>
         </div>
         <div class="config-version-group">
-          <b>账号经营策略配置</b>
-          <div class="detail-note">滚动统计窗口：{{ versionDetail.config.rolling_posts }} 篇</div>
-          <div class="table-wrap"><table><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th><th>阶段定义</th></tr></thead><tbody>
-            <tr v-for="stage in versionDetail.config.stage_targets" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td><td>{{ lifecycleRuleSummary(versionDetail.config.lifecycle_rules.find(rule => rule.name === stage.name) ?? { name: stage.name, conditions: [], catchAll: true }, versionDetail.config.lifecycle_rules) }}</td></tr>
+          <b>策划规则配置</b>
+          <div class="table-wrap"><table><thead><tr><th>生命周期阶段判定</th><th>进入条件</th></tr></thead><tbody>
+            <tr v-for="rule in versionDetail.config.lifecycle_rules" :key="rule.name"><td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, versionDetail.config.lifecycle_rules) }}</td></tr>
           </tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>阶段经营目标</th><th>流量目标</th><th>转化目标</th></tr></thead><tbody>
+            <tr v-for="stage in versionDetail.config.stage_targets" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td></tr>
+          </tbody></table></div>
+          <div class="detail-note">滚动统计窗口：{{ versionDetail.config.rolling_posts }} 篇</div>
         </div>
       </div>
       <div class="drawer-foot"><button class="btn" type="button" @click="versionDetail = null">关闭</button></div>
@@ -657,5 +690,6 @@ function confirmCancelEditing() {
 
 
 <style scoped>
+.config-page-head .page-actions{margin-left:auto}
 .config-readonly-columns{grid-template-columns:minmax(0,1fr)}.config-readonly-tag-panel{padding:0;overflow:hidden}.config-readonly-tag-panel .config-readonly-panel-head{padding:15px 18px;margin:0}
 </style>
