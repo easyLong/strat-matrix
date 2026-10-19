@@ -77,7 +77,7 @@ function sourceLabel(item: AccountPlanRecord) {
 }
 
 function sourceHint(item: AccountPlanRecord) {
-  return item.plan_type === 'manual' ? '人：手动策划' : 'AI：自动策划'
+  return item.plan_type === 'manual' ? '人：人工策划' : 'AI：自动策划'
 }
 
 const allItems = computed<AccountPlanRecord[]>(() => details.value.flatMap(batch => batch.items.map(item => ({
@@ -168,7 +168,6 @@ async function load() {
     ])
     details.value = batchDetails
     accountCatalog.value = accounts
-    if (!expandedAccounts.value.size && accountGroups.value[0]) expandedAccounts.value = new Set([accountGroups.value[0].account_id])
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : '读取策划详情失败'
   } finally {
@@ -226,10 +225,9 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
       </div>
 
       <div v-if="accountGroups.length" class="planning-account-list">
-        <article v-for="group in accountGroups" :key="group.account_id" class="planning-account-card">
+        <article v-for="group in accountGroups" :key="group.account_id" :class="['planning-account-card', { expanded: expandedAccounts.has(group.account_id) }]">
           <header class="planning-account-head">
             <div class="planning-account-main">
-              <div class="planning-account-avatar" aria-hidden="true">{{ (group.account_name || '账').slice(0, 1) }}</div>
               <div class="planning-account-identity">
                 <div class="planning-account-title">
                   <strong>{{ group.account_name }}</strong>
@@ -241,14 +239,15 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
                   <span v-if="group.profile?.organization">{{ group.profile.organization }}</span>
                   <span v-if="group.profile?.um_no">UM {{ group.profile.um_no }}</span>
                   <span v-if="group.profile?.platform">{{ group.profile.platform }}</span>
+                  <span class="planning-account-persona-inline"><b>人设</b>{{ group.profile?.persona || '未配置' }}</span>
                 </div>
-                <div class="planning-account-persona"><small>人设</small><span>{{ group.profile?.persona || '未配置' }}</span></div>
               </div>
             </div>
             <div class="planning-account-actions">
-              <span class="tag blue">{{ group.items.length }} 条策划</span>
-              <button class="btn planning-expand-btn" type="button" :aria-expanded="expandedAccounts.has(group.account_id)" @click="toggleAccount(group.account_id)">
-                {{ expandedAccounts.has(group.account_id) ? '收起计划' : '查看计划' }}
+              <span class="planning-plan-count">{{ group.items.length }} 条策划</span>
+              <button class="planning-expand-btn" type="button" :aria-expanded="expandedAccounts.has(group.account_id)" :aria-label="`${expandedAccounts.has(group.account_id) ? '收起' : '展开'}${group.account_name}的策划计划`" @click="toggleAccount(group.account_id)">
+                <span>{{ expandedAccounts.has(group.account_id) ? '收起' : '展开' }}</span>
+                <svg :class="{ expanded: expandedAccounts.has(group.account_id) }" width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
               </button>
             </div>
           </header>
@@ -260,7 +259,7 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
                 <div v-if="day.items.length" class="planning-day-items">
                   <button v-for="item in day.items" :key="item.id" type="button" class="planning-plan-card" :class="{ navigable: !isBatchMode }" @click="openItemBatch(item)">
                     <div class="account-week-plan-tags">
-                      <span class="tag gray" :data-source-hint="sourceHint(item)" :aria-label="sourceHint(item)" tabindex="0">{{ sourceLabel(item) }}</span>
+                      <span :class="['tag', 'gray', 'planning-source-badge', item.plan_type === 'manual' ? 'source-manual' : 'source-ai']" :data-source-hint="sourceHint(item)" :aria-label="sourceHint(item)" tabindex="0">{{ sourceLabel(item) }}</span>
                       <span :class="['tag', statusTone(productionStatusLabel(item))]">{{ productionStatusLabel(item) }}</span>
                     </div>
                     <b>{{ item.topic_title || '待确定选题' }}</b>
@@ -285,9 +284,10 @@ watch([() => props.mode, () => props.batches.map(batch => batch.id).join(',')], 
 .planning-dashboard small{color:var(--neutral-500);font-size:12px}.planning-dashboard strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
 .detail-filter-shell{margin:0 20px 16px;padding:12px 14px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}
 .detail-filter-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}.detail-filter-fields label{display:flex;flex-direction:column;gap:6px}.detail-filter-fields label>span{color:var(--neutral-500);font-size:12px}.detail-filter-fields input,.detail-filter-fields select{width:100%}
-.planning-account-list{display:grid;gap:14px;padding:0 20px 20px}.planning-account-card{overflow:hidden;border:1px solid var(--neutral-200);border-radius:14px;background:var(--surface);box-shadow:0 1px 2px rgba(15,23,42,.03)}
-.planning-account-head{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:18px 20px}.planning-account-main{display:flex;align-items:flex-start;gap:14px;min-width:0;flex:1}.planning-account-avatar{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:var(--primary-50);color:var(--primary-600);font-size:16px;font-weight:700}.planning-account-identity{display:flex;flex-direction:column;gap:7px;min-width:0}.planning-account-title{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.planning-account-title>strong{color:var(--neutral-900);font-size:15px;line-height:22px}.planning-account-meta{display:flex;align-items:center;flex-wrap:wrap;color:var(--neutral-400);font-size:11px;line-height:18px}.planning-account-meta span+span::before{display:inline-block;width:1px;height:11px;margin:0 9px;background:var(--neutral-200);content:'';vertical-align:-1px}.planning-account-persona{display:flex;align-items:center;gap:7px;min-width:0}.planning-account-persona small{flex:none;padding:2px 6px;border-radius:5px;background:var(--neutral-100);color:var(--neutral-500);font-size:10px;line-height:16px}.planning-account-persona span{max-width:560px;overflow:hidden;color:var(--neutral-600);font-size:12px;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.planning-account-actions{display:flex;align-items:center;gap:10px;flex:none}.planning-expand-btn{height:34px;padding:0 10px;font-size:12px}
-.planning-week-wrap{padding:16px 18px 18px;border-top:1px solid var(--neutral-100);background:linear-gradient(180deg,var(--neutral-50),var(--surface) 76px);overflow-x:auto}.planning-week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:10px;min-width:1120px}.planning-day{overflow:hidden;min-height:170px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}.planning-day>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 11px;border-bottom:1px solid var(--neutral-100);background:var(--neutral-50)}.planning-day>header>div{display:flex;align-items:baseline;gap:6px}.planning-day>header b{color:var(--neutral-700);font-size:13px}.planning-day>header small,.planning-day>header span{color:var(--neutral-400);font-size:10px}.planning-day-items{display:grid;gap:8px;padding:9px}.planning-plan-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;padding:10px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface);color:inherit;text-align:left}.planning-plan-card.navigable{cursor:pointer;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}.planning-plan-card.navigable:hover{border-color:var(--primary-200);box-shadow:0 5px 16px rgba(15,23,42,.06);transform:translateY(-1px)}.planning-plan-card>b{display:-webkit-box;overflow:hidden;color:var(--neutral-700);font-size:12px;line-height:18px;-webkit-line-clamp:2;-webkit-box-orient:vertical}.planning-plan-card>small{color:var(--neutral-400);font-size:10px}.planning-plan-batch{color:var(--neutral-400);font-size:9px}.planning-day-empty{display:grid;place-items:center;min-height:110px;color:var(--neutral-300);font-size:11px}
-@media(max-width:980px){.planning-dashboard{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px}.detail-filter-shell{margin:0 12px 14px}.detail-filter-fields{grid-template-columns:1fr 1fr}.planning-account-list{padding:0 12px 16px}.planning-account-head{align-items:flex-start;flex-direction:column;padding:16px}.planning-account-actions{width:100%;justify-content:space-between}.planning-account-persona span{max-width:420px}}
-@media(max-width:580px){.planning-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-filter-fields{grid-template-columns:1fr}.planning-account-main{gap:10px}.planning-account-avatar{width:36px;height:36px;flex-basis:36px;border-radius:10px}.planning-account-persona span{max-width:230px}.planning-week-wrap{padding:12px 8px 14px}}
+.planning-account-list{display:grid;gap:8px;padding:0 20px 20px}.planning-account-card{overflow:hidden;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface);transition:border-color .14s ease,background .14s ease}.planning-account-card:hover{border-color:var(--neutral-300)}.planning-account-card.expanded{border-color:var(--primary-200)}
+.planning-account-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 14px}.planning-account-main{min-width:0;flex:1}.planning-account-identity{display:flex;flex-direction:column;gap:5px;min-width:0}.planning-account-title{display:flex;align-items:center;flex-wrap:wrap;gap:7px}.planning-account-title>strong{color:var(--neutral-900);font-size:14px;line-height:20px}.planning-account-meta{display:flex;align-items:center;flex-wrap:wrap;color:var(--neutral-400);font-size:11px;line-height:17px}.planning-account-meta span{display:inline-flex;align-items:center;min-width:0}.planning-account-meta span+span::before{display:inline-block;flex:none;width:1px;height:10px;margin:0 8px;background:var(--neutral-200);content:''}.planning-account-persona-inline{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.planning-account-persona-inline b{margin-right:4px;color:var(--neutral-500);font-size:10px;font-weight:500}.planning-account-actions{display:flex;align-items:center;gap:8px;flex:none}.planning-plan-count{color:var(--neutral-500);font-size:11px;white-space:nowrap}.planning-expand-btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:var(--neutral-600);font-size:11px;cursor:pointer;transition:border-color .14s ease,background .14s ease,color .14s ease}.planning-expand-btn:hover{border-color:var(--primary-200);background:var(--primary-50);color:var(--primary-600)}.planning-expand-btn:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px}.planning-expand-btn svg{transition:transform .14s ease}.planning-expand-btn svg.expanded{transform:rotate(180deg)}
+.planning-week-wrap{padding:12px 14px 14px;border-top:1px solid var(--neutral-100);background:var(--neutral-50);overflow-x:auto}.planning-week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px;min-width:1100px}.planning-day{overflow:hidden;min-height:166px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface)}.planning-day>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-bottom:1px solid var(--neutral-100);background:var(--neutral-50)}.planning-day>header>div{display:flex;align-items:baseline;gap:6px}.planning-day>header b{color:var(--neutral-700);font-size:12px}.planning-day>header small,.planning-day>header span{color:var(--neutral-400);font-size:10px}.planning-day-items{display:grid;gap:7px;padding:8px}.planning-plan-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;padding:9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:inherit;text-align:left}.planning-plan-card.navigable{cursor:pointer;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}.planning-plan-card.navigable:hover{border-color:var(--primary-200);box-shadow:0 4px 12px rgba(15,23,42,.05);transform:translateY(-1px)}.planning-plan-card>b{display:-webkit-box;overflow:hidden;color:var(--neutral-700);font-size:12px;line-height:18px;-webkit-line-clamp:2;-webkit-box-orient:vertical}.planning-plan-card>small{color:var(--neutral-400);font-size:10px}.planning-plan-batch{color:var(--neutral-400);font-size:9px}.planning-day-empty{display:grid;place-items:center;min-height:108px;color:var(--neutral-300);font-size:11px}
+.planning-source-badge{display:inline-flex!important;align-items:center;gap:4px;border:1px solid transparent!important;font-weight:600!important}.planning-source-badge::before{width:5px;height:5px;border-radius:50%;background:currentColor;content:''}.planning-source-badge.source-ai{border-color:#bfdbfe!important;background:#eff6ff!important;color:#2563eb!important}.planning-source-badge.source-manual{border-color:#fed7aa!important;background:#fff7ed!important;color:#c2410c!important}
+@media(max-width:980px){.planning-dashboard{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px}.detail-filter-shell{margin:0 12px 14px}.detail-filter-fields{grid-template-columns:1fr 1fr}.planning-account-list{padding:0 12px 16px}.planning-account-head{align-items:flex-start;flex-direction:column;gap:10px;padding:12px}.planning-account-actions{width:100%;justify-content:flex-end}.planning-account-persona-inline{max-width:360px}}
+@media(max-width:580px){.planning-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-filter-fields{grid-template-columns:1fr}.planning-account-meta{row-gap:2px}.planning-account-persona-inline{max-width:220px}.planning-week-wrap{padding:10px 8px 12px}.planning-account-actions{justify-content:space-between}}
 </style>
