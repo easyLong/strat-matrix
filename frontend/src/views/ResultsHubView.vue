@@ -13,7 +13,6 @@ import CycleDetailView from './CycleDetailView.vue'
 import LegacyResultsView from './ResultsView.vue'
 
 type ResultDimension = 'account' | 'period'
-
 type PeriodSummary = {
   cycleStart: string
   cycleEnd: string
@@ -43,10 +42,11 @@ const page = ref(1)
 const pageSize = ref(20)
 let loaded = false
 
-const showingBatchDetail = computed(() => typeof route.query.batch === 'string' && /^\d+$/.test(route.query.batch))
-const dimension = computed<ResultDimension>(() => route.query.dimension === 'period' ? 'period' : 'account')
+const requestedBatchId = computed(() => typeof route.query.batch === 'string' && /^\d+$/.test(route.query.batch) ? Number(route.query.batch) : null)
 const requestedCycle = computed(() => typeof route.query.cycle === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(route.query.cycle) ? route.query.cycle : '')
-const showingPeriodDetail = computed(() => dimension.value === 'period' && !showingBatchDetail.value && Boolean(requestedCycle.value))
+const showingBatchDetail = computed(() => requestedBatchId.value !== null)
+const showingPeriodDetail = computed(() => !showingBatchDetail.value && Boolean(requestedCycle.value))
+const dimension = computed<ResultDimension>(() => route.query.dimension === 'period' || showingBatchDetail.value || showingPeriodDetail.value ? 'period' : 'account')
 
 function cycleWeekStart(date: string) {
   const value = new Date(`${date}T00:00:00Z`)
@@ -86,7 +86,6 @@ function summarizePeriods(source: BatchSummary[]): PeriodSummary[] {
     if (rows) rows.push(batch)
     else grouped.set(key, [batch])
   }
-
   return [...grouped.entries()].map(([cycleStart, rows]) => {
     const ordered = [...rows].sort((a, b) => {
       if (a.plan_type !== b.plan_type) return a.plan_type === 'auto' ? -1 : 1
@@ -94,10 +93,7 @@ function summarizePeriods(source: BatchSummary[]): PeriodSummary[] {
     })
     const autoBatches = ordered.filter(batch => batch.plan_type === 'auto')
     const manualBatches = ordered.filter(batch => batch.plan_type === 'manual')
-    const updatedAt = ordered
-      .map(batch => batch.updated_at || batch.created_at)
-      .filter(Boolean)
-      .sort((a, b) => b.localeCompare(a))[0] ?? null
+    const updatedAt = ordered.map(batch => batch.updated_at || batch.created_at).filter(Boolean).sort((a, b) => b.localeCompare(a))[0] ?? null
     return {
       cycleStart,
       cycleEnd: cycleWeekEnd(cycleStart),
@@ -113,23 +109,20 @@ function summarizePeriods(source: BatchSummary[]): PeriodSummary[] {
 }
 
 const allPeriods = computed(() => summarizePeriods(batches.value))
+const selectedPeriod = computed(() => allPeriods.value.find(period => period.cycleStart === requestedCycle.value) ?? null)
+const selectedBatch = computed(() => batches.value.find(batch => batch.id === requestedBatchId.value) ?? null)
 const periodKeys = computed(() => allPeriods.value.map(period => period.cycleStart))
 const yearOptions = computed(() => [...new Set(periodKeys.value.map(value => value.slice(0, 4)))].sort((a, b) => b.localeCompare(a)))
-const monthOptions = computed(() => [...new Set(periodKeys.value
-  .filter(value => year.value === 'all' || value.slice(0, 4) === year.value)
-  .map(value => value.slice(5, 7)))].sort())
+const monthOptions = computed(() => [...new Set(periodKeys.value.filter(value => year.value === 'all' || value.slice(0, 4) === year.value).map(value => value.slice(5, 7)))].sort())
 const weekOptions = computed(() => [...new Set(periodKeys.value
   .filter(value => (year.value === 'all' || value.slice(0, 4) === year.value) && (month.value === 'all' || value.slice(5, 7) === month.value))
   .map(value => monthWeekOf(value)))].sort((a, b) => a - b))
-
 const periods = computed(() => allPeriods.value.filter(period =>
   (appliedFilters.value.year === 'all' || period.cycleStart.slice(0, 4) === appliedFilters.value.year) &&
   (appliedFilters.value.month === 'all' || period.cycleStart.slice(5, 7) === appliedFilters.value.month) &&
   (appliedFilters.value.week === 'all' || String(monthWeekOf(period.cycleStart)) === appliedFilters.value.week),
 ))
-
 const pagedPeriods = computed(() => periods.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-const selectedPeriod = computed(() => allPeriods.value.find(period => period.cycleStart === requestedCycle.value) ?? null)
 
 function switchDimension(next: ResultDimension) {
   if (next === dimension.value && !showingBatchDetail.value && !showingPeriodDetail.value) return
@@ -161,16 +154,9 @@ function openBatch(batch: BatchSummary, cycleStart?: string) {
   void router.push({ path: '/results', query })
 }
 
-function interceptBatchBack(event: Event) {
-  const target = event.target instanceof Element ? event.target.closest('button') : null
-  if (!target || !target.textContent?.includes('返回批次维度')) return
-  event.preventDefault()
-  event.stopPropagation()
-  if (requestedCycle.value) {
-    void router.push({ path: '/results', query: { dimension: 'period', cycle: requestedCycle.value } })
-  } else {
-    returnToPeriodList()
-  }
+function returnFromBatchDetail() {
+  if (requestedCycle.value) void router.push({ path: '/results', query: { dimension: 'period', cycle: requestedCycle.value } })
+  else returnToPeriodList()
 }
 
 async function loadBatches() {
@@ -190,41 +176,52 @@ async function loadBatches() {
 watch(year, () => { month.value = 'all'; week.value = 'all' })
 watch(month, () => { week.value = 'all' })
 watch([periods, pageSize], () => { page.value = Math.min(page.value, Math.max(1, Math.ceil(periods.value.length / pageSize.value))) })
-watch([() => store.databaseReady, dimension], ([ready, currentDimension]) => {
-  if (ready && currentDimension === 'period' && !loaded) void loadBatches()
+watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDetail], ([ready, currentDimension, batchDetail, periodDetail]) => {
+  if (ready && (currentDimension === 'period' || batchDetail || periodDetail) && !loaded) void loadBatches()
 }, { immediate: true })
 </script>
 
 <template>
-  <div v-if="showingBatchDetail" class="legacy-batch-detail" @click.capture="interceptBatchBack">
-    <LegacyResultsView />
+  <div v-if="dimension === 'account'" class="account-results-shell">
+    <div class="result-tabs" role="group" aria-label="策划结果查看维度">
+      <button type="button" class="active" aria-pressed="true" @click="switchDimension('account')">账号维度</button>
+      <button type="button" aria-pressed="false" @click="switchDimension('period')">周期维度</button>
+    </div>
+    <div class="legacy-account-view"><LegacyResultsView /></div>
   </div>
 
   <template v-else>
-    <div v-if="!showingPeriodDetail" class="result-tabs" role="group" aria-label="策划结果查看维度">
-      <button type="button" :class="{ active: dimension === 'account' }" :aria-pressed="dimension === 'account'" @click="switchDimension('account')">账号维度</button>
-      <button type="button" :class="{ active: dimension === 'period' }" :aria-pressed="dimension === 'period'" @click="switchDimension('period')">周期维度</button>
-    </div>
+    <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
+    <section v-if="loading || !store.initialized" class="card"><LoadingSkeleton /></section>
 
-    <div v-if="dimension === 'account'" class="legacy-account-view">
-      <LegacyResultsView />
-    </div>
+    <CycleDetailView
+      v-else-if="showingBatchDetail && selectedBatch"
+      mode="batch"
+      :cycle-start="cycleWeekStart(selectedBatch.cycle_start)"
+      :cycle-end="cycleWeekEnd(selectedBatch.cycle_start)"
+      :batches="[selectedBatch]"
+      @back="returnFromBatchDetail"
+    />
+    <section v-else-if="showingBatchDetail" class="card"><div class="empty-state"><b>未找到该批次</b></div></section>
+
+    <CycleDetailView
+      v-else-if="showingPeriodDetail && selectedPeriod"
+      mode="cycle"
+      :cycle-start="selectedPeriod.cycleStart"
+      :cycle-end="selectedPeriod.cycleEnd"
+      :batches="selectedPeriod.batches"
+      @back="returnToPeriodList"
+      @open-batch="batch => openBatch(batch, selectedPeriod.cycleStart)"
+    />
+    <section v-else-if="showingPeriodDetail" class="card"><div class="empty-state"><b>未找到该策划周期</b></div></section>
 
     <template v-else>
-      <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
-      <section v-if="loading || !store.initialized" class="card"><LoadingSkeleton /></section>
+      <div class="result-tabs" role="group" aria-label="策划结果查看维度">
+        <button type="button" aria-pressed="false" @click="switchDimension('account')">账号维度</button>
+        <button type="button" class="active" aria-pressed="true" @click="switchDimension('period')">周期维度</button>
+      </div>
 
-      <CycleDetailView
-        v-else-if="showingPeriodDetail && selectedPeriod"
-        :cycle-start="selectedPeriod.cycleStart"
-        :cycle-end="selectedPeriod.cycleEnd"
-        :batches="selectedPeriod.batches"
-        @back="returnToPeriodList"
-        @open-batch="batch => openBatch(batch, selectedPeriod?.cycleStart)"
-      />
-      <section v-else-if="showingPeriodDetail" class="card"><div class="empty-state"><b>未找到该策划周期</b></div></section>
-
-      <section v-else class="card period-result-card">
+      <section class="card period-result-card">
         <div class="card-body batch-dimension-filters">
           <button class="filter-collapse-toggle" type="button" aria-controls="period-dimension-filter-fields" :aria-expanded="filtersExpanded" @click="filtersExpanded = !filtersExpanded">
             <span>筛选条件</span>
@@ -254,37 +251,29 @@ watch([() => store.databaseReady, dimension], ([ready, currentDimension]) => {
                   <td class="batch-count" :class="{ completed: period.completedCount > 0 }">{{ period.completedCount }}</td>
                   <td class="batch-count" :class="{ failed: period.failedCount > 0 }">{{ period.failedCount }}</td>
                   <td>{{ formatDateTime(period.updatedAt) }}</td>
-                  <td>
-                    <div class="period-actions">
-                      <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
-                      <button class="text-btn" type="button" @click="openPeriod(period)">周期详情</button>
-                    </div>
-                  </td>
+                  <td><div class="period-actions">
+                    <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
+                    <button class="text-btn" type="button" @click="openPeriod(period)">周期详情</button>
+                  </div></td>
                 </tr>
                 <tr v-if="expandedPeriod === period.cycleStart" class="period-expansion-row">
                   <td colspan="9">
-                    <div class="period-batch-panel">
-                      <div class="table-wrap">
-                        <table>
-                          <thead><tr><th>批次</th><th>策划方式</th><th>批次周期</th><th>账号数</th><th>完成数</th><th>失败数</th><th>选题数</th><th>策划状态</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>更新时间</th><th>操作</th></tr></thead>
-                          <tbody>
-                            <tr v-for="batch in period.batches" :key="batch.id">
-                              <td><div class="account-name-cell"><b>{{ batch.task_name || '—' }}</b><small>ID {{ batch.batch_code }}</small></div></td>
-                              <td>{{ batch.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</td>
-                              <td>{{ batch.cycle_start }} 至 {{ batch.cycle_end }}</td>
-                              <td>{{ batch.account_count }}</td>
-                              <td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td>
-                              <td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td>
-                              <td>{{ batch.topic_count }}</td>
-                              <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
-                              <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
-                              <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
-                              <td><button class="text-btn" type="button" @click="openBatch(batch)">查看详情</button></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                    <div class="period-batch-panel"><div class="table-wrap"><table>
+                      <thead><tr><th>批次</th><th>策划方式</th><th>批次周期</th><th>账号数</th><th>完成数</th><th>失败数</th><th>选题数</th><th>策划状态</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>更新时间</th><th>操作</th></tr></thead>
+                      <tbody><tr v-for="batch in period.batches" :key="batch.id">
+                        <td><div class="account-name-cell"><b>{{ batch.task_name || '—' }}</b><small>ID {{ batch.batch_code }}</small></div></td>
+                        <td>{{ batch.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</td>
+                        <td>{{ batch.cycle_start }} 至 {{ batch.cycle_end }}</td>
+                        <td>{{ batch.account_count }}</td>
+                        <td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td>
+                        <td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td>
+                        <td>{{ batch.topic_count }}</td>
+                        <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
+                        <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
+                        <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
+                        <td><button class="text-btn" type="button" @click="openBatch(batch, period.cycleStart)">查看详情</button></td>
+                      </tr></tbody>
+                    </table></div></div>
                   </td>
                 </tr>
               </template>
@@ -300,13 +289,7 @@ watch([() => store.databaseReady, dimension], ([ready, currentDimension]) => {
 
 <style scoped>
 .legacy-account-view :deep(.result-tabs){display:none}
-.period-summary-row>td{vertical-align:middle}
-.period-type-stat{display:flex;flex-direction:column;gap:3px;white-space:nowrap}
-.period-type-stat b{color:var(--neutral-700);font-size:13px}
-.period-type-stat small{color:var(--neutral-400);font-size:11px}
-.period-actions{display:flex;align-items:center;gap:12px;white-space:nowrap}
-.period-expansion-row>td{padding:0!important;background:var(--neutral-50)}
-.period-batch-panel{padding:12px 18px 18px;border-top:1px solid var(--neutral-200);border-bottom:1px solid var(--neutral-200)}
-.period-batch-panel>.table-wrap{margin:0;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface)}
+.period-summary-row>td{vertical-align:middle}.period-type-stat{display:flex;flex-direction:column;gap:3px;white-space:nowrap}.period-type-stat b{color:var(--neutral-700);font-size:13px}.period-type-stat small{color:var(--neutral-400);font-size:11px}.period-actions{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.period-expansion-row>td{padding:0!important;background:var(--neutral-50)}.period-batch-panel{padding:14px 18px 18px;border-top:1px solid var(--neutral-200);border-bottom:1px solid var(--neutral-200)}.period-batch-panel>.table-wrap{margin:0;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface)}
 @media(max-width:980px){.period-summary-table{min-width:980px}.period-batch-panel{padding:12px}}
 </style>
