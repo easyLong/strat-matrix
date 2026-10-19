@@ -42,15 +42,38 @@ def matches(condition: LifecycleCondition, metrics: dict[str, int | float]) -> b
 
 
 def lifecycle_stage(config: StrategyConfig, metrics: dict[str, int | float]) -> str:
+    rules = {rule.name: rule for rule in config.lifecycle_rules}
+    growth = rules.get("流量增长期")
+    cold = rules.get("冷启动期")
+
+    # Higher maturity stages take precedence. The cold-start OR boundary is
+    # evaluated before growth so an account with either low metric stays cold.
     for rule in config.lifecycle_rules:
-        if rule.catchAll:
-            return rule.name
+        if rule.catchAll or rule.name in {"流量增长期", "冷启动期"}:
+            continue
         passed = matches(rule.conditions[0], metrics)
         for condition in rule.conditions[1:]:
             result = matches(condition, metrics)
             passed = passed and result if condition.join == "AND" else passed or result
         if passed:
             return rule.name
+
+    if growth and cold:
+        low_boundary = [
+            condition for condition in growth.conditions
+            if condition.field in {"followers_count", "valid_content_count"}
+            and condition.operator == "gte"
+        ]
+        if low_boundary and any(metrics[condition.field] < condition.value for condition in low_boundary):
+            return cold.name
+        passed = matches(growth.conditions[0], metrics)
+        for condition in growth.conditions[1:]:
+            result = matches(condition, metrics)
+            passed = passed and result if condition.join == "AND" else passed or result
+        if passed:
+            return growth.name
+    if cold:
+        return cold.name
     raise PlanningError("生命周期配置缺少兜底阶段")
 
 

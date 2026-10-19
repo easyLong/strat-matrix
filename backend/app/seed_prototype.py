@@ -93,7 +93,7 @@ def seed_config(cursor, now: datetime) -> None:
         "marketing_max": 1,
         "rolling_posts": 10,
         "stage_targets": [
-            {"name": "冷启验证期", "traffic": 80, "conversion": 20},
+            {"name": "冷启动期", "traffic": 80, "conversion": 20},
             {"name": "流量增长期", "traffic": 70, "conversion": 30},
             {"name": "转化试探期", "traffic": 50, "conversion": 50},
             {"name": "转化放大期", "traffic": 30, "conversion": 70},

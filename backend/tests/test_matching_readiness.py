@@ -24,7 +24,7 @@ def fixture():
         "followers_count": 1000, "interaction_data": [], "interaction_source": "if01",
         "metrics_as_of": CHECKED_AT.isoformat(), "rolling_posts": 10,
         "valid_content_count": 0, "rolling_interaction_count": 0, "traffic_trend": "数据不足",
-        "lifecycle_stage": "冷启验证期", "business_goal": {"traffic": 80, "conversion": 20},
+        "lifecycle_stage": "冷启动期", "business_goal": {"traffic": 80, "conversion": 20},
     } for account_id in ("ACCOUNT-001", "ACCOUNT-002")]
     batch = {"batch_id": 123, "batch_code": "AUTO-RULE-20261012", "cycle_end": date(2026, 10, 18),
              "config_version": 3, "config_json": config.model_dump_json(),

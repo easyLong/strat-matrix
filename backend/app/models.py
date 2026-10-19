@@ -28,17 +28,17 @@ class LifecycleRule(BaseModel):
 def default_lifecycle_rules() -> list[LifecycleRule]:
     return [
         LifecycleRule(name="稳定经营期", conditions=[
-            LifecycleCondition(field="followers_count", operator="gte", value=1000),
+            LifecycleCondition(field="followers_count", operator="gte", value=500),
             LifecycleCondition(field="rolling_interaction_count", operator="gte", value=20),
             LifecycleCondition(field="valid_content_count", operator="gte", value=5),
         ]),
         LifecycleRule(name="转化放大期", conditions=[
-            LifecycleCondition(field="followers_count", operator="gte", value=500),
+            LifecycleCondition(field="followers_count", operator="gte", value=200),
             LifecycleCondition(field="rolling_interaction_count", operator="gte", value=10),
             LifecycleCondition(field="valid_content_count", operator="gte", value=5),
         ]),
         LifecycleRule(name="转化试探期", conditions=[
-            LifecycleCondition(field="followers_count", operator="gte", value=200),
+            LifecycleCondition(field="followers_count", operator="gte", value=100),
             LifecycleCondition(field="rolling_interaction_count", operator="gte", value=5),
             LifecycleCondition(field="valid_content_count", operator="gte", value=5),
         ]),
@@ -46,7 +46,7 @@ def default_lifecycle_rules() -> list[LifecycleRule]:
             LifecycleCondition(field="followers_count", operator="gte", value=50),
             LifecycleCondition(field="valid_content_count", operator="gte", value=5, join="OR"),
         ]),
-        LifecycleRule(name="冷启验证期", catchAll=True),
+        LifecycleRule(name="冷启动期", catchAll=True),
     ]
 
 class StrategyConfig(BaseModel):
@@ -59,13 +59,27 @@ class StrategyConfig(BaseModel):
     lifecycle_rules: list[LifecycleRule] = Field(default_factory=default_lifecycle_rules)
     stage_targets: list[StageTarget] = Field(
         default_factory=lambda: [
-            StageTarget(name="冷启验证期", traffic=80, conversion=20),
+            StageTarget(name="冷启动期", traffic=80, conversion=20),
             StageTarget(name="流量增长期", traffic=70, conversion=30),
             StageTarget(name="转化试探期", traffic=50, conversion=50),
             StageTarget(name="转化放大期", traffic=30, conversion=70),
             StageTarget(name="稳定经营期", traffic=50, conversion=50),
         ]
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_lifecycle_name(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        for key in ("lifecycle_rules", "stage_targets"):
+            items = value.get(key)
+            if isinstance(items, list):
+                value[key] = [
+                    {**item, "name": "冷启动期"} if isinstance(item, dict) and item.get("name") == "冷启验证期" else item
+                    for item in items
+                ]
+        return value
 
     @field_validator("stage_targets")
     @classmethod
@@ -86,14 +100,14 @@ class StrategyConfig(BaseModel):
     @model_validator(mode="after")
     def validate_lifecycle_rules(self) -> "StrategyConfig":
         names = [rule.name for rule in self.lifecycle_rules]
-        if names != ["稳定经营期", "转化放大期", "转化试探期", "流量增长期", "冷启验证期"]:
+        if names != ["稳定经营期", "转化放大期", "转化试探期", "流量增长期", "冷启动期"]:
             raise ValueError("生命周期阶段须按成熟度从高到低配置五个固定阶段")
         if {target.name for target in self.stage_targets} != set(names):
             raise ValueError("经营目标必须覆盖五个固定生命周期阶段")
         if any(rule.catchAll or not rule.conditions for rule in self.lifecycle_rules[:-1]):
             raise ValueError("前四个生命周期阶段均须配置进入条件")
         if not self.lifecycle_rules[-1].catchAll or self.lifecycle_rules[-1].conditions:
-            raise ValueError("冷启验证期须作为唯一兜底阶段")
+            raise ValueError("冷启动期须作为唯一兜底阶段")
         return self
 
 

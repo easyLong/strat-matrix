@@ -10,18 +10,18 @@ export const defaultConfig: StrategyConfig = {
   hotspot_ratio: 20,
   rolling_posts: 10,
   stage_targets: [
-    { name: '冷启验证期', traffic: 80, conversion: 20 },
+    { name: '冷启动期', traffic: 80, conversion: 20 },
     { name: '流量增长期', traffic: 70, conversion: 30 },
     { name: '转化试探期', traffic: 50, conversion: 50 },
     { name: '转化放大期', traffic: 30, conversion: 70 },
     { name: '稳定经营期', traffic: 50, conversion: 50 },
   ],
   lifecycle_rules: [
-    { name: '稳定经营期', conditions: [{ field: 'followers_count', operator: 'gte', value: 1000, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 20, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
-    { name: '转化放大期', conditions: [{ field: 'followers_count', operator: 'gte', value: 500, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 10, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
-    { name: '转化试探期', conditions: [{ field: 'followers_count', operator: 'gte', value: 200, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 5, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
+    { name: '稳定经营期', conditions: [{ field: 'followers_count', operator: 'gte', value: 500, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 20, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
+    { name: '转化放大期', conditions: [{ field: 'followers_count', operator: 'gte', value: 200, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 10, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
+    { name: '转化试探期', conditions: [{ field: 'followers_count', operator: 'gte', value: 100, join: 'AND' }, { field: 'rolling_interaction_count', operator: 'gte', value: 5, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'AND' }], catchAll: false },
     { name: '流量增长期', conditions: [{ field: 'followers_count', operator: 'gte', value: 50, join: 'AND' }, { field: 'valid_content_count', operator: 'gte', value: 5, join: 'OR' }], catchAll: false },
-    { name: '冷启验证期', conditions: [], catchAll: true },
+    { name: '冷启动期', conditions: [], catchAll: true },
   ],
 }
 

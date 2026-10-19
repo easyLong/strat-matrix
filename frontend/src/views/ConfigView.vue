@@ -67,25 +67,27 @@ const lifecycleOperatorOptions = [
 const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value)
 const pageDirty = computed(() => dirty.value || tagDirty.value)
 const hasUnsavedChanges = computed(() => editing.value && pageDirty.value)
-const coldStartDefinition = computed(() => {
-  const growth = lifecycleRules.value.find(rule => rule.name === '流量增长期')
-  if (!growth || growth.conditions.length === 0 || growth.conditions.some((condition, index) =>
-    condition.operator !== 'gte' || (index > 0 && condition.join !== 'OR'))) {
-    return '未命中前置阶段条件的账号自动归入此阶段，确保每个账号都有且只有一个生命周期阶段。'
-  }
-  const conditions = growth.conditions.map(condition => {
-    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
-    return `${metric?.label ?? condition.field} < ${condition.value} ${metric?.unit ?? ''}`
-  }).join('，且 ')
-  return `未命中更高阶段，且 ${conditions}。边界随流量增长期的进入条件同步调整。`
-})
+const coldStartDefinition = computed(() => coldStartSummary(draft.value.lifecycle_rules))
 
 function metricUnit(field: string) {
   return lifecycleMetricOptions.find(option => option.value === field)?.unit ?? ''
 }
 
-function lifecycleRuleSummary(rule: LifecycleRule) {
-  if (rule.catchAll) return '未命中前置阶段条件时归入此阶段'
+function coldStartSummary(rules: LifecycleRule[]) {
+  const growth = rules.find(rule => rule.name === '流量增长期')
+  const lowBoundary = growth?.conditions.filter(condition =>
+    ['followers_count', 'valid_content_count'].includes(condition.field) && condition.operator === 'gte',
+  ) ?? []
+  if (!lowBoundary.length) return '未命中其他阶段时归入此阶段'
+  const conditions = lowBoundary.map(condition => {
+    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
+    return `${metric?.label ?? condition.field} < ${condition.value} ${metric?.unit ?? ''}`
+  })
+  return `${conditions.join(' 或 ')}；未命中其他阶段时也归入此阶段`
+}
+
+function lifecycleRuleSummary(rule: LifecycleRule, rules: LifecycleRule[] = draft.value.lifecycle_rules) {
+  if (rule.catchAll) return coldStartSummary(rules)
   return rule.conditions.map((condition, index) => {
     const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
     const operator = lifecycleOperatorOptions.find(option => option.value === condition.operator)
@@ -125,7 +127,7 @@ function configDetailRows(config: StrategyConfig) {
     rows.push({ key: `stage:${stage.name}:conversion`, group: '账号经营策略配置', label: `${stage.name} · 转化目标`, value: `${stage.conversion}%` })
   }
   for (const rule of config.lifecycle_rules) {
-    rows.push({ key: `lifecycle:${rule.name}`, group: '账号生命周期阶段定义', label: rule.name, value: lifecycleRuleSummary(rule) })
+    rows.push({ key: `lifecycle:${rule.name}`, group: '账号生命周期阶段定义', label: rule.name, value: lifecycleRuleSummary(rule, config.lifecycle_rules) })
   }
   return rows
 }
@@ -498,7 +500,7 @@ function confirmCancelEditing() {
             <table class="stage-table config-readonly-stage-table"><thead><tr><th>经营阶段</th><th>流量</th><th>转化</th><th>阶段定义</th></tr></thead>
               <tbody><tr v-for="stage in draft.stage_targets" :key="stage.name">
                 <td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td>
-                <td>{{ lifecycleRuleSummary(lifecycleRules.find(rule => rule.name === stage.name) ?? { name: stage.name, conditions: [], catchAll: true }) }}</td>
+                <td>{{ lifecycleRuleSummary(lifecycleRules.find(rule => rule.name === stage.name) ?? { name: stage.name, conditions: [], catchAll: true }, lifecycleRules) }}</td>
               </tr></tbody>
             </table>
           </div>
@@ -537,7 +539,7 @@ function confirmCancelEditing() {
           <b>账号经营策略配置</b>
           <div class="detail-note">滚动统计窗口：{{ versionDetail.config.rolling_posts }} 篇</div>
           <div class="table-wrap"><table><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th><th>阶段定义</th></tr></thead><tbody>
-            <tr v-for="stage in versionDetail.config.stage_targets" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td><td>{{ lifecycleRuleSummary(versionDetail.config.lifecycle_rules.find(rule => rule.name === stage.name) ?? { name: stage.name, conditions: [], catchAll: true }) }}</td></tr>
+            <tr v-for="stage in versionDetail.config.stage_targets" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td><td>{{ lifecycleRuleSummary(versionDetail.config.lifecycle_rules.find(rule => rule.name === stage.name) ?? { name: stage.name, conditions: [], catchAll: true }, versionDetail.config.lifecycle_rules) }}</td></tr>
           </tbody></table></div>
         </div>
       </div>
