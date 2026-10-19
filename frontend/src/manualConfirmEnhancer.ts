@@ -22,7 +22,10 @@ function ensureAccounts() {
         accountCatalog = rows
         return rows
       })
-      .catch(() => [])
+      .catch(() => {
+        accountRequest = null
+        return []
+      })
   }
   return accountRequest
 }
@@ -172,7 +175,13 @@ function enhanceTopicTable(table: HTMLTableElement) {
 }
 
 function enhance() {
-  document.querySelectorAll<HTMLTableElement>('.manual-submit-account-table').forEach(enhanceAccountTable)
+  const accountTables = [...document.querySelectorAll<HTMLTableElement>('.manual-submit-account-table')]
+  if (accountTables.length && !accountCatalog.length) {
+    void ensureAccounts().then(rows => {
+      if (rows.length) scheduleEnhance()
+    })
+  }
+  accountTables.forEach(enhanceAccountTable)
   document.querySelectorAll<HTMLTableElement>('.manual-submit-topic-table').forEach(enhanceTopicTable)
 }
 
@@ -186,11 +195,11 @@ function scheduleEnhance() {
 }
 
 export function installManualConfirmEnhancer() {
-  void ensureAccounts().then(scheduleEnhance)
   scheduleEnhance()
   observer?.disconnect()
   observer = new MutationObserver(scheduleEnhance)
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+  const root = document.getElementById('app') ?? document.body
+  observer.observe(root, { childList: true, subtree: true, characterData: true })
   window.addEventListener('scroll', hideTooltip, true)
   window.addEventListener('resize', hideTooltip)
 }
