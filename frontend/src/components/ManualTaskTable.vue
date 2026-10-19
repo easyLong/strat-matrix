@@ -4,7 +4,7 @@ import type { ManualTaskSummary } from '../types'
 import { formatDateTime } from '../planningTime'
 import { statusTone } from '../ui/status'
 
-const props = defineProps<{
+defineProps<{
   tasks: ManualTaskSummary[]
   loading: boolean
   initialized: boolean
@@ -25,6 +25,7 @@ function contentLabel(task: ManualTaskSummary) {
   const hasCompleted = task.content_completed_count > 0 || task.content_completed_account_count > 0
   const hasFailures = task.content_failed_count > 0
   if (hasCompleted && hasFailures) return '部分失败'
+  if (hasFailures && !hasCompleted) return '生成失败'
   if (/待生产|待生成|未生成/.test(raw)) return '待生成'
   if (/生产中|生成中|上传中/.test(raw)) return '生成中'
   if (/已完成|已生成|已发布/.test(raw)) return '已完成'
