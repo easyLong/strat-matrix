@@ -18,6 +18,7 @@ BUSINESS_ZONE = ZoneInfo("Asia/Shanghai")
 POLL_SECONDS = 60
 RETRY_INTERVAL = timedelta(minutes=5)
 SYNC_LOCK = "godp:hotspot-topic-sync"
+SUPPORTED_PLAN_MODES = ("rule_fallback", "ai_matching")
 
 
 def due_publish_date(now: datetime) -> date:
@@ -25,12 +26,27 @@ def due_publish_date(now: datetime) -> date:
     return local.date() + timedelta(days=local.time() >= time(22, 0))
 
 
+def ai_hotspot_fallback(item: dict) -> dict:
+    """Read the ordinary fallback frozen when an AI batch was formally committed."""
+    try:
+        snapshot = json.loads(item["topic_snapshot_json"])
+        key = f"{item['account_id']}|{item['publish_date'].isoformat()}"
+        topic = snapshot["hotspot_fallbacks"][key]
+        required = ("topic_id", "title", "outline", "content_type")
+        if not all(isinstance(topic.get(name), str) and (topic[name].strip() if name in ("topic_id", "title") else True)
+                   for name in required):
+            raise ValueError("invalid fallback fields")
+        return topic
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise PlanningError("AI热点槽缺少正式提交时冻结的普通选题兜底") from exc
+
+
 def reconcile_batches(cursor, today: date) -> int:
     cursor.execute(
         "SELECT b.id, b.cycle_start, b.status, r.id AS run_id, r.status AS run_status "
         "FROM godp_planning_batch b JOIN godp_auto_plan_run r ON r.batch_id=b.id "
         "WHERE b.del_flag='N' AND r.del_flag='N' AND r.data_scope='live' "
-        "AND r.plan_mode='rule_fallback' AND b.cycle_start<=%s "
+        "AND r.plan_mode IN ('rule_fallback','ai_matching') AND b.cycle_start<=%s "
         "AND b.status IN ('已规划', '热点空槽待填充') FOR UPDATE",
         (today,),
     )
@@ -71,13 +87,13 @@ def run_due(now: datetime | None = None) -> dict:
             status_updates = reconcile_batches(cursor, local.date())
             db.commit()
             cursor.execute(
-                "SELECT i.id, i.batch_id, i.account_id, i.topic_title, i.publish_date, "
-                "s.version, s.slot_id FROM godp_planning_item i "
+                "SELECT i.id, i.batch_id, i.account_id, i.topic_title, i.publish_date, i.content_role, "
+                "s.version, s.slot_id, r.plan_mode, r.topic_snapshot_json FROM godp_planning_item i "
                 "JOIN godp_planning_batch b ON b.id=i.batch_id "
                 "JOIN godp_auto_plan_run r ON r.batch_id=b.id "
                 "JOIN godp_slot_state s ON s.item_id=i.id "
                 "WHERE i.del_flag='N' AND b.del_flag='N' AND r.del_flag='N' AND s.del_flag='N' "
-                "AND r.data_scope='live' AND r.plan_mode='rule_fallback' "
+                "AND r.data_scope='live' AND r.plan_mode IN ('rule_fallback','ai_matching') "
                 "AND i.slot_type='hotspot' AND i.topic_id='' AND s.topic_id='' "
                 "AND s.published_at IS NULL AND i.status<>'已发布' "
                 "AND i.publish_date<=%s ORDER BY i.publish_date, i.id FOR UPDATE",
@@ -118,7 +134,7 @@ def run_due(now: datetime | None = None) -> dict:
                 "SELECT i.publish_date, i.topic_id FROM godp_planning_item i "
                 "JOIN godp_auto_plan_run r ON r.batch_id=i.batch_id "
                 "WHERE i.del_flag='N' AND r.del_flag='N' AND r.data_scope='live' "
-                "AND r.plan_mode='rule_fallback' AND i.slot_type='hotspot' "
+                "AND r.plan_mode IN ('rule_fallback','ai_matching') AND i.slot_type='hotspot' "
                 "AND i.topic_type='热点' AND i.topic_id<>'' "
                 f"AND i.publish_date IN ({placeholders})",
                 tuple(by_date),
@@ -140,19 +156,28 @@ def run_due(now: datetime | None = None) -> dict:
                            if topic["topic_id"] not in used_by_date.get(publish_date, set())]
                 rng.shuffle(choices)
                 for index, item in enumerate(items):
+                    ai_mode = item["plan_mode"] == "ai_matching"
+                    if ai_mode and item["content_role"] not in ("流量", "转化"):
+                        raise PlanningError("AI热点槽缺少正式提交时冻结的经营作用")
                     if index < len(choices):
                         topic = choices[index]
                         topic_type = "热点"
-                        role = "流量"
+                        role = item["content_role"] if ai_mode else "流量"
                         reason = f"热点触发随机分配；IF-04批次{latest['source_batch_id']}"
                         hotspot_count += 1
                     else:
-                        if ordinary is None:
-                            ordinary = load_topics(cursor, "live")
-                        topic = ordinary[0]
+                        if ai_mode:
+                            topic = ai_hotspot_fallback(item)
+                            role = item["content_role"]
+                            reason = (f"合法热点不足，使用AI正式提交时冻结普通兜底；"
+                                      f"IF-04批次{latest['source_batch_id']}")
+                        else:
+                            if ordinary is None:
+                                ordinary = load_topics(cursor, "live")
+                            topic = ordinary[0]
+                            role = topic["content_role"]
+                            reason = f"合法热点不足，普通选题热度兜底；IF-04批次{latest['source_batch_id']}"
                         topic_type = "普通"
-                        role = topic["content_role"]
-                        reason = f"合法热点不足，普通选题热度兜底；IF-04批次{latest['source_batch_id']}"
                         fallback_count += 1
                     next_version = item["version"] + 1
                     cursor.execute(
