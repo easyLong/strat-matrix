@@ -1,8 +1,10 @@
-"""Pure algorithm tests for the built-in Matching Executor V1."""
+"""Algorithm and worker tests for the built-in Matching Executor V1."""
 
 from copy import deepcopy
 import unittest
+from unittest.mock import patch
 
+from app import matching_executor_worker as worker
 from app.matching_executor import IMPLEMENTATION_KEY, ExecutorPolicyError, execute_job
 
 
@@ -166,6 +168,17 @@ class MatchingExecutorTests(unittest.TestCase):
         first = execute_job(base_job()).model_dump(mode="json")
         second = execute_job(deepcopy(base_job())).model_dump(mode="json")
         self.assertEqual(first, second)
+
+    def test_worker_claims_only_builtin_implementation_and_saves_evaluation(self):
+        job = base_job()
+        with patch.object(worker, "claim_task", side_effect=[
+                {"job": job, "next_after_id": 1001},
+                {"job": None, "next_after_id": 1001},
+             ]) as claim, patch.object(worker, "save_evaluation",
+                                      return_value={"status": "evaluated", "version": 3}) as save:
+            self.assertEqual(worker.run_once(), 0)
+        self.assertEqual(claim.call_args_list[0].kwargs["implementation_key"], IMPLEMENTATION_KEY)
+        save.assert_called_once()
 
 
 if __name__ == "__main__":
