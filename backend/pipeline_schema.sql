@@ -1,0 +1,56 @@
+-- Planning Pipeline V1 orchestration schema. Run explicitly before enabling the API.
+-- No foreign keys, stored procedures, functions, or views.
+
+CREATE TABLE IF NOT EXISTS godp_planning_pipeline_run (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'Pipeline运行记录主键ID',
+    pipeline_code VARCHAR(64) NOT NULL COMMENT 'Pipeline运行唯一编码',
+    reservation_key VARCHAR(64) NULL COMMENT '正式策划周期占用键；取消后置空以允许重建',
+    schema_version INT NOT NULL DEFAULT 1 COMMENT 'Pipeline编排契约版本，第一版固定为1',
+    cycle_start DATE NOT NULL COMMENT '目标策划周期开始日期，必须为周一',
+    cycle_end DATE NOT NULL COMMENT '目标策划周期结束日期，固定为开始日期后六天',
+    selection_json LONGTEXT NOT NULL COMMENT '参与账号编码有序JSON；null表示使用全部可用正式账号',
+    selection_hash CHAR(64) NOT NULL COMMENT '参与账号范围JSON的SHA256指纹',
+    policy_id BIGINT NOT NULL COMMENT '逻辑关联已确认匹配策略版本ID，无外键',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'Pipeline状态：pending、running、waiting、succeeded、failed或cancelled',
+    current_stage VARCHAR(40) NULL COMMENT '当前依赖前沿中的首个阶段标识；完成或取消后为空',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Pipeline乐观锁版本号，每次编排状态变更递增',
+    preparation_id BIGINT NULL COMMENT '逻辑关联AI准备记录ID，无外键',
+    matching_task_id BIGINT NULL COMMENT '逻辑关联匹配执行任务ID，无外键',
+    production_batch_id BIGINT NULL COMMENT '正式结果提交后关联策划批次ID；V1保持为空',
+    last_error_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '当前首个失败阶段错误码；无失败为空字符串',
+    last_error_message VARCHAR(500) NOT NULL DEFAULT '' COMMENT '当前首个失败阶段可展示错误说明；无失败为空字符串',
+    create_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '创建时间，按UTC保存',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '创建来源',
+    update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '修改时间，按UTC保存',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '最后修改来源',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_planning_pipeline_code (pipeline_code),
+    UNIQUE KEY uk_planning_pipeline_reservation (reservation_key),
+    KEY idx_planning_pipeline_cycle (cycle_start, status, id),
+    KEY idx_planning_pipeline_preparation (preparation_id),
+    KEY idx_planning_pipeline_matching_task (matching_task_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式智能策划Pipeline统一运行状态与下游执行引用';
+
+CREATE TABLE IF NOT EXISTS godp_planning_stage_run (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'Pipeline阶段运行记录主键ID',
+    pipeline_id BIGINT NOT NULL COMMENT '逻辑关联Pipeline运行记录ID，无外键',
+    stage_key VARCHAR(40) NOT NULL COMMENT '阶段稳定标识：数据接入、双侧准备、匹配、分配、组合或提交',
+    stage_order INT NOT NULL COMMENT '阶段展示顺序；依赖关系由代码契约定义而非单纯顺序定义',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '阶段状态：pending、running、waiting、succeeded、failed或cancelled',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '阶段进入等待或运行态的启动及重试次数',
+    version INT NOT NULL DEFAULT 1 COMMENT '阶段乐观锁观察版本，每次阶段状态内容变更递增',
+    backend_type VARCHAR(32) NULL COMMENT '复用后端类型：ai_preparation、matching_task或空',
+    backend_id BIGINT NULL COMMENT '逻辑关联复用后端记录ID，无外键',
+    detail_json LONGTEXT NULL COMMENT '阶段状态摘要JSON，仅保存可审计摘要不保存模型密钥',
+    error_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '阶段失败或等待原因码；无原因为空字符串',
+    error_message VARCHAR(500) NOT NULL DEFAULT '' COMMENT '阶段失败或等待的可展示说明；无原因为空字符串',
+    started_at DATETIME(6) NULL COMMENT '阶段首次进入等待或运行态的时间，按UTC保存',
+    finished_at DATETIME(6) NULL COMMENT '阶段成功、失败或取消的最近结束时间，按UTC保存',
+    create_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '创建时间，按UTC保存',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '创建来源',
+    update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '修改时间，按UTC保存',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '最后修改来源',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
+    UNIQUE KEY uk_planning_stage_key (pipeline_id, stage_key),
+    KEY idx_planning_stage_status (status, pipeline_id, stage_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式智能策划Pipeline各阶段生命周期、重试与后端引用';
