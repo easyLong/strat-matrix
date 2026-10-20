@@ -66,6 +66,19 @@ def _maybe_commit(result: dict) -> dict:
         commit_pipeline_result(result["pipeline_id"], result["version"])
     except ResultCommitError as exc:
         return _record_commit_failure(result["pipeline_id"], result["version"], exc)
+    except Exception:
+        # Preserve the original infrastructure exception for the API/error log,
+        # but replace the obsolete V1 "not implemented" waiting reason if the
+        # orchestration tables are still writable.
+        try:
+            _record_commit_failure(
+                result["pipeline_id"], result["version"],
+                ResultCommitError("result_commit_infrastructure_error",
+                                  "正式结果提交发生基础设施异常，请检查服务日志与数据库迁移"),
+            )
+        except Exception:
+            pass
+        raise
     return read_pipeline(result["pipeline_id"])
 
 
