@@ -33,6 +33,10 @@ def main() -> None:
         if cursor.fetchone()["index_count"] == 0:
             cursor.execute("ALTER TABLE godp_matching_task ADD KEY idx_matching_task_production_batch "
                            "(production_batch_id)")
+        cursor.execute(
+            "ALTER TABLE godp_auto_plan_run MODIFY COLUMN plan_mode VARCHAR(32) NOT NULL "
+            "COMMENT '策划方式：ordinary_fallback普通兜底、rule_fallback规则槽位或ai_matching正式AI匹配'"
+        )
         db.commit()
     print(f"Result commit schema ready; matching task columns added: {added}")
 
