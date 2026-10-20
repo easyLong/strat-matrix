@@ -35,7 +35,7 @@ def policy():
                           "official_usage_unknown": "allow_unknown",
                           "fallback_unknown_heat": "allow_unknown"},
         "decisions": {code: {"definition": f"{code} fixture rule",
-                             "parameters": params,
+                             "parameters": deepcopy(params),
                              "acceptance_examples": [f"{code} fixture example"]}
                       for code, params in DECISIONS.items()},
     }
