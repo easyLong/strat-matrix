@@ -45,6 +45,13 @@ ACCOUNT_VECTOR_MODEL_URL="${ACCOUNT_VECTOR_MODEL_URL:-$(dotenv_value ACCOUNT_VEC
 export ACCOUNT_VECTOR_MODEL_URL
 AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-$(dotenv_value AI_PREPARATION_WORKER_ENABLED)}"
 AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-0}"
+MATCHING_EXECUTOR_WORKER_ENABLED="${MATCHING_EXECUTOR_WORKER_ENABLED:-$(dotenv_value MATCHING_EXECUTOR_WORKER_ENABLED)}"
+MATCHING_EXECUTOR_WORKER_ENABLED="${MATCHING_EXECUTOR_WORKER_ENABLED:-0}"
+MATCHING_EXECUTOR_POLL_SECONDS="${MATCHING_EXECUTOR_POLL_SECONDS:-$(dotenv_value MATCHING_EXECUTOR_POLL_SECONDS)}"
+MATCHING_EXECUTOR_POLL_SECONDS="${MATCHING_EXECUTOR_POLL_SECONDS:-10}"
+MATCHING_EXECUTOR_LEASE_SECONDS="${MATCHING_EXECUTOR_LEASE_SECONDS:-$(dotenv_value MATCHING_EXECUTOR_LEASE_SECONDS)}"
+MATCHING_EXECUTOR_LEASE_SECONDS="${MATCHING_EXECUTOR_LEASE_SECONDS:-1800}"
+export MATCHING_EXECUTOR_POLL_SECONDS MATCHING_EXECUTOR_LEASE_SECONDS
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 LOG_DIR="${LOG_DIR:-$APP_ROOT/logs}"
 
@@ -58,6 +65,7 @@ topic_label_worker_pid="$RUN_DIR/topic-label-worker.pid"
 topic_vector_worker_pid="$RUN_DIR/topic-vector-worker.pid"
 account_vector_worker_pid="$RUN_DIR/account-vector-worker.pid"
 ai_preparation_worker_pid="$RUN_DIR/ai-preparation-worker.pid"
+matching_executor_worker_pid="$RUN_DIR/matching-executor-worker.pid"
 
 is_running() {
   local pid_file="$1"
@@ -99,6 +107,15 @@ if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
   (
     cd "$APP_ROOT/backend"
     "$PYTHON_BIN" -m app.ai_preparation_worker --check-config
+  )
+fi
+
+if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
+  (
+    cd "$APP_ROOT/backend"
+    MATCHING_EXECUTOR_POLL_SECONDS="$MATCHING_EXECUTOR_POLL_SECONDS" \
+      MATCHING_EXECUTOR_LEASE_SECONDS="$MATCHING_EXECUTOR_LEASE_SECONDS" \
+      "$PYTHON_BIN" -m app.matching_executor_worker --check-config
   )
 fi
 
@@ -198,6 +215,20 @@ if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
   fi
 fi
 
+if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
+  if is_running "$matching_executor_worker_pid"; then
+    echo "Matching executor worker is already running (PID $(cat "$matching_executor_worker_pid"))."
+  else
+    rm -f "$matching_executor_worker_pid"
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.matching_executor_worker
+    ) >"$LOG_DIR/matching-executor-worker.log" 2>&1 &
+    echo $! >"$matching_executor_worker_pid"
+    echo "Matching executor worker started (PID $(cat "$matching_executor_worker_pid"))."
+  fi
+fi
+
 if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
   if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
     echo "npm not found: $NPM_BIN" >&2
@@ -224,4 +255,4 @@ else
   echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
 fi
 
-echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log, $LOG_DIR/topic-label-worker.log, $LOG_DIR/topic-vector-worker.log, $LOG_DIR/account-vector-worker.log, $LOG_DIR/ai-preparation-worker.log and $LOG_DIR/frontend.log"
+echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log, $LOG_DIR/topic-label-worker.log, $LOG_DIR/topic-vector-worker.log, $LOG_DIR/account-vector-worker.log, $LOG_DIR/ai-preparation-worker.log, $LOG_DIR/matching-executor-worker.log and $LOG_DIR/frontend.log"
