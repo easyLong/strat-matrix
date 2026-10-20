@@ -36,8 +36,10 @@ def _record_commit_failure(pipeline_id: int, expected_version: int,
         detail = canonical_json({"operations_result_committed": False,
                                  "matching_task_id": pipeline["matching_task_id"],
                                  "retryable": True})
+        # The transition into waiting already counted this attempt in the base
+        # orchestrator. Failure only closes that same attempt.
         cursor.execute(
-            "UPDATE godp_planning_stage_run SET status='failed',attempt_count=attempt_count+1,"
+            "UPDATE godp_planning_stage_run SET status='failed',"
             "detail_json=%s,error_code=%s,error_message=%s,started_at=COALESCE(started_at,%s),"
             "finished_at=%s,version=version+1,update_by=%s WHERE id=%s",
             (detail, error.code[:64], error.message[:500], now, now, ACTOR, stage["id"]),
@@ -75,11 +77,12 @@ def retry_pipeline_to_commit(pipeline_id: int, expected_version: int) -> dict:
     snapshot = read_pipeline(pipeline_id)
     if snapshot["version"] != expected_version:
         raise HTTPException(409, "Pipeline版本已变化，请重新查询后再操作")
-    # The base V1 retry intentionally refused result_commit while it was not
-    # implemented. Once the adapter exists, retry that stage directly without
-    # re-running a successful immutable MatchingEvaluation.
+    # The base public retry refused result_commit while the adapter did not
+    # exist. Use the same orchestrator advance path directly: it reopens the
+    # failed commit stage and counts one retry, but an evaluated Matching Task
+    # is only read/projection-checked and is never re-executed.
     if snapshot["active_stages"] == ["result_commit"]:
         if snapshot["status"] not in ("failed", "waiting", "pending"):
             raise HTTPException(409, "正式提交阶段当前不属于可重试状态")
-        return _maybe_commit(snapshot)
+        return _maybe_commit(advance_pipeline(pipeline_id, expected_version, retry=True))
     return _maybe_commit(retry_pipeline(pipeline_id, expected_version))
