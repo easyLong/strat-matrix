@@ -1,4 +1,4 @@
-"""Poll leased matching tasks and execute the built-in deterministic engine."""
+"""Poll matching tasks assigned to the built-in deterministic engine."""
 
 import argparse
 import logging
@@ -8,8 +8,10 @@ import time
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from .db import connection
 from .matching_contracts import ClaimTask, MatchingFailure
-from .matching_executor import ExecutorInputError, ExecutorPolicyError, execute_job
+from .matching_executor import (IMPLEMENTATION_KEY, ExecutorInputError,
+                                ExecutorPolicyError, execute_job)
 from .matching_tasks import claim_task, fail_task, save_evaluation
 
 
@@ -37,6 +39,23 @@ def lease_seconds() -> int:
     return _integer_env("MATCHING_EXECUTOR_LEASE_SECONDS", 1800, 30, 3600)
 
 
+def next_supported_task(after_id: int) -> int | None:
+    """Find a runnable task without leasing work owned by another executor."""
+    with connection() as db, db.cursor() as cursor:
+        cursor.execute(
+            "SELECT t.id FROM godp_matching_task t "
+            "JOIN godp_matching_policy p ON p.id=t.policy_id AND p.del_flag='N' "
+            "WHERE t.del_flag='N' AND t.id>%s "
+            "AND (t.status='queued' OR (t.status='processing' AND t.lease_expires_at<=UTC_TIMESTAMP(6))) "
+            "AND JSON_VALID(p.document_json)=1 "
+            "AND JSON_UNQUOTE(JSON_EXTRACT(p.document_json,'$.implementation_key'))=%s "
+            "ORDER BY t.id LIMIT 1",
+            (after_id, IMPLEMENTATION_KEY),
+        )
+        row = cursor.fetchone()
+    return row["id"] if row else None
+
+
 def _failure_payload(job: dict, code: str) -> MatchingFailure:
     return MatchingFailure.model_validate({
         "lease_id": job["lease_id"],
@@ -59,15 +78,26 @@ def run_once() -> int:
     after_id = 0
     failures = 0
     while True:
-        response = claim_task(ClaimTask(after_id=after_id, lease_seconds=lease_seconds()))
-        next_after_id = response.get("next_after_id", after_id)
+        candidate = next_supported_task(after_id)
+        if candidate is None:
+            return failures
+        # ClaimTask remains the sole lease implementation. candidate-1 makes
+        # this task the first possible integer ID if it is still runnable.
+        response = claim_task(ClaimTask(after_id=candidate - 1, lease_seconds=lease_seconds()))
+        next_after_id = response.get("next_after_id", candidate)
         job = response.get("job")
         if job is None:
-            if next_after_id > after_id:
-                after_id = next_after_id
-                continue
-            return failures
-        after_id = next_after_id
+            after_id = max(candidate, next_after_id)
+            continue
+        after_id = max(candidate, next_after_id)
+        if job.get("policy", {}).get("implementation_key") != IMPLEMENTATION_KEY:
+            # A concurrent claimant can move the preselected task between the
+            # discovery and lease transactions. Never execute another engine's
+            # policy; release this accidental lease as an explicit failure.
+            failures += 1
+            LOG.error("匹配任务 %s 在领取竞争中绑定了其他执行器", job["task_id"])
+            _record_failure(job, "execution_failed")
+            continue
         try:
             proposal = execute_job(job)
         except (ExecutorPolicyError, ExecutorInputError, ValidationError, ValueError, TypeError, KeyError):
