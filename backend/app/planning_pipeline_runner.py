@@ -66,6 +66,10 @@ def _maybe_commit(result: dict) -> dict:
         commit_pipeline_result(result["pipeline_id"], result["version"])
     except ResultCommitError as exc:
         return _record_commit_failure(result["pipeline_id"], result["version"], exc)
+    except HTTPException:
+        # A concurrent optimistic-lock change is not an infrastructure failure
+        # and must remain a normal control-plane conflict.
+        raise
     except Exception:
         # Preserve the original infrastructure exception for the API/error log,
         # but replace the obsolete V1 "not implemented" waiting reason if the
