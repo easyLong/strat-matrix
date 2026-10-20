@@ -30,6 +30,7 @@ from .weekly_planning import load_marketing, round_hotspot_slots
 
 ACTOR = "planning-result-commit"
 PLAN_MODE = "ai_matching"
+_MISSING = object()
 
 
 class ResultCommitError(Exception):
@@ -156,7 +157,7 @@ def build_final_plan(inputs: dict, evaluation: dict, marketing: list[dict]) -> d
     slots = []
     hotspot_fallbacks = {}
     actual_marketing = marketing_fallback = 0
-    for index, raw in enumerate(blueprint):
+    for index, _ in enumerate(blueprint):
         account_id, publish_date = keys[index]
         wrapper = account_by_id[account_id]
         snapshot = wrapper.get("snapshot") or {}
@@ -179,8 +180,8 @@ def build_final_plan(inputs: dict, evaluation: dict, marketing: list[dict]) -> d
                           "outline": None, "content_type": None, "status": "待热点触发"})
             continue
 
-        marketing_topic = marketing_slots.get(index) if index in marketing_slots else ...
-        if marketing_topic is not ... and marketing_topic is not None:
+        marketing_topic = marketing_slots.get(index, _MISSING)
+        if marketing_topic is not _MISSING and marketing_topic is not None:
             if base["content_role"] != "转化":
                 raise ResultCommitError("composition_role_changed", "营销覆盖不得改变冻结经营作用")
             slots.append({**common, "slot_type": "marketing_priority",
@@ -248,15 +249,23 @@ def _existing_formal_batch(cursor, cycle_start) -> dict | None:
 
 def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
     """Create the operations batch and mark Pipeline success atomically."""
+    # Read only the immutable cycle identity before taking the named lock. Use
+    # a fresh connection for the real transaction so its Repeatable Read
+    # snapshot cannot be established while waiting for another cycle writer.
+    with connection() as initial_db, initial_db.cursor() as initial_cursor:
+        initial = _pipeline_row(initial_cursor, pipeline_id)
+        cycle_start = initial["cycle_start"]
+    lock_name = f"godp:ordinary:live:{cycle_start:%Y%m%d}"
+
     with connection() as db, db.cursor() as cursor:
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        initial = _pipeline_row(cursor, pipeline_id)
-        lock_name = f"godp:ordinary:live:{initial['cycle_start']:%Y%m%d}"
         cursor.execute("SELECT GET_LOCK(%s,5) AS acquired", (lock_name,))
         if cursor.fetchone()["acquired"] != 1:
             raise ResultCommitError("cycle_locked", "该周期正式结果正在提交，请稍后重试")
         try:
             pipeline = _pipeline_row(cursor, pipeline_id, lock=True)
+            if pipeline["cycle_start"] != cycle_start:
+                raise ResultCommitError("pipeline_cycle_changed", "Pipeline策划周期发生异常变化")
             if pipeline["version"] != expected_version:
                 raise HTTPException(409, "Pipeline版本已变化，请重新查询后再操作")
             if pipeline["status"] == "cancelled":
@@ -290,8 +299,6 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
                 inputs = checked_inputs(cursor, preparation, policy, datetime.now(timezone.utc), task=task)
             except InvalidInputs as exc:
                 raise ResultCommitError(exc.code, "正式提交前匹配输入或策略已失效") from exc
-            # Recompute the frozen-input digest on this same transaction as a
-            # second audit boundary before writing operational state.
             verified_inputs, _ = load_frozen_inputs(cursor, preparation)
             if canonical_json({k: v for k, v in inputs.items() if k != "supplemental"}) \
                     != canonical_json(verified_inputs):
@@ -306,9 +313,11 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
             account_snapshots = [row["snapshot"] for row in inputs["accounts"]]
             try:
                 marketing, marketing_sync_batch = load_marketing(cursor, account_snapshots)
-                plan = build_final_plan(inputs, evaluation, marketing)
             except PlanningError as exc:
                 raise ResultCommitError("marketing_snapshot_unavailable", str(exc)) from exc
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ResultCommitError("marketing_snapshot_invalid", "营销选题快照格式错误") from exc
+            plan = build_final_plan(inputs, evaluation, marketing)
 
             batch_code = f"AUTO-AI-{pipeline['cycle_start']:%Y%m%d}"
             note = (f"AI匹配任务{task['id']}；策略{policy['id']}；热点空槽{plan['hotspot_slots']}；"
