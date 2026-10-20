@@ -128,7 +128,16 @@ def matching_task_result(task_id: int) -> dict:
 
 @router.get("/api/internal/matching-tasks/{task_id}/inputs")
 def matching_task_inputs(task_id: int) -> dict:
-    return guarded(read_task_inputs, task_id)
+    try:
+        result = read_task_inputs(task_id)
+        with connection() as db, db.cursor() as cursor:
+            task = select_task(cursor, task_id)
+        return {**result,
+                "operations_result_committed": task.get("production_batch_id") is not None,
+                "production_batch_id": task.get("production_batch_id"),
+                "operations_committed_at": utc_text(task.get("operations_committed_at"))}
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
 
 
 @router.post("/api/internal/matching-tasks/{task_id}/heartbeat")
