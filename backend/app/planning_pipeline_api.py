@@ -8,9 +8,10 @@ import pymysql
 
 from .db import connection
 from .integration import db_error, require_integration_token
-from .planning_pipeline import (advance_pipeline, cancel_pipeline, create_pipeline,
-                                pipeline_summary, read_pipeline, retry_pipeline,
-                                select_stages)
+from .planning_pipeline import (cancel_pipeline, create_pipeline,
+                                pipeline_summary, read_pipeline, select_stages)
+from .planning_pipeline_runner import (advance_pipeline_to_commit,
+                                       retry_pipeline_to_commit)
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
@@ -60,12 +61,12 @@ def planning_pipeline_detail(pipeline_id: int) -> dict:
 
 @router.post("/api/internal/planning-pipelines/{pipeline_id}/advance")
 def advance_planning_pipeline(pipeline_id: int, payload: PipelineAction) -> dict:
-    return guarded(advance_pipeline, pipeline_id, payload.expected_version)
+    return guarded(advance_pipeline_to_commit, pipeline_id, payload.expected_version)
 
 
 @router.post("/api/internal/planning-pipelines/{pipeline_id}/retry")
 def retry_planning_pipeline(pipeline_id: int, payload: PipelineAction) -> dict:
-    return guarded(retry_pipeline, pipeline_id, payload.expected_version)
+    return guarded(retry_pipeline_to_commit, pipeline_id, payload.expected_version)
 
 
 @router.post("/api/internal/planning-pipelines/{pipeline_id}/cancel")
