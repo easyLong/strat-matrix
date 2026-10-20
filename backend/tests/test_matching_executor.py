@@ -5,7 +5,9 @@ import unittest
 from unittest.mock import patch
 
 from app import matching_executor_worker as worker
+from app.matching_contracts import MatchingPolicyDocument
 from app.matching_executor import IMPLEMENTATION_KEY, ExecutorPolicyError, execute_job
+from app.matching_policy import implementation_approval_errors
 
 
 DECISIONS = {
@@ -163,6 +165,15 @@ class MatchingExecutorTests(unittest.TestCase):
         job["policy"]["decisions"]["ALG-03"]["parameters"]["invented_default"] = 1
         with self.assertRaises(ExecutorPolicyError):
             execute_job(job)
+
+    def test_builtin_machine_contract_is_checked_before_policy_approval(self):
+        document = MatchingPolicyDocument.model_validate(policy())
+        self.assertEqual(implementation_approval_errors(document), [])
+        broken = policy()
+        broken["decisions"]["ALG-03"]["parameters"]["invented_default"] = 1
+        problems = implementation_approval_errors(MatchingPolicyDocument.model_validate(broken))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("参数契约不兼容", problems[0])
 
     def test_execution_is_deterministic(self):
         first = execute_job(base_job()).model_dump(mode="json")
