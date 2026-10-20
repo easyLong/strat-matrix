@@ -36,12 +36,33 @@ def intact_document(row: dict) -> MatchingPolicyDocument:
         raise HTTPException(409, "算法策略版本完整性校验未通过") from exc
 
 
+def implementation_approval_errors(document: MatchingPolicyDocument) -> list[str]:
+    """Validate known executor contracts without inventing rules for unknown engines."""
+    if document.implementation_key != "builtin-cosine-balanced-v1":
+        return []
+    from .matching_executor import ExecutorPolicyError, executor_config
+    try:
+        executor_config(document.model_dump(mode="json"))
+    except ExecutorPolicyError as exc:
+        return [f"内置执行器参数契约不兼容：{exc}"]
+    except (TypeError, ValueError) as exc:
+        return [f"内置执行器策略无法解析：{type(exc).__name__}"]
+    return []
+
+
+def approval_errors(document: MatchingPolicyDocument) -> list[str]:
+    problems = document.approval_errors()
+    if not problems:
+        problems.extend(implementation_approval_errors(document))
+    return problems
+
+
 def policy_summary(row: dict, *, include_document: bool = False) -> dict:
     document = intact_document(row)
     result = {"policy_id": row["id"], "policy_key": row["policy_key"], "version": row["version"],
               "document_hash": row["document_hash"], "status": row["status"],
               "implementation_key": document.implementation_key, "confirmed_by": row["confirmed_by"],
-              "confirmed_at": utc_text(row["confirmed_at"]), "approval_errors": document.approval_errors()}
+              "confirmed_at": utc_text(row["confirmed_at"]), "approval_errors": approval_errors(document)}
     if include_document:
         result["document"] = json.loads(row["document_json"])
     return result
@@ -90,7 +111,7 @@ def confirm_policy(policy_id: int, payload: PolicyConfirmation, *, disable: bool
         if not disable:
             if row["status"] != "draft":
                 raise HTTPException(409, "已停用策略不可重新批准，请创建新版本")
-            if problems := document.approval_errors():
+            if problems := approval_errors(document):
                 raise HTTPException(409, {"message": "算法规则尚未完整确认", "problems": problems})
             cursor.execute("UPDATE godp_matching_policy SET status='approved',confirmed_by=%s, "
                            "confirmed_at=UTC_TIMESTAMP(6),update_by=%s WHERE id=%s",

@@ -1,6 +1,6 @@
 # 算法策略版本与普通匹配执行任务
 
-更新日期：2026-10-13。PRD V1.1 业务口径同步稿将算法公式交由后续算法说明确定。本轮先实现不可变策略版本和可重试执行任务，算法仍由[策略草稿](ALGORITHM_STRATEGY_V1.0.md)确认；代码没有预设召回数量、Fit权重或全局分配公式，也没有内置匹配执行器。
+更新日期：2026-10-20。Matching Task 继续负责不可变策略版本、冻结输入、租约、重试与提案回写；仓库现已提供第一版内置确定性执行器 `builtin-cosine-balanced-v1`。该实现只执行严格的结构化参数契约，不会从 ALG-01 至 ALG-09 的自然语言自动生成算法。详细规则见 [Matching Executor V1](MATCHING_EXECUTOR.md)。
 
 ## 策略版本
 
@@ -10,11 +10,11 @@
 
 - ALG-01至ALG-09九项均有明确规则说明和至少一个非空验收样例。参数作为有限JSON数据保存，整个文档不超过256KB。
 - 声明具体 `implementation_key`、向量模型标识、维度以及供应方确认的语义空间标识。相同字符串与维度不能自动证明双侧模型语义空间相同，须在ALG-01明确确认。
-- 声明账号、选题、配置、日期四类冻结输入依赖。第一版仅支持四项；第二版已支持基础兜底池、历史和正式使用计数，须明确对应输入选项，详见[补充输入快照](MATCHING_SUPPLEMENTAL_INPUTS.md)。其他未支持的 `required_inputs` 仍会被阻断，未知事实不能按零使用。
+- 声明账号、选题、配置、日期四类冻结输入依赖。第一版契约支持四项；第二版已支持基础兜底池、历史和正式使用计数，须明确对应输入选项，详见[补充输入快照](MATCHING_SUPPLEMENTAL_INPUTS.md)。其他未支持的 `required_inputs` 仍会被阻断，未知事实不能按零使用。
 
 批准通过的是文档完整性和操作者的规则确认；服务端不会从自然语言规则自动生成算法，也不能仅凭这些文字证明执行器实现正确。`confirmed_by` 是内部调用提交的确认人记录，不是SSO验证身份。文档中不得放模型地址或凭据。没有默认策略，不会自动创建或批准版本。
 
-可复制[策略创建草稿模板](examples/matching-policy-draft.json)，补齐规则后再提交。模板中的实现标识为待定、向量空间为空、规则为空，只能作为草稿，不能批准或创建执行任务。
+通用草稿可复制[策略创建草稿模板](examples/matching-policy-draft.json)。使用内置执行器时可复制 [builtin V1 模板](examples/matching-policy-builtin-v1-template.json)，但模板中的 `vector_space` 仍为空，且参数只是待评审起点；必须补齐真实向量空间并人工批准后才可用于任务。
 
 ## 任务绑定与输入校验
 
@@ -44,7 +44,7 @@
 
 每次领取保存独立尝试，保留失败、过期或提案已保存状态及原因码。失败回写只接受 `engine_unavailable`、`execution_failed`、`invalid_response`，不保存模型错误正文。失败重试回到队列，已保存提案不能重试或覆盖。取消执行任务不会释放策划周期，需要另行取消准备记录才能释放。
 
-领取接口一次检查一个候选。即使返回 `job=null`，只要 `next_after_id` 前进，也应继续扫描；遇到无前进的空结果结束本轮。下一轮从0开始，使旧ID任务的租约过期和显式失败重试能再次被读取。
+领取接口一次检查一个候选。即使返回 `job=null`，只要 `next_after_id` 前进，也应继续扫描；遇到无前进的空结果结束本轮。下一轮从0开始，使旧ID任务的租约过期和显式失败重试能再次被读取。内部 Worker 还可以按 `implementation_key` 过滤候选，因此多个实现可以共享任务表而不互相领取。
 
 锁顺序为周期锁→准备记录→策略版本→任务。策略停用或准备取消后，尚未结束任务在下次领取、续租、重试或回写时拒绝执行并留痕。已保存提案保留用于审计；完全相同的成功回写可幂等返回历史结果，即使之后策略已停用，也不会重新执行。
 
@@ -83,12 +83,20 @@
 
 ## 当前范围与下一步
 
-所有任务标明 `evaluation_scope=ordinary_only`、`operations_result_committed=false`、`production_batch_id=null`。提案保存只验证契约、输入版本和引用完整性，不证明算法符合每条业务规则；按日期完整覆盖也不代表已完成营销/热点槽位组合。它不会创建运营批次、槽位结果或内容生产事件。
+所有任务标明 `evaluation_scope=ordinary_only`、`operations_result_committed=false`、`production_batch_id=null`。提案保存只验证契约、输入版本和引用完整性；使用 `builtin-cosine-balanced-v1` 时，算法本身按 [Matching Executor V1](MATCHING_EXECUTOR.md) 中的固定机器契约执行。其他 `implementation_key` 仍必须由各自执行器实现，服务端不会解释自然语言代替算法。
 
-准备摘要继续描述画像与输入准备阶段；已绑定策略和执行状态以匹配任务接口为准。第二版已独立冻结基础兜底池、历史去重事实与独立正式计数，并明确未知状态；这些事实及引用检查不替代账号组合合法性、兜底排序、完整历史覆盖或算法验收。后续需实现与 `implementation_key` 对应的算法执行器及算法验收、客户历史覆盖证明、普通/营销/热点组合和原子结果提交。真实执行器未接入前，不会自动领取或调用模型。
+内置执行器已经能够自动领取并完成绑定自身实现标识的任务，但按日期完整覆盖仍不代表已完成营销/热点槽位组合。它不会创建运营批次、槽位结果或内容生产事件。后续仍需补客户历史覆盖证明/策略口径收敛、完整普通/营销/热点组合以及原子正式结果提交。
 
 ## 部署与验证
 
-在 `backend` 运行 `python3 -m app.init_db` 建立 `godp_matching_policy`、`godp_matching_task`、`godp_matching_attempt`，三张表及所有字段包含中文说明。更新后重启后端；本轮没有新增常驻进程或 `.env` 模型配置。
+数据库结构仍由 `python3 -m app.init_db` 维护；本轮没有新增匹配表。Matching Executor 新增可选常驻进程，默认关闭：
 
-`python3 -m unittest discover -s tests -v` 用固定快照、模拟数据库和ASGI请求验证策略版本/完整性、待定项阻断、任务去重、输入改变、模型不兼容、领取/续租/过期、旧租约、失败重试、提案覆盖与幂等，以及所有新接口的令牌保护；不会连接业务库或调用真实执行器。
+```text
+MATCHING_EXECUTOR_WORKER_ENABLED=0
+MATCHING_EXECUTOR_POLL_SECONDS=10
+MATCHING_EXECUTOR_LEASE_SECONDS=1800
+```
+
+启用前必须先创建并人工批准真实可执行的策略版本。启动脚本会先运行 `python3 -m app.matching_executor_worker --check-config`，启用后再启动 Worker。
+
+`python3 -m unittest discover -s tests -v` 继续验证原有策略/任务协议；`test_matching_executor.py` 额外验证内置算法的城市/历史 Hard Gate、Recall/Fit、全局分配、未知正式计数、兜底、Composition 与确定性。测试使用固定快照，不连接业务库或外部模型。

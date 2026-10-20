@@ -209,12 +209,30 @@ def create_task(payload: MatchingTaskCreate) -> dict:
         return task_summary(task)
 
 
-def claim_task(payload: ClaimTask) -> dict:
+def claim_task(payload: ClaimTask, *, implementation_key: str | None = None) -> dict:
+    """Claim the next runnable task, optionally restricted to one executor implementation.
+
+    Public API callers keep the historical unfiltered behavior. In-process
+    executor workers pass their implementation key so multiple executors can
+    share the queue without leasing each other's tasks.
+    """
     now = now_utc()
     with connection() as db, db.cursor() as cursor:
-        cursor.execute("SELECT id FROM godp_matching_task WHERE del_flag='N' AND id>%s "
-                       "AND (status='queued' OR (status='processing' AND lease_expires_at<=%s)) "
-                       "ORDER BY id LIMIT 1", (payload.after_id, now.replace(tzinfo=None)))
+        if implementation_key is None:
+            cursor.execute("SELECT id FROM godp_matching_task WHERE del_flag='N' AND id>%s "
+                           "AND (status='queued' OR (status='processing' AND lease_expires_at<=%s)) "
+                           "ORDER BY id LIMIT 1", (payload.after_id, now.replace(tzinfo=None)))
+        else:
+            cursor.execute(
+                "SELECT t.id FROM godp_matching_task t "
+                "JOIN godp_matching_policy p ON p.id=t.policy_id AND p.del_flag='N' "
+                "WHERE t.del_flag='N' AND t.id>%s "
+                "AND (t.status='queued' OR (t.status='processing' AND t.lease_expires_at<=%s)) "
+                "AND JSON_VALID(p.document_json)=1 "
+                "AND JSON_UNQUOTE(JSON_EXTRACT(p.document_json,'$.implementation_key'))=%s "
+                "ORDER BY t.id LIMIT 1",
+                (payload.after_id, now.replace(tzinfo=None), implementation_key),
+            )
         candidate = cursor.fetchone()
     if not candidate:
         return {"job": None, "next_after_id": payload.after_id}
