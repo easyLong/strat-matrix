@@ -12,9 +12,11 @@ from .matching_contracts import (ClaimTask, LeaseHeartbeat, MatchingEvaluation, 
 from .matching_policy import confirm_policy, create_policy, policy_summary, select_policy
 from .matching_tasks import (cancel_task, claim_task, create_task, fail_task, heartbeat_task,
                              read_evaluation, read_task_inputs, retry_task, save_evaluation, select_task, task_summary)
+from .planning_pipeline_api import router as planning_pipeline_router
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
+router.include_router(planning_pipeline_router)
 
 
 @router.post("/api/internal/matching-policies")
