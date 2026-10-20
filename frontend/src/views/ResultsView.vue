@@ -10,6 +10,7 @@ import ContentProgress from '../components/ContentProgress.vue'
 import FloatingTableScrollbar from '../components/FloatingTableScrollbar.vue'
 import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { statusTone } from '../ui/status'
+import { canReplacePlanTopic, productionStatusLabel } from '../ui/slotContentStatus'
 import { formatDateTime } from '../planningTime'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
@@ -355,14 +356,6 @@ function topicTypeLabel(item: AccountPlanRecord) {
   if (type === '\u666e\u901a' || type === 'normal' || type === 'regular') return '\u666e\u901a'
   return item.slot_type === 'hotspot' ? '\u70ed\u70b9' : item.slot_type === 'marketing_priority' ? '\u8425\u9500' : '\u666e\u901a'
 }
-function productionStatusLabel(item: AccountPlanRecord) {
-  if (!item.topic_id) return '待生产'
-  const states: Record<string, string> = { planned: '待生产', ready: '生成中', generated: '已完成', published: '已完成', failed: '生成失败' }
-  return states[item.production_status ?? ''] ?? ({
-    '已生成': '已完成', '已发布': '已完成', '生成中': '生成中', '生产中': '生成中',
-    '生成失败': '生成失败', '生产失败': '生成失败', '生产异常': '生成失败',
-  } as Record<string, string>)[item.status] ?? '待生产'
-}
 function weekdayLabel(date: string) {
   return new Intl.DateTimeFormat('zh-CN', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`))
 }
@@ -402,6 +395,7 @@ function replacementTopicType(topic: TopicOption) {
   return topic.topic_type || (topic.is_marketing ? '\u8425\u9500' : '\u666e\u901a')
 }
 async function openReplacement(item: AccountPlanRecord) {
+  if (!canReplacePlanTopic(item)) return
   const request = ++planDetailRequest
   replacementReturnsToDetails = drawerMode.value === 'view' && replaceTarget.value?.id === item.id
   replacementReturnScrollTop = planDrawerBody.value?.scrollTop ?? 0
@@ -484,7 +478,7 @@ function closeReplacement() {
   if (props.detailOnly) emit('closePlan')
 }
 async function confirmReplacement() {
-  if (replaceBusy.value || !replaceTarget.value || !replacementTopicId.value || replaceTarget.value.result_version == null) return
+  if (replaceBusy.value || !replaceTarget.value || !canReplacePlanTopic(replaceTarget.value) || !replacementTopicId.value || replaceTarget.value.result_version == null) return
   const request = planDetailRequest
   const returnToDetails = replacementReturnsToDetails
   const returnScrollTop = replacementReturnScrollTop
@@ -818,12 +812,12 @@ onBeforeUnmount(() => { planDetailRequest++ })
         <template v-if="drawerMode === 'view'">
           <section class="slot-detail-section"><h3>策划信息</h3><div class="slot-detail-grid"><div><small>投放日期</small><b>{{ replaceTarget.publish_date }} · {{ weekdayLabel(replaceTarget.publish_date) }}</b></div><div><small>批次周期</small><b>{{ replaceTarget.cycle_start }} 至 {{ replaceTarget.cycle_end }}</b></div><div><small>批次编号</small><b>{{ replaceTarget.batch_code || '—' }}</b></div><div><small>策划方式</small><b>{{ replaceTarget.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</b></div><div><small>经营阶段</small><b>{{ replaceTarget.lifecycle_stage || '—' }}</b></div><div><small>经营作用</small><b>{{ replaceTarget.content_role || '—' }}</b></div><div><small>内容状态</small><b>{{ productionStatusLabel(replaceTarget) }}</b></div></div></section>
           <section class="slot-detail-section"><h3>账号信息</h3><div class="slot-detail-grid"><div><small>用户 UM 号</small><b>{{ getAccountProfile(replaceTarget.account_id)?.um_no || '—' }}</b></div><div><small>账号昵称</small><b>{{ replaceTarget.account_name || '—' }}</b></div><div><small>账号 ID</small><b>{{ replaceTarget.account_id || '—' }}</b></div><div><small>账号类型</small><b>{{ accountTypeLabel(replaceTarget.account_id) }}</b></div><div><small>所属分行</small><b>{{ getAccountProfile(replaceTarget.account_id)?.organization || '—' }}</b></div><div><small>人设标签</small><b>{{ getAccountProfile(replaceTarget.account_id)?.persona || '—' }}</b></div></div></section>
-          <section class="slot-detail-section"><div class="slot-detail-section-head"><h3>选题信息</h3><button v-if="replaceTarget.allow_replace" class="btn primary" type="button" @click="openReplacement(replaceTarget)">&#x66FF;&#x6362;&#x9009;&#x9898;</button></div><div v-if="planDetailLoading" class="slot-detail-loading">正在读取选题信息…</div><template v-else-if="planTopicDetail"><div class="slot-detail-grid"><div><small>内容类型</small><b>{{ planTopicDetail.content_type || replaceTarget.content_type || '—' }}</b></div><div><small>选题 ID</small><b>{{ planTopicDetail.topic_id || '—' }}</b></div><div class="slot-detail-wide"><small>选题标题</small><b>{{ planTopicDetail.topic_title || replaceTarget.topic_title || '—' }}</b></div><div class="slot-detail-wide"><small>选题大纲</small><b class="slot-detail-outline">{{ planTopicDetail.outline || replaceTarget.outline || '—' }}</b></div><div class="slot-detail-wide"><small>选题有效期</small><b>{{ planTopicDetail.valid_from?.slice(0, 10) || '不限' }} 至 {{ planTopicDetail.valid_to?.slice(0, 10) || '不限' }}</b></div></div><div class="slot-topic-label-groups"><div v-for="group in planTopicTagGroups" :key="group.name"><small>{{ group.name }}</small><div v-if="group.values.length" class="slot-topic-labels"><span v-for="label in group.values" :key="label">{{ label }}</span></div><b v-else class="slot-topic-label-empty">未识别</b></div></div></template><div v-else class="empty-state">暂无选题信息</div></section>
+          <section class="slot-detail-section"><div class="slot-detail-section-head"><h3>选题信息</h3><button v-if="canReplacePlanTopic(replaceTarget)" class="btn primary" type="button" @click="openReplacement(replaceTarget)">&#x66FF;&#x6362;&#x9009;&#x9898;</button></div><div v-if="planDetailLoading" class="slot-detail-loading">正在读取选题信息…</div><template v-else-if="planTopicDetail"><div class="slot-detail-grid"><div><small>内容类型</small><b>{{ planTopicDetail.content_type || replaceTarget.content_type || '—' }}</b></div><div><small>选题 ID</small><b>{{ planTopicDetail.topic_id || '—' }}</b></div><div class="slot-detail-wide"><small>选题标题</small><b>{{ planTopicDetail.topic_title || replaceTarget.topic_title || '—' }}</b></div><div class="slot-detail-wide"><small>选题大纲</small><b class="slot-detail-outline">{{ planTopicDetail.outline || replaceTarget.outline || '—' }}</b></div><div class="slot-detail-wide"><small>选题有效期</small><b>{{ planTopicDetail.valid_from?.slice(0, 10) || '不限' }} 至 {{ planTopicDetail.valid_to?.slice(0, 10) || '不限' }}</b></div></div><div class="slot-topic-label-groups"><div v-for="group in planTopicTagGroups" :key="group.name"><small>{{ group.name }}</small><div v-if="group.values.length" class="slot-topic-labels"><span v-for="label in group.values" :key="label">{{ label }}</span></div><b v-else class="slot-topic-label-empty">未识别</b></div></div></template><div v-else class="empty-state">暂无选题信息</div></section>
           <section class="slot-detail-section"><h3>操作记录</h3><div v-if="planOperationsLoading" class="slot-detail-loading">正在读取操作记录…</div><div v-else-if="planOperationsError" class="detail-note" role="alert">{{ planOperationsError }}</div><div v-else-if="planOperationLogs.length" class="slot-operation-list"><article v-for="log in planOperationLogs" :key="log.key" class="slot-operation-item"><span class="slot-operation-dot" aria-hidden="true"/><div class="slot-operation-content"><div><b>{{ log.action }}</b><time>{{ formatDateTime(log.createdAt) }}</time></div><p>{{ log.detail }}</p><small>操作方：{{ log.actor }}</small></div></article></div><div v-else class="empty-state">暂无操作记录</div></section>
         </template>
         <template v-else>
         <div class="detail-note"><b>&#x5F53;&#x524D;&#x9009;&#x9898;:</b>{{ replaceTarget.topic_title }}<br /><b>&#x6295;&#x653E;&#x65E5;&#x671F;:</b>{{ replaceTarget.publish_date }}<br /><b>&#x7C7B;&#x578B;:</b>{{ slotLabel(replaceTarget.slot_type, replaceTarget.plan_type) }}<br /><b>&#x72B6;&#x6001;:</b>{{ replaceTarget.publish_status }}</div>
-        <template v-if="drawerMode === 'replace' && replaceTarget.allow_replace">
+        <template v-if="drawerMode === 'replace' && canReplacePlanTopic(replaceTarget)">
           <h3>选择新选题</h3>
           <div class="replacement-filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="replacement-topic-filters" :aria-expanded="replacementFiltersExpanded" @click="replacementFiltersExpanded = !replacementFiltersExpanded"><span>筛选条件</span><svg :class="{ expanded: replacementFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
           <div id="replacement-topic-filters" v-show="replacementFiltersExpanded" class="replacement-topic-filters">
@@ -848,7 +842,7 @@ onBeforeUnmount(() => { planDetailRequest++ })
         <div v-if="adjustmentHistory.length === 0" class="empty-state">暂无历史调整</div>
         <div v-for="record in adjustmentHistory" :key="record.id" class="detail-note">{{ formatDateTime(record.created_at) }} · {{ record.created_by }} · {{ record.adjustment_source }}<br />{{ record.old_topic_title }} · {{ record.new_topic_title }}<span v-if="record.reason"> · {{ record.reason }}</span></div>
         </template>
-        <div v-if="drawerMode === 'replace' && replaceTarget.allow_replace" class="footer-actions"><button class="btn primary" type="button" :disabled="replaceBusy || !replacementTopicId" @click="confirmReplacement">{{ replaceBusy ? '\u4fdd\u5b58\u4e2d\u2026' : '\u786e\u8ba4\u66ff\u6362' }}</button></div>
+        <div v-if="drawerMode === 'replace' && canReplacePlanTopic(replaceTarget)" class="footer-actions"><button class="btn primary" type="button" :disabled="replaceBusy || !replacementTopicId" @click="confirmReplacement">{{ replaceBusy ? '\u4fdd\u5b58\u4e2d\u2026' : '\u786e\u8ba4\u66ff\u6362' }}</button></div>
       </div>
     </aside>
   </div>

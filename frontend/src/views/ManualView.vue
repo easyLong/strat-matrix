@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import TopicDetailDrawer from '../components/TopicDetailDrawer.vue'
-import type { TaxonomyItems } from '../topicTaxonomy'
 import AccountTypeBadge from '../components/AccountTypeBadge.vue'
 import HoverHint from '../components/HoverHint.vue'
 import ListPagination from '../components/ListPagination.vue'
@@ -37,9 +35,7 @@ const followersMax = ref<number | null>(null)
 const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', organization: '', platform: '', businessLine: '', city: '', lifecycle: '', followersMin: null as number | null, followersMax: null as number | null })
 const accounts = ref<AccountOption[]>([])
 const topics = ref<TopicOption[]>([])
-const taxonomyItems = ref<TaxonomyItems>({})
 const topicFiltersExpanded = ref(false)
-const detailTopic = ref<TopicOption | null>(null)
 const tasks = ref<ManualTaskSummary[]>([])
 const productionRequestStorageKey = 'strat-matrix.manual-production-requests'
 function readProductionRequestIds() {
@@ -256,8 +252,7 @@ async function loadAccountAvailability(reselect = false): Promise<boolean> {
 async function loadCatalog() {
   catalogLoading.value = true
   try {
-    const [accountRows, topicRows, taxonomy] = await Promise.all([api.accounts(), api.topics(), api.tagTaxonomy()])
-    taxonomyItems.value = taxonomy.items
+    const [accountRows, topicRows] = await Promise.all([api.accounts(), api.topics()])
     accounts.value = accountRows
     topics.value = topicRows
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取账号和选题失败' }
@@ -369,14 +364,19 @@ function toggleAccountRow(accountId: string, event: Event) {
   setAccountSelected(accountId, !sampledIds.value.includes(accountId))
 }
 
-function addTopicFromRow(topicId: string, event: Event) {
+function toggleTopicRow(topicId: string, event: Event) {
   if (interactiveRowTarget(event)) return
-  addTopic(topicId)
+  setTopicSelected(topicId, !selectedTopicIds.value.includes(topicId))
 }
 
-function addTopic(topicId: string) {
-  if (topicReview.value || selectedTopicIds.value.length >= 100) return
-  selectedTopicIds.value = [...selectedTopicIds.value, topicId]
+function setTopicSelected(topicId: string, checked: boolean) {
+  if (topicReview.value) return
+  if (checked) {
+    if (selectedTopicIds.value.includes(topicId) || selectedTopicIds.value.length >= 100) return
+    selectedTopicIds.value = [...selectedTopicIds.value, topicId]
+  } else {
+    selectedTopicIds.value = selectedTopicIds.value.filter(id => id !== topicId)
+  }
   error.value = ''
 }
 
@@ -704,9 +704,9 @@ function closeEligibilityNotice(returnToSelection = false) {
             </div>
             <div class="manual-topic-list-meta"><b>&#x7B26;&#x5408;&#x6761;&#x4EF6; {{ filteredTopics.length }} &#x4E2A;</b></div>
             <LoadingSkeleton v-if="catalogLoading || !store.initialized" />
-            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th>&#x9009;&#x9898; ID</th><th>&#x9009;&#x9898;&#x6807;&#x9898;</th><th>&#x9009;&#x9898;&#x5927;&#x7EB2;</th><th>&#x9009;&#x9898;&#x7C7B;&#x578B;</th><th>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</th><th>&#x5173;&#x8054;&#x4EA7;&#x54C1;</th><th>&#x5173;&#x8054;&#x6D3B;&#x52A8;</th><th>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</th><th>&#x6709;&#x6548;&#x671F;</th></tr></thead><tbody>
-              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-label="`双击添加选题 ${topic.topic_title}`" @dblclick="addTopicFromRow(topic.topic_id, $event)" @keydown.enter.self.prevent="addTopic(topic.topic_id)"><td>{{ topic.topic_id }}</td><td><button class="topic-title-link manual-topic-title-value" type="button" :title="topic.topic_title" @click.stop="detailTopic = topic">{{ topic.topic_title }}</button></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '&#x4E0D;&#x9650;' }}<i>&#x81F3;</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '&#x4E0D;&#x9650;' }}</span></td></tr>
-              <tr v-if="filteredTopics.length === 0"><td colspan="9"><div class="empty-state">&#x6CA1;&#x6709;&#x7B26;&#x5408;&#x6761;&#x4EF6;&#x7684;&#x53EF;&#x7528;&#x9009;&#x9898;</div></td></tr>
+            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th class="manual-topic-checkbox-cell">选择</th><th>&#x9009;&#x9898; ID</th><th>&#x9009;&#x9898;&#x6807;&#x9898;</th><th>&#x9009;&#x9898;&#x5927;&#x7EB2;</th><th>&#x9009;&#x9898;&#x7C7B;&#x578B;</th><th>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</th><th>&#x5173;&#x8054;&#x4EA7;&#x54C1;</th><th>&#x5173;&#x8054;&#x6D3B;&#x52A8;</th><th>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</th><th>&#x6709;&#x6548;&#x671F;</th></tr></thead><tbody>
+              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-disabled="topicReview || (!selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100) || undefined" @click="toggleTopicRow(topic.topic_id, $event)" @keydown.enter.self.prevent="toggleTopicRow(topic.topic_id, $event)" @keydown.space.self.prevent="toggleTopicRow(topic.topic_id, $event)"><td class="manual-topic-checkbox-cell"><input type="checkbox" :checked="selectedTopicIds.includes(topic.topic_id)" :disabled="topicReview || (!selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100)" :aria-label="`选择选题 ${topic.topic_title}`" @change="setTopicSelected(topic.topic_id, ($event.target as HTMLInputElement).checked)" /></td><td>{{ topic.topic_id }}</td><td><HoverHint :text="topic.topic_title" :show-icon="false" class="manual-topic-title-tooltip"><span class="manual-topic-title-value">{{ topic.topic_title }}</span></HoverHint></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '&#x4E0D;&#x9650;' }}<i>&#x81F3;</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '&#x4E0D;&#x9650;' }}</span></td></tr>
+              <tr v-if="filteredTopics.length === 0"><td colspan="10"><div class="empty-state">&#x6CA1;&#x6709;&#x7B26;&#x5408;&#x6761;&#x4EF6;&#x7684;&#x53EF;&#x7528;&#x9009;&#x9898;</div></td></tr>
             </tbody></table></div>
             <ListPagination v-model:page="topicPage" v-model:page-size="topicPageSize" :total="filteredTopics.length" unit="&#x4E2A;&#x9009;&#x9898;" :page-size-options="[20, 50, 100]" class="manual-topic-pagination" />
           </section>
@@ -780,7 +780,6 @@ function closeEligibilityNotice(returnToSelection = false) {
       </div>
     </Transition>
   </Teleport>
-  <TopicDetailDrawer v-if="detailTopic" :topic="detailTopic" :items="taxonomyItems" @close="detailTopic = null" />
 </template>
 
 <style scoped>
@@ -833,7 +832,9 @@ function closeEligibilityNotice(returnToSelection = false) {
 
 <style scoped>
 .manual-head-actions{margin-left:auto}
-.topic-filters-toggle{display:flex;justify-content:flex-end;margin-bottom:12px}.topic-title-link{padding:0;border:0;background:transparent;color:var(--primary-600);font-size:13px;font-weight:500;text-align:left;line-height:1.6}.topic-title-link:hover{text-decoration:underline}.manual-topic-filters .field{width:100%}
+.topic-filters-toggle{display:flex;justify-content:flex-end;margin-bottom:12px}.manual-topic-filters .field{width:100%}
+.manual-topic-table :deep(.manual-topic-title-tooltip){display:flex;width:100%;min-width:0;color:var(--neutral-800);font-size:13px;font-weight:500;text-align:left;line-height:1.6}
+.manual-topic-table :deep(.manual-topic-title-tooltip:hover),.manual-topic-table :deep(.manual-topic-title-tooltip:focus-visible){color:var(--neutral-800);text-decoration:none}
 .manual-submit-table{overflow:auto;border:1px solid var(--neutral-200);border-radius:6px}
 .manual-submit-table table{width:100%;min-width:0;table-layout:fixed}
 .manual-submit-table th,.manual-submit-table td{padding:10px 8px;text-align:left;font-size:12px}
@@ -843,7 +844,7 @@ function closeEligibilityNotice(returnToSelection = false) {
 .manual-submit-truncate.account-name,.manual-submit-truncate.topic-title{font-weight:500;color:var(--neutral-800)}
 .manual-submit-truncate.identifier{font-variant-numeric:tabular-nums;color:var(--neutral-500)}
 .manual-submit-truncate.topic-outline{color:var(--neutral-600)}
-.manual-topic-table table{min-width:1280px}.manual-topic-table td:nth-child(2){width:220px;max-width:220px}.manual-topic-table td:nth-child(3){width:300px;max-width:300px}.manual-topic-title-value,.manual-topic-outline-value{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.manual-topic-outline-value{color:var(--neutral-600);font-size:12px}
+.manual-topic-table table{min-width:1328px}.manual-topic-table .manual-topic-checkbox-cell{width:48px;min-width:48px;padding:0 12px;text-align:center}.manual-topic-checkbox-cell input{vertical-align:middle}.manual-topic-table td:nth-child(3){width:220px;max-width:220px}.manual-topic-table td:nth-child(4){width:300px;max-width:300px}.manual-topic-title-value,.manual-topic-outline-value{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.manual-topic-outline-value{color:var(--neutral-600);font-size:12px}
 .manual-account-mode-row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}.manual-account-mode-row>.field{min-width:180px;margin:0}.manual-account-mode-row .manual-selection-modes{align-self:flex-end;margin:0}
 @media(max-width:580px){.manual-account-mode-row{align-items:stretch;flex-direction:column;gap:10px}.manual-account-mode-row>.field{min-width:0}.manual-account-mode-row .manual-selection-modes{width:100%}.manual-account-mode-row .manual-mode-tab{flex:1}}
 </style>

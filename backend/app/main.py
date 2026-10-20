@@ -111,6 +111,8 @@ def replacement_block_reason(row: dict, plan_type: str | None = None) -> str:
     if (row.get("published_at") is not None or row.get("status") == "已发布"
             or row.get("production_status") in ("published", "已发布")):
         return "内容已发布，当前结果不可替换"
+    if production_status(row) == "ready":
+        return "内容生产中，选题不可替换"
     return ""
 
 

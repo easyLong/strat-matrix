@@ -8,6 +8,7 @@ import ResultsView from './ResultsView.vue'
 import { api } from '../api'
 import type { AccountOption, AccountPlanRecord, BatchDetail, BatchSummary } from '../types'
 import { statusTone } from '../ui/status'
+import { productionStatusLabel } from '../ui/slotContentStatus'
 
 type DetailMode = 'batch' | 'cycle' | 'account'
 type PlanningWeek = { start: string; end: string; items: AccountPlanRecord[] }
@@ -89,15 +90,6 @@ function accountProfile(accountId: string) {
 
 function accountTypeLabel(profile?: AccountOption) {
   return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—')
-}
-
-function productionStatusLabel(item: AccountPlanRecord) {
-  if (!item.topic_id) return '待生产'
-  const states: Record<string, string> = { planned: '待生产', ready: '生成中', generated: '已完成', published: '已完成', failed: '生成失败' }
-  return states[item.production_status ?? ''] ?? ({
-    '已生成': '已完成', '已发布': '已完成', '生成中': '生成中', '生产中': '生成中',
-    '生成失败': '生成失败', '生产失败': '生成失败', '生产异常': '生成失败',
-  } as Record<string, string>)[item.status] ?? '待生产'
 }
 
 function topicTypeLabel(item: AccountPlanRecord) {
