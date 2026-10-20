@@ -32,6 +32,8 @@ ACCOUNT_VECTOR_WORKER_ENABLED="${ACCOUNT_VECTOR_WORKER_ENABLED:-$(dotenv_value A
 ACCOUNT_VECTOR_WORKER_ENABLED="${ACCOUNT_VECTOR_WORKER_ENABLED:-0}"
 AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-$(dotenv_value AI_PREPARATION_WORKER_ENABLED)}"
 AI_PREPARATION_WORKER_ENABLED="${AI_PREPARATION_WORKER_ENABLED:-0}"
+MATCHING_EXECUTOR_WORKER_ENABLED="${MATCHING_EXECUTOR_WORKER_ENABLED:-$(dotenv_value MATCHING_EXECUTOR_WORKER_ENABLED)}"
+MATCHING_EXECUTOR_WORKER_ENABLED="${MATCHING_EXECUTOR_WORKER_ENABLED:-0}"
 RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
 
 running=0
@@ -90,6 +92,10 @@ if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
 fi
 if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
   check_process "AI preparation worker" "$RUN_DIR/ai-preparation-worker.pid" || true
+  expected=$((expected + 1))
+fi
+if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
+  check_process "Matching executor worker" "$RUN_DIR/matching-executor-worker.pid" || true
   expected=$((expected + 1))
 fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true
