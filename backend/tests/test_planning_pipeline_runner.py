@@ -3,6 +3,8 @@
 import unittest
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 from app import planning_pipeline_runner as runner
 from app.planning_result_commit import ResultCommitError
 
@@ -62,6 +64,29 @@ class PlanningPipelineRunnerTests(unittest.TestCase):
             result = runner.advance_pipeline_to_commit(501, 6)
         record.assert_called_once_with(501, 7, error)
         self.assertEqual(result["status"], "failed")
+
+    def test_infrastructure_failure_is_recorded_but_original_error_is_raised(self):
+        pending = waiting_result()
+        error = RuntimeError("database unavailable")
+        with patch.object(runner, "advance_pipeline", return_value=pending), \
+             patch.object(runner, "commit_pipeline_result", side_effect=error), \
+             patch.object(runner, "_record_commit_failure") as record:
+            with self.assertRaises(RuntimeError):
+                runner.advance_pipeline_to_commit(501, 6)
+        recorded = record.call_args.args[2]
+        self.assertEqual(record.call_args.args[:2], (501, 7))
+        self.assertEqual(recorded.code, "result_commit_infrastructure_error")
+
+    def test_optimistic_lock_conflict_is_not_relabelled_as_infrastructure_failure(self):
+        pending = waiting_result()
+        conflict = HTTPException(409, "Pipeline版本已变化")
+        with patch.object(runner, "advance_pipeline", return_value=pending), \
+             patch.object(runner, "commit_pipeline_result", side_effect=conflict), \
+             patch.object(runner, "_record_commit_failure") as record:
+            with self.assertRaises(HTTPException) as raised:
+                runner.advance_pipeline_to_commit(501, 6)
+        self.assertEqual(raised.exception.status_code, 409)
+        record.assert_not_called()
 
 
 if __name__ == "__main__":
