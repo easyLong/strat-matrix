@@ -19,6 +19,18 @@ router = APIRouter(dependencies=[Depends(require_integration_token)])
 router.include_router(planning_pipeline_router)
 
 
+def task_view(row: dict, *, reused: bool = False) -> dict:
+    """Add the downstream formal-commit relation without changing Matching task semantics."""
+    result = task_summary(row, reused=reused)
+    batch_id = row.get("production_batch_id")
+    result.update(
+        operations_result_committed=batch_id is not None,
+        production_batch_id=batch_id,
+        operations_committed_at=utc_text(row.get("operations_committed_at")),
+    )
+    return result
+
+
 @router.post("/api/internal/matching-policies")
 def create_matching_policy(payload: PolicyCreate) -> dict:
     return guarded(create_policy, payload)
@@ -83,7 +95,7 @@ def list_matching_tasks(after_id: int = Query(0, ge=0), limit: int = Query(100, 
         with connection() as db, db.cursor() as cursor:
             cursor.execute(query, params)
             rows = cursor.fetchall()
-        return {"tasks": [task_summary(row) for row in rows],
+        return {"tasks": [task_view(row) for row in rows],
                 "next_after_id": rows[-1]["id"] if rows else after_id}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
@@ -99,7 +111,7 @@ def matching_task_detail(task_id: int) -> dict:
                            "ORDER BY attempt_number DESC", (task_id,))
             attempts = [{**row, "lease_expires_at": utc_text(row["lease_expires_at"]),
                          "completed_at": utc_text(row["completed_at"])} for row in cursor.fetchall()]
-        return {**task_summary(task), "attempts": attempts}
+        return {**task_view(task), "attempts": attempts}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
 
@@ -109,14 +121,23 @@ def matching_task_result(task_id: int) -> dict:
     try:
         with connection() as db, db.cursor() as cursor:
             task = select_task(cursor, task_id)
-        return {**task_summary(task), "evaluation": read_evaluation(task)}
+        return {**task_view(task), "evaluation": read_evaluation(task)}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
 
 
 @router.get("/api/internal/matching-tasks/{task_id}/inputs")
 def matching_task_inputs(task_id: int) -> dict:
-    return guarded(read_task_inputs, task_id)
+    try:
+        result = read_task_inputs(task_id)
+        with connection() as db, db.cursor() as cursor:
+            task = select_task(cursor, task_id)
+        return {**result,
+                "operations_result_committed": task.get("production_batch_id") is not None,
+                "production_batch_id": task.get("production_batch_id"),
+                "operations_committed_at": utc_text(task.get("operations_committed_at"))}
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
 
 
 @router.post("/api/internal/matching-tasks/{task_id}/heartbeat")
