@@ -37,16 +37,19 @@ class PlanningPipelineRunnerTests(unittest.TestCase):
         self.assertEqual(result["production_batch_id"], 9001)
         self.assertEqual(result["status"], "succeeded")
 
-    def test_result_commit_retry_does_not_rerun_immutable_matching(self):
+    def test_result_commit_retry_reopens_stage_without_rerunning_matching_task(self):
         failed = waiting_result(status="failed", version=9)
-        succeeded = {**failed, "version": 10, "status": "succeeded",
+        reopened = waiting_result(status="waiting", version=10)
+        succeeded = {**reopened, "version": 11, "status": "succeeded",
                      "production_batch_id": 9002, "active_stages": []}
         with patch.object(runner, "read_pipeline", side_effect=[failed, succeeded]), \
+             patch.object(runner, "advance_pipeline", return_value=reopened) as advance, \
              patch.object(runner, "retry_pipeline") as base_retry, \
              patch.object(runner, "commit_pipeline_result", return_value={"batch_id": 9002}) as commit:
             result = runner.retry_pipeline_to_commit(501, 9)
+        advance.assert_called_once_with(501, 9, retry=True)
         base_retry.assert_not_called()
-        commit.assert_called_once_with(501, 9)
+        commit.assert_called_once_with(501, 10)
         self.assertEqual(result["production_batch_id"], 9002)
 
     def test_business_commit_failure_is_persisted_as_retryable_stage_failure(self):
