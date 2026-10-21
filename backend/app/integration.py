@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 from hmac import compare_digest
 import json
-import os
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -14,6 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 import pymysql
 
 from .db import connection
+from .system_config import get_setting
 from .integration_models import (
     AccountSync,
     ContentReadyInput,
@@ -58,7 +58,7 @@ def single_choice_labels(tags: dict) -> dict[str, str] | None:
 
 
 def require_integration_token(x_integration_token: str = Header(default="")) -> None:
-    expected = os.getenv("INTEGRATION_TOKEN", "")
+    expected = get_setting("INTEGRATION_TOKEN", "")
     if not expected:
         raise HTTPException(status_code=503, detail="尚未配置系统对接令牌")
     if not compare_digest(x_integration_token, expected):

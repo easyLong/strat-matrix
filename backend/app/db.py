@@ -4,14 +4,18 @@ from contextlib import contextmanager
 from pathlib import Path
 import os
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 import pymysql
 from pymysql.cursors import DictCursor
 
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / "docs" / ".env")
-load_dotenv(ROOT / ".env", override=True)
+# Only MySQL bootstrapping may come from a file or process environment.
+# Application settings are read independently from godp_system_config.
+for _file in (ROOT / "docs" / ".env", ROOT / ".env"):
+    for _key, _value in dotenv_values(_file).items():
+        if _key in ("MYSQL_HOST", "MYSQL_PORT", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE") and _value is not None:
+            os.environ[_key] = _value
 
 
 def settings() -> dict:
@@ -49,6 +53,7 @@ def check_database() -> bool:
             cursor.execute("SHOW TABLES")
             tables = {next(iter(row.values())) for row in cursor.fetchall()}
             return {
+                "godp_system_config",
                 "godp_strategy_config",
                 "godp_account",
                 "godp_topic",

@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import os
 import time
 
 from fastapi import HTTPException
@@ -12,13 +11,14 @@ from .matching_contracts import ClaimTask, MatchingFailure
 from .matching_executor import (IMPLEMENTATION_KEY, ExecutorInputError,
                                 ExecutorPolicyError, execute_job)
 from .matching_tasks import claim_task, fail_task, save_evaluation
+from .system_config import get_setting
 
 
 LOG = logging.getLogger("matching-executor-worker")
 
 
 def _integer_env(name: str, default: int, low: int, high: int) -> int:
-    raw = os.getenv(name, str(default))
+    raw = get_setting(name, str(default))
     try:
         value = int(raw)
     except ValueError as exc:

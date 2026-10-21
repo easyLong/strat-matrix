@@ -3,20 +3,15 @@
 import argparse
 from dataclasses import dataclass
 import logging
-import os
-from pathlib import Path
 import re
 import time
 from urllib.parse import quote, urlsplit
 
-from dotenv import load_dotenv
-
 from .vector_utils import normalized_vector
+from .system_config import get_setting
 from .worker_http import StaleResult, WorkerError, json_request
 
 
-load_dotenv(Path(__file__).resolve().parents[2] / "docs" / ".env")
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 LOG = logging.getLogger("account-vector-worker")
 JobKey = tuple[str, int, str, str]
 
@@ -50,7 +45,7 @@ def http_url(value: str, name: str) -> str:
 
 def seconds(name: str, default: int, minimum: int, maximum: int) -> int:
     try:
-        value = int(os.getenv(name, str(default)))
+        value = int(get_setting(name, str(default)))
     except ValueError as exc:
         raise ConfigurationError(f"{name} 必须是整数秒数") from exc
     if not minimum <= value <= maximum:
@@ -59,17 +54,17 @@ def seconds(name: str, default: int, minimum: int, maximum: int) -> int:
 
 
 def read_config() -> WorkerConfig:
-    model_url = os.getenv("ACCOUNT_VECTOR_MODEL_URL", "").strip()
-    api_token = os.getenv("INTEGRATION_TOKEN", "").strip()
+    model_url = get_setting("ACCOUNT_VECTOR_MODEL_URL", "").strip()
+    api_token = get_setting("INTEGRATION_TOKEN", "").strip()
     if not model_url or not api_token:
         raise ConfigurationError("需要配置 ACCOUNT_VECTOR_MODEL_URL 和 INTEGRATION_TOKEN；未处理任何任务")
-    api_url = os.getenv("ACCOUNT_VECTOR_API_URL", "").strip().rstrip("/")
+    api_url = get_setting("ACCOUNT_VECTOR_API_URL", "").strip().rstrip("/")
     if not api_url:
-        api_url = f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '6930')}"
+        api_url = f"http://127.0.0.1:{get_setting('BACKEND_PORT', '6930')}"
     return WorkerConfig(
         api_url=http_url(api_url, "ACCOUNT_VECTOR_API_URL"), api_token=api_token,
         model_url=http_url(model_url, "ACCOUNT_VECTOR_MODEL_URL"),
-        model_token=os.getenv("ACCOUNT_VECTOR_MODEL_TOKEN", "").strip(),
+        model_token=get_setting("ACCOUNT_VECTOR_MODEL_TOKEN", "").strip(),
         model_timeout=seconds("ACCOUNT_VECTOR_MODEL_TIMEOUT_SECONDS", 120, 1, 600),
         poll_seconds=seconds("ACCOUNT_VECTOR_POLL_SECONDS", 30, 5, 3600),
         retry_seconds=seconds("ACCOUNT_VECTOR_RETRY_SECONDS", 600, 60, 86400),

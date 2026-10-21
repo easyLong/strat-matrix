@@ -74,9 +74,9 @@ python3 -m app.ai_preparation_worker
 
 账号向量进程默认轮询准备记录与已有运营批次两种独立队列。模型服务使用原来的 `task=account_profile_embedding`，准备任务请求携带 `preparation_id`，已有批次请求携带 `batch_id`，二者不会同时出现。画像字段及向量响应格式一致；供应方需要支持准备身份字段。进程按身份类型、ID、账号、指纹分别记录重试及成功结果缓存，不能跨身份复用。
 
-`.env` 可配置：
+MySQL `godp_system_config` 中可配置以下键值，见[系统配置说明](SYSTEM_CONFIG.md)：
 
-```dotenv
+```text
 AI_PREPARATION_WORKER_ENABLED=0
 AI_PREPARATION_POLL_SECONDS=60
 ```

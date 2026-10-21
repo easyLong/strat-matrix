@@ -5,7 +5,6 @@ from contextlib import ExitStack
 from copy import deepcopy
 from datetime import timedelta
 import json
-import os
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -17,6 +16,7 @@ from app import ai_preparation as preparation
 from app import matching_execution_api as api
 from app import matching_policy as policies
 from app import matching_tasks as tasks
+from app.system_config import override_config
 from app.account_profile import canonical_json
 from app.init_db import column_definitions, table_descriptions
 from app.matching_contracts import (ALGORITHM_CODES, ClaimTask, LeaseHeartbeat, MatchingEvaluation,
@@ -383,6 +383,7 @@ class MatchingExecutionTests(unittest.TestCase):
 class MatchingExecutionAuthorizationTests(unittest.TestCase):
     def test_new_policy_and_execution_routes_are_protected_before_db_access(self):
         from app.main import app
+        from app import planning_pipeline, planning_pipeline_api, planning_pipeline_runner
         async def request(method, path, body):
             messages = []
             async def receive():
@@ -394,15 +395,27 @@ class MatchingExecutionAuthorizationTests(unittest.TestCase):
                        "query_string": b"", "root_path": "", "headers": [(b"content-type", b"application/json")],
                        "server": ("test", 80), "client": ("test", 1234)}, receive, send)
             return next(item["status"] for item in messages if item["type"] == "http.response.start")
-        routes = api.router.routes
+        # OpenAPI includes nested routers across FastAPI versions. Inspecting
+        # router.routes directly misses lazy _IncludedRouter entries.
+        prefixes = ("/api/internal/matching-policies", "/api/internal/matching-tasks",
+                    "/api/internal/planning-pipelines")
+        routes = {path: operations for path, operations in app.openapi()["paths"].items()
+                  if path.startswith(prefixes)}
+        self.assertIn("/api/internal/planning-pipelines/{pipeline_id}/advance", routes)
+        self.assertIn("/api/internal/planning-pipelines/{pipeline_id}/retry", routes)
         with ExitStack() as stack:
-            stack.enter_context(patch.dict(os.environ, {"INTEGRATION_TOKEN": "test-only-token"}))
-            database = [stack.enter_context(patch.object(module, "connection")) for module in (api, tasks, policies)]
-            for route in routes:
-                path = route.path.replace("{policy_id}", "1").replace("{task_id}", "1")
-                for method in route.methods:
+            stack.enter_context(override_config({"INTEGRATION_TOKEN": "test-only-token"}))
+            database = [stack.enter_context(patch.object(module, "connection"))
+                        for module in (api, tasks, policies, planning_pipeline,
+                                       planning_pipeline_api, planning_pipeline_runner)]
+            for route_path, operations in routes.items():
+                path = (route_path.replace("{policy_id}", "1").replace("{task_id}", "1")
+                        .replace("{pipeline_id}", "1"))
+                for method in operations:
+                    if method not in {"get", "post", "put", "patch", "delete", "head", "options"}:
+                        continue
                     with self.subTest(method=method, path=path):
-                        self.assertEqual(asyncio.run(request(method, path, {})), 401)
+                        self.assertEqual(asyncio.run(request(method.upper(), path, {})), 401)
             for mock in database:
                 mock.assert_not_called()
 

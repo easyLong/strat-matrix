@@ -1,6 +1,6 @@
 """Regression checks for planning status and historical content progress."""
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import date
 import sqlite3
 import unittest
@@ -12,7 +12,7 @@ from app.planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, planning_status_l
 
 class PlanningProgressTests(unittest.TestCase):
     def test_count_accounts_only_after_all_their_slots_complete(self):
-        with sqlite3.connect(":memory:") as db:
+        with closing(sqlite3.connect(":memory:")) as db:
             count = db.execute(
                 "WITH i(id, account_id, topic_id, status) AS (VALUES "
                 "(1,'A','T1','待生成'), (2,'A','T2','待生成'), "

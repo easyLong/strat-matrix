@@ -1,0 +1,376 @@
+{
+  "checkedAt": "2026-10-20T07:23:41.897Z",
+  "checks": [
+    {
+      "name": "AI策划配置：默认只读总览",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签配置：T1 业务属性",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签配置：T2 经营作用",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签配置：T3 内容主题",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签配置：T4 目标客群",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签配置：T5 使用场景",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "配置编辑：表单、生命周期、经营目标",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签编辑：改名与停用菜单",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签编辑：改名输入框",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "标签编辑：改名后展示（未保存）",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "取消编辑确认弹窗",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "取消编辑：继续编辑",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "取消编辑：恢复原配置",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "历史配置列表",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "历史配置：版本摘要与完整详情",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "历史配置：恢复确认弹窗",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：策划任务列表",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "新建人工策划：创建策划",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：选择账号及筛选维度",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：点击查询并选中账号",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号选择：分页",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号选择：模板导入面板",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "模板导入：识别、勾选与未匹配UM号",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号选择：保存后冻结与下一步",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：选择选题默认列表",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "选择选题：筛选项展开",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "选择选题：标题查询结果",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "选择选题：勾选加入左侧",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "选择选题：保存确认",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：提交概览两栏",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "策划结果：账号视图默认列表",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号视图：筛选项展开",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号视图：查询结果",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号视图：无结果空状态",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "账号视图：账号列表分页",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "策划结果：周期视图默认列表",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "周期视图：年月周筛选",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "周期视图：展开批次列表",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "策划详情：dimension=account&account=DEMO-P-B",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情周历展开：dimension=account&account=DEMO-P-B",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情筛选展开：dimension=account&account=DEMO-P-B",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "单条计划详情：dimension=account&account=DEMO-P-B",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "策划详情：dimension=period&cycle=2026-10-19",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情周历展开：dimension=period&cycle=2026-10-19",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情筛选展开：dimension=period&cycle=2026-10-19",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "单条计划详情：dimension=period&cycle=2026-10-19",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "周期策划详情：账号分页",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "策划详情：dimension=period&batch=108",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情周历展开：dimension=period&batch=108",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情筛选展开：dimension=period&batch=108",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "单条计划详情：dimension=period&batch=108",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "策划详情：dimension=period&batch=108&plan_type=manual&from=manual",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情周历展开：dimension=period&batch=108&plan_type=manual&from=manual",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "详情筛选展开：dimension=period&batch=108&plan_type=manual&from=manual",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "单条计划详情：dimension=period&batch=108&plan_type=manual&from=manual",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "替换选题：候选列表与调整记录",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "替换选题：筛选维度",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "替换选题：选中候选选题",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "全部已导出GET接口数据、排序与候选范围",
+      "success": true,
+      "detail": "134 个请求"
+    },
+    {
+      "name": "1280桌面布局：/config",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "1280桌面布局：/manual",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "1280桌面布局：/results",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "1280桌面布局：/results?dimension=period",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "1280桌面布局：/results?account=DEMO-P-B",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "1280桌面布局：/results?batch=108",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "离线写操作：配置保存、冲突、恢复",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：每账号一条分配与异步完成",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：完成前不占用、完成后置灰、防重复",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：账号属主组织回填",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "人工策划：新增周期汇总同步",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "新增标签：保存后分类与叶子关系保留",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "全程没有修改真实后端",
+      "success": true,
+      "detail": "[]"
+    },
+    {
+      "name": "离线版没有HTTP网络请求",
+      "success": true,
+      "detail": ""
+    },
+    {
+      "name": "所有页面无JavaScript异常",
+      "success": true,
+      "detail": ""
+    }
+  ],
+  "issues": []
+}

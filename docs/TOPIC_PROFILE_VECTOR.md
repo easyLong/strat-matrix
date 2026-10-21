@@ -40,9 +40,9 @@ python3 -m app.init_db
 
 ## 配置向量执行进程
 
-项目内已有 `python3 -m app.topic_vector_worker` 执行器。它分页读取当前画像，将画像交给配置的模型服务，校验返回的向量并回写。模型服务地址尚未提供，所以默认关闭；没有配置 `TOPIC_VECTOR_MODEL_URL` 或 `INTEGRATION_TOKEN` 时，进程直接退出，**不会处理任务或伪造向量**。在 `.env` 中配置：
+项目内已有 `python3 -m app.topic_vector_worker` 执行器。它分页读取当前画像，将画像交给配置的模型服务，校验返回的向量并回写。模型服务地址尚未提供，所以默认关闭；没有配置 `TOPIC_VECTOR_MODEL_URL` 或 `INTEGRATION_TOKEN` 时，进程直接退出。以下键值统一存放于 MySQL `godp_system_config`，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
 
-```dotenv
+```text
 TOPIC_VECTOR_WORKER_ENABLED=1
 TOPIC_VECTOR_MODEL_URL=https://your-trusted-model-service.example/topic-embedding
 TOPIC_VECTOR_MODEL_TOKEN=your-model-service-token

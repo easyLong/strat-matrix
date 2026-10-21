@@ -389,7 +389,8 @@ class PreparationAuthorizationTests(unittest.TestCase):
                      ("GET", "/api/internal/preparation-account-vector-jobs", {}),
                      ("PUT", "/api/internal/preparation-account-vectors/1/ACCOUNT-001",
                       {"profile_hash": "a" * 64, "vector": [1, 0], "vector_model": "test"})]
-        with patch.dict(os.environ, {"INTEGRATION_TOKEN": "test-only-internal-token"}), \
+        from app.system_config import override_config
+        with override_config({"INTEGRATION_TOKEN": "test-only-internal-token"}), \
                 patch.object(api, "connection") as api_db, patch.object(service, "connection") as service_db:
             for method, path, body in endpoints:
                 with self.subTest(path=path):

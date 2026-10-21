@@ -51,9 +51,9 @@ IF-01 的 `interaction_data` 优先；显式空数组表示没有帖子，不读
 
 执行器 `python3 -m app.account_vector_worker` 按批次读取冻结画像，调用项目约定的模型服务 JSON 接口，并回写该批次的向量。它不会查询最新账号来源，不会复用其他批次的账号向量。模型地址未配置时默认关闭，不自动生成向量。
 
-在项目根目录 `.env` 配置：
+在 MySQL `godp_system_config` 配置以下键值，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
 
-```dotenv
+```text
 ACCOUNT_VECTOR_WORKER_ENABLED=1
 ACCOUNT_VECTOR_MODEL_URL=https://your-trusted-model-service.example/account-embedding
 ACCOUNT_VECTOR_MODEL_TOKEN=your-model-service-token

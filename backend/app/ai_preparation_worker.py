@@ -2,13 +2,13 @@
 
 import argparse
 import logging
-import os
 import time
 
 from fastapi import HTTPException
 
 from .ai_preparation import advance_preparation, today
 from .db import connection
+from .system_config import get_setting
 
 
 LOG = logging.getLogger("ai-preparation-worker")
@@ -16,7 +16,7 @@ LOG = logging.getLogger("ai-preparation-worker")
 
 def poll_seconds() -> int:
     try:
-        interval = int(os.getenv("AI_PREPARATION_POLL_SECONDS", "60"))
+        interval = int(get_setting("AI_PREPARATION_POLL_SECONDS", "60"))
     except ValueError as exc:
         raise ValueError("AI_PREPARATION_POLL_SECONDS 必须是整数") from exc
     if not 5 <= interval <= 3600:

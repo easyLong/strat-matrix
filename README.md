@@ -14,7 +14,7 @@
 
 ## 启动
 
-数据库连接配置读取 `docs/.env`，也可放在项目根目录 `.env` 覆盖。需要 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`。
+数据库连接配置读取根目录 `.env`（兼容旧 `docs/.env`），只保留 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`。其他运行配置统一存放于 MySQL `godp_system_config`，创建、迁移及修改方式见[系统配置说明](docs/SYSTEM_CONFIG.md)。
 
 先确认数据库和访问权限，再在项目根目录执行：
 
@@ -57,7 +57,7 @@ npm run dev
 
 运行 `python -m app.init_db` 会补建本地来源数据、内容历史、槽位状态、待投递事件、回传记录及标签表，并将 `backend/schema.sql` 中的中文表说明和字段说明同步到已有表；已有业务记录保留。接口划分及数据归属见 [`docs/接口预留清单_V0.1.md`](docs/接口预留清单_V0.1.md)。
 
-本项目提供下列**跨系统入站接口**，调用方在请求头发送 `X-Integration-Token`。本地开发令牌保存在被 Git 忽略的项目根目录 `.env`，示例键见 `.env.example`。
+本项目提供下列**跨系统入站接口**，调用方在请求头发送 `X-Integration-Token`。令牌保存于 MySQL `godp_system_config` 的 `INTEGRATION_TOKEN` 配置项，配置查询默认脱敏。
 
 | 路径 | 用途 |
 | --- | --- |

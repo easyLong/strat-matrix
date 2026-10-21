@@ -2,7 +2,6 @@
 
 from datetime import date, datetime, timedelta, timezone
 import json
-import os
 import secrets
 from uuid import uuid4
 
@@ -12,6 +11,7 @@ from fastapi.responses import JSONResponse
 import pymysql
 
 from .db import check_database, connection
+from .system_config import SystemConfigError, get_setting
 from .account_metrics import account_metrics, months_ago
 from .account_profile import interaction_snapshot
 from .integration import queue_event, queue_manual_slot, router as integration_router
@@ -20,6 +20,7 @@ from .account_vector_api import router as account_vector_router
 from .matching_readiness_api import router as matching_readiness_router
 from .ai_preparation_api import router as ai_preparation_router
 from .matching_execution_api import router as matching_execution_router
+from .topic_label_model_api import router as topic_label_model_router
 from .ordinary_planning import PlanningError, lifecycle_stage, load_accounts
 from .manual_availability import ensure_manual_accounts_available, planned_manual_accounts
 from .planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, PRODUCTION_STATUS_SQL, planning_status_label, production_status
@@ -48,13 +49,19 @@ from .models import (
 )
 
 
+class ConfiguredCORSMiddleware(CORSMiddleware):
+    def is_allowed_origin(self, origin: str) -> bool:
+        try:
+            port = get_setting("FRONTEND_PORT", "930")
+        except SystemConfigError:
+            return False
+        return origin in (f"http://localhost:{port}", f"http://127.0.0.1:{port}")
+
+
 app = FastAPI(title="多账号智能策划 API", version="0.2.0")
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        f"http://localhost:{os.getenv('FRONTEND_PORT', '930')}",
-        f"http://127.0.0.1:{os.getenv('FRONTEND_PORT', '930')}",
-    ],
+    ConfiguredCORSMiddleware,
+    allow_origins=[],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
@@ -65,6 +72,7 @@ app.include_router(account_vector_router)
 app.include_router(matching_readiness_router)
 app.include_router(ai_preparation_router)
 app.include_router(matching_execution_router)
+app.include_router(topic_label_model_router)
 
 
 @app.middleware("http")
@@ -74,7 +82,10 @@ async def integration_auth_middleware(request: Request, call_next):
         return await call_next(request)
     # Integration and worker APIs use their separate machine-to-machine token.
     if path.startswith("/api/integrations/") or path.startswith("/api/internal/"):
-        expected = os.getenv("INTEGRATION_TOKEN", "")
+        try:
+            expected = get_setting("INTEGRATION_TOKEN", "")
+        except SystemConfigError:
+            return JSONResponse(status_code=503, content={"detail": "系统配置暂不可用"})
         supplied = request.headers.get("x-integration-token", "")
         if not expected:
             return JSONResponse(status_code=503, content={"detail": "系统接口令牌尚未配置"})
@@ -83,6 +94,11 @@ async def integration_auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     return await call_next(request)
+
+
+@app.exception_handler(SystemConfigError)
+async def system_config_error(request: Request, exc: SystemConfigError):
+    return JSONResponse(status_code=503, content={"detail": "系统配置暂不可用"})
 
 
 def infer_content_role(row: dict, topic: dict) -> str:

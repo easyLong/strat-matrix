@@ -8,6 +8,7 @@ from app import matching_executor_worker as worker
 from app.matching_contracts import MatchingPolicyDocument
 from app.matching_executor import IMPLEMENTATION_KEY, ExecutorPolicyError, execute_job
 from app.matching_policy import implementation_approval_errors
+from app.system_config import override_config
 
 
 DECISIONS = {
@@ -182,7 +183,7 @@ class MatchingExecutorTests(unittest.TestCase):
 
     def test_worker_claims_only_builtin_implementation_and_saves_evaluation(self):
         job = base_job()
-        with patch.object(worker, "claim_task", side_effect=[
+        with override_config({}), patch.object(worker, "claim_task", side_effect=[
                 {"job": job, "next_after_id": 1001},
                 {"job": None, "next_after_id": 1001},
              ]) as claim, patch.object(worker, "save_evaluation",

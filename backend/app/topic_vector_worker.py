@@ -2,19 +2,14 @@
 
 import argparse
 import logging
-import os
 import time
-from pathlib import Path
 from urllib.parse import quote
 
-from dotenv import load_dotenv
-
 from .topic_profile import normalized_topic_vector
+from .system_config import get_setting
 from .worker_http import StaleResult, WorkerError, json_request
 
 
-load_dotenv(Path(__file__).resolve().parents[2] / "docs" / ".env")
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 LOG = logging.getLogger("topic-vector-worker")
 
 
@@ -58,21 +53,21 @@ def process_job(job: dict, api_url: str, api_token: str,
 
 
 def run(once: bool) -> int:
-    model_url = os.getenv("TOPIC_VECTOR_MODEL_URL", "").strip()
-    api_token = os.getenv("INTEGRATION_TOKEN", "").strip()
+    model_url = get_setting("TOPIC_VECTOR_MODEL_URL", "").strip()
+    api_token = get_setting("INTEGRATION_TOKEN", "").strip()
     if not model_url or not api_token:
         LOG.error("需要配置 TOPIC_VECTOR_MODEL_URL 和 INTEGRATION_TOKEN；未处理任何任务")
         return 2
     if not model_url.startswith(("http://", "https://")):
         LOG.error("TOPIC_VECTOR_MODEL_URL 必须是完整的 HTTP(S) 地址；未处理任何任务")
         return 2
-    api_url = os.getenv("TOPIC_VECTOR_API_URL", "").strip().rstrip("/")
+    api_url = get_setting("TOPIC_VECTOR_API_URL", "").strip().rstrip("/")
     if not api_url:
-        api_url = f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '6930')}"
-    model_token = os.getenv("TOPIC_VECTOR_MODEL_TOKEN", "").strip()
-    model_timeout = max(1, min(int(os.getenv("TOPIC_VECTOR_MODEL_TIMEOUT_SECONDS", "120")), 600))
-    poll_seconds = max(5, int(os.getenv("TOPIC_VECTOR_POLL_SECONDS", "30")))
-    retry_seconds = max(60, int(os.getenv("TOPIC_VECTOR_RETRY_SECONDS", "600")))
+        api_url = f"http://127.0.0.1:{get_setting('BACKEND_PORT', '6930')}"
+    model_token = get_setting("TOPIC_VECTOR_MODEL_TOKEN", "").strip()
+    model_timeout = max(1, min(int(get_setting("TOPIC_VECTOR_MODEL_TIMEOUT_SECONDS", "120")), 600))
+    poll_seconds = max(5, int(get_setting("TOPIC_VECTOR_POLL_SECONDS", "30")))
+    retry_seconds = max(60, int(get_setting("TOPIC_VECTOR_RETRY_SECONDS", "600")))
     cooldowns: dict[str, float] = {}
     headers = {"X-Integration-Token": api_token}
     while True:

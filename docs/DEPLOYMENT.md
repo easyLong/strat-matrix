@@ -51,20 +51,15 @@ MYSQL_PORT=3306
 MYSQL_USER=数据库账号
 MYSQL_PASSWORD=数据库密码
 MYSQL_DATABASE=strat_matrix
-INTEGRATION_TOKEN=请替换成随机长字符串
-BACKEND_HOST=127.0.0.1
-BACKEND_PORT=6930
-FRONTEND_HOST=127.0.0.1
-FRONTEND_PORT=930
-ORDINARY_SCHEDULER_ENABLED=1
-HOTSPOT_SCHEDULER_ENABLED=1
 ```
+
+端口、接口令牌、模型和进程开关统一存放于 MySQL `godp_system_config`，见[系统配置说明](SYSTEM_CONFIG.md)。安装后端依赖后，在 `backend` 执行 `python -m app.init_system_config --migrate-env --clean-env` 创建并迁移；该命令核对入库成功后才清理旧文件。新环境还需在配置表中设置 `INTEGRATION_TOKEN`。
 
 页面作为整体业务模块嵌入客户系统，直接进入策划配置、AI自动策划、手动策划和策划结果。登录、用户账号和角色由宿主系统负责。当前人工操作审计统一标记为“运营人员”，自动任务标记为 `system`。
 
 `/api/integrations/` 和 `/api/internal/` 下的系统接口使用 `X-Integration-Token` 机器令牌。
 
-For direct public access on Alibaba Cloud, set BACKEND_HOST and FRONTEND_HOST to 0.0.0.0 and allow TCP 930 in the security group. With Nginx, expose only ports 80/443 and keep backend port 6930 private.
+阿里云直接访问时，在配置表中将 `BACKEND_HOST`、`FRONTEND_HOST` 设置为 `0.0.0.0` 并开放前端端口；经 Nginx 访问时可设为 `127.0.0.1`，对外开放 80/443。
 
 确认数据库账号已经拥有 `strat_matrix` 数据库及项目表的读写权限。初始化或补齐表结构：
 
@@ -102,11 +97,11 @@ chmod +x start.sh stop.sh status.sh
 1. 选择Python：显式`PYTHON_BIN`优先，其次项目`backend/.venv/bin/python`，再尝试系统`python3`/`python`；检查已启用模型进程的必要配置。
 2. 启动尚未运行的FastAPI后端。
 3. 启动周度规则策划与热点调度进程（默认开启，按服务端配置的北京时间执行）。
-4. 按`.env`开关启动标签、选题向量、账号向量及AI准备推进进程（默认关闭，按相应任务文档配置）。
+4. 按 MySQL 系统配置表中的开关启动标签、选题向量、账号向量及 AI 准备推进进程（默认关闭）。
 5. 默认执行前端生产构建，依赖不存在时执行`npm ci`；前端构建在前端启动前、后端启动后进行。
 6. 启动尚未运行的Vite Preview前端，将PID写入`run/`、日志写入`logs/`。
 
-`start.sh`检测到PID对应进程已运行时会跳过该服务，不能用再次运行启动脚本替代后端重启。更新后端代码或接口结构后，按第8节停止旧进程、更新代码、构建前端并重新启动；`BUILD_FRONTEND=1`只负责前端构建，不会重启已经运行的旧后端。
+`start.sh` 检测到 PID 对应进程已运行时会跳过该服务。更新代码或配置后，按第 8 节停止旧进程再启动；配置表中的 `BUILD_FRONTEND=1` 只负责前端构建。
 
 默认端口：
 
@@ -118,14 +113,16 @@ chmod +x start.sh stop.sh status.sh
 首次只构建一次时可以：
 
 ```bash
-BUILD_FRONTEND=1 ./start.sh
+(cd backend && python3 -m app.system_config set BUILD_FRONTEND --value 1)
+./start.sh
 ```
 
 如果只重启服务、不重新构建前端：
 
 ```bash
 ./stop.sh
-BUILD_FRONTEND=0 ./start.sh
+(cd backend && python3 -m app.system_config set BUILD_FRONTEND --value 0)
+./start.sh
 ```
 
 ## 5. 查看和停止
@@ -182,21 +179,19 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d your-domain.example.com
 ```
 
-## 7. 常用环境变量
+## 7. 常用系统配置
 
-脚本支持通过环境变量调整路径和端口：
+运行参数以 MySQL `godp_system_config` 为准，`.env` 仅用于数据库连接。定位项目及解释器的启动引导选项仍可在命令行指定：
 
 ```bash
 APP_ROOT=/opt/strat-matrix \
-BACKEND_PORT=6930 \
-FRONTEND_PORT=930 \
-BUILD_FRONTEND=0 \
+PYTHON_BIN=/opt/strat-matrix/backend/.venv/bin/python \
 ./start.sh
 ```
 
-可用变量：
+修改端口、构建开关或 Worker 开关请使用 `python -m app.system_config set 配置键 --value 配置值`，或直接更新配置表。
 
-下表为启动脚本未配置时的回退值；环境变量优先，其次读取根目录 `.env`。示例 `.env` 使用 `127.0.0.1` 配合 Nginx，直接通过服务器 IP 访问时可配置为 `0.0.0.0`。
+下表列出初始化默认值。`APP_ROOT`、`PYTHON_BIN`、`NPM_BIN` 是启动引导选项，其余参数保存在数据库，端口和开关不再读取同名环境变量。监听地址配合 Nginx 使用时可在表中改为 `127.0.0.1`。
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -213,7 +208,8 @@ BUILD_FRONTEND=0 \
 | `LOG_DIR` | `logs` | 日志目录 |
 | `ORDINARY_SCHEDULER_ENABLED` | `1` | 是否启动普通内容周策划调度进程；设为 `0` 后重启服务停用 |
 | `HOTSPOT_SCHEDULER_ENABLED` | `1` | 是否启动热点槽位调度进程 |
-| `TOPIC_LABEL_WORKER_ENABLED` | `0` | 是否启动普通选题首次标签识别进程；还需配置 `LABEL_MODEL_URL` |
+| `TOPIC_LABEL_WORKER_ENABLED` | `0` | 是否启动普通选题首次标签识别进程；启动前执行配置预检 |
+| `TOPIC_LABEL_PROVIDER` | `doubao` | `doubao` 使用[内置豆包服务](DOUBAO_TOPIC_LABELING.md)，需配置 `ARK_API_KEY`、聊天及向量模型；`http` 使用 `LABEL_MODEL_URL` |
 | `TOPIC_VECTOR_WORKER_ENABLED` | `0` | 是否启动普通选题画像向量进程；还需配置 `TOPIC_VECTOR_MODEL_URL` |
 | `ACCOUNT_VECTOR_WORKER_ENABLED` | `0` | 是否启动批次账号画像向量进程；还需配置 `ACCOUNT_VECTOR_MODEL_URL` 和内部接口令牌 |
 | `AI_PREPARATION_WORKER_ENABLED` | `0` | 是否推进已创建的AI准备记录，等待输入并冻结；不自动新建准备或生成结果 |
@@ -226,8 +222,10 @@ cd /opt/strat-matrix
 ./stop.sh
 git pull --ff-only origin main
 backend/.venv/bin/pip install -r backend/requirements.txt
+(cd backend && .venv/bin/python -m app.init_system_config --migrate-env --clean-env)
 (cd backend && .venv/bin/python -m app.init_db)
-BUILD_FRONTEND=1 ./start.sh
+(cd backend && .venv/bin/python -m app.system_config set BUILD_FRONTEND --value 1)
+./start.sh
 ./status.sh
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -271,4 +269,4 @@ tail -f logs/backend.log
 ss -lntp | grep -E ':6930|:930'
 ```
 
-可以通过 `BACKEND_PORT` 和 `FRONTEND_PORT` 修改端口，并同步修改 Nginx 配置。
+可在 `godp_system_config` 中修改 `BACKEND_PORT` 和 `FRONTEND_PORT`，重启相关服务，并同步修改 Nginx 配置。

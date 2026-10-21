@@ -131,7 +131,7 @@ Worker 对策略/冻结输入与实现契约不一致回写 `invalid_response`�
 
 ## 6. Worker
 
-环境变量：
+MySQL `godp_system_config` 配置项，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
 
 ```text
 MATCHING_EXECUTOR_WORKER_ENABLED=0

@@ -1,6 +1,25 @@
 -- MySQL schema. Run explicitly after confirming the target database.
 -- No foreign keys, stored procedures, functions, or views.
 
+CREATE TABLE IF NOT EXISTS godp_system_config (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '系统配置记录主键ID',
+    config_key VARCHAR(100) COLLATE utf8mb4_bin NOT NULL COMMENT '系统配置唯一键，区分大小写并沿用原配置项名称',
+    config_group VARCHAR(64) NOT NULL COMMENT '配置分组：服务、调度、接口、豆包、打标、向量或匹配',
+    config_name VARCHAR(200) NOT NULL COMMENT '配置项中文名称及用途',
+    config_value MEDIUMTEXT NOT NULL COMMENT '配置值文本，按值类型解析；密钥仅供受控服务端读取',
+    value_type VARCHAR(16) NOT NULL DEFAULT 'string' COMMENT '配置值类型：string字符串、int整数、bool开关',
+    is_secret TINYINT NOT NULL DEFAULT 0 COMMENT '是否敏感配置：1为密钥或令牌，查询展示时脱敏',
+    enabled TINYINT NOT NULL DEFAULT 1 COMMENT '配置启用标记：1启用、0停用；停用参数禁止读取',
+    version INT NOT NULL DEFAULT 1 COMMENT '配置版本号，每次修改递增，用于并发更新校验',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '配置创建时间',
+    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '配置创建人或初始化进程',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后修改时间',
+    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '配置最后修改人或更新进程',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '逻辑删除标志：N正常、Y删除',
+    UNIQUE KEY uk_system_config_key (config_key),
+    KEY idx_system_config_group (config_group, del_flag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统运行配置，除MySQL连接外的端口、模型、密钥及任务开关统一配置源';
+
 CREATE TABLE IF NOT EXISTS godp_strategy_config (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置记录主键ID',
     config_key VARCHAR(64) NOT NULL COMMENT '配置项唯一标识',

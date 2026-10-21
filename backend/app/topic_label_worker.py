@@ -3,20 +3,16 @@
 import argparse
 import json
 import logging
-import os
 import time
-from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from dotenv import load_dotenv
-
+from .doubao_labeling import DoubaoConfigurationError, read_config as doubao_config
+from .system_config import get_setting
 from .t6_tags import normalized_embedding
 
 
-load_dotenv(Path(__file__).resolve().parents[2] / "docs" / ".env")
-load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 LOG = logging.getLogger("topic-label-worker")
 DIMENSIONS = tuple(f"T{number}" for number in range(1, 7))
 
@@ -69,7 +65,8 @@ def checked_labels(response: dict, taxonomy: dict) -> dict[str, list[str]]:
 
 
 def process_job(topic_id: str, api_url: str, api_token: str,
-                model_url: str, model_token: str, model_timeout: int) -> None:
+                model_url: str, model_token: str, model_timeout: int,
+                provider: str = "http") -> bool | None:
     topic_path = quote(topic_id, safe="")
     internal_headers = {"X-Integration-Token": api_token}
     claim = json_request(f"{api_url}/api/internal/topic-label-jobs/{topic_path}/claim",
@@ -79,7 +76,8 @@ def process_job(topic_id: str, api_url: str, api_token: str,
     except KeyError as exc:
         raise WorkerError("领取响应缺少 lease_id") from exc
     try:
-        model_headers = {"Authorization": f"Bearer {model_token}"} if model_token else {}
+        model_headers = ({"X-Integration-Token": api_token} if provider == "doubao" else
+                         {"Authorization": f"Bearer {model_token}"} if model_token else {})
         response = json_request(model_url, "POST", body={
             "task": "ordinary_topic_labels",
             "topic_id": topic_id,
@@ -102,6 +100,7 @@ def process_job(topic_id: str, api_url: str, api_token: str,
             "t6_embedding_model": response["t6_embedding_model"].strip(),
         }, headers=internal_headers, lease_conflict=True)
         LOG.info("选题 %s 标签识别完成", topic_id)
+        return True
     except LeaseLost:
         LOG.info("选题 %s 租约已失效，忽略旧结果", topic_id)
     except (WorkerError, KeyError) as exc:
@@ -118,26 +117,47 @@ def process_job(topic_id: str, api_url: str, api_token: str,
         except WorkerError as report_error:
             LOG.error("选题 %s 失败状态回写异常：%s", topic_id, report_error)
         LOG.warning("选题 %s 标签识别失败：%s", topic_id, reason)
+        return False
+
+
+def worker_config() -> dict:
+    provider = get_setting("TOPIC_LABEL_PROVIDER", "doubao").strip().lower()
+    if provider not in ("http", "doubao"):
+        raise ValueError("TOPIC_LABEL_PROVIDER 只能是 http 或 doubao")
+    api_token = get_setting("INTEGRATION_TOKEN", "").strip()
+    if not api_token:
+        raise ValueError("需要配置 INTEGRATION_TOKEN；未领取任何任务")
+    api_url = get_setting("TOPIC_LABEL_API_URL", "").strip().rstrip("/")
+    if not api_url:
+        api_url = f"http://127.0.0.1:{get_setting('BACKEND_PORT', '6930')}"
+    if not api_url.startswith(("http://", "https://")):
+        raise ValueError("TOPIC_LABEL_API_URL 必须是完整的 HTTP(S) 地址")
+    model_url = get_setting("LABEL_MODEL_URL", "").strip()
+    model_token = get_setting("LABEL_MODEL_TOKEN", "").strip()
+    model_timeout = int(get_setting("LABEL_MODEL_TIMEOUT_SECONDS", "120"))
+    poll_seconds = int(get_setting("TOPIC_LABEL_POLL_SECONDS", "30"))
+    retry_seconds = int(get_setting("TOPIC_LABEL_RETRY_SECONDS", "600"))
+    if not 1 <= model_timeout <= 600 or not 5 <= poll_seconds <= 3600 or not 60 <= retry_seconds <= 86400:
+        raise ValueError("打标超时需在 1–600 秒，轮询需在 5–3600 秒，重试需在 60–86400 秒")
+    if provider == "doubao":
+        doubao_config()  # Fail before claiming jobs when credentials/models are missing.
+        model_url = f"{api_url}/api/internal/topic-label-model"
+        model_token = ""
+        # Service calls chat and embedding sequentially; each has its own timeout.
+        model_timeout = 2 * model_timeout + 15
+    elif not model_url.startswith(("http://", "https://")):
+        raise ValueError("需要配置有效的 LABEL_MODEL_URL；未领取任何任务")
+    return {"api_url": api_url, "api_token": api_token, "model_url": model_url,
+            "model_token": model_token, "model_timeout": model_timeout,
+            "provider": provider, "poll_seconds": poll_seconds, "retry_seconds": retry_seconds}
 
 
 def run(once: bool) -> int:
-    model_url = os.getenv("LABEL_MODEL_URL", "").strip()
-    api_token = os.getenv("INTEGRATION_TOKEN", "").strip()
-    if not model_url or not api_token:
-        LOG.error("需要配置 LABEL_MODEL_URL 和 INTEGRATION_TOKEN；未领取任何任务")
-        return 2
-    if not model_url.startswith(("http://", "https://")):
-        LOG.error("LABEL_MODEL_URL 必须是完整的 HTTP(S) 地址；未领取任何任务")
-        return 2
-    api_url = os.getenv("TOPIC_LABEL_API_URL", "").strip().rstrip("/")
-    if not api_url:
-        api_url = f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '6930')}"
-    model_token = os.getenv("LABEL_MODEL_TOKEN", "").strip()
-    model_timeout = max(1, min(int(os.getenv("LABEL_MODEL_TIMEOUT_SECONDS", "120")), 600))
-    poll_seconds = max(5, int(os.getenv("TOPIC_LABEL_POLL_SECONDS", "30")))
-    retry_seconds = max(60, int(os.getenv("TOPIC_LABEL_RETRY_SECONDS", "600")))
+    cfg = worker_config()
+    api_url, api_token = cfg["api_url"], cfg["api_token"]
     cooldowns: dict[str, float] = {}
     while True:
+        failures = 0
         try:
             after_id = 0
             while True:
@@ -155,13 +175,16 @@ def run(once: bool) -> int:
                     if not isinstance(topic_id, str) or cooldowns.get(topic_id, 0) > time.monotonic():
                         continue
                     try:
-                        process_job(topic_id, api_url, api_token, model_url, model_token,
-                                    model_timeout)
+                        result = process_job(topic_id, api_url, api_token, cfg["model_url"],
+                                             cfg["model_token"], cfg["model_timeout"], cfg["provider"])
+                        if result is False:
+                            failures += 1
                     except LeaseLost:
                         LOG.info("选题 %s 已由其他识别器领取", topic_id)
                     except WorkerError as exc:
+                        failures += 1
                         LOG.error("选题 %s 处理异常：%s", topic_id, exc)
-                    cooldowns[topic_id] = time.monotonic() + retry_seconds
+                    cooldowns[topic_id] = time.monotonic() + cfg["retry_seconds"]
                 if len(jobs) < 100:
                     break
         except WorkerError as exc:
@@ -169,19 +192,24 @@ def run(once: bool) -> int:
             if once:
                 return 1
         if once:
-            return 0
+            return 1 if failures else 0
         cooldowns = {key: until for key, until in cooldowns.items() if until > time.monotonic()}
-        time.sleep(poll_seconds)
+        time.sleep(cfg["poll_seconds"])
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="普通选题首次标签识别进程")
     parser.add_argument("--once", action="store_true", help="扫描一次任务队列后退出")
+    parser.add_argument("--check-config", action="store_true", help="只检查配置，不领取任务或调用模型")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
+        if args.check_config:
+            cfg = worker_config()
+            LOG.info("标签识别配置有效；provider=%s；未领取任务或调用模型", cfg["provider"])
+            return 0
         return run(args.once)
-    except ValueError as exc:
+    except (ValueError, DoubaoConfigurationError) as exc:
         LOG.error("标签识别进程配置无效：%s", exc)
         return 2
 

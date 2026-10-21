@@ -3,7 +3,12 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="${APP_ROOT:-$SCRIPT_DIR}"
-RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
+source "$APP_ROOT/system-config.sh"
+if ! load_system_config; then
+  # Stopping known processes must remain possible when the database is down.
+  RUN_DIR="${RUN_DIR:-$APP_ROOT/run}"
+  echo "MySQL configuration unavailable; using fallback PID directory: $RUN_DIR" >&2
+fi
 
 stop_one() {
   local name="$1"
