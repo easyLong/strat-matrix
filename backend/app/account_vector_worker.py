@@ -5,11 +5,12 @@ from dataclasses import dataclass
 import logging
 import re
 import time
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 from .vector_utils import normalized_vector
 from .system_config import get_setting
 from .worker_http import StaleResult, WorkerError, json_request
+from .doubao_labeling import DoubaoConfigurationError, read_embedding_config
 
 
 LOG = logging.getLogger("account-vector-worker")
@@ -24,23 +25,9 @@ class ConfigurationError(WorkerError):
 class WorkerConfig:
     api_url: str
     api_token: str
-    model_url: str
-    model_token: str
     model_timeout: int
     poll_seconds: int
     retry_seconds: int
-
-
-def http_url(value: str, name: str) -> str:
-    try:
-        parsed = urlsplit(value)
-        valid = parsed.scheme in ("http", "https") and bool(parsed.hostname) and not parsed.fragment
-        parsed.port  # Also reject an invalid port without logging the URL.
-    except ValueError as exc:
-        raise ConfigurationError(f"{name} 必须是有效的 HTTP(S) 地址") from exc
-    if not valid or any(character.isspace() for character in value):
-        raise ConfigurationError(f"{name} 必须是有效的 HTTP(S) 地址")
-    return value
 
 
 def seconds(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -54,17 +41,18 @@ def seconds(name: str, default: int, minimum: int, maximum: int) -> int:
 
 
 def read_config() -> WorkerConfig:
-    model_url = get_setting("ACCOUNT_VECTOR_MODEL_URL", "").strip()
     api_token = get_setting("INTEGRATION_TOKEN", "").strip()
-    if not model_url or not api_token:
-        raise ConfigurationError("需要配置 ACCOUNT_VECTOR_MODEL_URL 和 INTEGRATION_TOKEN；未处理任何任务")
+    if not api_token:
+        raise ConfigurationError("需要配置 INTEGRATION_TOKEN；未处理任何任务")
+    try:
+        read_embedding_config()
+    except DoubaoConfigurationError as exc:
+        raise ConfigurationError(str(exc)) from exc
     api_url = get_setting("ACCOUNT_VECTOR_API_URL", "").strip().rstrip("/")
     if not api_url:
         api_url = f"http://127.0.0.1:{get_setting('BACKEND_PORT', '6930')}"
     return WorkerConfig(
-        api_url=http_url(api_url, "ACCOUNT_VECTOR_API_URL"), api_token=api_token,
-        model_url=http_url(model_url, "ACCOUNT_VECTOR_MODEL_URL"),
-        model_token=get_setting("ACCOUNT_VECTOR_MODEL_TOKEN", "").strip(),
+        api_url=api_url, api_token=api_token,
         model_timeout=seconds("ACCOUNT_VECTOR_MODEL_TIMEOUT_SECONDS", 120, 1, 600),
         poll_seconds=seconds("ACCOUNT_VECTOR_POLL_SECONDS", 30, 5, 3600),
         retry_seconds=seconds("ACCOUNT_VECTOR_RETRY_SECONDS", 600, 60, 86400),
@@ -105,11 +93,11 @@ def process_job(job: dict, cfg: WorkerConfig, ready_results: dict[JobKey, dict])
     endpoint = f"{cfg.api_url}/api/internal/{route}/{batch_id}/{quote(account_id, safe='')}"
     if key not in ready_results:
         try:
-            response = json_request(cfg.model_url, "POST", body={
+            response = json_request(f"{cfg.api_url}/api/internal/embedding-model", "POST", body={
                 "task": "account_profile_embedding", identity: batch_id,
                 "account_id": account_id, "profile_hash": fingerprint,
                 "config_version": job["config_version"], "profile": job["profile"],
-            }, headers={"Authorization": f"Bearer {cfg.model_token}"} if cfg.model_token else {},
+            }, headers={"X-Integration-Token": cfg.api_token},
                 timeout=cfg.model_timeout)
             try:
                 normalized_vector(response["vector"], response["vector_model"], "账号")
@@ -214,7 +202,7 @@ def main() -> int:
         parser.error("--preparation-id 必须是正整数")
     try:
         cfg = read_config()
-    except ConfigurationError as exc:
+    except (ConfigurationError, DoubaoConfigurationError) as exc:
         LOG.error("账号向量进程配置无效：%s", exc)
         return 2
     if args.check_config:

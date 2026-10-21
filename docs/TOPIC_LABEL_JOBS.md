@@ -14,21 +14,9 @@
 
 ## 配置本地识别进程
 
-项目内已有 `python3 -m app.topic_label_worker` 执行器。它使用上述内部接口领取任务，将首次入库选题快照与领取时的 T1–T5 字典交给配置的模型服务，校验响应后提交 T1–T6 单选结果。已实现[豆包内置打标服务](DOUBAO_TOPIC_LABELING.md)：`TOPIC_LABEL_PROVIDER=doubao` 使用本项目内部服务，需要配置方舟 API Key、聊天模型和 T6 向量模型。也可使用 `http` 保留以下外部服务契约。默认不开启 Worker，配置不完整时不领取任务。
+项目内已有 `python3 -m app.topic_label_worker` 执行器。它使用上述内部接口领取任务，将首次入库选题快照与领取时的 T1–T5 字典交给本项目内置模型服务，校验响应后提交 T1–T6 单选结果。文本生成使用全局 `MODEL_NAME`；T6 向量使用与选题、账号画像共用的 `EMBEDDING_MODEL_NAME`；三类调用共用 `ARK_API_KEY`。默认不开启 Worker，配置不完整时不领取任务。
 
-在 MySQL `godp_system_config` 中配置以下键值，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
-
-```text
-TOPIC_LABEL_WORKER_ENABLED=1
-TOPIC_LABEL_PROVIDER=http
-LABEL_MODEL_URL=https://your-trusted-model-service.example/ordinary-topic-labels
-LABEL_MODEL_TOKEN=your-model-service-token
-LABEL_MODEL_TIMEOUT_SECONDS=120
-TOPIC_LABEL_POLL_SECONDS=30
-TOPIC_LABEL_RETRY_SECONDS=600
-```
-
-`LABEL_MODEL_TOKEN` 可留空；非空时执行器使用 `Authorization: Bearer <token>`。模型服务必须能接收 JSON `POST`，请求示例：
+方舟 API Key 和两类全局模型配置保存在 MySQL `godp_system_config`。Worker 开关和轮询参数使用代码默认值。内部打标模型接口接收 JSON `POST`，请求示例：
 
 ```json
 {
@@ -54,4 +42,4 @@ T1–T5 必须各选一个当前字典名称；T6 必须是 1–80 字的单个�
 
 T6 标签库保存在 `godp_t6_tag`，选题当前记录及历史记录保存 `t6_tag_id`。服务端先按名称复用已有 T6；其余候选只与**同一向量模型标识、相同维度**的已有 T6 计算余弦相似度，最高值**严格大于 0.80** 时复用该稳定 ID 和已有名称，否则新增标签。标签库比较、关联回写和任务完成在同一数据库事务中执行，并用数据库锁避免并发新增重复标签。这个余弦口径是当前工程实现，后续算法文档确认时可调整。
 
-部署更新后先运行 `cd backend && python3 -m app.init_db`。迁移会按名称给既有已完成的 T6 标签补稳定 ID；由于历史记录没有向量，不会伪造语义向量。模型服务返回同名 T6 时可为其补入向量；在此之前，这些旧标签只能按名称复用，不能参与相似度比较。模型适配保留项目 HTTP JSON 契约，支持外部服务及内置豆包服务。[选题画像与向量生成](TOPIC_PROFILE_VECTOR.md)、[账号画像及向量准备](ACCOUNT_PROFILE_VECTOR.md)、[正式匹配执行](MATCHING_EXECUTOR.md)及[策划流水线](PLANNING_PIPELINE.md)由各自模块负责，是否具备真实运行条件须按对应配置和部署检查。
+部署更新后先运行 `cd backend && python3 -m app.init_db`。迁移会按名称给既有已完成的 T6 标签补稳定 ID；由于历史记录没有向量，不会伪造语义向量。模型返回同名 T6 时可为其补入向量；在此之前，这些旧标签只能按名称复用，不能参与相似度比较。T6、选题画像和账号画像调用同一向量适配器及全局向量配置。[选题画像与向量生成](TOPIC_PROFILE_VECTOR.md)、[账号画像及向量准备](ACCOUNT_PROFILE_VECTOR.md)、[正式匹配执行](MATCHING_EXECUTOR.md)及[策划流水线](PLANNING_PIPELINE.md)由各自模块负责。

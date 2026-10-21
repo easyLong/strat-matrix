@@ -12,7 +12,7 @@ export default defineConfig(({ command }) => {
     ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python', import.meta.url))
   const python = process.env.PYTHON_BIN || (existsSync(venv) ? venv
     : process.platform === 'win32' ? 'python' : 'python3')
-  // This command returns only four non-secret bind/proxy settings.
+  // This command returns fixed non-secret bind/proxy defaults from code.
   const settings = JSON.parse(execFileSync(python, ['-m', 'app.system_config', 'frontend-json'], {
     cwd: backendDir, encoding: 'utf8', timeout: 15000, windowsHide: true,
     env: { ...process.env, PYTHONIOENCODING: 'utf-8' },

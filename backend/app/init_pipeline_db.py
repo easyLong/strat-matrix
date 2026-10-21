@@ -14,6 +14,14 @@ def main() -> None:
     with connection() as db, db.cursor() as cursor:
         for statement in statements:
             cursor.execute(statement)
+        cursor.execute("SHOW COLUMNS FROM godp_planning_pipeline_run")
+        columns = {row['Field'] for row in cursor.fetchall()}
+        for name, definition in (
+            ('planning_scope', "VARCHAR(20) NOT NULL DEFAULT 'full' COMMENT '策划范围：full普通营销热点组合，ordinary_only仅普通选题'"),
+            ('production_provider', "VARCHAR(20) NOT NULL DEFAULT 'disabled' COMMENT '正式结果下游生产方式：disabled不自动生产，local_mock本地模拟内容方'"),
+        ):
+            if name not in columns:
+                cursor.execute(f"ALTER TABLE godp_planning_pipeline_run ADD COLUMN {name} {definition}")
         updated_tables = sync_table_comments(cursor, source)
         updated_columns = sync_column_comments(cursor, source)
         db.commit()

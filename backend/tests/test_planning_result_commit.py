@@ -211,6 +211,13 @@ class PlanningResultTransactionTests(unittest.TestCase):
         self.assertTrue(any(sql.startswith("UPDATE godp_planning_pipeline_run") for sql, _ in self.sql))
         self.assertIn("RELEASE_LOCK", self.sql[-1][0])
 
+    def test_ordinary_only_commit_does_not_require_a_marketing_source(self):
+        self.pipeline['planning_scope'] = 'ordinary_only'
+        self.marketing.side_effect = AssertionError('ordinary flow must not read marketing')
+        result = service.commit_pipeline_result(501, 7)
+        self.assertEqual(result['batch_id'], 9001)
+        self.marketing.assert_not_called()
+
     def test_failure_after_slot_inserts_rolls_back_without_success_relations(self):
         self.profiles.side_effect = RuntimeError("profile write failed")
         with self.assertRaisesRegex(RuntimeError, "profile write failed"):

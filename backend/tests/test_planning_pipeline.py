@@ -163,7 +163,7 @@ class PlanningPipelineTests(unittest.TestCase):
         self.assertEqual(stages["matrix_allocation"]["status"], "succeeded")
         self.assertEqual(stages["composition"]["status"], "succeeded")
         self.assertEqual(stages["result_commit"]["status"], "waiting")
-        self.assertEqual(stages["result_commit"]["error_code"], "result_commit_not_implemented")
+        self.assertEqual(stages["result_commit"]["error_code"], "result_commit_pending")
         self.assertFalse(result["operations_result_committed"])
         self.assertIsNone(result["production_batch_id"])
         for call in self.store.cursor.execute.call_args_list:
@@ -176,13 +176,13 @@ class PlanningPipelineTests(unittest.TestCase):
         created = self.create()
         for stage in self.store.stages:
             stage["status"] = "succeeded"
-        self.store.stages[-1].update(status="waiting", error_code="result_commit_not_implemented",
-                                     error_message="not implemented")
+        self.store.stages[-1].update(status="waiting", error_code="result_commit_pending",
+                                     error_message="pending commit")
         self.store.pipeline.update(status="waiting", current_stage="result_commit")
         with self.assertRaises(HTTPException) as caught:
             service.retry_pipeline(501, created["version"])
         self.assertEqual(caught.exception.status_code, 409)
-        self.assertIn("正式结果提交适配器尚未实现", str(caught.exception.detail))
+        self.assertIn("请通过正式结果提交执行器重试", str(caught.exception.detail))
 
     def test_schema_has_chinese_table_and_column_comments(self):
         schema = (Path(__file__).resolve().parents[1] / "pipeline_schema.sql").read_text(encoding="utf-8")

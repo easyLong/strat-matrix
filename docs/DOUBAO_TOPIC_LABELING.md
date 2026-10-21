@@ -1,29 +1,22 @@
 # 豆包选题打标服务
 
-项目内置豆包火山方舟适配器。标签 Worker 领取任务后，调用本项目内部模型接口生成 T1–T6 标签及 T6 语义向量，再沿用已有事务回写标签、稳定 ID 和选题画像。本轮未新增数据表或字段。
+项目内置豆包火山方舟适配器。标签 Worker 领取任务后，调用本项目内部模型接口生成 T1–T6 标签及 T6 语义向量，再沿用已有事务回写标签、稳定 ID 和选题画像。本轮未新增数据表或字段。全项目文本任务统一使用 `MODEL_NAME`，T6、普通选题画像及账号画像向量统一使用 `EMBEDDING_MODEL_NAME`；凭据共用 `ARK_API_KEY`。
 
 ## 配置
 
-以下配置键统一保存于 MySQL `godp_system_config`，通过[系统配置命令或 SQL](SYSTEM_CONFIG.md)修改；`.env` 只保留数据库连接。以下为键值示例，不应粘贴进 `.env`：
+模型与密钥保存在 MySQL `godp_system_config`，通过[系统配置命令](SYSTEM_CONFIG.md)修改；`.env` 只保留数据库连接。当前只需关心以下三项：
 
 ```text
-TOPIC_LABEL_PROVIDER=doubao
-TOPIC_LABEL_WORKER_ENABLED=0
 ARK_API_KEY=
-DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-DOUBAO_CHAT_MODEL=doubao-seed-2-0-lite-260215
-DOUBAO_EMBEDDING_MODEL=
-DOUBAO_EMBEDDING_API=multimodal
-LABEL_MODEL_TIMEOUT_SECONDS=120
-TOPIC_LABEL_POLL_SECONDS=30
-TOPIC_LABEL_RETRY_SECONDS=600
+MODEL_NAME=doubao-seed-2-1-lite-260915
+EMBEDDING_MODEL_NAME=doubao-embedding-vision-251215
 ```
 
-聊天模型使用仓库《使用的框架说明.txt》指定的版本；也可填写方舟账号已授权的 Model ID 或推理接入点 ID。`DOUBAO_EMBEDDING_MODEL` 必须填写实际可用的豆包向量模型或接入点 ID，不能使用聊天、文生图模型或示例占位符。
+聊天模型填写标准方舟 API 可用的版本化 Model ID 或推理接入点 ID。当前默认 `doubao-seed-2-1-lite-260915`；Coding Plan 的别名 `doubao-seed-2.1-lite` 不能直接用于项目当前的标准 `/api/v3` 地址。
 
-`DOUBAO_EMBEDDING_API=multimodal` 调用 `/embeddings/multimodal`，输入为一条 `type=text` 的 T6 文本，读取 `data.embedding`。若开通的是旧版文本向量接口，设为 `text`，调用 `/embeddings`，读取 `data[0].embedding`。保存上游响应中实际 `model` 作为向量空间标识。
+所有项目向量都使用方舟 `/embeddings/multimodal` 的纯文本输入能力；账号画像和选题画像将规范化画像 JSON 作为文本输入，T6 将需求短语作为文本输入，不发送图片或视频。保存上游响应中实际 `model` 作为统一向量空间标识。当前默认模型支持纯文本输入，详见[方舟向量化接口文档](https://docs.volcengine.com/docs/ark/vectorization?lang=zh&redirect=1)。
 
-T6 标签向量只用于需求标签归并；整个选题画像和账号画像的向量仍由对应 Worker 生成。
+T6 标签向量用于需求标签归并；选题画像和账号画像由各自 Worker 生成，但三者复用相同的向量适配器、模型配置、API Key 和向量空间。
 
 ## 流程
 
@@ -94,9 +87,9 @@ python -m app.topic_label_worker --once
 python -m app.topic_label_worker
 ```
 
-`--once` 会调用模型并更新真实标签；有任务失败时退出码为 1，配置错误为 2。服务器常驻启用时，将 `TOPIC_LABEL_WORKER_ENABLED=1`，再使用根目录启停脚本。`start.sh` 会先预检配置；凭据暂缺时保持开关为 `0`。
+`--once` 会调用模型并更新真实标签；有任务失败时退出码为 1，配置错误为 2。Worker 默认不随服务启动；需要运行时手动启动 Worker 命令。超时与重试间隔采用代码默认值。
 
-外部模型服务仍可使用 `TOPIC_LABEL_PROVIDER=http`，配置 `LABEL_MODEL_URL` 和可选 `LABEL_MODEL_TOKEN`。
+当前固定使用豆包服务；其它模型供应方接入后，再按实际运营需求补充配置项。
 
 ```bash
 cd backend

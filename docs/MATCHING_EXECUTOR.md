@@ -1,8 +1,8 @@
 # Matching Executor V1
 
-更新日期：2026-10-20。
+更新日期：2026-10-21。
 
-本页描述仓库内第一版真实普通内容匹配执行器。它对应唯一实现标识 `builtin-cosine-balanced-v1`，消费现有 Matching Task 的不可变冻结输入和租约，生成并回写完整 `MatchingEvaluation`。它不是 mock，也不会创建正式运营策划批次。
+本页描述仓库内普通内容匹配执行器。V1 对应 `builtin-cosine-balanced-v1`；V2 组合执行器对应 `builtin-cosine-portfolio-v2`。两者消费 Matching Task 的不可变冻结输入和租约，生成并回写完整 `MatchingEvaluation`。它们不会直接创建正式运营策划批次。
 
 ## 1. 边界
 
@@ -131,15 +131,7 @@ Worker 对策略/冻结输入与实现契约不一致回写 `invalid_response`�
 
 ## 6. Worker
 
-MySQL `godp_system_config` 配置项，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
-
-```text
-MATCHING_EXECUTOR_WORKER_ENABLED=0
-MATCHING_EXECUTOR_POLL_SECONDS=10
-MATCHING_EXECUTOR_LEASE_SECONDS=1800
-```
-
-默认关闭。启用后由 `start.sh` 启动 `python -m app.matching_executor_worker`。Worker 只领取绑定 `builtin-cosine-balanced-v1` 的任务；其他 `implementation_key` 保留给未来执行器。
+匹配执行器通过命令手工运行 `python -m app.matching_executor_worker`。Worker 分别领取绑定 V1、V2 实现标识的任务；未知实现标识的任务不会被领取。策略必须先显式创建并批准，V2 不会自动成为默认策略。
 
 单次手工验证：
 
@@ -161,9 +153,24 @@ python3 -m app.matching_executor_worker --once
 
 仓库不会自动创建默认策略，也不会自动批准模板。没有已批准且向量空间真实可用的策略时，Executor 不会凭模板自行开始生产匹配。
 
-## 8. 仍未解决的下一步
+## 8. V2 组合执行器
 
-- 当前 Global Allocation 是确定性贪心，不是数学最优分配；如后续验收要求最优化，应增加新 `implementation_key`。
+V2 使用 `docs/examples/matching-policy-builtin-cosine-portfolio-v2-template.json`。先填写实际 `vector_space` 的模型、维度和语义空间，再通过 `POST /api/internal/matching-policies` 创建草稿；检查返回的 `approval_errors` 为空后，使用 `POST /api/internal/matching-policies/{policy_id}/approve` 批准。V2 沿用 V1 的冻结向量、城市/历史门槛、cosine Fit、生命周期角色和兜底输入，并增加 T2 经营作用硬门槛：槽位为流量/转化时，只召回相同 T2 的普通选题，兜底也应用相同规则。组合分配使用容量约束矩阵、MMR 候选缩减和组合目标局部优化。`portfolio` 参数必须完整写入策略文档并随任务审计；当前复用 V1 的单一 `global_topic_max`/不设上限，以及 `same_account_topic_max`，暂不支持逐选题容量表。
+
+V2 组合审计摘要保存在既有五阶段结果中：`global_allocation` 记录最终分配汇总，`composition` 记录 R/C/B/D、总效用、实际权重、MMR输入/保留/裁剪边数、迭代次数及是否达到局部最优。全局选题容量同时约束普通匹配和兜底选择。创建 Matching Task 时显式传入该 V2 `policy_id`；位置结果仍通过现有提案校验和保存接口。
+
+当前 V2 Fit 仍是冻结账号/选题向量的 cosine 相关性分，不是 T1–T6 多特征 Fit。T3/T4/T5 稳定选题标签用于覆盖度，账号侧 taxonomy 映射仍未冻结，因此不能把本版本描述为完整的账号标签适配方案。后续完整多特征版本必须使用新的 `implementation_key` 或 V3 策略版本，不能在已批准 V2 策略下改写计算口径。Worker 由 `MATCHING_EXECUTOR_WORKER_ENABLED` 控制，默认关闭；策略批准后，在服务器显式启用：
+
+```bash
+MATCHING_EXECUTOR_WORKER_ENABLED=1 ./start.sh
+MATCHING_EXECUTOR_WORKER_ENABLED=1 ./status.sh
+```
+
+启用后 Worker 会同时消费 V1 和 V2 已批准策略的任务。关闭 Worker 执行 `./stop.sh`。
+
+## 9. 仍未解决的下一步
+
+- 当前 V2 Global Allocation 先运行容量约束矩阵分配，再做确定性局部改进；非线性组合目标仍不保证数学全局最优。
 - 历史快照当前可表达 `coverage=unknown`；是否必须完整由策略输入选项决定。本实现不会把未知覆盖率解释成“没有历史”。
 - 当前任务在执行时校验选题当前有效性，但未来正式发布日期的精确有效期语义仍应在完整结果提交适配器中再次校验。
 - 营销/热点完整组合和 `godp_planning_batch` / `godp_planning_item` / `godp_slot_state` 原子提交仍未实现；Pipeline V1 的正式提交闸门继续保留。

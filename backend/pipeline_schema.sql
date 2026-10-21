@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS godp_planning_pipeline_run (
     selection_json LONGTEXT NOT NULL COMMENT '参与账号编码有序JSON；null表示使用全部可用正式账号',
     selection_hash CHAR(64) NOT NULL COMMENT '参与账号范围JSON的SHA256指纹',
     policy_id BIGINT NOT NULL COMMENT '逻辑关联已确认匹配策略版本ID，无外键',
+    planning_scope VARCHAR(20) NOT NULL DEFAULT 'full' COMMENT '策划范围：full普通营销热点组合，ordinary_only仅普通选题',
+    production_provider VARCHAR(20) NOT NULL DEFAULT 'disabled' COMMENT '正式结果下游生产方式：disabled不自动生产，local_mock本地模拟内容方',
     status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'Pipeline状态：pending、running、waiting、succeeded、failed或cancelled',
     current_stage VARCHAR(40) NULL COMMENT '当前依赖前沿中的首个阶段标识；完成或取消后为空',
     version INT NOT NULL DEFAULT 1 COMMENT 'Pipeline乐观锁版本号，每次编排状态变更递增',

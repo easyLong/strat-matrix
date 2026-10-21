@@ -1,6 +1,6 @@
 # 算法策略版本与普通匹配执行任务
 
-更新日期：2026-10-20。Matching Task 负责不可变策略版本、冻结输入、租约、重试与普通选题提案回写；仓库提供第一版内置确定性执行器 `builtin-cosine-balanced-v1`。该实现只执行严格的结构化参数契约，不会从 ALG-01 至 ALG-09 的自然语言自动生成算法。详细规则见 [Matching Executor V1](MATCHING_EXECUTOR.md)。
+更新日期：2026-10-21。Matching Task 负责不可变策略版本、冻结输入、租约、重试与普通选题提案回写；仓库提供确定性 V1 执行器 `builtin-cosine-balanced-v1` 和组合优化 V2 执行器 `builtin-cosine-portfolio-v2`。执行器只运行结构化参数契约，不会从 ALG-01 至 ALG-09 的自然语言自动生成算法。详细规则见 [Matching Executor](MATCHING_EXECUTOR.md)。
 
 ## 策略版本
 
@@ -12,7 +12,7 @@
 - 声明具体 `implementation_key`、向量模型标识、维度以及供应方确认的语义空间标识。相同字符串与维度不能自动证明双侧模型语义空间相同，须在ALG-01明确确认。
 - 声明账号、选题、配置、日期四类冻结输入依赖。第二版支持基础兜底池、历史和正式使用计数，须明确对应输入选项，详见[补充输入快照](MATCHING_SUPPLEMENTAL_INPUTS.md)。其他未支持的 `required_inputs` 仍会被阻断，未知事实不能按零使用。
 
-批准通过的是文档完整性和操作者的规则确认；服务端不会从自然语言规则自动生成算法。对 `builtin-cosine-balanced-v1` 还会在批准阶段校验该实现接受的精确机器参数名、枚举和值域。`confirmed_by` 是内部调用提交的确认人记录，不是SSO验证身份。文档中不得放模型地址或凭据。没有默认策略，不会自动创建或批准版本。
+批准通过的是文档完整性和操作者的规则确认；服务端不会从自然语言规则自动生成算法。对 `builtin-cosine-balanced-v1` 会校验其精确机器参数；对 `builtin-cosine-portfolio-v2` 还会要求完整组合参数、权重和为 1，并校验复用、召回和兜底配置。`confirmed_by` 是内部调用提交的确认人记录，不是SSO验证身份。文档中不得放模型地址或凭据。没有默认策略，不会自动创建或批准版本。
 
 通用草稿可复制[策略创建草稿模板](examples/matching-policy-draft.json)。使用内置执行器时可复制 [builtin V1 模板](examples/matching-policy-builtin-v1-template.json)，但模板中的 `vector_space` 为空，必须补齐真实向量空间并人工批准后才可用于任务。
 
@@ -106,13 +106,7 @@ python3 -m app.init_result_commit_db
 
 维护。最后一步为已有 Matching Task 表增加正式批次关系字段，并更新 `godp_auto_plan_run.plan_mode` 说明以包含 `ai_matching`。
 
-Matching Executor Worker 默认关闭：
-
-```text
-MATCHING_EXECUTOR_WORKER_ENABLED=0
-MATCHING_EXECUTOR_POLL_SECONDS=10
-MATCHING_EXECUTOR_LEASE_SECONDS=1800
-```
+Matching Executor Worker 默认关闭，轮询和租约参数暂用代码默认值，尚未登记为运营配置。服务器完成策略审批后，可通过 `MATCHING_EXECUTOR_WORKER_ENABLED=1 ./start.sh` 显式开启 V1/V2 Worker。
 
 启用前必须创建并人工批准真实可执行策略版本。代码不会自动猜测生产向量模型、维度或 `semantic_space_id`。
 

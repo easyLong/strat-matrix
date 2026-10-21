@@ -21,6 +21,8 @@ from .matching_readiness_api import router as matching_readiness_router
 from .ai_preparation_api import router as ai_preparation_router
 from .matching_execution_api import router as matching_execution_router
 from .topic_label_model_api import router as topic_label_model_router
+from .embedding_model_api import router as embedding_model_router
+from .content_production_api import router as content_production_router
 from .ordinary_planning import PlanningError, lifecycle_stage, load_accounts
 from .manual_availability import ensure_manual_accounts_available, planned_manual_accounts
 from .planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, PRODUCTION_STATUS_SQL, planning_status_label, production_status
@@ -73,6 +75,8 @@ app.include_router(matching_readiness_router)
 app.include_router(ai_preparation_router)
 app.include_router(matching_execution_router)
 app.include_router(topic_label_model_router)
+app.include_router(embedding_model_router)
+app.include_router(content_production_router)
 
 
 @app.middleware("http")
@@ -645,7 +649,8 @@ def list_batches(plan_type: str | None = None, limit: int = 200) -> list[dict]:
             query = (
                 "SELECT id, batch_code, plan_type, status, cycle_start, cycle_end, "
                 "account_count, content_count, note, create_time AS created_at, "
-                "update_time AS updated_at "
+                "update_time AS updated_at, EXISTS(SELECT 1 FROM godp_auto_plan_run r "
+                "WHERE r.batch_id=godp_planning_batch.id AND r.plan_mode='ai_matching' AND r.del_flag='N') AS ai_committed "
                 "FROM godp_planning_batch WHERE del_flag='N' "
             )
             params: tuple = ()
@@ -701,7 +706,7 @@ def list_batches(plan_type: str | None = None, limit: int = 200) -> list[dict]:
                 )
                 row["updated_at"] = task.get("task_updated_at") or row["updated_at"]
                 row["planning_status"] = task.get("task_status") or (
-                    "\u5df2\u5b8c\u6210" if row["plan_type"] == "manual" else row["status"]
+                    "\u5df2\u5b8c\u6210" if row["plan_type"] == "manual" or row.get('ai_committed') else row["status"]
                 )
                 row["content_status"] = (
                     "\u751f\u6210\u5931\u8d25" if production_failed_count else

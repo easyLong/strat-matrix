@@ -20,8 +20,8 @@ from app.system_config import override_config
 TAXONOMY = {"T1": ["非营销", "营销"], "T2": ["流量", "转化"],
             "T3": ["金融知识"], "T4": ["年轻客群"], "T5": ["日常理财"]}
 LABELS = {key: values[0] for key, values in TAXONOMY.items()} | {"T6": "管理日常资金"}
-ENV = {"ARK_API_KEY": "test-only-key", "DOUBAO_CHAT_MODEL": "chat-fixture",
-       "DOUBAO_EMBEDDING_MODEL": "embedding-fixture", "INTEGRATION_TOKEN": "test-only-token",
+ENV = {"ARK_API_KEY": "test-only-key", "MODEL_NAME": "chat-fixture",
+       "EMBEDDING_MODEL_NAME": "embedding-fixture", "INTEGRATION_TOKEN": "test-only-token",
        "TOPIC_LABEL_PROVIDER": "doubao", "BACKEND_PORT": "6930"}
 
 
@@ -35,14 +35,14 @@ def chat(labels=None, finish_reason="stop"):
                          "message": {"content": json.dumps({"labels": labels or LABELS})}}]}
 
 
-def embedding(multimodal=True):
+def embedding():
     row = {"embedding": [3.0, 4.0]}
-    return {"model": "embedding-fixture-v1", "data": row if multimodal else [{**row, "index": 0}]}
+    return {"model": "embedding-fixture-v1", "data": row}
 
 
-def config(api_type="multimodal"):
+def config():
     return service.DoubaoConfig("https://ark.example.invalid/api/v3", "test-only-key",
-                                "chat-fixture", "embedding-fixture", api_type, 10)
+                                "chat-fixture", "embedding-fixture", 10)
 
 
 @contextmanager
@@ -84,7 +84,7 @@ def local_ark():
     thread.start()
     try:
         cfg = service.DoubaoConfig(f"http://127.0.0.1:{server.server_port}/api/v3",
-                                   "test-only-key", "chat-fixture", "embedding-fixture", "multimodal", 10)
+                                   "test-only-key", "chat-fixture", "embedding-fixture", 10)
         yield cfg, requests
     finally:
         server.shutdown()
@@ -94,21 +94,25 @@ def local_ark():
 
 class DoubaoLabelingTests(unittest.TestCase):
     def test_missing_credentials_or_embedding_model_fail_before_network(self):
-        for missing in ("ARK_API_KEY", "DOUBAO_EMBEDDING_MODEL"):
+        for missing in ("ARK_API_KEY", "EMBEDDING_MODEL_NAME"):
             with self.subTest(missing=missing), override_config({**ENV, missing: ""}), \
                     patch.object(service, "ark_post") as network:
                 with self.assertRaises(service.DoubaoConfigurationError):
                     service.label_topic(payload())
                 network.assert_not_called()
 
-    def test_invalid_endpoint_or_timeout_is_rejected_without_printing_secrets(self):
-        for update in ({"DOUBAO_BASE_URL": "http://example.invalid/api/v3"},
-                       {"DOUBAO_BASE_URL": "https://secret@example.invalid/api/v3"},
-                       {"DOUBAO_EMBEDDING_API": "unknown"}, {"LABEL_MODEL_TIMEOUT_SECONDS": "bad"}):
-            with self.subTest(update=update), override_config({**ENV, **update}):
-                with self.assertRaises(service.DoubaoConfigurationError) as raised:
-                    service.read_config()
-                self.assertNotIn("test-only-key", str(raised.exception))
+    def test_provider_url_and_embedding_protocol_are_fixed_in_code(self):
+        with override_config({**ENV, "DOUBAO_BASE_URL": "http://wrong.invalid",
+                              "DOUBAO_EMBEDDING_API": "unknown"}):
+            cfg = service.read_config()
+        self.assertEqual(cfg.base_url, "https://ark.cn-beijing.volces.com/api/v3")
+        self.assertFalse(hasattr(cfg, "embedding_api"))
+
+    def test_invalid_timeout_is_rejected_without_printing_secrets(self):
+        with override_config({**ENV, "LABEL_MODEL_TIMEOUT_SECONDS": "bad"}):
+            with self.assertRaises(service.DoubaoConfigurationError) as raised:
+                service.read_config()
+            self.assertNotIn("test-only-key", str(raised.exception))
         self.assertNotIn("test-only-key", repr(config()))
 
     def test_incomplete_or_ambiguous_dictionary_is_rejected(self):
@@ -118,7 +122,7 @@ class DoubaoLabelingTests(unittest.TestCase):
                 service.LabelInput(topic_id="T", topic={"title": "title"}, taxonomy_version=1,
                                    taxonomy=taxonomy)
 
-    def test_chat_and_multimodal_embedding_roundtrip_over_http(self):
+    def test_chat_and_text_input_multimodal_embedding_roundtrip_over_http(self):
         with local_ark() as (cfg, requests):
             result = service.label_topic(payload(), cfg)
         self.assertEqual(result["labels"], LABELS)
@@ -129,14 +133,9 @@ class DoubaoLabelingTests(unittest.TestCase):
         self.assertTrue(all(row[1] == "Bearer test-only-key" for row in requests))
         self.assertEqual(requests[0][2]["response_format"], {"type": "json_object"})
         self.assertEqual(requests[1][2]["input"], [{"type": "text", "text": LABELS["T6"]}])
+        self.assertEqual(requests[1][2]["encoding_format"], "float")
+        self.assertIn("Target_modality: text", requests[1][2]["instructions"])
         self.assertNotIn("test-only-key", json.dumps(requests[0][2]))
-
-    def test_text_embedding_contract_is_supported(self):
-        with patch.object(service, "ark_post", side_effect=[chat(), embedding(False)]) as post:
-            result = service.label_topic(payload(), config("text"))
-        self.assertEqual(result["t6_embedding"], [0.6, 0.8])
-        self.assertEqual(post.call_args.args[1], "/embeddings")
-        self.assertEqual(post.call_args.args[2]["input"], [LABELS["T6"]])
 
     def test_invalid_dictionary_label_is_not_embedded(self):
         with patch.object(service, "ark_post", return_value=chat({**LABELS, "T3": "字典外名称"})) as post:
@@ -191,8 +190,9 @@ class DoubaoWorkerTests(unittest.TestCase):
     def test_worker_doubao_route_uses_internal_token_and_sequential_timeout(self):
         with override_config(ENV):
             cfg = worker.worker_config()
-        self.assertEqual(cfg["model_url"], "http://127.0.0.1:6930/api/internal/topic-label-model")
+        self.assertEqual(cfg["api_url"], "http://127.0.0.1:6930")
         self.assertEqual(cfg["model_timeout"], 255)
+        self.assertNotIn("model_url", cfg)
 
     def test_full_claim_inference_embedding_and_completion_handoff(self):
         calls = []
@@ -207,7 +207,7 @@ class DoubaoWorkerTests(unittest.TestCase):
                 return {"label_status": "已完成"}
             with patch.object(worker, "json_request", side_effect=request):
                 result = worker.process_job("T-001", "http://backend", "integration-fixture",
-                                            "http://backend/api/internal/topic-label-model", "", 255, "doubao")
+                                            255)
         self.assertTrue(result)
         self.assertEqual(len(network), 2)
         completed = calls[-1][2]["body"]
@@ -220,7 +220,7 @@ class DoubaoWorkerTests(unittest.TestCase):
         claim = {"lease_id": "lease-fixture", "topic": payload().topic,
                  "taxonomy_version": 3, "taxonomy": TAXONOMY}
         with patch.object(worker, "json_request", side_effect=[claim, worker.WorkerError("HTTP 502"), {}]) as req:
-            result = worker.process_job("T-001", "http://backend", "internal", "http://model", "", 120)
+            result = worker.process_job("T-001", "http://backend", "internal", 120)
         self.assertFalse(result)
         self.assertEqual(req.call_args.kwargs["body"]["label_status"], "失败")
         self.assertEqual(req.call_args.kwargs["body"]["tags"], {})
@@ -229,7 +229,7 @@ class DoubaoWorkerTests(unittest.TestCase):
         claim = {"lease_id": "old", "topic": payload().topic, "taxonomy_version": 3, "taxonomy": TAXONOMY}
         result = {"labels": LABELS, "t6_embedding_model": "embedding-v1", "t6_embedding": [3, 4]}
         with patch.object(worker, "json_request", side_effect=[claim, result, worker.LeaseLost("HTTP 409")]) as req:
-            self.assertIsNone(worker.process_job("T", "http://backend", "token", "http://model", "", 120))
+            self.assertIsNone(worker.process_job("T", "http://backend", "token", 120))
         self.assertEqual(req.call_count, 3)
 
     def test_once_exits_with_failure_when_a_model_job_fails(self):
@@ -238,12 +238,12 @@ class DoubaoWorkerTests(unittest.TestCase):
                 patch.object(worker, "process_job", return_value=False):
             self.assertEqual(worker.run(once=True), 1)
 
-    def test_legacy_http_provider_remains_supported(self):
-        with override_config({"TOPIC_LABEL_PROVIDER": "http", "LABEL_MODEL_URL": "http://legacy/labels",
-                              "INTEGRATION_TOKEN": "internal", "LABEL_MODEL_TOKEN": "model-token"}):
+    def test_legacy_model_urls_are_ignored_in_favor_of_shared_internal_service(self):
+        with override_config({**ENV, "LABEL_MODEL_URL": "http://legacy/labels",
+                              "LABEL_MODEL_TOKEN": "model-token"}):
             cfg = worker.worker_config()
-        self.assertEqual(cfg["model_url"], "http://legacy/labels")
-        self.assertEqual(cfg["model_token"], "model-token")
+        self.assertEqual(cfg["api_url"], "http://127.0.0.1:6930")
+        self.assertNotIn("model_url", cfg)
 
 
 class DoubaoApiTests(unittest.TestCase):

@@ -38,6 +38,24 @@ class MatchingInputOptions(StrictModel):
     fallback_unknown_heat: Literal["allow_unknown", "block"] | None = None
 
 
+class MatchingPortfolioOptions(StrictModel):
+    relevance_weight: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    coverage_weight: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    balance_weight: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    redundancy_weight: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    mmr_relevance_weight: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    shortlist_per_slot: int = Field(strict=True, ge=1, le=1000)
+    max_improvement_passes: int = Field(strict=True, ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def objective_weights_sum_to_one(self):
+        weights = (self.relevance_weight, self.coverage_weight,
+                   self.balance_weight, self.redundancy_weight)
+        if abs(sum(weights) - 1.0) > 1e-9:
+            raise ValueError("portfolio objective weights must sum to 1")
+        return self
+
+
 class MatchingPolicyDocument(StrictModel):
     schema_version: Literal[1, 2] = 1
     implementation_key: str = Field(min_length=1, max_length=100)
@@ -45,6 +63,7 @@ class MatchingPolicyDocument(StrictModel):
     required_inputs: list[str] = Field(default_factory=list, max_length=20)
     decisions: dict[AlgorithmCode, RuleDecision] = Field(default_factory=dict)
     input_options: MatchingInputOptions | None = None
+    portfolio: MatchingPortfolioOptions | None = None
 
     @model_validator(mode="after")
     def finite_document(self):

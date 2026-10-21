@@ -186,10 +186,13 @@ class MatchingExecutorTests(unittest.TestCase):
         with override_config({}), patch.object(worker, "claim_task", side_effect=[
                 {"job": job, "next_after_id": 1001},
                 {"job": None, "next_after_id": 1001},
+                {"job": None, "next_after_id": 0},
              ]) as claim, patch.object(worker, "save_evaluation",
                                       return_value={"status": "evaluated", "version": 3}) as save:
             self.assertEqual(worker.run_once(), 0)
         self.assertEqual(claim.call_args_list[0].kwargs["implementation_key"], IMPLEMENTATION_KEY)
+        self.assertEqual(claim.call_args_list[2].kwargs['implementation_key'], worker.V2_IMPLEMENTATION_KEY)
+        self.assertEqual(claim.call_args_list[2].args[0].after_id, 0)
         save.assert_called_once()
 
 

@@ -715,57 +715,20 @@ def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, acco
 
 @router.post("/api/internal/slots/{slot_id}/content-ready", dependencies=[Depends(require_integration_token)])
 def content_ready(slot_id: str, payload: ContentReadyInput) -> dict:
-    """IF-07: submit a planning Agent result to the content production side asynchronously."""
+    """Legacy single-slot entry delegates to the same durable production queue."""
+    from .content_production import enqueue_batch
     try:
         with connection() as db, db.cursor() as cursor:
-            cursor.execute(
-                "SELECT s.item_id, s.version, s.topic_id, s.production_status, "
-                "i.account_id, i.publish_date, i.slot_type, i.batch_id "
-                "FROM godp_slot_state s JOIN godp_planning_item i ON i.id=s.item_id "
-                "WHERE s.slot_id=%s AND s.del_flag='N' FOR UPDATE",
-                (slot_id,),
-            )
+            cursor.execute("SELECT i.batch_id FROM godp_slot_state s JOIN godp_planning_item i ON i.id=s.item_id "
+                           "WHERE s.slot_id=%s AND s.del_flag='N' AND i.del_flag='N'", (slot_id,))
             slot = cursor.fetchone()
-            if not slot:
-                raise HTTPException(status_code=404, detail="槽位不存在")
-            if not slot["topic_id"]:
-                raise HTTPException(status_code=409, detail="占位槽尚未绑定真实选题")
-            if slot["production_status"] in ("generated", "published", "failed"):
-                raise HTTPException(status_code=409, detail="当前版本已结束生产；再次生产需要新版本")
-            if slot["production_status"] == "ready":
-                cursor.execute(
-                    "SELECT event_id FROM godp_integration_outbox WHERE event_type='CONTENT_READY' "
-                    "AND JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.slot_id'))=%s "
-                    "ORDER BY id DESC LIMIT 1",
-                    (slot_id,),
-                )
-                previous = cursor.fetchone()
-                return {"slot_id": slot_id, "version": slot["version"],
-                        "event_id": previous["event_id"] if previous else None,
-                        "production_task_id": f"{slot_id}-v{slot['version']}",
-                        "status": "已存在", "queued": False}
-            event_id = queue_event(cursor, "planning", "CONTENT_READY", {
-                "planning_cycle_id": slot["publish_date"].isoformat(),
-                "planning_batch_id": slot["batch_id"],
-                "account_id": slot["account_id"],
-                "slot_id": slot_id,
-                "version": slot["version"],
-                "production_task_id": f"{slot_id}-v{slot['version']}",
-                "publish_date": slot["publish_date"].isoformat(),
-                "slot_type": slot["slot_type"],
-                "topic_id": slot["topic_id"],
-                "fit_score": payload.fit_score,
-                "tags": payload.tags,
-                "agent_type": payload.agent_type,
-                "content_agent_input": payload.content_agent_input,
-            })
-            cursor.execute(
-                "UPDATE godp_slot_state SET production_status='ready' WHERE slot_id=%s", (slot_id,),
-            )
-            db.commit()
-            return {"slot_id": slot_id, "version": slot["version"], "event_id": event_id,
-                    "production_task_id": f"{slot_id}-v{slot['version']}",
-                    "status": "已受理", "queued": True}
+        if not slot:
+            raise HTTPException(404, "策划槽位不存在")
+        result = enqueue_batch(slot['batch_id'], slot_id=slot_id, agent_input=payload.model_dump())
+        task_id = result['production_task_ids'][0]
+        return {'slot_id': slot_id, 'version': int(task_id.rsplit('-v', 1)[1]),
+                'production_task_id': task_id, 'queued': result['accepted'] > 0,
+                'status': 'accepted' if result['accepted'] else 'reused'}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
 
@@ -954,7 +917,8 @@ def receive_content_status(payload: ContentStatusCallback) -> dict:
                     raise HTTPException(status_code=409, detail="相同事件 ID 的回传内容不同")
                 return {"accepted": True, "applied": False, "reason": "duplicate_event"}
             cursor.execute(
-                "SELECT s.item_id, s.version, s.production_status, s.content_id, i.batch_id "
+                "SELECT s.item_id, s.version, s.production_status, s.content_id, s.topic_id, "
+                "i.batch_id, i.topic_type, i.slot_type "
                 "FROM godp_slot_state s JOIN godp_planning_item i ON i.id=s.item_id "
                 "WHERE s.slot_id=%s AND s.del_flag='N' FOR UPDATE", (payload.slot_id,),
             )
@@ -1007,10 +971,10 @@ def receive_content_status(payload: ContentStatusCallback) -> dict:
                     (translated, slot["item_id"]),
                 )
                 if new in ("generated", "published") and old not in ("generated", "published"):
-                    cursor.execute(
-                        "UPDATE godp_planning_batch SET content_count=content_count+1, "
-                        "update_by='integration' WHERE id=%s", (slot["batch_id"],),
-                    )
+                    from .content_production import record_success
+                    record_success(cursor, payload, slot)
+                    # content_count is the batch's planned slot count. Production
+                    # progress is derived from slot states and must not inflate it.
                 cursor.execute(
                     "SELECT COUNT(*) AS total, "
                     "SUM(status IN ('已生成','已发布')) AS completed, "
@@ -1032,6 +996,8 @@ def receive_content_status(payload: ContentStatusCallback) -> dict:
                     "UPDATE godp_planning_batch SET status=%s, update_by='integration' WHERE id=%s",
                     (batch_status, slot["batch_id"]),
                 )
+                from .content_production import apply_task_result
+                apply_task_result(cursor, payload)
             db.commit()
             return {"accepted": True, "applied": reason == "applied", "reason": reason}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
@@ -1089,8 +1055,9 @@ def topic_labels(topic_id: str) -> dict:
 
 
 @router.post("/api/integrations/topics/official-usage/query", dependencies=[Depends(require_integration_token)])
+@router.post("/api/integrations/topics/usage/query", dependencies=[Depends(require_integration_token)])
 def official_topic_usage(payload: OfficialUsageQuery) -> dict:
-    """OP-04: only read independently maintained official-use counts."""
+    """OP-03: read counts maintained atomically by successful production callbacks."""
     placeholders = ",".join(["%s"] * len(payload.topic_ids))
     try:
         with connection() as db, db.cursor() as cursor:
@@ -1100,18 +1067,26 @@ def official_topic_usage(payload: OfficialUsageQuery) -> dict:
                 (payload.topic_type, *payload.topic_ids),
             )
             counts = {row["topic_id"]: row["official_use_count"] for row in cursor.fetchall()}
+            source_table = {'普通': 'godp_topic_source', '营销': 'godp_marketing_topic_source',
+                            '热点': 'godp_hotspot_topic_source'}[payload.topic_type]
+            cursor.execute(f"SELECT DISTINCT topic_id FROM {source_table} WHERE topic_id IN ({placeholders}) AND del_flag='N'",
+                           payload.topic_ids)
+            for source in cursor.fetchall():
+                counts.setdefault(source['topic_id'], 0)
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise db_error(exc) from exc
     missing = [topic_id for topic_id in payload.topic_ids if topic_id not in counts]
     if missing:
         raise HTTPException(
-            status_code=503,
-            detail=f"{len(missing)} 个选题的正式使用次数尚未同步：{', '.join(missing[:5])}",
+            status_code=404,
+            detail=f"{len(missing)} 个选题不存在：{', '.join(missing[:5])}",
         )
-    return {"topic_type": payload.topic_type, "items": [
+    items = [
         {"topic_id": topic_id, "official_use_count": counts[topic_id]}
         for topic_id in payload.topic_ids
-    ]}
+    ]
+    return {'queried_at': datetime.now(timezone.utc).isoformat(), 'status': 'success',
+            'topic_results': items, "topic_type": payload.topic_type, "items": items}
 
 
 @router.put("/api/internal/topic-official-usage", dependencies=[Depends(require_integration_token)])
@@ -1127,6 +1102,8 @@ def update_official_topic_usage(payload: OfficialUsageUpdate) -> dict:
                     "FOR UPDATE", (payload.topic_type, record.topic_id),
                 )
                 previous = cursor.fetchone()
+                if previous and previous['source_name'] == 'content-production':
+                    raise HTTPException(409, '该选题次数已由内容成功回传维护，不支持外部覆盖')
                 if previous and record.source_revision < previous["source_revision"]:
                     counters["stale"] += 1
                     continue

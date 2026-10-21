@@ -8,13 +8,19 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from .matching_contracts import ClaimTask, MatchingFailure
-from .matching_executor import (IMPLEMENTATION_KEY, ExecutorInputError,
-                                ExecutorPolicyError, execute_job)
+from .matching_executor import (IMPLEMENTATION_KEY as V1_IMPLEMENTATION_KEY,
+                                ExecutorInputError, ExecutorPolicyError, execute_job)
+from .matching_executor_v2 import (IMPLEMENTATION_KEY as V2_IMPLEMENTATION_KEY,
+                                  execute_job_v2)
 from .matching_tasks import claim_task, fail_task, save_evaluation
 from .system_config import get_setting
 
 
 LOG = logging.getLogger("matching-executor-worker")
+EXECUTORS = {
+    V1_IMPLEMENTATION_KEY: execute_job,
+    V2_IMPLEMENTATION_KEY: execute_job_v2,
+}
 
 
 def _integer_env(name: str, default: int, low: int, high: int) -> int:
@@ -57,49 +63,52 @@ def _record_failure(job: dict, code: str) -> None:
 
 
 def run_once() -> int:
-    after_id = 0
     failures = 0
-    while True:
-        response = claim_task(
-            ClaimTask(after_id=after_id, lease_seconds=lease_seconds()),
-            implementation_key=IMPLEMENTATION_KEY,
-        )
-        next_after_id = response.get("next_after_id", after_id)
-        job = response.get("job")
-        if job is None:
-            if next_after_id > after_id:
-                after_id = next_after_id
+    for implementation_key, executor in EXECUTORS.items():
+        after_id = 0
+        while True:
+            response = claim_task(
+                ClaimTask(after_id=after_id, lease_seconds=lease_seconds()),
+                implementation_key=implementation_key,
+            )
+            next_after_id = response.get("next_after_id", after_id)
+            job = response.get("job")
+            if job is None:
+                if next_after_id > after_id:
+                    after_id = next_after_id
+                    continue
+                break
+            after_id = next_after_id
+            try:
+                proposal = executor(job)
+            except (ExecutorPolicyError, ExecutorInputError, ValidationError, ValueError, TypeError, KeyError):
+                failures += 1
+                LOG.error("匹配任务 %s 的执行策略或冻结输入不符合%s执行器契约",
+                          job["task_id"], implementation_key)
+                _record_failure(job, "invalid_response")
                 continue
-            return failures
-        after_id = next_after_id
-        try:
-            proposal = execute_job(job)
-        except (ExecutorPolicyError, ExecutorInputError, ValidationError, ValueError, TypeError, KeyError):
-            failures += 1
-            LOG.error("匹配任务 %s 的执行策略或冻结输入不符合内置执行器契约", job["task_id"])
-            _record_failure(job, "invalid_response")
-            continue
-        except Exception as exc:
-            failures += 1
-            LOG.error("匹配任务 %s 执行异常：%s", job["task_id"], type(exc).__name__)
-            _record_failure(job, "execution_failed")
-            continue
+            except Exception as exc:
+                failures += 1
+                LOG.error("匹配任务 %s 执行异常：%s", job["task_id"], type(exc).__name__)
+                _record_failure(job, "execution_failed")
+                continue
 
-        try:
-            result = save_evaluation(job["task_id"], proposal)
-            LOG.info("匹配任务 %s 已完成，状态 %s，版本 %s",
-                     job["task_id"], result["status"], result["version"])
-        except HTTPException as exc:
-            failures += 1
-            LOG.info("匹配任务 %s 结果未保存，HTTP %s", job["task_id"], exc.status_code)
-        except Exception as exc:
-            failures += 1
-            LOG.error("匹配任务 %s 结果保存异常：%s", job["task_id"], type(exc).__name__)
-            _record_failure(job, "execution_failed")
+            try:
+                result = save_evaluation(job["task_id"], proposal)
+                LOG.info("匹配任务 %s 已完成，状态 %s，版本 %s，执行器 %s",
+                         job["task_id"], result["status"], result["version"], implementation_key)
+            except HTTPException as exc:
+                failures += 1
+                LOG.info("匹配任务 %s 结果未保存，HTTP %s", job["task_id"], exc.status_code)
+            except Exception as exc:
+                failures += 1
+                LOG.error("匹配任务 %s 结果保存异常：%s", job["task_id"], type(exc).__name__)
+                _record_failure(job, "execution_failed")
+    return failures
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="执行已批准策略绑定的普通内容匹配任务")
+    parser = argparse.ArgumentParser(description="执行已批准V1/V2策略绑定的普通内容匹配任务")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--check-config", action="store_true")
     args = parser.parse_args()
@@ -111,7 +120,8 @@ def main() -> int:
         LOG.error("%s", exc)
         return 2
     if args.check_config:
-        LOG.info("Matching Executor 配置有效；poll=%ss lease=%ss；未访问数据库", interval, lease)
+        LOG.info("Matching Executor 配置有效；实现=%s；poll=%ss lease=%ss；未访问数据库",
+                 ",".join(EXECUTORS), interval, lease)
         return 0
     while True:
         try:

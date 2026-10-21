@@ -12,7 +12,7 @@ import time
 import pymysql
 
 from .db import connection
-from .system_config_catalog import CATALOG, FRONTEND_KEYS, LAUNCH_KEYS, validate_value
+from .system_config_catalog import CATALOG, FRONTEND_KEYS, LAUNCH_KEYS, RUNTIME_DEFAULTS, validate_value
 
 
 class SystemConfigError(RuntimeError):
@@ -86,9 +86,10 @@ def get_setting(key: str, default: str | None = None) -> str:
 
 def public_settings(frontend=False) -> dict[str, str]:
     keys = FRONTEND_KEYS if frontend else LAUNCH_KEYS
-    result = {key: get_setting(key) for key in keys}
-    if not frontend:
-        result["TOPIC_VECTOR_MODEL_CONFIGURED"] = "1" if get_setting("TOPIC_VECTOR_MODEL_URL") else "0"
+    result = {
+        key: get_setting(key, RUNTIME_DEFAULTS[key]) if key in CATALOG else RUNTIME_DEFAULTS[key]
+        for key in keys
+    }
     return result
 
 

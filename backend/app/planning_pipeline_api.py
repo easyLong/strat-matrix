@@ -1,6 +1,7 @@
 """Protected control plane for the versioned planning Pipeline V1."""
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -21,6 +22,8 @@ class PipelineCreate(BaseModel):
     cycle_start: date | None = None
     account_ids: list[str] | None = Field(default=None, min_length=1, max_length=2000)
     policy_id: int = Field(ge=1)
+    planning_scope: Literal['full', 'ordinary_only'] = 'full'
+    production_provider: Literal['disabled', 'local_mock'] = 'disabled'
 
 
 class PipelineAction(BaseModel):
@@ -36,7 +39,8 @@ def guarded(handler, *args):
 
 @router.post("/api/internal/planning-pipelines")
 def create_planning_pipeline(payload: PipelineCreate) -> dict:
-    return guarded(create_pipeline, payload.cycle_start, payload.account_ids, payload.policy_id)
+    return guarded(create_pipeline, payload.cycle_start, payload.account_ids, payload.policy_id,
+                   payload.planning_scope, payload.production_provider)
 
 
 @router.get("/api/internal/planning-pipelines")

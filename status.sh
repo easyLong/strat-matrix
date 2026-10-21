@@ -68,6 +68,10 @@ if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
   check_process "Matching executor worker" "$RUN_DIR/matching-executor-worker.pid" || true
   expected=$((expected + 1))
 fi
+if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
+  check_process "Planning workflow worker" "$RUN_DIR/planning-workflow-worker.pid" || true
+  expected=$((expected + 1))
+fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true
 check_http "Frontend" "http://${CHECK_HOST}:${FRONTEND_PORT}/" || true
 

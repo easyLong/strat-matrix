@@ -38,11 +38,36 @@ def intact_document(row: dict) -> MatchingPolicyDocument:
 
 def implementation_approval_errors(document: MatchingPolicyDocument) -> list[str]:
     """Validate known executor contracts without inventing rules for unknown engines."""
-    if document.implementation_key != "builtin-cosine-balanced-v1":
+    if document.implementation_key not in {
+        "builtin-cosine-balanced-v1", "builtin-cosine-portfolio-v2",
+    }:
         return []
     from .matching_executor import ExecutorPolicyError, executor_config
     try:
-        executor_config(document.model_dump(mode="json"))
+        raw = document.model_dump(mode="json")
+        if document.implementation_key == "builtin-cosine-balanced-v1":
+            if document.portfolio is not None:
+                return ["V1策略不能包含V2组合目标参数"]
+            executor_config(raw)
+        else:
+            if document.portfolio is None:
+                return ["V2策略必须完整声明组合目标与MMR参数"]
+            if document.schema_version != 2:
+                return ["V2组合执行器要求策略schema_version=2"]
+            if set(document.required_inputs) != {
+                "accounts", "topics", "config", "positions",
+                "fallback_topics", "history", "official_usage",
+            }:
+                return ["V2当前要求与V1相同的冻结输入集合"]
+            # V2 portfolio optimization intentionally starts from the approved
+            # deterministic cosine candidate contract. Only the composition
+            # objective and allocation search differ in this implementation.
+            raw["implementation_key"] = "builtin-cosine-balanced-v1"
+            executor_config(raw)
+            allocation = document.decisions["ALG-05"].parameters
+            if allocation["global_reuse_penalty"] != 0 \
+                    or allocation["official_usage_penalty"] != 0:
+                return ["V2组合执行器要求旧版选题复用排序惩罚均为0"]
     except ExecutorPolicyError as exc:
         return [f"内置执行器参数契约不兼容：{exc}"]
     except (TypeError, ValueError) as exc:

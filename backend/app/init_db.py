@@ -324,12 +324,16 @@ def main() -> None:
         )
         updated_tables = sync_table_comments(cursor, source)
         updated_columns = sync_column_comments(cursor, source)
-        from .init_system_config import imported_values, seed_config
+        from .init_system_config import delete_unneeded_config, imported_values, restore_retained_ports, seed_config
         root = Path(__file__).resolve().parents[2]
         seed_config(cursor, imported_values([root / "docs" / ".env", root / ".env"]))
+        restore_retained_ports(cursor)
+        delete_unneeded_config(cursor)
         db.commit()
     print(f"Schema ready; table comments updated: {updated_tables}; "
           f"column comments updated: {updated_columns}")
+    from .init_workflow_db import main as init_workflow
+    init_workflow()
 
 
 if __name__ == "__main__":

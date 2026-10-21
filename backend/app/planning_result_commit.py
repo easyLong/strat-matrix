@@ -312,7 +312,7 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
 
             account_snapshots = [row["snapshot"] for row in inputs["accounts"]]
             try:
-                marketing, marketing_sync_batch = load_marketing(cursor, account_snapshots)
+                marketing, marketing_sync_batch = ([], None) if pipeline.get('planning_scope') == 'ordinary_only' else load_marketing(cursor, account_snapshots)
             except PlanningError as exc:
                 raise ResultCommitError("marketing_snapshot_unavailable", str(exc)) from exc
             except (KeyError, TypeError, ValueError) as exc:
@@ -350,6 +350,7 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
 
             audit_snapshot = {
                 "schema_version": 1,
+                "planning_scope": pipeline.get('planning_scope', 'full'),
                 "mode": PLAN_MODE,
                 "pipeline_id": pipeline_id,
                 "preparation_id": preparation["id"],

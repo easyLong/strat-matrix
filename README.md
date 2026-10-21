@@ -4,6 +4,8 @@
 
 周度规则策划的定时调度、手动触发命令和数据准入规则见[周度规则策划首版](docs/ORDINARY_PLANNING.md)。
 
+已实现[单账号普通选题正式闭环](docs/ORDINARY_WORKFLOW.md)：数据同步、真实模型画像与向量、V2匹配、正式策划提交及本地模拟内容生产回传和去重计数。后台Worker由启动脚本管理，已有规则定时调度暂未切换。
+
 本项目作为整体业务页面嵌入客户系统，保留四个业务页面及其导航。入口、登录和用户角色由宿主系统负责，本项目不建设独立登录页、运营账号管理或角色权限后台。
 
 ## 技术结构
@@ -14,7 +16,7 @@
 
 ## 启动
 
-数据库连接配置读取根目录 `.env`（兼容旧 `docs/.env`），只保留 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`。其他运行配置统一存放于 MySQL `godp_system_config`，创建、迁移及修改方式见[系统配置说明](docs/SYSTEM_CONFIG.md)。
+数据库连接配置读取根目录 `.env`（兼容旧 `docs/.env`），只保留 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`。MySQL `godp_system_config` 保存前后端监听地址/端口、模型标识和鉴权密钥，说明见[系统配置说明](docs/SYSTEM_CONFIG.md)。
 
 先确认数据库和访问权限，再在项目根目录执行：
 
@@ -94,7 +96,7 @@ T1–T5 字典的稳定 ID、改名、启停、选题标签 ID 关联和逐版�
 
 标签完成后的当前选题画像、内容变化引起的向量失效、可配置的向量执行进程、内部向量回写和 AI 候选准入见 [`docs/TOPIC_PROFILE_VECTOR.md`](docs/TOPIC_PROFILE_VECTOR.md)。具体向量服务地址尚未配置；正式周策划仍运行规则热度兜底。
 
-正式新批次同步冻结账号基本信息、人设、互动明细、阶段与经营目标，保存该批次独立的账号画像及向量准备状态。内部准备任务、向量回写、按批次的账号候选查询和可配置的账号向量执行进程见 [`docs/ACCOUNT_PROFILE_VECTOR.md`](docs/ACCOUNT_PROFILE_VECTOR.md)。执行进程默认关闭，配置模型服务后支持常驻处理、失败重试和指定批次单轮处理；旧批次不使用当前来源补造历史画像。具体模型服务与正式匹配仍待接入。
+正式新批次同步冻结账号基本信息、人设、互动明细、阶段与经营目标，保存该批次独立的账号画像及向量准备状态。内部准备任务、共享向量接口、按批次的账号候选查询和账号向量执行进程见 [`docs/ACCOUNT_PROFILE_VECTOR.md`](docs/ACCOUNT_PROFILE_VECTOR.md)。账号画像、选题画像与 T6 标签共用系统配置中的向量模型；执行进程默认关闭，启用后支持常驻处理、失败重试和指定批次单轮处理。旧批次不使用当前来源补造历史画像。
 
 正式 AI 主链准备提供受令牌保护的 `GET /api/internal/matching-readiness?batch_id=123`，以批次账号快照和当前有效选题池检查画像完整性、单位向量、模型与维度兼容性，返回内部阻断原因，不改写现有结果。接口口径见[匹配输入准备检查](docs/MATCHING_PREPARATION.md)；正式算法参数待[算法与策略草稿](docs/ALGORITHM_STRATEGY_V1.0.md)评审确认。
 

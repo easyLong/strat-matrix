@@ -6,6 +6,7 @@ import HoverHint from '../components/HoverHint.vue'
 import ListPagination from '../components/ListPagination.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
 import ManualTaskTable from '../components/ManualTaskTable.vue'
+import ContentFlowDrawer from '../components/ContentFlowDrawer.vue'
 import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
@@ -37,14 +38,8 @@ const accounts = ref<AccountOption[]>([])
 const topics = ref<TopicOption[]>([])
 const topicFiltersExpanded = ref(false)
 const tasks = ref<ManualTaskSummary[]>([])
-const productionRequestStorageKey = 'strat-matrix.manual-production-requests'
-function readProductionRequestIds() {
-  try {
-    const values = JSON.parse(localStorage.getItem(productionRequestStorageKey) || '[]')
-    return new Set<number>(Array.isArray(values) ? values.filter((value): value is number => Number.isInteger(value)) : [])
-  } catch { return new Set<number>() }
-}
-const productionRequestIds = ref(readProductionRequestIds())
+const productionBusy = ref(false)
+const contentFlowBatchId = ref<number | null>(null)
 const sampledIds = ref<string[]>([])
 const selectedTopicIds = ref<string[]>([])
 const topicIdFilter = ref('')
@@ -263,17 +258,7 @@ async function loadTasks() {
   tasksLoading.value = true
   try {
     const rows = await api.manualTasks()
-    const pending = new Set(productionRequestIds.value)
-    tasks.value = rows.map(task => {
-      if (!pending.has(task.id)) return task
-      if (task.content_status === '\u5df2\u5b8c\u6210' || task.content_status === '\u751f\u6210\u5931\u8d25') {
-        pending.delete(task.id)
-        return task
-      }
-      return { ...task, content_status: '\u751f\u6210\u4e2d' }
-    })
-    productionRequestIds.value = pending
-    localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
+    tasks.value = rows
     error.value = ''
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '\u8bfb\u53d6\u624b\u52a8\u7b56\u5212\u4efb\u52a1\u5931\u8d25' }
   finally { tasksLoading.value = false }
@@ -284,20 +269,19 @@ function openTaskDetails(task: ManualTaskSummary) {
   void router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual', from: 'manual' } })
 }
 
-function startTaskProduction(task: ManualTaskSummary) {
+async function startTaskProduction(task: ManualTaskSummary) {
   const planningStatus = task.planning_status || task.status
   if (!task.batch_id || !/完成|成功/.test(planningStatus) || !/待生产|待生成|未生成/.test(task.content_status || '')) return
-  const pending = new Set(productionRequestIds.value)
-  pending.add(task.id)
-  productionRequestIds.value = pending
-  localStorage.setItem(productionRequestStorageKey, JSON.stringify([...pending]))
-  task.content_status = '\u751f\u6210\u4e2d'
-  notice.value = `已发起「${task.task_name || task.batch_code}」内容生成，可在内容状态查看进度`
+  if (productionBusy.value) return
+  productionBusy.value = true
+  try { await api.startContentProduction(task.batch_id); await loadTasks() }
+  catch (exc) { error.value = exc instanceof Error ? exc.message : '提交内容生产失败' }
+  finally { productionBusy.value = false }
 }
 
 function openContentFlow(task: ManualTaskSummary) {
   if (!task.batch_id) return
-  notice.value = `内容流水入口已预留（批次 ${task.batch_code || task.batch_id}），外部页面接入后将从这里跳转`
+  contentFlowBatchId.value = task.batch_id
 }
 
 watch(() => store.databaseReady, ready => {
@@ -610,6 +594,7 @@ function closeEligibilityNotice(returnToSelection = false) {
 </script>
 
 <template>
+  <ContentFlowDrawer v-if="contentFlowBatchId" :batch-id="contentFlowBatchId" @close="contentFlowBatchId = null" @changed="loadTasks" />
   <div class="page-head manual-page-head">
     <div class="manual-head-actions">
       <button v-if="mode === 'create'" class="btn" type="button" @click="mode = 'list'; error = ''">返回任务列表</button>

@@ -8,26 +8,25 @@ from urllib.parse import quote
 from .topic_profile import normalized_topic_vector
 from .system_config import get_setting
 from .worker_http import StaleResult, WorkerError, json_request
+from .doubao_labeling import DoubaoConfigurationError, read_embedding_config
 
 
 LOG = logging.getLogger("topic-vector-worker")
 
 
-def process_job(job: dict, api_url: str, api_token: str,
-                model_url: str, model_token: str, model_timeout: int) -> None:
+def process_job(job: dict, api_url: str, api_token: str, model_timeout: int = 180) -> None:
     topic_id = job["topic_id"]
     topic_path = quote(topic_id, safe="")
     endpoint = f"{api_url}/api/internal/topic-vectors/{topic_path}"
     headers = {"X-Integration-Token": api_token}
     version = {"content_hash": job["content_hash"], "tag_version": job["tag_version"]}
     try:
-        model_headers = {"Authorization": f"Bearer {model_token}"} if model_token else {}
-        response = json_request(model_url, "POST", body={
+        response = json_request(f"{api_url}/api/internal/embedding-model", "POST", body={
             "task": "ordinary_topic_embedding",
             "topic_id": topic_id,
             **version,
             "profile": job["profile"],
-        }, headers=model_headers, timeout=model_timeout)
+        }, headers=headers, timeout=model_timeout)
         try:
             vector = normalized_topic_vector(response["vector"], response["vector_model"])
         except (KeyError, ValueError) as exc:
@@ -52,22 +51,29 @@ def process_job(job: dict, api_url: str, api_token: str,
         LOG.warning("选题 %s 向量生成失败：%s", topic_id, reason)
 
 
-def run(once: bool) -> int:
-    model_url = get_setting("TOPIC_VECTOR_MODEL_URL", "").strip()
+def worker_config() -> dict:
     api_token = get_setting("INTEGRATION_TOKEN", "").strip()
-    if not model_url or not api_token:
-        LOG.error("需要配置 TOPIC_VECTOR_MODEL_URL 和 INTEGRATION_TOKEN；未处理任何任务")
-        return 2
-    if not model_url.startswith(("http://", "https://")):
-        LOG.error("TOPIC_VECTOR_MODEL_URL 必须是完整的 HTTP(S) 地址；未处理任何任务")
-        return 2
+    if not api_token:
+        raise ValueError("需要配置 INTEGRATION_TOKEN；未处理任何任务")
+    read_embedding_config()
     api_url = get_setting("TOPIC_VECTOR_API_URL", "").strip().rstrip("/")
     if not api_url:
         api_url = f"http://127.0.0.1:{get_setting('BACKEND_PORT', '6930')}"
-    model_token = get_setting("TOPIC_VECTOR_MODEL_TOKEN", "").strip()
     model_timeout = max(1, min(int(get_setting("TOPIC_VECTOR_MODEL_TIMEOUT_SECONDS", "120")), 600))
     poll_seconds = max(5, int(get_setting("TOPIC_VECTOR_POLL_SECONDS", "30")))
     retry_seconds = max(60, int(get_setting("TOPIC_VECTOR_RETRY_SECONDS", "600")))
+    return {"api_token": api_token, "api_url": api_url, "model_timeout": model_timeout,
+            "poll_seconds": poll_seconds, "retry_seconds": retry_seconds}
+
+
+def run(once: bool) -> int:
+    try:
+        cfg = worker_config()
+    except (ValueError, DoubaoConfigurationError) as exc:
+        LOG.error("选题向量进程配置无效：%s", exc)
+        return 2
+    api_token, api_url = cfg["api_token"], cfg["api_url"]
+    model_timeout, poll_seconds, retry_seconds = cfg["model_timeout"], cfg["poll_seconds"], cfg["retry_seconds"]
     cooldowns: dict[str, float] = {}
     headers = {"X-Integration-Token": api_token}
     while True:
@@ -88,8 +94,7 @@ def run(once: bool) -> int:
                     if cooldowns.get(topic_id, 0) > time.monotonic():
                         continue
                     try:
-                        process_job(job, api_url, api_token, model_url, model_token,
-                                    model_timeout)
+                        process_job(job, api_url, api_token, model_timeout)
                     except (WorkerError, KeyError) as exc:
                         LOG.error("选题 %s 处理异常：%s", topic_id, exc)
                     cooldowns[topic_id] = time.monotonic() + retry_seconds
@@ -109,11 +114,16 @@ def run(once: bool) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="普通选题当前画像向量生成进程")
     parser.add_argument("--once", action="store_true", help="扫描一次任务队列后退出")
+    parser.add_argument("--check-config", action="store_true", help="检查共享模型配置后退出，不读取任务")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
+        if args.check_config:
+            worker_config()
+            LOG.info("共享向量模型配置有效；未读取任务或调用模型")
+            return 0
         return run(args.once)
-    except ValueError as exc:
+    except (ValueError, DoubaoConfigurationError) as exc:
         LOG.error("选题向量进程配置无效：%s", exc)
         return 2
 

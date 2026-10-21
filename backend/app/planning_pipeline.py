@@ -3,8 +3,8 @@
 V1 deliberately reuses AI preparation and the existing matching task instead of
 inventing a second execution stack. Matching stages 4-6 are projections of one
 matching task; they are not independently retryable until the matching contract
-is split in a later version. The final operations commit remains an explicit
-waiting stage because the current matching proposal is ordinary-only.
+is split in a later version. The final operations commit is performed by the
+planning_pipeline_runner after this control-plane projection.
 """
 
 from __future__ import annotations
@@ -166,6 +166,8 @@ def pipeline_summary(row: dict, stage_rows: list[dict], *, reused: bool = False)
         "status": row["status"],
         "version": row["version"],
         "policy_id": row["policy_id"],
+        "planning_scope": row.get('planning_scope', 'full'),
+        "production_provider": row.get('production_provider', 'disabled'),
         "preparation_id": row["preparation_id"],
         "matching_task_id": row["matching_task_id"],
         "production_batch_id": row["production_batch_id"],
@@ -220,7 +222,10 @@ def read_pipeline(pipeline_id: int) -> dict:
     return pipeline_summary(row, stages)
 
 
-def create_pipeline(cycle_start: date | None, account_ids: list[str] | None, policy_id: int) -> dict:
+def create_pipeline(cycle_start: date | None, account_ids: list[str] | None, policy_id: int,
+                    planning_scope: str = 'full', production_provider: str = 'disabled') -> dict:
+    if planning_scope not in ('full', 'ordinary_only') or production_provider not in ('disabled', 'local_mock'):
+        raise HTTPException(422, '无效的策划范围或内容生产方式')
     start = cycle_start or current_next_monday()
     if start.weekday() != 0:
         raise HTTPException(422, "策划周期必须从周一开始")
@@ -240,7 +245,9 @@ def create_pipeline(cycle_start: date | None, account_ids: list[str] | None, pol
                            "AND del_flag='N' FOR UPDATE", (reservation,))
             existing = cursor.fetchone()
             if existing:
-                if existing["selection_hash"] != selection_hash or existing["policy_id"] != policy_id:
+                if (existing["selection_hash"] != selection_hash or existing["policy_id"] != policy_id
+                        or existing.get('planning_scope', 'full') != planning_scope
+                        or existing.get('production_provider', 'disabled') != production_provider):
                     raise HTTPException(409, "该周期已有不同账号范围或算法策略的Pipeline")
                 stages = select_stages(cursor, existing["id"])
                 db.rollback()
@@ -248,10 +255,11 @@ def create_pipeline(cycle_start: date | None, account_ids: list[str] | None, pol
             cursor.execute(
                 "INSERT INTO godp_planning_pipeline_run "
                 "(pipeline_code,reservation_key,schema_version,cycle_start,cycle_end,selection_json,"
-                "selection_hash,policy_id,status,current_stage,create_by,update_by) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'pending','source_ingestion',%s,%s)",
+                "selection_hash,policy_id,planning_scope,production_provider,status,current_stage,create_by,update_by) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending','source_ingestion',%s,%s)",
                 (f"PIPE-{start:%Y%m%d}-{uuid4().hex[:12]}", reservation, PIPELINE_SCHEMA_VERSION,
-                 start, start + timedelta(days=6), selection_json, selection_hash, policy_id, ACTOR, ACTOR),
+                 start, start + timedelta(days=6), selection_json, selection_hash, policy_id,
+                 planning_scope, production_provider, ACTOR, ACTOR),
             )
             pipeline_id = cursor.lastrowid
             for spec in STAGES:
@@ -455,7 +463,10 @@ def advance_pipeline(pipeline_id: int, expected_version: int, *, retry: bool = F
 
     if preparation_id is None:
         try:
-            preparation = create_preparation(snapshot["cycle_start"], account_ids)
+            if snapshot.get('planning_scope', 'full') == 'ordinary_only':
+                preparation = create_preparation(snapshot["cycle_start"], account_ids, planning_scope='ordinary_only')
+            else:
+                preparation = create_preparation(snapshot["cycle_start"], account_ids)
             preparation_id = preparation["preparation_id"]
             desired["source_ingestion"] = _desired(
                 STAGE_SUCCEEDED, backend_type="ai_preparation", backend_id=preparation_id,
@@ -513,8 +524,8 @@ def advance_pipeline(pipeline_id: int, expected_version: int, *, retry: bool = F
             detail={"matching_task_id": matching_task_id,
                     "evaluation_scope": "ordinary_only",
                     "operations_result_committed": False},
-            error_code="result_commit_not_implemented",
-            error_message="V1仅完成编排骨架；普通匹配提案尚未包含完整营销/热点组合，禁止写入正式策划结果")
+            error_code="result_commit_pending",
+            error_message="匹配已完成，等待正式结果校验与原子提交")
     return _persist(pipeline_id, expected_version, desired,
                     preparation_id=preparation_id, matching_task_id=matching_task_id)
 
@@ -527,7 +538,7 @@ def retry_pipeline(pipeline_id: int, expected_version: int) -> dict:
         raise HTTPException(409, "当前Pipeline不属于可重试或可恢复状态")
     frontier = snapshot["active_stages"]
     if frontier == ["result_commit"]:
-        raise HTTPException(409, "正式结果提交适配器尚未实现，不能用重试绕过业务校验")
+        raise HTTPException(409, "请通过正式结果提交执行器重试，不能绕过业务校验")
     return advance_pipeline(pipeline_id, expected_version, retry=True)
 
 

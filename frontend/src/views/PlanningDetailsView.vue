@@ -4,6 +4,7 @@ import AccountTypeBadge from '../components/AccountTypeBadge.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
 import ListPagination from '../components/ListPagination.vue'
 import HoverHint from '../components/HoverHint.vue'
+import ContentFlowDrawer from '../components/ContentFlowDrawer.vue'
 import ResultsView from './ResultsView.vue'
 import { api } from '../api'
 import type { AccountOption, AccountPlanRecord, BatchDetail, BatchSummary } from '../types'
@@ -55,6 +56,19 @@ const isBatchMode = computed(() => props.mode === 'batch')
 const isAccountMode = computed(() => props.mode === 'account')
 const detailTitle = computed(() => isAccountMode.value ? '账号策划详情' : isBatchMode.value ? '批次策划详情' : '周期策划详情')
 const currentBatch = computed(() => isBatchMode.value ? props.batches[0] ?? null : null)
+const productionBusy = ref(false)
+const productionError = ref('')
+const contentFlowBatchId = ref<number | null>(null)
+const productionItems = computed(() => details.value.flatMap(detail => detail.items))
+const canProduce = computed(() => productionItems.value.some(item => item.topic_id && item.production_status === 'planned'))
+const hasProduction = computed(() => productionItems.value.some(item => ['ready', 'generated', 'published', 'failed'].includes(item.production_status || '')))
+async function startProduction() {
+  if (!currentBatch.value || productionBusy.value) return
+  productionBusy.value = true; productionError.value = ''
+  try { await api.startContentProduction(currentBatch.value.id); await load() }
+  catch (exc) { productionError.value = exc instanceof Error ? exc.message : '提交内容生产失败' }
+  finally { productionBusy.value = false }
+}
 const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号视图' : '返回周期视图'))
 const fixedPlanType = computed<'auto' | 'manual' | null>(() => isBatchMode.value ? currentBatch.value?.plan_type ?? null : null)
 const scopeLabel = computed(() => {
@@ -257,10 +271,14 @@ watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => pr
 }, { immediate: true })
 watch(pageSize, () => { page.value = 1 })
 watch(historyPageSize, () => { historyPage.value = 1 })
-onBeforeUnmount(() => { loadRequest++ })
+const productionTimer = window.setInterval(() => {
+  if (!loading.value && productionItems.value.some(item => item.production_status === 'ready')) void load()
+}, 3000)
+onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
 </script>
 
 <template>
+  <ContentFlowDrawer v-if="contentFlowBatchId" :batch-id="contentFlowBatchId" @close="contentFlowBatchId = null" @changed="load" />
   <section class="card planning-detail-card">
     <div class="card-head">
       <div>
@@ -276,9 +294,15 @@ onBeforeUnmount(() => { loadRequest++ })
         </div>
         <div v-else class="planning-detail-scope"><HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ scopeLabel }}</HoverHint></div>
       </div>
-      <button class="btn" type="button" @click="emit('back')">{{ backLabel }}</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button v-if="isBatchMode && canProduce" class="btn primary" :disabled="productionBusy" @click="startProduction">{{ productionBusy ? '提交中…' : '生成内容' }}</button>
+        <button v-if="isBatchMode && !canProduce && productionItems.some(item => item.production_status === 'ready')" class="btn" disabled>生产中</button>
+        <button v-if="isBatchMode && hasProduction" class="btn" @click="contentFlowBatchId = currentBatch?.id || null">查看内容流水</button>
+        <button class="btn" type="button" @click="emit('back')">{{ backLabel }}</button>
+      </div>
     </div>
 
+    <div v-if="productionError" class="banner error-banner" role="alert">{{ productionError }}</div>
     <LoadingSkeleton v-if="loading" :rows="8" />
     <div v-else-if="error" class="banner error-banner" role="alert">{{ error }}</div>
     <template v-else>

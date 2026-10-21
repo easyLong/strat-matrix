@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS godp_system_config (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '系统配置记录主键ID',
     config_key VARCHAR(100) COLLATE utf8mb4_bin NOT NULL COMMENT '系统配置唯一键，区分大小写并沿用原配置项名称',
-    config_group VARCHAR(64) NOT NULL COMMENT '配置分组：服务、调度、接口、豆包、打标、向量或匹配',
+    config_group VARCHAR(64) NOT NULL COMMENT '配置分组：服务端口、模型名称或鉴权密钥',
     config_name VARCHAR(200) NOT NULL COMMENT '配置项中文名称及用途',
     config_value MEDIUMTEXT NOT NULL COMMENT '配置值文本，按值类型解析；密钥仅供受控服务端读取',
     value_type VARCHAR(16) NOT NULL DEFAULT 'string' COMMENT '配置值类型：string字符串、int整数、bool开关',
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS godp_system_config (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '逻辑删除标志：N正常、Y删除',
     UNIQUE KEY uk_system_config_key (config_key),
     KEY idx_system_config_group (config_group, del_flag)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统运行配置，除MySQL连接外的端口、模型、密钥及任务开关统一配置源';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服务监听地址与端口、模型名称及鉴权密钥配置；MySQL连接信息单独保存在.env';
 
 CREATE TABLE IF NOT EXISTS godp_strategy_config (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置记录主键ID',

@@ -49,31 +49,19 @@ IF-01 的 `interaction_data` 优先；显式空数组表示没有帖子，不读
 
 ## 配置账号向量执行进程
 
-执行器 `python3 -m app.account_vector_worker` 按批次读取冻结画像，调用项目约定的模型服务 JSON 接口，并回写该批次的向量。它不会查询最新账号来源，不会复用其他批次的账号向量。模型地址未配置时默认关闭，不自动生成向量。
+执行器 `python3 -m app.account_vector_worker` 按批次读取冻结画像，调用项目内置的共享向量接口 `/api/internal/embedding-model`，再回写该批次的向量。账号画像与选题画像共用同一 `EMBEDDING_MODEL_NAME` 和 `ARK_API_KEY`，不需要单独的账号模型地址或模型密钥。它不会查询最新账号来源，不会复用其他批次的账号向量。
 
-在 MySQL `godp_system_config` 配置以下键值，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
-
-```text
-ACCOUNT_VECTOR_WORKER_ENABLED=1
-ACCOUNT_VECTOR_MODEL_URL=https://your-trusted-model-service.example/account-embedding
-ACCOUNT_VECTOR_MODEL_TOKEN=your-model-service-token
-ACCOUNT_VECTOR_MODEL_TIMEOUT_SECONDS=120
-ACCOUNT_VECTOR_POLL_SECONDS=30
-ACCOUNT_VECTOR_RETRY_SECONDS=600
-```
-
-`INTEGRATION_TOKEN` 用于调用后端内部接口，必须配置。`ACCOUNT_VECTOR_MODEL_TOKEN` 可留空，非空时向模型服务发送 `Authorization: Bearer <token>`。后端接口默认使用 `http://127.0.0.1:<BACKEND_PORT>`；跨主机部署时另外设置 `ACCOUNT_VECTOR_API_URL`。
+该执行进程的调度开关及轮询参数使用代码默认值，默认不自动运行。`INTEGRATION_TOKEN` 是内部任务接口鉴权密钥；模型密钥和模型名称统一从系统配置读取。
 
 | 配置 | 默认值 | 范围或用途 |
 | --- | --- | --- |
 | `ACCOUNT_VECTOR_WORKER_ENABLED` | `0` | Linux 脚本设为 `1` 时启动常驻进程 |
-| `ACCOUNT_VECTOR_MODEL_URL` | 空 | 完整的模型服务 HTTP(S) 地址 |
 | `ACCOUNT_VECTOR_API_URL` | 本机后端地址 | 后端基础地址，不带 `/api` |
 | `ACCOUNT_VECTOR_MODEL_TIMEOUT_SECONDS` | `120` | 模型请求超时，1–600 秒 |
 | `ACCOUNT_VECTOR_POLL_SECONDS` | `30` | 队列扫描间隔，5–3600 秒 |
 | `ACCOUNT_VECTOR_RETRY_SECONDS` | `600` | 同一批次、账号和画像指纹的重试间隔，60–86400 秒 |
 
-模型服务接收 JSON `POST`：
+共享向量接口接收 JSON `POST`：
 
 ```json
 {
@@ -92,7 +80,7 @@ ACCOUNT_VECTOR_RETRY_SECONDS=600
 }
 ```
 
-上例画像字段为节选；执行器原样发送任务接口返回的完整 `profile`，其中包含冻结的基本信息、互动时间窗口与帖子明细。模型响应：
+上例画像字段为节选；执行器原样发送任务接口返回的完整 `profile`，其中包含冻结的基本信息、互动时间窗口与帖子明细。接口使用全局向量模型生成响应：
 
 ```json
 {"vector_model": "your-shared-embedding-model-version", "vector": [0.12, 0.34, 0.56]}
@@ -119,8 +107,8 @@ python3 -m app.account_vector_worker --once --batch-id 123
 
 ## 当前开发边界
 
-批次画像冻结、准备接口和可配置执行进程已完成。具体模型服务地址仍需提供，并须遵循上述项目 JSON 契约；这些配置不是直接调用某个厂商 SDK 的参数。账号和选题向量用于后续匹配前，还须核对模型标识、维度和向量空间一致性，不能直接比较不同模型的向量。
+批次画像冻结、准备接口和共享向量调用已完成。账号与选题画像使用同一向量模型、维度及向量空间，可供后续匹配共同使用。
 
 正式周策划继续采用规则热度兜底，尚未使用账号候选执行 Recall、Fit 或全局分配。向量准备不重新分配已产生的规则策划结果，也不自动投递内容生产任务。
 
-结果生成之前的独立[AI准备流程](AI_PREPARATION.md)已接入。账号向量执行器默认同时扫描运营批次与准备记录队列；`--batch-id` 仅处理运营批次，`--preparation-id` 仅处理准备记录。准备任务向模型发送 `preparation_id`，原有批次任务仍发送 `batch_id`；供应方须支持相应身份字段，两类指纹及缓存不混用。准备记录的向量回写、周期和取消规则见准备流程文档。
+结果生成之前的独立[AI准备流程](AI_PREPARATION.md)已接入。账号向量执行器默认同时扫描运营批次与准备记录队列；`--batch-id` 仅处理运营批次，`--preparation-id` 仅处理准备记录。两类任务使用同一个共享向量接口，批次身份和画像指纹仍分别校验，不混用结果缓存。准备记录的向量回写、周期和取消规则见准备流程文档。

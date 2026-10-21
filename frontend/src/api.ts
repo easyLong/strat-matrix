@@ -1,5 +1,13 @@
 import type { AccountOption, AccountPlanRecord, AdjustmentRecord, AutoCycleSummary, AutoFailure, BatchDetail, BatchSummary, ConfigResponse, ConfigVersionSummary, ManualPlanInput, ManualPreviewInput, ManualPreviewResponse, ManualTaskSummary, PlanningAccountSummary, PlanningCycleSummary, StrategyConfig, TopicOption } from './types'
 
+export interface ContentProductionTask {
+  production_task_id: string; slot_id: string; topic_id: string; provider: string
+  status: string; content_id: string | null; last_error: string
+  accepted_at: string; completed_at: string | null
+  request: { planning: { publish_date: string }; account: { account_name: string }; topic: { title: string } }
+  response: { title?: string; body?: string }
+}
+
 export interface TagTaxonomyItem {
   id: string | null; name: string; enabled: boolean
   node_type?: 'group' | 'tag'
@@ -98,6 +106,8 @@ export const api = {
   batches: (type?: 'manual' | 'auto', limit = 200) =>
     request<BatchSummary[]>(`/batches?limit=${limit}${type ? `&plan_type=${type}` : ''}`),
   batch: (id: number) => request<BatchDetail>(`/batches/${id}`),
+  startContentProduction: (id: number) => request<{ accepted: number; reused: number; provider: string }>(`/batches/${id}/content-production`, { method: 'POST' }),
+  contentProductionFlow: (id: number) => request<{ batch_id: number; tasks: ContentProductionTask[] }>(`/batches/${id}/content-production`),
   accountItems: (account: string, limit = 5000) => request<AccountPlanRecord[]>(`/items?account=${encodeURIComponent(account)}&limit=${limit}`),
   planningAccounts: () => request<PlanningAccountSummary[]>('/planning-accounts'),
   replacementCandidates: (itemId: number) => request<TopicOption[]>(`/items/${itemId}/replacement-candidates`),

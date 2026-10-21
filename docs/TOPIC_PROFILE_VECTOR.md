@@ -40,18 +40,7 @@ python3 -m app.init_db
 
 ## 配置向量执行进程
 
-项目内已有 `python3 -m app.topic_vector_worker` 执行器。它分页读取当前画像，将画像交给配置的模型服务，校验返回的向量并回写。模型服务地址尚未提供，所以默认关闭；没有配置 `TOPIC_VECTOR_MODEL_URL` 或 `INTEGRATION_TOKEN` 时，进程直接退出。以下键值统一存放于 MySQL `godp_system_config`，修改方式见[系统配置说明](SYSTEM_CONFIG.md)：
-
-```text
-TOPIC_VECTOR_WORKER_ENABLED=1
-TOPIC_VECTOR_MODEL_URL=https://your-trusted-model-service.example/topic-embedding
-TOPIC_VECTOR_MODEL_TOKEN=your-model-service-token
-TOPIC_VECTOR_MODEL_TIMEOUT_SECONDS=120
-TOPIC_VECTOR_POLL_SECONDS=30
-TOPIC_VECTOR_RETRY_SECONDS=600
-```
-
-`TOPIC_VECTOR_MODEL_TOKEN` 可留空；非空时使用 `Authorization: Bearer <token>`。模型服务接收 JSON `POST`：
+项目内已有 `python3 -m app.topic_vector_worker` 执行器。它分页读取当前画像，调用项目内置共享接口 `/api/internal/embedding-model`，校验返回的向量并回写。选题画像、账号画像及 T6 标签向量统一使用 `EMBEDDING_MODEL_NAME` 和 `ARK_API_KEY`，不再配置各自的模型服务地址或密钥。Worker 开关和调度参数使用代码默认值，执行进程默认关闭。共享接口接收 JSON `POST`：
 
 ```json
 {
@@ -73,6 +62,6 @@ TOPIC_VECTOR_RETRY_SECONDS=600
 {"vector_model": "your-topic-embedding-model-version", "vector": [0.12, 0.34, 0.56]}
 ```
 
-模型标识须能区分不同向量空间或模型版本，向量维度由实际模型确定，上例数字只演示协议。可以在 `backend` 目录运行 `python3 -m app.topic_vector_worker --once` 处理一轮任务。Linux `start.sh`、`stop.sh` 和 `status.sh` 管理常驻进程，日志写入 `logs/topic-vector-worker.log`。向量进程与后端不在同一主机时，可另外设置 `TOPIC_VECTOR_API_URL` 指向后端内部地址。
+接口直接使用全局向量模型，模型标识和向量维度由实际模型确定，上例数字只演示协议。可以在 `backend` 目录运行 `python3 -m app.topic_vector_worker --once` 处理一轮任务。Linux `start.sh`、`stop.sh` 和 `status.sh` 管理常驻进程，日志写入 `logs/topic-vector-worker.log`。向量进程与后端不在同一主机时，可另外设置 `TOPIC_VECTOR_API_URL` 指向后端内部地址。
 
 当前任务列表没有租约，多个向量进程可能读取同一任务；同一画像先写入的已就绪向量获胜，后续完全相同的回写可幂等返回，不同向量返回 409。内容或标签更新后旧指纹失效，旧结果无法写入。模型调用失败或返回无效向量时，执行器回写 `failed`；同一进程至少等待 `TOPIC_VECTOR_RETRY_SECONDS` 后再次处理该选题。任务列表和 `ai-topic-candidates` 读取时再次核对当前内容指纹，避免过期画像进入后续 AI 匹配。分页时始终使用响应的 `next_after_id` 继续查询，即使当前页因过期记录被过滤后为空。正式新批次的[账号画像冻结、准备接口与可配置执行进程](ACCOUNT_PROFILE_VECTOR.md)已接入。当前正式周策划仍使用普通选题热度规则兜底，尚未读取这些 AI 候选接口，也尚未运行 Recall、Fit 或全局分配。

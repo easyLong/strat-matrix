@@ -65,8 +65,7 @@ def checked_labels(response: dict, taxonomy: dict) -> dict[str, list[str]]:
 
 
 def process_job(topic_id: str, api_url: str, api_token: str,
-                model_url: str, model_token: str, model_timeout: int,
-                provider: str = "http") -> bool | None:
+                model_timeout: int) -> bool | None:
     topic_path = quote(topic_id, safe="")
     internal_headers = {"X-Integration-Token": api_token}
     claim = json_request(f"{api_url}/api/internal/topic-label-jobs/{topic_path}/claim",
@@ -76,15 +75,13 @@ def process_job(topic_id: str, api_url: str, api_token: str,
     except KeyError as exc:
         raise WorkerError("领取响应缺少 lease_id") from exc
     try:
-        model_headers = ({"X-Integration-Token": api_token} if provider == "doubao" else
-                         {"Authorization": f"Bearer {model_token}"} if model_token else {})
-        response = json_request(model_url, "POST", body={
+        response = json_request(f"{api_url}/api/internal/topic-label-model", "POST", body={
             "task": "ordinary_topic_labels",
             "topic_id": topic_id,
             "topic": claim["topic"],
             "taxonomy_version": claim["taxonomy_version"],
             "taxonomy": claim["taxonomy"],
-        }, headers=model_headers, timeout=model_timeout)
+        }, headers=internal_headers, timeout=model_timeout)
         tags = checked_labels(response, claim["taxonomy"])
         try:
             t6_embedding = normalized_embedding(
@@ -121,9 +118,6 @@ def process_job(topic_id: str, api_url: str, api_token: str,
 
 
 def worker_config() -> dict:
-    provider = get_setting("TOPIC_LABEL_PROVIDER", "doubao").strip().lower()
-    if provider not in ("http", "doubao"):
-        raise ValueError("TOPIC_LABEL_PROVIDER 只能是 http 或 doubao")
     api_token = get_setting("INTEGRATION_TOKEN", "").strip()
     if not api_token:
         raise ValueError("需要配置 INTEGRATION_TOKEN；未领取任何任务")
@@ -132,24 +126,17 @@ def worker_config() -> dict:
         api_url = f"http://127.0.0.1:{get_setting('BACKEND_PORT', '6930')}"
     if not api_url.startswith(("http://", "https://")):
         raise ValueError("TOPIC_LABEL_API_URL 必须是完整的 HTTP(S) 地址")
-    model_url = get_setting("LABEL_MODEL_URL", "").strip()
-    model_token = get_setting("LABEL_MODEL_TOKEN", "").strip()
     model_timeout = int(get_setting("LABEL_MODEL_TIMEOUT_SECONDS", "120"))
     poll_seconds = int(get_setting("TOPIC_LABEL_POLL_SECONDS", "30"))
     retry_seconds = int(get_setting("TOPIC_LABEL_RETRY_SECONDS", "600"))
     if not 1 <= model_timeout <= 600 or not 5 <= poll_seconds <= 3600 or not 60 <= retry_seconds <= 86400:
         raise ValueError("打标超时需在 1–600 秒，轮询需在 5–3600 秒，重试需在 60–86400 秒")
-    if provider == "doubao":
-        doubao_config()  # Fail before claiming jobs when credentials/models are missing.
-        model_url = f"{api_url}/api/internal/topic-label-model"
-        model_token = ""
-        # Service calls chat and embedding sequentially; each has its own timeout.
-        model_timeout = 2 * model_timeout + 15
-    elif not model_url.startswith(("http://", "https://")):
-        raise ValueError("需要配置有效的 LABEL_MODEL_URL；未领取任何任务")
-    return {"api_url": api_url, "api_token": api_token, "model_url": model_url,
-            "model_token": model_token, "model_timeout": model_timeout,
-            "provider": provider, "poll_seconds": poll_seconds, "retry_seconds": retry_seconds}
+    doubao_config()  # Fail before claiming jobs when shared credentials/models are missing.
+    # Label generation uses one chat call and one shared-vector call.
+    model_timeout = 2 * model_timeout + 15
+    return {"api_url": api_url, "api_token": api_token,
+            "model_timeout": model_timeout, "poll_seconds": poll_seconds,
+            "retry_seconds": retry_seconds}
 
 
 def run(once: bool) -> int:
@@ -175,8 +162,7 @@ def run(once: bool) -> int:
                     if not isinstance(topic_id, str) or cooldowns.get(topic_id, 0) > time.monotonic():
                         continue
                     try:
-                        result = process_job(topic_id, api_url, api_token, cfg["model_url"],
-                                             cfg["model_token"], cfg["model_timeout"], cfg["provider"])
+                        result = process_job(topic_id, api_url, api_token, cfg["model_timeout"])
                         if result is False:
                             failures += 1
                     except LeaseLost:
@@ -206,7 +192,7 @@ def main() -> int:
     try:
         if args.check_config:
             cfg = worker_config()
-            LOG.info("标签识别配置有效；provider=%s；未领取任务或调用模型", cfg["provider"])
+            LOG.info("共享模型配置有效；未领取任务或调用模型")
             return 0
         return run(args.once)
     except (ValueError, DoubaoConfigurationError) as exc:

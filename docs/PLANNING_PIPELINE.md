@@ -2,6 +2,8 @@
 
 更新日期：2026-10-20。
 
+单账号普通选题及本地模拟内容闭环的部署、接口和验收命令见 [ORDINARY_WORKFLOW.md](ORDINARY_WORKFLOW.md)。新增 `planning_scope=ordinary_only`、`production_provider=local_mock` 和持续推进Worker；默认完整组合流程继续兼容。
+
 ## 目标
 
 Planning Pipeline V1 统一正式智能策划的运行生命周期，复用现有数据同步、AI Preparation、Matching Task、正式策划结果表和热点 T-1 调度，不复制第二套执行栈。

@@ -81,7 +81,10 @@ def assert_no_result_batch(cursor, start: date) -> None:
         raise HTTPException(409, "该周期已有正式自动策划结果，不能叠加AI准备记录")
 
 
-def create_preparation(cycle_start: date | None = None, account_ids: list[str] | None = None) -> dict:
+def create_preparation(cycle_start: date | None = None, account_ids: list[str] | None = None,
+                       *, planning_scope: str = 'full') -> dict:
+    if planning_scope not in ('full', 'ordinary_only'):
+        raise HTTPException(422, '无效的策划范围')
     start = cycle_start or current_next_monday()
     if start.weekday() != 0:
         raise HTTPException(422, "策划周期必须从周一开始")
@@ -97,6 +100,10 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
         if existing:
             if existing["selection_json"] != selection:
                 raise HTTPException(409, "该周期已有不同账号范围的准备记录；请先取消原记录")
+            if existing.get('create_by') == 'ordinary-only-preparation' and planning_scope != 'ordinary_only':
+                raise HTTPException(409, '该周期已被普通选题流程占用')
+            if planning_scope == 'ordinary_only' and existing.get('create_by') != 'ordinary-only-preparation':
+                raise HTTPException(409, '该周期已有其他范围的准备记录')
             db.rollback()
             return summary(existing, reused=True)
         if start < current_next_monday():
@@ -107,6 +114,8 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
         config_row = cursor.fetchone()
         config = StrategyConfig.model_validate_json(config_row["config_json"]) if config_row else StrategyConfig()
         config_version = config_row["version"] if config_row else 0
+        if planning_scope == 'ordinary_only':
+            config = config.model_copy(update={'hotspot_ratio': 0, 'marketing_max': 0})
         try:
             accounts = load_accounts(cursor, "live", config)
         except PlanningError as exc:
@@ -127,7 +136,8 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
             "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (f"AI-PREP-{start:%Y%m%d}-{uuid4().hex[:12]}", reservation_key(start),
              start, start + timedelta(days=6), selection, config_version, config.model_dump_json(),
-             canonical_json(accounts), canonical_json(positions), len(accounts), len(positions), ACTOR, ACTOR),
+             canonical_json(accounts), canonical_json(positions), len(accounts), len(positions),
+             'ordinary-only-preparation' if planning_scope == 'ordinary_only' else ACTOR, ACTOR),
         )
         preparation_id = cursor.lastrowid
         for account in accounts:

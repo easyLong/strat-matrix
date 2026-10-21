@@ -1,0 +1,1138 @@
+{
+  "scope": "ordinary_only",
+  "cycle_start": "2026-11-16",
+  "cycle_end": "2026-11-22",
+  "pipeline": {
+    "pipeline_id": 2,
+    "pipeline_code": "PIPE-20261116-281b97139e66",
+    "schema_version": 1,
+    "cycle_start": "2026-11-16",
+    "cycle_end": "2026-11-22",
+    "status": "succeeded",
+    "version": 5,
+    "policy_id": 5,
+    "planning_scope": "ordinary_only",
+    "production_provider": "local_mock",
+    "preparation_id": 6,
+    "matching_task_id": 5,
+    "production_batch_id": 110,
+    "operations_result_committed": true,
+    "current_stage": null,
+    "active_stages": [],
+    "last_error_code": "",
+    "last_error_message": "",
+    "stages": [
+      {
+        "stage_key": "source_ingestion",
+        "label": "数据源接入",
+        "stage_order": 10,
+        "dependencies": [],
+        "status": "succeeded",
+        "attempt_count": 0,
+        "version": 2,
+        "backend_type": "ai_preparation",
+        "backend_id": 6,
+        "detail": {
+          "mode": "current_local_source_snapshot",
+          "preparation_id": 6
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": null,
+        "finished_at": "2026-10-21T06:54:21.491568+00:00"
+      },
+      {
+        "stage_key": "topic_profile",
+        "label": "选题打标与画像",
+        "stage_order": 20,
+        "dependencies": [
+          "source_ingestion"
+        ],
+        "status": "succeeded",
+        "attempt_count": 1,
+        "version": 3,
+        "backend_type": "ai_preparation",
+        "backend_id": 6,
+        "detail": {
+          "last_report": {
+            "account_input_scope": "preparation_snapshot",
+            "accounts": {
+              "counts": {
+                "failed": 0,
+                "incomplete_snapshot": 0,
+                "invalid_vector": 0,
+                "missing": 0,
+                "pending": 0,
+                "ready": 10,
+                "stale": 0
+              },
+              "expected": 10,
+              "samples": {},
+              "vector_spaces": [
+                {
+                  "count": 10,
+                  "dimension": 2048,
+                  "vector_model": "doubao-embedding-vision-251215"
+                }
+              ]
+            },
+            "blocking_reasons": [],
+            "checked_at": "2026-10-21T06:54:27.045632+00:00",
+            "config_version": 16,
+            "inputs_ready": true,
+            "matching_executed": false,
+            "preparation_id": 6,
+            "status": "ready",
+            "topic_input_scope": "preparation_snapshot",
+            "topics": {
+              "compatible_ready": 36,
+              "counts": {
+                "awaiting_labels": 0,
+                "failed": 0,
+                "invalid_vector": 0,
+                "label_failed": 0,
+                "missing": 0,
+                "pending": 0,
+                "ready": 36,
+                "stale": 0,
+                "unavailable": 0
+              },
+              "freeze_eligible": 36,
+              "incompatible_ready": 0,
+              "inspected": 36,
+              "samples": {},
+              "vector_spaces": [
+                {
+                  "count": 36,
+                  "dimension": 2048,
+                  "vector_model": "doubao-embedding-vision-251215"
+                }
+              ]
+            },
+            "vector_space": {
+              "dimension": 2048,
+              "vector_model": "doubao-embedding-vision-251215"
+            }
+          },
+          "preparation_status": "inputs_frozen",
+          "preparation_version": 3
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": "2026-10-21T06:54:21.491568+00:00",
+        "finished_at": "2026-10-21T06:54:28.358174+00:00"
+      },
+      {
+        "stage_key": "account_profile",
+        "label": "账号画像",
+        "stage_order": 30,
+        "dependencies": [
+          "source_ingestion"
+        ],
+        "status": "succeeded",
+        "attempt_count": 1,
+        "version": 3,
+        "backend_type": "ai_preparation",
+        "backend_id": 6,
+        "detail": {
+          "last_report": {
+            "account_input_scope": "preparation_snapshot",
+            "accounts": {
+              "counts": {
+                "failed": 0,
+                "incomplete_snapshot": 0,
+                "invalid_vector": 0,
+                "missing": 0,
+                "pending": 0,
+                "ready": 10,
+                "stale": 0
+              },
+              "expected": 10,
+              "samples": {},
+              "vector_spaces": [
+                {
+                  "count": 10,
+                  "dimension": 2048,
+                  "vector_model": "doubao-embedding-vision-251215"
+                }
+              ]
+            },
+            "blocking_reasons": [],
+            "checked_at": "2026-10-21T06:54:27.045632+00:00",
+            "config_version": 16,
+            "inputs_ready": true,
+            "matching_executed": false,
+            "preparation_id": 6,
+            "status": "ready",
+            "topic_input_scope": "preparation_snapshot",
+            "topics": {
+              "compatible_ready": 36,
+              "counts": {
+                "awaiting_labels": 0,
+                "failed": 0,
+                "invalid_vector": 0,
+                "label_failed": 0,
+                "missing": 0,
+                "pending": 0,
+                "ready": 36,
+                "stale": 0,
+                "unavailable": 0
+              },
+              "freeze_eligible": 36,
+              "incompatible_ready": 0,
+              "inspected": 36,
+              "samples": {},
+              "vector_spaces": [
+                {
+                  "count": 36,
+                  "dimension": 2048,
+                  "vector_model": "doubao-embedding-vision-251215"
+                }
+              ]
+            },
+            "vector_space": {
+              "dimension": 2048,
+              "vector_model": "doubao-embedding-vision-251215"
+            }
+          },
+          "preparation_status": "inputs_frozen",
+          "preparation_version": 3
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": "2026-10-21T06:54:21.491568+00:00",
+        "finished_at": "2026-10-21T06:54:28.358174+00:00"
+      },
+      {
+        "stage_key": "single_account_matching",
+        "label": "单账号选题匹配",
+        "stage_order": 40,
+        "dependencies": [
+          "topic_profile",
+          "account_profile"
+        ],
+        "status": "succeeded",
+        "attempt_count": 1,
+        "version": 3,
+        "backend_type": "matching_task",
+        "backend_id": 5,
+        "detail": {
+          "fit": {
+            "score_scale": "positive_cosine_0_1; output 0-100",
+            "scored_edges": 600
+          },
+          "hard_gate": {
+            "account_count": 10,
+            "city_excluded_edges": 0,
+            "eligible_edges": 1080,
+            "history_excluded_edges": 0,
+            "role_eligible_edges": 600,
+            "t2_role_excluded_edges": 480,
+            "topic_count": 36,
+            "unknown_t2_role_excluded_edges": 0
+          },
+          "recall": {
+            "accounts_without_recall": 0,
+            "min_cosine": 0.0,
+            "recalled_edges": 600,
+            "slots_without_recall": 0,
+            "top_k": 100
+          },
+          "task": {
+            "attempt_count": 1,
+            "completed_at": "2026-10-21T06:54:29.857860+00:00",
+            "contract_version": 2,
+            "error_code": "",
+            "evaluation_scope": "ordinary_only",
+            "input_hash": "00ef93ff2a0e2bd7e55384f5b31de207351fde4a58bf7154d7147c4092a1aff2",
+            "lease_expires_at": "2026-10-21T07:24:28.678521+00:00",
+            "operations_result_committed": false,
+            "policy_hash": "106a2b618b6133b2dd4440a81b6474a09307bd2182e6bcd636add0f675897e4f",
+            "policy_id": 5,
+            "preparation_id": 6,
+            "preparation_version": 3,
+            "production_batch_id": null,
+            "result_hash": "94702c0062980352f8247f45b809057ca6f846d1f7f37d899ec7b725b6e07a58",
+            "reused": false,
+            "status": "evaluated",
+            "supplemental_hash": "33b51aca19947404d45c4c5b26f6c4222fb1b7d63ba492962f283a863dd0be50",
+            "task_id": 5,
+            "version": 3
+          }
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": "2026-10-21T06:54:28.358174+00:00",
+        "finished_at": "2026-10-21T06:54:30.783213+00:00"
+      },
+      {
+        "stage_key": "matrix_allocation",
+        "label": "全账号矩阵分配",
+        "stage_order": 50,
+        "dependencies": [
+          "single_account_matching"
+        ],
+        "status": "succeeded",
+        "attempt_count": 0,
+        "version": 2,
+        "backend_type": "matching_task",
+        "backend_id": 5,
+        "detail": {
+          "global_allocation": {
+            "failed_positions": 0,
+            "fallback_positions": 0,
+            "matched_positions": 30,
+            "maximum_matched_topic_reuse": 6,
+            "unique_matched_topics": 12
+          },
+          "task": {
+            "attempt_count": 1,
+            "completed_at": "2026-10-21T06:54:29.857860+00:00",
+            "contract_version": 2,
+            "error_code": "",
+            "evaluation_scope": "ordinary_only",
+            "input_hash": "00ef93ff2a0e2bd7e55384f5b31de207351fde4a58bf7154d7147c4092a1aff2",
+            "lease_expires_at": "2026-10-21T07:24:28.678521+00:00",
+            "operations_result_committed": false,
+            "policy_hash": "106a2b618b6133b2dd4440a81b6474a09307bd2182e6bcd636add0f675897e4f",
+            "policy_id": 5,
+            "preparation_id": 6,
+            "preparation_version": 3,
+            "production_batch_id": null,
+            "result_hash": "94702c0062980352f8247f45b809057ca6f846d1f7f37d899ec7b725b6e07a58",
+            "reused": false,
+            "status": "evaluated",
+            "supplemental_hash": "33b51aca19947404d45c4c5b26f6c4222fb1b7d63ba492962f283a863dd0be50",
+            "task_id": 5,
+            "version": 3
+          }
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": null,
+        "finished_at": "2026-10-21T06:54:30.783213+00:00"
+      },
+      {
+        "stage_key": "composition",
+        "label": "选题组合编排",
+        "stage_order": 60,
+        "dependencies": [
+          "matrix_allocation"
+        ],
+        "status": "succeeded",
+        "attempt_count": 0,
+        "version": 2,
+        "backend_type": "matching_task",
+        "backend_id": 5,
+        "detail": {
+          "composition": {
+            "actual_conversion_positions": 10,
+            "actual_traffic_positions": 20,
+            "failed_positions": 0,
+            "fallback_audit": {},
+            "improvement_passes": 18,
+            "local_optimum_reached": true,
+            "mmr_input_edges": 600,
+            "mmr_pruned_edges": 80,
+            "mmr_relevance_weight": 0.7,
+            "mmr_shortlisted_edges": 520,
+            "objective_weights": {
+              "balance": 0.1,
+              "coverage": 0.2,
+              "redundancy": 0.15,
+              "relevance": 0.55
+            },
+            "portfolio_objective": {
+              "balance": 0.979311,
+              "coverage": 1.0,
+              "redundancy": 0.685127,
+              "relevance": 0.589861,
+              "utility": 0.519586
+            },
+            "search_edges_including_preserved_initial": 521,
+            "shortlist_per_slot": 20,
+            "target_conversion_positions": 10,
+            "target_traffic_positions": 20
+          },
+          "task": {
+            "attempt_count": 1,
+            "completed_at": "2026-10-21T06:54:29.857860+00:00",
+            "contract_version": 2,
+            "error_code": "",
+            "evaluation_scope": "ordinary_only",
+            "input_hash": "00ef93ff2a0e2bd7e55384f5b31de207351fde4a58bf7154d7147c4092a1aff2",
+            "lease_expires_at": "2026-10-21T07:24:28.678521+00:00",
+            "operations_result_committed": false,
+            "policy_hash": "106a2b618b6133b2dd4440a81b6474a09307bd2182e6bcd636add0f675897e4f",
+            "policy_id": 5,
+            "preparation_id": 6,
+            "preparation_version": 3,
+            "production_batch_id": null,
+            "result_hash": "94702c0062980352f8247f45b809057ca6f846d1f7f37d899ec7b725b6e07a58",
+            "reused": false,
+            "status": "evaluated",
+            "supplemental_hash": "33b51aca19947404d45c4c5b26f6c4222fb1b7d63ba492962f283a863dd0be50",
+            "task_id": 5,
+            "version": 3
+          }
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": null,
+        "finished_at": "2026-10-21T06:54:30.783213+00:00"
+      },
+      {
+        "stage_key": "result_commit",
+        "label": "结果校验与正式提交",
+        "stage_order": 70,
+        "dependencies": [
+          "composition"
+        ],
+        "status": "succeeded",
+        "attempt_count": 1,
+        "version": 3,
+        "backend_type": "planning_batch",
+        "backend_id": 110,
+        "detail": {
+          "batch_code": "AUTO-AI-20261116",
+          "conversion_slots": 10,
+          "hotspot_slots": 0,
+          "marketing_ordinary_fallback_slots": 0,
+          "marketing_priority_slots": 0,
+          "marketing_topics": 0,
+          "matching_result_hash": "94702c0062980352f8247f45b809057ca6f846d1f7f37d899ec7b725b6e07a58",
+          "matching_task_id": 5,
+          "production_batch_id": 110,
+          "traffic_slots": 20
+        },
+        "error_code": "",
+        "error_message": "",
+        "started_at": "2026-10-21T06:54:30.783213+00:00",
+        "finished_at": "2026-10-21T06:54:32.070838+00:00"
+      }
+    ],
+    "reused": false
+  },
+  "account_ids": [
+    "E2E-ORD10-001",
+    "E2E-ORD10-002",
+    "E2E-ORD10-003",
+    "E2E-ORD10-004",
+    "E2E-ORD10-005",
+    "E2E-ORD10-006",
+    "E2E-ORD10-007",
+    "E2E-ORD10-008",
+    "E2E-ORD10-009",
+    "E2E-ORD10-010"
+  ],
+  "account_count": 10,
+  "slot_count": 30,
+  "completed_slots": "30",
+  "usage_fact_count": 30,
+  "per_account": [
+    {
+      "account_id": "E2E-ORD10-001",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-002",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-003",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-004",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-005",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-006",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-007",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-008",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-009",
+      "slot_count": 3,
+      "completed_count": "3"
+    },
+    {
+      "account_id": "E2E-ORD10-010",
+      "slot_count": 3,
+      "completed_count": "3"
+    }
+  ],
+  "verification": {
+    "slot_count": 30,
+    "usage_fact_count": 30,
+    "callback_rollback_and_expired_lease_recovery": false,
+    "duplicate_callback_and_submission": "passed",
+    "late_failure_after_success": "ignored",
+    "usage": {
+      "queried_at": "2026-10-21T06:54:57.245655+00:00",
+      "status": "success",
+      "topic_results": [
+        {
+          "topic_id": "E2E-ORD-TOPIC-001",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "E2E-ORD-TOPIC-006",
+          "official_use_count": 2
+        },
+        {
+          "topic_id": "HOT-002",
+          "official_use_count": 6
+        },
+        {
+          "topic_id": "HOT-009",
+          "official_use_count": 2
+        },
+        {
+          "topic_id": "HOT-012",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "HOT-013",
+          "official_use_count": 6
+        },
+        {
+          "topic_id": "HOT-016",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "HOT-019",
+          "official_use_count": 4
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-02",
+          "official_use_count": 2
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-03",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-04",
+          "official_use_count": 5
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-10",
+          "official_use_count": 1
+        }
+      ],
+      "topic_type": "普通",
+      "items": [
+        {
+          "topic_id": "E2E-ORD-TOPIC-001",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "E2E-ORD-TOPIC-006",
+          "official_use_count": 2
+        },
+        {
+          "topic_id": "HOT-002",
+          "official_use_count": 6
+        },
+        {
+          "topic_id": "HOT-009",
+          "official_use_count": 2
+        },
+        {
+          "topic_id": "HOT-012",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "HOT-013",
+          "official_use_count": 6
+        },
+        {
+          "topic_id": "HOT-016",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "HOT-019",
+          "official_use_count": 4
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-02",
+          "official_use_count": 2
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-03",
+          "official_use_count": 1
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-04",
+          "official_use_count": 5
+        },
+        {
+          "topic_id": "TEST-CONV-20261021-10",
+          "official_use_count": 1
+        }
+      ]
+    },
+    "tasks": [
+      {
+        "task_id": "SLOT-7151-v1",
+        "topic_id": "TEST-CONV-20261021-10",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7152-v1",
+        "topic_id": "HOT-002",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7153-v1",
+        "topic_id": "E2E-ORD-TOPIC-001",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7154-v1",
+        "topic_id": "TEST-CONV-20261021-04",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7155-v1",
+        "topic_id": "HOT-019",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7156-v1",
+        "topic_id": "HOT-013",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7157-v1",
+        "topic_id": "TEST-CONV-20261021-03",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7158-v1",
+        "topic_id": "HOT-002",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7159-v1",
+        "topic_id": "HOT-009",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7160-v1",
+        "topic_id": "TEST-CONV-20261021-04",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7161-v1",
+        "topic_id": "HOT-013",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7162-v1",
+        "topic_id": "HOT-002",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7163-v1",
+        "topic_id": "E2E-ORD-TOPIC-006",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7164-v1",
+        "topic_id": "HOT-013",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7165-v1",
+        "topic_id": "HOT-019",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7166-v1",
+        "topic_id": "TEST-CONV-20261021-04",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7167-v1",
+        "topic_id": "HOT-019",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7168-v1",
+        "topic_id": "HOT-012",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7169-v1",
+        "topic_id": "TEST-CONV-20261021-02",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7170-v1",
+        "topic_id": "HOT-016",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7171-v1",
+        "topic_id": "HOT-002",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7172-v1",
+        "topic_id": "TEST-CONV-20261021-04",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7173-v1",
+        "topic_id": "HOT-019",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7174-v1",
+        "topic_id": "HOT-013",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7175-v1",
+        "topic_id": "E2E-ORD-TOPIC-006",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7176-v1",
+        "topic_id": "HOT-002",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7177-v1",
+        "topic_id": "HOT-013",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7178-v1",
+        "topic_id": "TEST-CONV-20261021-04",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7179-v1",
+        "topic_id": "HOT-013",
+        "status": "completed",
+        "provider": "local_mock"
+      },
+      {
+        "task_id": "SLOT-7180-v1",
+        "topic_id": "HOT-009",
+        "status": "completed",
+        "provider": "local_mock"
+      }
+    ]
+  },
+  "elapsed_seconds": 36.6,
+  "review_path": "/results?batch=110",
+  "matching_quality": {
+    "outcome_counts": {
+      "matched": 30,
+      "fallback": 0,
+      "failed": 0
+    },
+    "stage_summaries": {
+      "hard_gate": {
+        "account_count": 10,
+        "city_excluded_edges": 0,
+        "eligible_edges": 1080,
+        "history_excluded_edges": 0,
+        "role_eligible_edges": 600,
+        "t2_role_excluded_edges": 480,
+        "topic_count": 36,
+        "unknown_t2_role_excluded_edges": 0
+      },
+      "recall": {
+        "accounts_without_recall": 0,
+        "min_cosine": 0.0,
+        "recalled_edges": 600,
+        "slots_without_recall": 0,
+        "top_k": 100
+      },
+      "fit": {
+        "score_scale": "positive_cosine_0_1; output 0-100",
+        "scored_edges": 600
+      },
+      "global_allocation": {
+        "failed_positions": 0,
+        "fallback_positions": 0,
+        "matched_positions": 30,
+        "maximum_matched_topic_reuse": 6,
+        "unique_matched_topics": 12
+      },
+      "composition": {
+        "actual_conversion_positions": 10,
+        "actual_traffic_positions": 20,
+        "failed_positions": 0,
+        "fallback_audit": {},
+        "improvement_passes": 18,
+        "local_optimum_reached": true,
+        "mmr_input_edges": 600,
+        "mmr_pruned_edges": 80,
+        "mmr_relevance_weight": 0.7,
+        "mmr_shortlisted_edges": 520,
+        "objective_weights": {
+          "balance": 0.1,
+          "coverage": 0.2,
+          "redundancy": 0.15,
+          "relevance": 0.55
+        },
+        "portfolio_objective": {
+          "balance": 0.979311,
+          "coverage": 1.0,
+          "redundancy": 0.685127,
+          "relevance": 0.589861,
+          "utility": 0.519586
+        },
+        "search_edges_including_preserved_initial": 521,
+        "shortlist_per_slot": 20,
+        "target_conversion_positions": 10,
+        "target_traffic_positions": 20
+      }
+    }
+  },
+  "account_results": {
+    "E2E-ORD10-001": [
+      {
+        "account_name": "家庭财务顾问-01",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-10",
+        "title": "家庭保障配置前的四项准备：成员、预算、责任与期限",
+        "content_role": "转化",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "家庭财务顾问-01",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-002",
+        "title": "LPR又没变：房贷、消费贷和经营贷到底看哪个利率？",
+        "content_role": "流量",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "家庭财务顾问-01",
+        "publish_date": "2026-11-20",
+        "topic_id": "E2E-ORD-TOPIC-001",
+        "title": "工资到账后，如何列出每月固定支出清单",
+        "content_role": "流量",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-002": [
+      {
+        "account_name": "职场金融讲师-02",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-04",
+        "title": "小微商户收支分账：让经营流水和家庭支出更清楚",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "职场金融讲师-02",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-019",
+        "title": "今年赏红叶别只凭经验：一张“秋色地图”怎么选时间和目的地？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "职场金融讲师-02",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-013",
+        "title": "AI编程要进入2万家软件企业：普通职场人该怎么理解这轮变化？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-003": [
+      {
+        "account_name": "信用卡服务顾问-03",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-03",
+        "title": "信用卡账单怎么管：还款提醒、消费记录和费用核对",
+        "content_role": "转化",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "信用卡服务顾问-03",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-002",
+        "title": "LPR又没变：房贷、消费贷和经营贷到底看哪个利率？",
+        "content_role": "流量",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "信用卡服务顾问-03",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-009",
+        "title": "买东西怕踩坑？11月这些消费维权主题值得提前知道",
+        "content_role": "流量",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-004": [
+      {
+        "account_name": "小微企业金融专员-04",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-04",
+        "title": "小微商户收支分账：让经营流水和家庭支出更清楚",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "小微企业金融专员-04",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-013",
+        "title": "AI编程要进入2万家软件企业：普通职场人该怎么理解这轮变化？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "小微企业金融专员-04",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-002",
+        "title": "LPR又没变：房贷、消费贷和经营贷到底看哪个利率？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-005": [
+      {
+        "account_name": "养老保障咨询员-05",
+        "publish_date": "2026-11-16",
+        "topic_id": "E2E-ORD-TOPIC-006",
+        "title": "预约家庭保障咨询前，需要准备哪些信息",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "养老保障咨询员-05",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-013",
+        "title": "AI编程要进入2万家软件企业：普通职场人该怎么理解这轮变化？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "养老保障咨询员-05",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-019",
+        "title": "今年赏红叶别只凭经验：一张“秋色地图”怎么选时间和目的地？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-006": [
+      {
+        "account_name": "青年生活财经博主-06",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-04",
+        "title": "小微商户收支分账：让经营流水和家庭支出更清楚",
+        "content_role": "转化",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "青年生活财经博主-06",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-019",
+        "title": "今年赏红叶别只凭经验：一张“秋色地图”怎么选时间和目的地？",
+        "content_role": "流量",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "青年生活财经博主-06",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-012",
+        "title": "2592 EFLOPS是什么概念？一篇看懂“智能算力”为什么这么重要",
+        "content_role": "流量",
+        "lifecycle_stage": "流量增长期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-007": [
+      {
+        "account_name": "房产家庭规划师-07",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-02",
+        "title": "家庭现金流体检：做产品规划前先看懂收支与保障缺口",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "房产家庭规划师-07",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-016",
+        "title": "成都公积金新变化：装修、物业费怎么提？先看这张条件清单",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "房产家庭规划师-07",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-002",
+        "title": "LPR又没变：房贷、消费贷和经营贷到底看哪个利率？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-008": [
+      {
+        "account_name": "自由职业者财务顾问-08",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-04",
+        "title": "小微商户收支分账：让经营流水和家庭支出更清楚",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "自由职业者财务顾问-08",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-019",
+        "title": "今年赏红叶别只凭经验：一张“秋色地图”怎么选时间和目的地？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "自由职业者财务顾问-08",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-013",
+        "title": "AI编程要进入2万家软件企业：普通职场人该怎么理解这轮变化？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-009": [
+      {
+        "account_name": "亲子家庭金融讲师-09",
+        "publish_date": "2026-11-16",
+        "topic_id": "E2E-ORD-TOPIC-006",
+        "title": "预约家庭保障咨询前，需要准备哪些信息",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "亲子家庭金融讲师-09",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-002",
+        "title": "LPR又没变：房贷、消费贷和经营贷到底看哪个利率？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "亲子家庭金融讲师-09",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-013",
+        "title": "AI编程要进入2万家软件企业：普通职场人该怎么理解这轮变化？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ],
+    "E2E-ORD10-010": [
+      {
+        "account_name": "数字生活服务顾问-10",
+        "publish_date": "2026-11-16",
+        "topic_id": "TEST-CONV-20261021-04",
+        "title": "小微商户收支分账：让经营流水和家庭支出更清楚",
+        "content_role": "转化",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "数字生活服务顾问-10",
+        "publish_date": "2026-11-18",
+        "topic_id": "HOT-013",
+        "title": "AI编程要进入2万家软件企业：普通职场人该怎么理解这轮变化？",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      },
+      {
+        "account_name": "数字生活服务顾问-10",
+        "publish_date": "2026-11-20",
+        "topic_id": "HOT-009",
+        "title": "买东西怕踩坑？11月这些消费维权主题值得提前知道",
+        "content_role": "流量",
+        "lifecycle_stage": "转化试探期",
+        "production_status": "generated"
+      }
+    ]
+  }
+}

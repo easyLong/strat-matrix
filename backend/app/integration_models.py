@@ -303,8 +303,8 @@ class ContentStatusCallback(BaseModel):
 
     @model_validator(mode="after")
     def check_content(self):
-        if self.status in ("generated", "published") and not self.content_id:
-            raise ValueError("生成完成或已发布必须提供 content_id")
+        # The current callback contract only requires task identity and status.
+        # Content identifiers remain optional metadata for older callers.
         return self
 
 
@@ -327,7 +327,7 @@ class PublicationStatusCallback(BaseModel):
 
 
 class OfficialUsageQuery(BaseModel):
-    topic_type: Literal["普通", "营销", "热点"]
+    topic_type: Literal["普通", "营销", "热点"] = '普通'
     topic_ids: list[str] = Field(min_length=1, max_length=500)
 
     @model_validator(mode="after")

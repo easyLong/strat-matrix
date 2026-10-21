@@ -18,6 +18,7 @@ topic_vector_worker_pid="$RUN_DIR/topic-vector-worker.pid"
 account_vector_worker_pid="$RUN_DIR/account-vector-worker.pid"
 ai_preparation_worker_pid="$RUN_DIR/ai-preparation-worker.pid"
 matching_executor_worker_pid="$RUN_DIR/matching-executor-worker.pid"
+planning_workflow_worker_pid="$RUN_DIR/planning-workflow-worker.pid"
 
 is_running() {
   local pid_file="$1"
@@ -41,9 +42,11 @@ if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
   )
 fi
 
-if [[ "$TOPIC_VECTOR_WORKER_ENABLED" == "1" && "$TOPIC_VECTOR_MODEL_CONFIGURED" != "1" ]]; then
-  echo "Topic vector worker enabled, but TOPIC_VECTOR_MODEL_URL is empty." >&2
-  exit 1
+if [[ "$TOPIC_VECTOR_WORKER_ENABLED" == "1" ]]; then
+  (
+    cd "$APP_ROOT/backend"
+    "$PYTHON_BIN" -m app.topic_vector_worker --check-config
+  )
 fi
 
 if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
@@ -64,6 +67,13 @@ if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
   (
     cd "$APP_ROOT/backend"
     "$PYTHON_BIN" -m app.matching_executor_worker --check-config
+  )
+fi
+
+if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
+  (
+    cd "$APP_ROOT/backend"
+    "$PYTHON_BIN" -m app.init_workflow_db
   )
 fi
 
@@ -174,6 +184,17 @@ if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
     ) >"$LOG_DIR/matching-executor-worker.log" 2>&1 &
     echo $! >"$matching_executor_worker_pid"
     echo "Matching executor worker started (PID $(cat "$matching_executor_worker_pid"))."
+  fi
+fi
+
+if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
+  if ! is_running "$planning_workflow_worker_pid"; then
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.planning_workflow_worker
+    ) >"$LOG_DIR/planning-workflow-worker.log" 2>&1 &
+    echo $! >"$planning_workflow_worker_pid"
+    echo "Planning workflow worker started (PID $(cat "$planning_workflow_worker_pid"))."
   fi
 fi
 

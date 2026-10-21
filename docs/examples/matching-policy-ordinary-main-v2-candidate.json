@@ -1,0 +1,129 @@
+{
+  "policy_key": "ordinary-main",
+  "expected_latest_version": 1,
+  "document": {
+    "schema_version": 2,
+    "implementation_key": "builtin-cosine-portfolio-v2",
+    "vector_space": {
+      "vector_model": "doubao-embedding-vision-251215",
+      "dimension": 2048,
+      "semantic_space_id": "doubao-embedding-vision-251215"
+    },
+    "required_inputs": [
+      "accounts",
+      "topics",
+      "config",
+      "positions",
+      "fallback_topics",
+      "history",
+      "official_usage"
+    ],
+    "input_options": {
+      "history_window_days": 90,
+      "history_completeness": "allow_unknown",
+      "history_unknown_references": "allow_unknown",
+      "official_usage_unknown": "allow_unknown",
+      "fallback_unknown_heat": "allow_unknown"
+    },
+    "decisions": {
+      "ALG-01": {
+        "definition": "使用已对齐向量空间中的账号与选题向量计算余弦相似度，作为基础 Fit 分。",
+        "parameters": {
+          "similarity": "cosine_unit_vectors"
+        },
+        "acceptance_examples": [
+          "账号向量与选题向量相似度为 0.82 时，Fit=82；此值只表示语义接近程度，不是成功概率。"
+        ]
+      },
+      "ALG-02": {
+        "definition": "先执行城市兼容与账号历史去重。明确城市不匹配或近 90 天同账号已用选题会排除；未知引用不能伪装为未使用。",
+        "parameters": {
+          "city_gate": "allow_empty_or_exact",
+          "history_gate": "exclude_observed_account_history"
+        },
+        "acceptance_examples": [
+          "空城市限制按策略视为通用；已知不匹配的候选边不进入召回。"
+        ]
+      },
+      "ALG-03": {
+        "definition": "先保留余弦分数不低于 0.0 的候选，每个账号、槽位角色分别按分数取 Top-K=100；再由 MMR 缩减至 20 个组合候选。",
+        "parameters": {
+          "top_k": 100,
+          "min_cosine": 0.0
+        },
+        "acceptance_examples": [
+          "候选数超过 100 时截取前 100，不足 100 时全部保留；稳定排序使用 topic_id 打破并列。"
+        ]
+      },
+      "ALG-04": {
+        "definition": "余弦分数截断至 [0,1]，乘 100 作为可阅读的 Fit 显示分。",
+        "parameters": {
+          "score_scale": "positive_cosine_0_100"
+        },
+        "acceptance_examples": [
+          "余弦为 0.82 时返回 Fit 82；输出 fit_score 保留与现有结果契约一致。"
+        ]
+      },
+      "ALG-05": {
+        "definition": "以账号为组合单位，在全部槽位上同时优化相关性、标签覆盖、槽位目标平衡和选题内部多样性。不使用旧的跨账号复用惩罚或正式使用次数排序。",
+        "parameters": {
+          "same_account_topic_max": 1,
+          "global_topic_max": null,
+          "global_reuse_penalty": 0.0,
+          "official_usage_penalty": 0.0
+        },
+        "acceptance_examples": [
+          "同一选题在同一账号的周期内最多使用 1 次；跨账号不设硬容量，但各账号独立计算目标。"
+        ]
+      },
+      "ALG-06": {
+        "definition": "先按冻结的生命周期目标和周内规则为槽位分配“流量/转化”角色，再强制选题 T2 与槽位角色一致。普通候选和兜底选题执行同一门槛；缺失或非法 T2 的选题被排除并记审计，不跨角色补位。",
+        "parameters": {
+          "rounding": "half_up",
+          "role_order": "even_spread"
+        },
+        "acceptance_examples": [
+          "流量槽位只能使用 T2=流量的选题，转化槽位只能使用 T2=转化的选题；没有合法 T2 的选题不参与候选，并统计无候选槽位。"
+        ]
+      },
+      "ALG-07": {
+        "definition": "使用组合目标决定多槽位整体分配；MMR 只在每槽位候选中优先保留相关性并降低与已选选题的重复。未知正式使用次数不影响 V2 打分。",
+        "parameters": {
+          "official_usage_unknown_rank": "after_known"
+        },
+        "acceptance_examples": [
+          "两个候选分数接近时，系统按组合覆盖与多样性选择；正式使用次数仍在快照中保留供审计。"
+        ]
+      },
+      "ALG-08": {
+        "definition": "槽位无普通候选时，从通过城市、历史、T2 角色和容量检查的兜底池选题。已知热度优先，其次按 topic_id 稳定排序；未知热度排在已知之后。",
+        "parameters": {
+          "fallback_sort": "heat_desc_topic_id",
+          "fallback_same_account_max": 1
+        },
+        "acceptance_examples": [
+          "用热度优先级相同的候选时，选 topic_id 字典序较前的项，确保相同输入结果可复现。"
+        ]
+      },
+      "ALG-09": {
+        "definition": "任务内无候选时先尝试合法兜底；存在无法补位槽位时整批不提交不完整提案。模型、快照或执行异常使整个任务失败，不当作业务空候选。",
+        "parameters": {
+          "no_candidate": "fallback_then_failed",
+          "system_error": "task_failure"
+        },
+        "acceptance_examples": [
+          "无法给槽位分配合法选题时标记 failed；策划提案提交规则不允许缺槽提案通过。"
+        ]
+      }
+    },
+    "portfolio": {
+      "relevance_weight": 0.55,
+      "coverage_weight": 0.2,
+      "balance_weight": 0.1,
+      "redundancy_weight": 0.15,
+      "mmr_relevance_weight": 0.7,
+      "shortlist_per_slot": 20,
+      "max_improvement_passes": 25
+    }
+  }
+}

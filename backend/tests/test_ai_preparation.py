@@ -322,13 +322,14 @@ class PreparationTests(unittest.TestCase):
 
 class PreparationWorkerTests(unittest.TestCase):
     def test_identity_separates_cache_and_routes_callback_to_preparation(self):
-        cfg = worker.WorkerConfig("http://backend", "internal", "http://model", "", 10, 5, 60)
+        cfg = worker.WorkerConfig("http://backend", "internal", 10, 5, 60)
         job = {"preparation_id": 123, "account_id": "ACCOUNT-001", "profile_hash": "a" * 64,
                "config_version": 3, "profile": {"account": {}}}
         cache = {}
         response = {"vector_model": "shared-v1", "vector": [3, 4]}
         with patch.object(worker, "json_request", side_effect=[response, WorkerError("temporary callback failure")]) as request:
             self.assertFalse(worker.process_job(job, cfg, cache))
+            self.assertTrue(request.call_args_list[0].args[0].endswith("/api/internal/embedding-model"))
             self.assertEqual(request.call_args_list[0].kwargs["body"]["preparation_id"], 123)
             self.assertNotIn("batch_id", request.call_args_list[0].kwargs["body"])
         acknowledgment = {"preparation_id": 123, "account_id": "ACCOUNT-001", "profile_hash": "a" * 64, "status": "ready"}
@@ -341,7 +342,7 @@ class PreparationWorkerTests(unittest.TestCase):
         self.assertNotEqual(worker.job_key(job), worker.job_key(batch_job))
 
     def test_default_worker_visits_both_queues_even_when_one_fails(self):
-        cfg = worker.WorkerConfig("http://backend", "internal", "http://model", "", 10, 5, 60)
+        cfg = worker.WorkerConfig("http://backend", "internal", 10, 5, 60)
         with patch.object(worker, "json_request", side_effect=[WorkerError("unavailable"),
                                                              {"jobs": [], "next_after_id": 0}]) as request:
             self.assertEqual(worker.run(cfg, True), 1)
