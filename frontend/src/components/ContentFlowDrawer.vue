@@ -11,19 +11,22 @@ const panel = ref<HTMLElement | null>(null)
 const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
 let timer: number | undefined
 let disposed = false
-let fingerprint = ''
+let fingerprint: string | null = null
+let requestBusy = false
 const labels: Record<string, string> = { accepted: '生产中', processing: '生产中', completed: '已完成', failed: '生产失败' }
 async function load() {
+  if (disposed || requestBusy) return
+  requestBusy = true
   try {
     const result = await api.contentProductionFlow(props.batchId)
     if (disposed) return
     const next = result.tasks.map(task => `${task.production_task_id}:${task.status}`).join('|')
-    if (fingerprint && next !== fingerprint) emit('changed')
+    if (fingerprint !== null && next !== fingerprint) emit('changed')
     fingerprint = next
     tasks.value = result.tasks
     error.value = ''
   } catch (exc) { if (!disposed) error.value = exc instanceof Error ? exc.message : '读取内容流水失败' }
-  finally { if (!disposed) loading.value = false }
+  finally { requestBusy = false; if (!disposed) loading.value = false }
 }
 function keyboard(event: KeyboardEvent) {
   if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); emit('close'); return }
@@ -35,7 +38,7 @@ function keyboard(event: KeyboardEvent) {
 }
 onMounted(() => {
   void load(); panel.value?.querySelector('button')?.focus()
-  timer = window.setInterval(() => { if (tasks.value.some(task => ['accepted', 'processing'].includes(task.status))) void load() }, 3000)
+  timer = window.setInterval(() => { void load() }, 3000)
   document.addEventListener('keydown', keyboard, true)
 })
 onBeforeUnmount(() => { disposed = true; window.clearInterval(timer); document.removeEventListener('keydown', keyboard, true); previousFocus?.focus({ preventScroll: true }) })

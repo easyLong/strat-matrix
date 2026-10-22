@@ -106,7 +106,6 @@ export const api = {
   batches: (type?: 'manual' | 'auto', limit = 200) =>
     request<BatchSummary[]>(`/batches?limit=${limit}${type ? `&plan_type=${type}` : ''}`),
   batch: (id: number) => request<BatchDetail>(`/batches/${id}`),
-  startContentProduction: (id: number) => request<{ accepted: number; reused: number; provider: string }>(`/batches/${id}/content-production`, { method: 'POST' }),
   contentProductionFlow: (id: number) => request<{ batch_id: number; tasks: ContentProductionTask[] }>(`/batches/${id}/content-production`),
   accountItems: (account: string, limit = 5000) => request<AccountPlanRecord[]>(`/items?account=${encodeURIComponent(account)}&limit=${limit}`),
   planningAccounts: () => request<PlanningAccountSummary[]>('/planning-accounts'),

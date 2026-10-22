@@ -21,7 +21,7 @@ const breadcrumbs = computed<{ label: string; to?: RouteLocationRaw }[]>(() => {
     const period = !account && (route.query.dimension === 'period' || Boolean(route.query.batch || route.query.cycle))
     const detail = Boolean(route.query.account || route.query.batch || route.query.cycle)
     const detailTitle = account ? '账号策划详情' : route.query.batch ? '批次策划详情' : '周期策划详情'
-    const view = { label: period ? '周期视图' : '账号视图', to: { path: '/results', query: period ? { dimension: 'period' } : {} } }
+    const view = { label: period ? '时间列表' : '账号列表', to: { path: '/results', query: period ? { dimension: 'period' } : {} } }
     return detail
       ? [{ label: '策划结果', to: '/results' }, view, { label: detailTitle }]
       : [{ label: '策划结果', to: '/results' }, { label: view.label }]

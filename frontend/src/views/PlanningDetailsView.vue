@@ -10,6 +10,7 @@ import { api } from '../api'
 import type { AccountOption, AccountPlanRecord, BatchDetail, BatchSummary } from '../types'
 import { statusTone } from '../ui/status'
 import { productionStatusLabel } from '../ui/slotContentStatus'
+import { summarizeContentTypes } from '../ui/contentTypeStats'
 
 type DetailMode = 'batch' | 'cycle' | 'account'
 type PlanningWeek = { start: string; end: string; items: AccountPlanRecord[] }
@@ -49,27 +50,17 @@ const appliedFilters = ref({ account: '', cycle: 'all', batch: 'all', planType: 
 const page = ref(1)
 const pageSize = ref(20)
 const historyPage = ref(1)
-const historyPageSize = ref(10)
+const historyPageSize = ref(20)
 let loadRequest = 0
 
 const isBatchMode = computed(() => props.mode === 'batch')
 const isAccountMode = computed(() => props.mode === 'account')
 const detailTitle = computed(() => isAccountMode.value ? '账号策划详情' : isBatchMode.value ? '批次策划详情' : '周期策划详情')
 const currentBatch = computed(() => isBatchMode.value ? props.batches[0] ?? null : null)
-const productionBusy = ref(false)
-const productionError = ref('')
+const batchById = computed(() => new Map(props.batches.map(batch => [batch.id, batch])))
 const contentFlowBatchId = ref<number | null>(null)
 const productionItems = computed(() => details.value.flatMap(detail => detail.items))
-const canProduce = computed(() => productionItems.value.some(item => item.topic_id && item.production_status === 'planned'))
-const hasProduction = computed(() => productionItems.value.some(item => ['ready', 'generated', 'published', 'failed'].includes(item.production_status || '')))
-async function startProduction() {
-  if (!currentBatch.value || productionBusy.value) return
-  productionBusy.value = true; productionError.value = ''
-  try { await api.startContentProduction(currentBatch.value.id); await load() }
-  catch (exc) { productionError.value = exc instanceof Error ? exc.message : '提交内容生产失败' }
-  finally { productionBusy.value = false }
-}
-const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号视图' : '返回周期视图'))
+const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号列表' : '返回时间列表'))
 const fixedPlanType = computed<'auto' | 'manual' | null>(() => isBatchMode.value ? currentBatch.value?.plan_type ?? null : null)
 const scopeLabel = computed(() => {
   if (isAccountMode.value) return `${accountProfile(props.accountId)?.account_name || historyItems.value[0]?.account_name || props.accountId} · ${props.accountId}`
@@ -176,8 +167,16 @@ const dashboard = computed(() => ({
   autoPlans: filteredItems.value.filter(item => item.plan_type === 'auto').length,
   manualPlans: filteredItems.value.filter(item => item.plan_type === 'manual').length,
 }))
+const topicTypeCounts = computed(() => summarizeContentTypes(filteredItems.value))
 
 const pagedAccountGroups = computed(() => accountGroups.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const accountHistoryRows = computed(() => [...filteredItems.value].sort((a, b) =>
+  b.publish_date.localeCompare(a.publish_date) || b.batch_id - a.batch_id || b.id - a.id,
+))
+const pagedAccountHistoryRows = computed(() => accountHistoryRows.value.slice(
+  (historyPage.value - 1) * historyPageSize.value,
+  historyPage.value * historyPageSize.value,
+))
 
 function weeksFor(group: AccountGroup): PlanningWeek[] {
   const weeks = new Map<string, AccountPlanRecord[]>()
@@ -188,11 +187,6 @@ function weeksFor(group: AccountGroup): PlanningWeek[] {
     else weeks.set(key, [item])
   }
   return [...weeks].map(([start, items]) => ({ start, end: weekEnd(start), items })).sort((a, b) => b.start.localeCompare(a.start))
-}
-
-function pagedWeeksFor(group: AccountGroup) {
-  const weeks = weeksFor(group)
-  return isAccountMode.value ? weeks.slice((historyPage.value - 1) * historyPageSize.value, historyPage.value * historyPageSize.value) : weeks
 }
 
 function daysFor(week: PlanningWeek) {
@@ -225,14 +219,14 @@ function updatePlan(item: AccountPlanRecord) {
   }))
 }
 
-async function load() {
+async function load(silent = false) {
   const request = ++loadRequest
-  loading.value = true
+  if (!silent) loading.value = true
   error.value = ''
   try {
     const [records, accounts] = await Promise.allSettled([
       isAccountMode.value ? api.accountItems(props.accountId) : Promise.all(props.batches.map(batch => api.batch(batch.id))),
-      api.accounts(1000, true),
+      silent && accountCatalog.value.length ? Promise.resolve(accountCatalog.value) : api.accounts(1000, true),
     ])
     if (request !== loadRequest) return
     if (records.status === 'rejected') throw records.reason
@@ -272,16 +266,16 @@ watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => pr
 watch(pageSize, () => { page.value = 1 })
 watch(historyPageSize, () => { historyPage.value = 1 })
 const productionTimer = window.setInterval(() => {
-  if (!loading.value && productionItems.value.some(item => item.production_status === 'ready')) void load()
+  if (!loading.value && productionItems.value.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item)))) void load(true)
 }, 3000)
 onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
 </script>
 
 <template>
-  <ContentFlowDrawer v-if="contentFlowBatchId" :batch-id="contentFlowBatchId" @close="contentFlowBatchId = null" @changed="load" />
+  <ContentFlowDrawer v-if="contentFlowBatchId" :batch-id="contentFlowBatchId" @close="contentFlowBatchId = null" @changed="load(true)" />
   <section class="card planning-detail-card">
-    <div class="card-head">
-      <div>
+    <div class="card-head planning-detail-head">
+      <div class="planning-detail-heading">
         <h2>{{ detailTitle }}</h2>
         <div v-if="isBatchMode" class="planning-detail-scope planning-batch-scope">
           <HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ cyclePeriodLabel(cycleStart) }}</HoverHint>
@@ -294,15 +288,12 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
         </div>
         <div v-else class="planning-detail-scope"><HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ scopeLabel }}</HoverHint></div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button v-if="isBatchMode && canProduce" class="btn primary" :disabled="productionBusy" @click="startProduction">{{ productionBusy ? '提交中…' : '生成内容' }}</button>
-        <button v-if="isBatchMode && !canProduce && productionItems.some(item => item.production_status === 'ready')" class="btn" disabled>生产中</button>
-        <button v-if="isBatchMode && hasProduction" class="btn" @click="contentFlowBatchId = currentBatch?.id || null">查看内容流水</button>
+      <div class="planning-detail-actions">
+        <button v-if="isBatchMode && currentBatch" class="btn" type="button" @click="contentFlowBatchId = currentBatch.id">查看内容流水</button>
         <button class="btn" type="button" @click="emit('back')">{{ backLabel }}</button>
       </div>
     </div>
 
-    <div v-if="productionError" class="banner error-banner" role="alert">{{ productionError }}</div>
     <LoadingSkeleton v-if="loading" :rows="8" />
     <div v-else-if="error" class="banner error-banner" role="alert">{{ error }}</div>
     <template v-else>
@@ -314,20 +305,52 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
         <div><small>人工策划</small><strong>{{ dashboard.manualPlans }}</strong></div>
       </section>
 
+      <section v-if="isBatchMode" class="batch-topic-types" aria-labelledby="batch-topic-types-title">
+        <h3 id="batch-topic-types-title">选题内容类型</h3>
+        <dl>
+          <div v-for="type in topicTypeCounts" :key="type.name" :title="type.hint">
+            <dt>{{ type.name }}</dt><dd :class="{ empty: type.count === 0 }">{{ type.count }}</dd>
+          </div>
+        </dl>
+      </section>
+
       <div class="detail-filter-shell">
         <button class="filter-collapse-toggle" type="button" :aria-expanded="filtersExpanded" @click="filtersExpanded = !filtersExpanded">
           <span>筛选条件</span>
           <svg :class="{ expanded: filtersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
         </button>
-        <div v-show="filtersExpanded" class="detail-filter-fields">
+        <div v-show="filtersExpanded" class="detail-filter-fields query-filter-grid" data-query-filters="compact">
           <label v-if="!isAccountMode"><span>账号 ID 或昵称</span><input v-model="accountKeyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
           <label v-if="isAccountMode"><span>周期</span><select v-model="cycleFilter"><option value="all">全部周期</option><option v-for="value in cycleOptions" :key="value" :value="value">{{ cyclePeriodLabel(value) }}</option></select></label>
-          <label><span>内容类型</span><select v-model="contentType"><option value="all">全部内容类型</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
-          <button class="btn primary detail-query-btn" type="button" @click="applyFilters">查询</button>
+          <div class="query-filter-tail">
+                <label><span>内容类型</span><select v-model="contentType"><option value="all">全部内容类型</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+                <div class="query-filter-actions"><button class="btn primary detail-query-btn" type="button" @click="applyFilters">查询</button></div>
+              </div>
         </div>
       </div>
 
-      <div v-if="accountGroups.length" class="planning-account-list">
+      <template v-if="isAccountMode">
+        <div class="table-wrap account-plan-table-wrap">
+          <table class="account-plan-table" aria-label="账号策划列表">
+            <colgroup><col style="width:155px" /><col style="width:20%" /><col /><col style="width:90px" /><col style="width:110px" /><col style="width:240px" /><col style="width:100px" /></colgroup>
+            <thead><tr><th scope="col">投放日期 / 星期</th><th scope="col">选题标题</th><th scope="col">选题大纲</th><th scope="col">内容类型</th><th scope="col">策划方式</th><th scope="col">批次信息</th><th scope="col">内容状态</th></tr></thead>
+            <tbody>
+              <tr v-for="item in pagedAccountHistoryRows" :key="item.id">
+                <td class="account-plan-date">{{ item.publish_date }} {{ weekdayLabel(item.publish_date) }}</td>
+                <td class="account-plan-text">{{ item.topic_title || (item.topic_id ? '暂无选题标题' : '待定题') }}</td>
+                <td class="account-plan-text">{{ item.outline || '—' }}</td>
+                <td>{{ item.content_type || '—' }}</td>
+                <td>{{ item.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td>
+                <td class="account-plan-batch"><span>{{ batchById.get(item.batch_id)?.task_name || '未命名批次' }}</span><small>{{ item.batch_code || batchById.get(item.batch_id)?.batch_code || '—' }}</small></td>
+                <td>{{ productionStatusLabel(item) }}</td>
+              </tr>
+              <tr v-if="!accountHistoryRows.length"><td colspan="7" class="empty-state">暂无策划记录</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ListPagination v-if="accountHistoryRows.length" v-model:page="historyPage" v-model:page-size="historyPageSize" :total="accountHistoryRows.length" unit="条" class="list-pagination-inset" />
+      </template>
+      <div v-else-if="accountGroups.length" class="planning-account-list">
         <article v-for="group in pagedAccountGroups" :key="group.account_id" :class="['planning-account-card', { expanded: expandedAccounts.has(group.account_id) }]">
           <header class="planning-account-head">
             <div class="planning-account-main">
@@ -356,7 +379,7 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
           </header>
 
           <template v-if="expandedAccounts.has(group.account_id)">
-          <div v-for="week in pagedWeeksFor(group)" :key="week.start" class="planning-week-section">
+          <div v-for="week in weeksFor(group)" :key="week.start" class="planning-week-section">
             <div class="planning-week-heading"><HoverHint :text="`${week.start} 至 ${week.end}`" :show-icon="false">{{ cyclePeriodLabel(week.start) }}</HoverHint><span>{{ week.items.length }} 条策划</span></div>
           <div class="planning-week-wrap">
             <div class="planning-week-grid">
@@ -378,7 +401,6 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
             </div>
           </div>
           </div>
-          <ListPagination v-if="isAccountMode" v-model:page="historyPage" v-model:page-size="historyPageSize" :total="weeksFor(group).length" unit="个周期" class="list-pagination-inset" />
           </template>
         </article>
       </div>
@@ -390,18 +412,22 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
 </template>
 
 <style scoped>
-.planning-detail-card>.card-head>div{flex:1;min-width:0}.planning-detail-scope .planning-context-tag{min-width:0;max-width:100%;min-height:24px;padding:3px 8px;border-radius:6px;background:var(--neutral-100);color:var(--neutral-500);font-size:12px;line-height:18px;font-weight:500}.planning-batch-code{min-width:0;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.batch-topic-types{margin:0 20px 16px;padding:0 0 4px}.batch-topic-types h3{margin:0 0 8px;color:var(--neutral-700);font-size:13px;line-height:22px;font-weight:600}.batch-topic-types dl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:20px;margin:0}.batch-topic-types dl>div{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--neutral-100)}.batch-topic-types dt{color:var(--neutral-500);font-size:12px;line-height:20px;overflow-wrap:anywhere}.batch-topic-types dd{flex:none;margin:0;color:var(--neutral-800);font-size:14px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums}.batch-topic-types dd.empty{color:var(--neutral-400);font-weight:400}
+@media(max-width:1200px){.batch-topic-types dl{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:980px){.batch-topic-types{margin:0 12px 16px}.batch-topic-types dl{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:16px}}@media(max-width:580px){.batch-topic-types dl{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px}}
+.account-plan-table-wrap{margin:0 20px 20px}.account-plan-table{table-layout:fixed;min-width:1180px}.account-plan-table th,.account-plan-table td{padding:14px 12px;vertical-align:top;line-height:22px}.account-plan-table td{color:var(--neutral-700)}.account-plan-date{white-space:nowrap;font-variant-numeric:tabular-nums}.account-plan-text{white-space:pre-wrap;overflow-wrap:anywhere}.account-plan-batch{overflow-wrap:anywhere}.account-plan-batch>span{display:block}.account-plan-batch>small{margin-top:3px;font-size:12px;line-height:18px}.account-plan-table .empty-state{text-align:center;padding:32px 12px;color:var(--neutral-400)}
+@media(max-width:980px){.account-plan-table-wrap{margin:0 12px 16px}}
+.planning-detail-head{align-items:flex-start;flex-wrap:wrap}.planning-detail-heading{flex:1 1 260px;min-width:0}.planning-detail-actions{display:flex;flex:0 0 auto;align-items:center;align-self:flex-start;justify-content:flex-end;flex-wrap:wrap;gap:8px;max-width:100%;margin-left:auto}.planning-detail-actions .btn{white-space:nowrap}.planning-detail-scope .planning-context-tag{min-width:0;max-width:100%;min-height:24px;padding:3px 8px;border-radius:6px;background:var(--neutral-100);color:var(--neutral-500);font-size:12px;line-height:18px;font-weight:500}.planning-batch-code{min-width:0;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .planning-batch-scope .planning-context-tag.orange{background:var(--processing-bg);color:var(--processing)}.planning-batch-scope .planning-context-tag.blue{background:var(--primary-50);color:var(--primary-600)}
-.planning-detail-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px;min-width:0}.planning-scope-label{max-width:560px;overflow:hidden;text-overflow:ellipsis;font-size:12px}.planning-week-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--neutral-200);background:var(--neutral-50)}.planning-week-heading>span{color:var(--neutral-400);font-size:11px}.detail-query-btn{align-self:end;justify-self:start}
+.planning-detail-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px;min-width:0}.planning-scope-label{max-width:560px;overflow:hidden;text-overflow:ellipsis;font-size:12px}.planning-week-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--neutral-200);background:var(--neutral-50)}.planning-week-heading>span{color:var(--neutral-400);font-size:11px}.detail-query-btn{align-self:end;height:36px;min-width:80px;white-space:nowrap}
 .planning-dashboard{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:16px 20px 16px;border:1px solid var(--neutral-200);border-radius:12px;overflow:hidden;background:var(--neutral-200)}
 .planning-dashboard>div{display:flex;flex-direction:column;gap:8px;min-height:74px;padding:14px 16px;background:var(--surface)}
 .planning-dashboard small{color:var(--neutral-500);font-size:12px}.planning-dashboard strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
 .detail-filter-shell{margin:0 20px 16px;padding:12px 14px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}
-.detail-filter-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}.detail-filter-fields label{display:flex;flex-direction:column;gap:6px}.detail-filter-fields label>span{color:var(--neutral-500);font-size:12px}.detail-filter-fields input,.detail-filter-fields select{width:100%}
+.detail-filter-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:12px;align-items:end;margin-top:12px}.detail-filter-fields label{display:flex;flex-direction:column;gap:6px;min-width:0}.detail-filter-fields label>span{color:var(--neutral-500);font-size:12px}.detail-filter-fields input,.detail-filter-fields select{width:100%;height:36px}
 .planning-account-list{display:grid;gap:8px;padding:0 20px 20px}.planning-account-card{overflow:hidden;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface);transition:border-color .14s ease,background .14s ease}.planning-account-card:hover{border-color:var(--neutral-300)}.planning-account-card.expanded{border-color:var(--primary-200)}
 .planning-account-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 14px}.planning-account-main{min-width:0;flex:1}.planning-account-identity{display:flex;flex-direction:column;gap:5px;min-width:0}.planning-account-title{display:flex;align-items:center;flex-wrap:wrap;gap:7px}.planning-account-title>strong{color:var(--neutral-900);font-size:14px;line-height:20px}.planning-account-meta{display:flex;align-items:center;flex-wrap:wrap;color:var(--neutral-400);font-size:11px;line-height:17px}.planning-account-meta span{display:inline-flex;align-items:center;min-width:0}.planning-account-meta span+span::before{display:inline-block;flex:none;width:1px;height:10px;margin:0 8px;background:var(--neutral-200);content:''}.planning-account-persona-inline{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.planning-account-persona-inline b{margin-right:4px;color:var(--neutral-500);font-size:10px;font-weight:500}.planning-account-actions{display:flex;align-items:center;gap:8px;flex:none}.planning-plan-count{color:var(--neutral-500);font-size:11px;white-space:nowrap}.planning-expand-btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:var(--neutral-600);font-size:11px;cursor:pointer;transition:border-color .14s ease,background .14s ease,color .14s ease}.planning-expand-btn:hover{border-color:var(--primary-200);background:var(--primary-50);color:var(--primary-600)}.planning-expand-btn:focus-visible{outline:2px solid var(--primary-300);outline-offset:2px}.planning-expand-btn svg{transition:transform .14s ease}.planning-expand-btn svg.expanded{transform:rotate(180deg)}
 .planning-week-wrap{padding:12px 14px 14px;border-top:1px solid var(--neutral-100);background:var(--neutral-50);overflow-x:auto}.planning-week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px;min-width:1100px}.planning-day{overflow:hidden;min-height:166px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface)}.planning-day>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-bottom:1px solid var(--neutral-100);background:var(--neutral-50)}.planning-day>header>div{display:flex;align-items:baseline;gap:6px}.planning-day>header b{color:var(--neutral-700);font-size:12px}.planning-day>header small,.planning-day>header span{color:var(--neutral-400);font-size:10px}.planning-day-items{display:grid;gap:7px;padding:8px}.planning-plan-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;padding:9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:inherit;text-align:left}.planning-plan-card.navigable{cursor:pointer;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}.planning-plan-card.navigable:hover{border-color:var(--primary-200);box-shadow:0 4px 12px rgba(15,23,42,.05);transform:translateY(-1px)}.planning-plan-card>b{display:-webkit-box;overflow:hidden;color:var(--neutral-700);font-size:12px;line-height:18px;-webkit-line-clamp:2;-webkit-box-orient:vertical}.planning-plan-card>small{color:var(--neutral-400);font-size:10px}.planning-plan-batch{color:var(--neutral-400);font-size:9px}.planning-day-empty{display:grid;place-items:center;min-height:108px;color:var(--neutral-300);font-size:11px}
 .planning-source-badge{display:inline-flex!important;align-items:center;gap:4px;border:1px solid transparent!important;font-weight:600!important}.planning-source-badge::before{width:5px;height:5px;border-radius:50%;background:currentColor;content:''}.planning-source-badge.source-ai{border-color:#bfdbfe!important;background:#eff6ff!important;color:#2563eb!important}.planning-source-badge.source-manual{border-color:#fed7aa!important;background:#fff7ed!important;color:#c2410c!important}
-@media(max-width:980px){.planning-dashboard{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px}.detail-filter-shell{margin:0 12px 14px}.detail-filter-fields{grid-template-columns:1fr 1fr}.planning-account-list{padding:0 12px 16px}.planning-account-head{align-items:flex-start;flex-direction:column;gap:10px;padding:12px}.planning-account-actions{width:100%;justify-content:flex-end}.planning-account-persona-inline{max-width:360px}}
-@media(max-width:580px){.planning-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-filter-fields{grid-template-columns:1fr}.planning-account-meta{row-gap:2px}.planning-account-persona-inline{max-width:220px}.planning-week-wrap{padding:10px 8px 12px}.planning-account-actions{justify-content:space-between}}
+@media(max-width:980px){.planning-dashboard{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px}.detail-filter-shell{margin:0 12px 14px}.planning-account-list{padding:0 12px 16px}.planning-account-head{align-items:flex-start;flex-direction:column;gap:10px;padding:12px}.planning-account-actions{width:100%;justify-content:flex-end}.planning-account-persona-inline{max-width:360px}}
+@media(max-width:580px){.planning-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-filter-fields{grid-template-columns:minmax(0,1fr) auto}.detail-filter-fields label:first-child{grid-column:1/-1}.planning-account-meta{row-gap:2px}.planning-account-persona-inline{max-width:220px}.planning-week-wrap{padding:10px 8px 12px}.planning-account-actions{justify-content:space-between}}
 </style>

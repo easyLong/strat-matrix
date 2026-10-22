@@ -12,7 +12,6 @@ defineProps<{
 
 const emit = defineEmits<{
   planDetails: [task: ManualTaskSummary]
-  generateContent: [task: ManualTaskSummary]
   contentFlow: [task: ManualTaskSummary]
 }>()
 
@@ -76,15 +75,6 @@ function contentStatusText(task: ManualTaskSummary) {
   return progress ? `${label}(${progress})` : label
 }
 
-function canGenerate(task: ManualTaskSummary) {
-  return Boolean(task.batch_id) && /完成|成功/.test(planningLabel(task)) && contentLabel(task) === '待生成'
-}
-
-function canViewContentFlow(task: ManualTaskSummary) {
-  if (!task.batch_id) return false
-  return task.content_completed_count > 0 || task.content_completed_account_count > 0 || task.content_failed_count > 0 ||
-    ['生成中', '已完成', '部分失败', '生成失败'].includes(contentLabel(task))
-}
 </script>
 
 <template>
@@ -126,8 +116,7 @@ function canViewContentFlow(task: ManualTaskSummary) {
           <td class="action-cell">
             <div class="manual-task-actions">
               <button v-if="task.batch_id" class="text-btn" type="button" @click="emit('planDetails', task)">查看策划</button>
-              <button v-if="canGenerate(task)" class="text-btn manual-primary-action" type="button" @click="emit('generateContent', task)">生成内容</button>
-              <button v-if="canViewContentFlow(task)" class="text-btn manual-content-flow-link" type="button" @click="emit('contentFlow', task)">查看内容流水</button>
+              <button v-if="task.batch_id" class="text-btn manual-content-flow-link" type="button" @click="emit('contentFlow', task)">查看内容流水</button>
               <span v-if="!task.batch_id" class="manual-action-empty">—</span>
             </div>
           </td>
@@ -161,7 +150,6 @@ tr.has-failures .action-cell{background:var(--processing-row)}
 tr.has-failures:hover .action-cell{background:var(--processing-bg)}
 .manual-task-actions{display:flex;align-items:center;gap:14px;white-space:nowrap}
 .manual-task-actions .text-btn{padding:0;border:0;background:transparent;font-size:12px;line-height:20px}
-.manual-primary-action{font-weight:600}
 .manual-content-flow-link{color:var(--neutral-600)}
 .manual-content-flow-link:hover{color:var(--primary-600)}
 .manual-action-empty{color:var(--neutral-300)}

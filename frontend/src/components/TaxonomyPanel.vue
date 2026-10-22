@@ -17,7 +17,9 @@ const popover = ref<HTMLElement | null>(null)
 const renameInput = ref<HTMLInputElement | null>(null)
 const position = ref({ left: '0px', top: '0px' })
 let anchor: HTMLElement | null = null
-const groups = computed(() => tagGroups(props.modelValue, active.value, true))
+const allGroups = computed(() => tagGroups(props.modelValue, active.value, true))
+const groups = computed(() => allGroups.value.filter(group => group.enabled).map(group => ({ ...group, tags: group.tags.filter(tag => tag.enabled) })))
+const inactiveGroups = computed(() => allGroups.value.map(group => ({ ...group, tags: group.enabled ? group.tags.filter(tag => !tag.enabled) : group.tags })).filter(group => !group.enabled || group.tags.length))
 const selectedItem = computed(() => (props.modelValue[active.value] ?? []).find(item => tagKey(item) === selected.value))
 function commit(items: TagTaxonomyItem[]) { emit('update:modelValue', { ...props.modelValue, [active.value]: items }) }
 function validateName(value: string, type: 'tag' | 'group', excluded?: string) {
@@ -127,15 +129,24 @@ onBeforeUnmount(() => {
       </section>
       <div v-if="!groups.length && !editing" class="empty-state">暂无标签分类</div>
       <div v-if="editing" class="taxonomy-add-group"><input v-model="groupInput" type="text" aria-label="新增一级分类名称" placeholder="一级分类名称" maxlength="80" :disabled="disabled" @keydown.enter.prevent="addGroup" /><button class="btn" type="button" :disabled="disabled || !groupInput.trim()" @click="addGroup">＋ 添加分类</button></div>
+      <details v-if="inactiveGroups.length" :key="active" class="taxonomy-inactive">
+        <summary>已停用标签</summary>
+        <section v-for="group in inactiveGroups" :key="group.id" class="taxonomy-group" :class="{ inactive: !group.enabled }">
+          <div class="taxonomy-group-head"><button v-if="editing && !group.enabled" class="taxonomy-group-title" type="button" :disabled="disabled" aria-haspopup="dialog" :aria-expanded="selected === group.id" @click="select(modelValue[active].find(item => tagKey(item) === group.id)!, $event)">{{ group.name }}</button><b v-else>{{ group.name }}</b><small v-if="!group.enabled">已停用</small></div>
+          <div class="taxonomy-group-body"><div class="taxonomy-pills"><button v-for="tag in group.tags" :key="tagKey(tag)" class="taxonomy-pill" :class="{ inactive: !tag.enabled, selected: selected === tagKey(tag) }" type="button" :disabled="!editing || disabled || !group.enabled" :title="`${group.name} / ${tag.name}${!tag.enabled ? ' · 已停用' : ''}`" :aria-haspopup="editing && group.enabled ? 'dialog' : undefined" :aria-expanded="editing && group.enabled ? selected === tagKey(tag) : undefined" @click.stop="select(tag, $event)">{{ tag.name }}</button></div></div>
+        </section>
+      </details>
     </div>
     <p v-if="error && !selectedItem" class="inline-error taxonomy-error" role="alert">{{ error }}</p>
   </div>
   <Teleport to="body">
     <section v-if="editing && selectedItem" ref="popover" class="taxonomy-action-popover" :class="{ 'is-form': action !== 'menu' }" :style="position" role="dialog" :aria-label="`${selectedItem.name}操作`">
-      <header class="taxonomy-action-head"><b>{{ selectedItem.name }}</b><button class="taxonomy-close" type="button" aria-label="关闭标签操作" @click="closeActions(true)">×</button></header>
       <template v-if="action === 'menu'">
-        <button class="taxonomy-menu-item" type="button" :disabled="disabled" @click="editAction('rename')">改名</button>
-        <button class="taxonomy-menu-item" :class="{ 'is-danger': selectedItem.enabled }" type="button" :disabled="disabled" @click="toggleEnabled">{{ selectedItem.enabled ? '停用' : '启用' }}</button>
+        <template v-if="selectedItem.enabled">
+          <button class="taxonomy-menu-item" type="button" :disabled="disabled" @click="editAction('rename')">改名</button>
+          <button class="taxonomy-menu-item is-danger" type="button" :disabled="disabled" @click="toggleEnabled">停用</button>
+        </template>
+        <button v-else class="taxonomy-menu-item" type="button" :disabled="disabled" @click="toggleEnabled">启用</button>
       </template>
       <form v-else @submit.prevent="saveName">
         <label class="taxonomy-action-field"><span>名称</span><input ref="renameInput" v-model="renameValue" aria-label="修改名称" maxlength="80" :disabled="disabled" /></label>
@@ -149,6 +160,7 @@ onBeforeUnmount(() => {
 .taxonomy-panel{min-width:0}.taxonomy-tabs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--neutral-200);padding:0 18px}.taxonomy-tabs{display:flex;gap:19px;overflow-x:auto}.taxonomy-tabs button{flex:none;padding:13px 0 11px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--neutral-500);font-size:13px;font-weight:500;white-space:nowrap}.taxonomy-tabs button.active{color:var(--primary-600);border-bottom-color:var(--primary-600)}.taxonomy-tabs-row :deep(.hover-hint){flex:none;font-size:12px;color:var(--neutral-400)}.taxonomy-groups{padding:3px 18px 14px}.taxonomy-group{padding:13px 0;border-bottom:1px solid var(--neutral-100)}.taxonomy-group:last-of-type{border-bottom:0}.taxonomy-group-head{display:flex;align-items:center;gap:6px;margin-bottom:10px;min-height:22px}.taxonomy-group-head>b,.taxonomy-group-title{font-size:13px;font-weight:600;color:var(--neutral-800)}.taxonomy-group-title{padding:0;border:0;background:transparent}.taxonomy-group-title:hover{color:var(--primary-600)}.taxonomy-fold{display:grid;place-items:center;padding:0;width:18px;height:22px;border:0;background:transparent}.taxonomy-fold svg{width:13px;height:13px;fill:none;stroke:var(--neutral-400);stroke-width:1.6;transition:transform .15s}.taxonomy-fold .folded{transform:rotate(-90deg)}.taxonomy-group-head small{color:var(--neutral-400);font-size:11px}.taxonomy-group-body{padding-left:24px}.taxonomy-pills{display:flex;flex-wrap:wrap;gap:7px}.taxonomy-pill{padding:4px 9px;border:1px solid transparent;border-radius:5px;background:var(--primary-50);color:var(--primary-600);font-size:12px;line-height:17px;max-width:100%;overflow-wrap:anywhere}.taxonomy-pill:disabled{opacity:1;cursor:default}.taxonomy-pill:not(:disabled):hover,.taxonomy-pill.selected{border-color:var(--primary-300);background:var(--primary-100)}[data-dimension="T4"] .taxonomy-pill{background:#f0f7f5;color:#397e68}[data-dimension="T5"] .taxonomy-pill{background:#f6f1fc;color:#7957a8}.taxonomy-pill.inactive,.taxonomy-group.inactive .taxonomy-pill{background:var(--neutral-100);color:var(--neutral-400);text-decoration:line-through}.taxonomy-inline-add{display:flex;align-items:center;gap:7px;margin-top:9px;max-width:260px}.taxonomy-inline-add input,.taxonomy-add-group input,.taxonomy-selected-editor input{box-sizing:border-box;min-width:0;height:30px;padding:0 9px;border:1px solid var(--neutral-200);border-radius:5px;background:var(--surface);font:inherit;font-size:12px;color:var(--neutral-800)}.taxonomy-inline-add input{width:150px}.taxonomy-inline-add button{flex:none;padding:4px 7px;border:0;background:transparent;color:var(--primary-600);font-size:12px}.taxonomy-add-group{display:flex;gap:8px;padding-top:15px;border-top:1px solid var(--neutral-200)}.taxonomy-add-group input{height:32px;width:180px}.taxonomy-add-group .btn{height:32px;font-size:12px}.taxonomy-no-tags{color:var(--neutral-400);font-size:12px}.taxonomy-fixed{display:flex;align-items:center;gap:20px;padding:22px 20px}.taxonomy-fixed-label{color:var(--neutral-500);font-size:13px}.taxonomy-selected-editor{display:flex;align-items:center;gap:12px;margin:0 18px 14px;padding:12px;border:1px solid var(--primary-100);border-radius:7px;background:var(--neutral-50)}.taxonomy-selected-editor>div{display:flex;align-items:center;gap:8px}.taxonomy-selected-editor small{color:var(--neutral-400);font-size:11px}.taxonomy-selected-editor b{font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.taxonomy-selected-editor input{flex:1;max-width:210px}.taxonomy-selected-editor .text-btn{font-size:12px;white-space:nowrap}.taxonomy-state-action{color:var(--neutral-600)}.taxonomy-state-action.danger{color:var(--danger)}.taxonomy-close{margin-left:auto;border:0;background:transparent;color:var(--neutral-400);font-size:20px}.taxonomy-error{padding:0 18px 12px}@media(max-width:720px){.taxonomy-tabs-row{flex-wrap:wrap;gap:0}.taxonomy-selected-editor{flex-wrap:wrap}.taxonomy-tabs{gap:14px}}
 </style>
 <style scoped>
+.taxonomy-inactive{margin-top:14px;border-top:1px solid var(--neutral-200);padding-top:12px}.taxonomy-inactive summary{cursor:pointer;color:var(--neutral-500);font-size:13px;font-weight:500}.taxonomy-inactive .taxonomy-group:last-child{border-bottom:0}
 .taxonomy-action-popover{position:fixed;z-index:70;box-sizing:border-box;width:164px;max-width:calc(100vw - 16px);padding:5px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-3)}
 .taxonomy-action-popover.is-form{width:280px;padding:12px}
 .taxonomy-action-head{display:flex;align-items:center;gap:8px;min-height:28px;padding:0 7px 4px;border-bottom:1px solid var(--neutral-100);margin-bottom:4px}

@@ -190,9 +190,9 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
 
 <template>
   <div v-if="dimension === 'account' && !showingAccountDetail" class="account-results-shell">
-    <div class="result-tabs" role="group" aria-label="策划结果查看维度">
-      <button type="button" class="active" aria-pressed="true" @click="switchDimension('account')">账号视图</button>
-      <button type="button" aria-pressed="false" @click="switchDimension('period')">周期视图</button>
+    <div class="result-tabs" role="group" aria-label="策划结果查看方式">
+      <button type="button" class="active" aria-pressed="true" @click="switchDimension('account')">账号列表</button>
+      <button type="button" aria-pressed="false" @click="switchDimension('period')">时间列表</button>
     </div>
     <div class="legacy-account-view"><LegacyResultsView external-navigation @view-plans="openAccount" /></div>
   </div>
@@ -217,7 +217,7 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
       :cycle-start="cycleWeekStart(selectedBatch.cycle_start)"
       :cycle-end="cycleWeekEnd(selectedBatch.cycle_start)"
       :batches="[selectedBatch]"
-      :return-label="fromManualTask ? '返回任务列表' : '返回周期视图'"
+      :return-label="fromManualTask ? '返回任务列表' : '返回时间列表'"
       @back="returnFromBatchDetail"
     />
     <section v-else-if="showingBatchDetail" class="card"><div class="empty-state"><b>未找到该批次</b></div></section>
@@ -233,9 +233,9 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
     <section v-else-if="showingPeriodDetail" class="card"><div class="empty-state"><b>未找到该策划周期</b></div></section>
 
     <template v-else>
-      <div class="result-tabs" role="group" aria-label="策划结果查看维度">
-        <button type="button" aria-pressed="false" @click="switchDimension('account')">账号视图</button>
-        <button type="button" class="active" aria-pressed="true" @click="switchDimension('period')">周期视图</button>
+      <div class="result-tabs" role="group" aria-label="策划结果查看方式">
+        <button type="button" aria-pressed="false" @click="switchDimension('account')">账号列表</button>
+        <button type="button" class="active" aria-pressed="true" @click="switchDimension('period')">时间列表</button>
       </div>
 
       <section class="card period-result-card">
@@ -245,11 +245,13 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
             <svg :class="{ expanded: filtersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
           </button>
           <div id="period-dimension-filter-fields" v-show="filtersExpanded" class="batch-filter-fields">
-            <div class="batch-filter-row">
+            <div class="batch-filter-row query-filter-grid" data-query-filters="standard">
               <select v-model="year"><option value="all">全部年份</option><option v-for="value in yearOptions" :key="value" :value="value">{{ value }} 年</option></select>
               <select v-model="month"><option value="all">全部月份</option><option v-for="value in monthOptions" :key="value" :value="value">{{ Number(value) }} 月</option></select>
-              <select v-model="week"><option value="all">全部周次</option><option v-for="value in weekOptions" :key="value" :value="String(value)">第 {{ value }} 周</option></select>
-              <button class="btn primary" type="button" @click="applyFilters">查询</button>
+              <div class="query-filter-tail">
+                <select v-model="week"><option value="all">全部周次</option><option v-for="value in weekOptions" :key="value" :value="String(value)">第 {{ value }} 周</option></select>
+                <div class="query-filter-actions"><button class="btn primary" type="button" @click="applyFilters">查询</button></div>
+              </div>
             </div>
           </div>
         </div>

@@ -5,6 +5,8 @@ button, input, select, textarea { transition: border-color .15s, background-colo
 button:focus-visible, a:focus-visible, [role='button']:focus-visible, summary:focus-visible { outline: 2px solid var(--primary-600); outline-offset: 2px; box-shadow: var(--focus-ring); }
 input::placeholder, textarea::placeholder { color: var(--neutral-400); font-weight: 400; }
 input[type='number'], input[type='date'], input[type='time'], td { font-variant-numeric: tabular-nums; }
+input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
+input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type='checkbox'] { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--primary-600); cursor: pointer; }
 input[type='checkbox']:disabled { cursor: not-allowed; }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 40; width: var(--sidebar-width); height: 100dvh; border: 0; background: var(--neutral-950); color: var(--neutral-400); }
@@ -204,4 +206,14 @@ tbody tr.selected b { color: var(--primary-600); }
 .account-week-scroll-control.previous { left: 4px; }
 .account-week-scroll-control.next { right: 4px; }
 .account-week-scroll-control svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+
+/* Keep the last filter and its query actions together when the filters wrap. */
+.query-filter-grid[data-query-filters] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; }
+.query-filter-grid[data-query-filters="compact"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.query-filter-grid[data-query-filters="narrow"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.query-filter-tail { grid-column: span 2; display: flex; align-items: flex-end; gap: 12px; min-width: 0; }
+.query-filter-tail > label, .query-filter-tail > select { flex: 1 1 0; min-width: 0; }
+.query-filter-grid .query-filter-actions { grid-column: auto; display: flex; flex: 0 0 auto; align-items: center; align-self: end; justify-content: flex-start; gap: 8px; white-space: nowrap; }
+.query-filter-grid .query-filter-actions > .btn { flex: 0 0 auto; height: 36px; min-width: 80px; }
+@media(max-width:980px) { .query-filter-grid[data-query-filters] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media(max-width:1100px) { .account-week-calendar { grid-template-columns: repeat(7,minmax(160px,1fr)); width: max-content; min-width: 100%; } }

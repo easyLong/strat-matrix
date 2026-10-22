@@ -11,6 +11,7 @@ import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
+import { recognizeAccountImport, type AccountImportRow } from '../ui/accountImport'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -28,17 +29,14 @@ const accountTypeFilter = ref('')
 const umNoFilter = ref('')
 const organizationFilter = ref('')
 const platformFilter = ref('')
-const businessLineFilter = ref('')
-const cityFilter = ref('')
 const lifecycleFilter = ref('')
 const followersMin = ref<number | null>(null)
 const followersMax = ref<number | null>(null)
-const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', organization: '', platform: '', businessLine: '', city: '', lifecycle: '', followersMin: null as number | null, followersMax: null as number | null })
+const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', organization: '', platform: '', lifecycle: '', followersMin: null as number | null, followersMax: null as number | null })
 const accounts = ref<AccountOption[]>([])
 const topics = ref<TopicOption[]>([])
 const topicFiltersExpanded = ref(false)
 const tasks = ref<ManualTaskSummary[]>([])
-const productionBusy = ref(false)
 const contentFlowBatchId = ref<number | null>(null)
 const sampledIds = ref<string[]>([])
 const selectedTopicIds = ref<string[]>([])
@@ -67,7 +65,15 @@ const accountReview = ref(false)
 const topicReview = ref(false)
 const importMatchedCount = ref(0)
 const importedAccountIds = ref<string[]>([])
-const importUnknownUmNos = ref<string[]>([])
+const importDataRowCount = ref(0)
+const importDuplicateRows = ref<AccountImportRow[]>([])
+const importUnmatchedRows = ref<AccountImportRow[]>([])
+const importPlannedRows = ref<AccountImportRow[]>([])
+const importIssueDialogOpen = ref(false)
+const importDialogClose = ref<HTMLButtonElement | null>(null)
+const importTrigger = ref<HTMLButtonElement | null>(null)
+const importErrorCount = computed(() => importUnmatchedRows.value.length + importPlannedRows.value.length)
+const hasImportIssues = computed(() => importDuplicateRows.value.length > 0 || importErrorCount.value > 0)
 const plannedAccountIds = ref<string[]>([])
 const availabilityDate = ref('')
 const availabilityLoading = ref(false)
@@ -109,15 +115,13 @@ const eligibleAccounts = computed(() => accounts.value.filter(account => {
     (!filters.umNo.trim() || (account.um_no || '').toLocaleLowerCase().includes(filters.umNo.trim().toLocaleLowerCase())) &&
     (!filters.organization || account.organization === filters.organization) &&
     (!filters.platform || account.platform === filters.platform) &&
-    (!filters.businessLine || account.business_line === filters.businessLine) &&
-    (!filters.city || account.city === filters.city) &&
     (!filters.lifecycle || account.lifecycle_stage === filters.lifecycle) &&
     (filters.followersMin === null || (account.followers !== null && account.followers >= filters.followersMin)) &&
     (filters.followersMax === null || (account.followers !== null && account.followers <= filters.followersMax))
 }))
 function applyAccountFilters() {
   flushSearch()
-  appliedAccountFilters.value = { keyword: keyword.value, accountType: accountTypeFilter.value, umNo: umNoFilter.value, organization: organizationFilter.value, platform: platformFilter.value, businessLine: businessLineFilter.value, city: cityFilter.value, lifecycle: lifecycleFilter.value, followersMin: followersMin.value, followersMax: followersMax.value }
+  appliedAccountFilters.value = { keyword: keyword.value, accountType: accountTypeFilter.value, umNo: umNoFilter.value, organization: organizationFilter.value, platform: platformFilter.value, lifecycle: lifecycleFilter.value, followersMin: followersMin.value, followersMax: followersMax.value }
   accountPage.value = 1
   applyDefaultAccountSelection()
 }
@@ -158,8 +162,6 @@ const plannedMatchingCount = computed(() => matchingAccounts.value.filter(accoun
 const availableMatchingCount = computed(() => availabilityReady.value ? matchingAccounts.value.length - plannedMatchingCount.value : 0)
 const organizationOptions = computed(() => [...new Set(accounts.value.map(item => item.organization).filter(Boolean))].sort())
 const platformOptions = computed(() => [...new Set(accounts.value.map(item => item.platform).filter(Boolean))].sort())
-const businessLineOptions = computed(() => [...new Set(accounts.value.map(item => item.business_line).filter(Boolean))].sort())
-const cityOptions = computed(() => [...new Set(accounts.value.map(item => item.city).filter(Boolean))].sort())
 const lifecycleOptions = computed(() => [...new Set(accounts.value.map(item => item.lifecycle_stage).filter(Boolean))])
 const contentTypes = computed(() => [...new Set(topics.value.map(item => item.content_type).filter(Boolean))].sort())
 const relatedProducts = computed(() => [...new Set(topics.value.map(item => item.related_product).filter(Boolean))].sort())
@@ -231,10 +233,7 @@ async function loadAccountAvailability(reselect = false): Promise<boolean> {
     availabilityDate.value = selectedDate
     availabilityLoading.value = false
     sampledIds.value = sampledIds.value.filter(id => !isAccountPlanned(id))
-    if (reselect) {
-      if (accountSelectionMode.value === 'filter') applyDefaultAccountSelection()
-      else sampledIds.value = importedAccountIds.value.filter(id => !isAccountPlanned(id))
-    }
+    if (reselect && accountSelectionMode.value === 'upload') sampledIds.value = importedAccountIds.value.filter(id => !isAccountPlanned(id))
     return true
   } catch (exc) {
     if (request === availabilityRequest) availabilityError.value = exc instanceof Error ? exc.message : '读取当日策划账号失败'
@@ -269,16 +268,6 @@ function openTaskDetails(task: ManualTaskSummary) {
   void router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual', from: 'manual' } })
 }
 
-async function startTaskProduction(task: ManualTaskSummary) {
-  const planningStatus = task.planning_status || task.status
-  if (!task.batch_id || !/完成|成功/.test(planningStatus) || !/待生产|待生成|未生成/.test(task.content_status || '')) return
-  if (productionBusy.value) return
-  productionBusy.value = true
-  try { await api.startContentProduction(task.batch_id); await loadTasks() }
-  catch (exc) { error.value = exc instanceof Error ? exc.message : '提交内容生产失败' }
-  finally { productionBusy.value = false }
-}
-
 function openContentFlow(task: ManualTaskSummary) {
   if (!task.batch_id) return
   contentFlowBatchId.value = task.batch_id
@@ -289,7 +278,10 @@ watch(() => store.databaseReady, ready => {
 }, { immediate: true })
 onMounted(() => {
   refreshTimer = window.setInterval(() => {
-    if (store.databaseReady && tasks.value.some(task => ['执行中', '进行中'].includes(task.status) || task.content_status === '\u751f\u6210\u4e2d')) void loadTasks()
+    if (store.databaseReady && tasks.value.some(task =>
+      /执行中|进行中|策划中|生成中/.test(task.planning_status || task.status) ||
+      (task.batch_id && /待生产|待生成|未生成|生成中|生产中|上传中/.test(task.content_status || '')),
+    )) void loadTasks()
   }, 3000)
 })
 onBeforeUnmount(() => {
@@ -305,7 +297,11 @@ function startCreate() {
   sampledIds.value = []
   importMatchedCount.value = 0
   importedAccountIds.value = []
-  importUnknownUmNos.value = []
+  importDataRowCount.value = 0
+  importDuplicateRows.value = []
+  importUnmatchedRows.value = []
+  importPlannedRows.value = []
+  importIssueDialogOpen.value = false
   selectedTopicIds.value = []
   topicIdFilter.value = ''
   topicQuery.value = ''
@@ -410,8 +406,8 @@ function setAccountSelectionMode(next: 'filter' | 'upload') {
   if (next === 'upload') sampledIds.value = availabilityReady.value ? importedAccountIds.value.filter(id => !isAccountPlanned(id)) : []
 }
 
-function downloadUmTemplate() {
-  const csv = `\uFEFFUM号\r\n`
+function downloadAccountTemplate() {
+  const csv = `\uFEFFUM号,账号ID\r\n`
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
@@ -420,31 +416,22 @@ function downloadUmTemplate() {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function parseCsvRows(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let cell = ''
-  let quoted = false
-  for (let index = 0; index < text.length; index++) {
-    const char = text[index]
-    if (char === '"') {
-      if (quoted && text[index + 1] === '"') { cell += '"'; index++ }
-      else quoted = !quoted
-    } else if (char === ',' && !quoted) {
-      row.push(cell.trim()); cell = ''
-    } else if ((char === '\n' || char === '\r') && !quoted) {
-      if (char === '\r' && text[index + 1] === '\n') index++
-      row.push(cell.trim()); cell = ''
-      if (row.some(value => value !== '')) rows.push(row)
-      row = []
-    } else cell += char
-  }
-  row.push(cell.trim())
-  if (row.some(value => value !== '')) rows.push(row)
-  return rows
+async function showImportIssues() {
+  importIssueDialogOpen.value = true
+  await nextTick()
+  importDialogClose.value?.focus()
 }
 
-async function importAccountsByUm(file?: File) {
+function closeImportIssueDialog() {
+  importIssueDialogOpen.value = false
+  importTrigger.value?.focus()
+}
+
+function importRowLabel(row: AccountImportRow) {
+  return [`第 ${row.rowNumber} 行`, row.umNo ? `UM 号 ${row.umNo}` : '', row.accountId ? `账号 ID ${row.accountId}` : ''].filter(Boolean).join(' · ')
+}
+
+async function importAccountsByIdentifier(file?: File) {
   if (!file) return
   error.value = ''
   notice.value = ''
@@ -452,36 +439,22 @@ async function importAccountsByUm(file?: File) {
     const bytes = await file.arrayBuffer()
     let text = new TextDecoder('utf-8').decode(bytes)
     if (text.includes('\uFFFD')) text = new TextDecoder('gb18030').decode(bytes)
-    const rows = parseCsvRows(text.replace(/^\uFEFF/, ''))
-    if (!rows.length) { error.value = '模板中没有可导入的 UM 号'; return }
-    const first = rows[0].map(value => value.toLocaleLowerCase())
-    const umColumn = first.findIndex(value => value.includes('um号') || value === 'um_no' || value === 'um number')
-    const column = umColumn >= 0 ? umColumn : 0
-    const start = umColumn >= 0 ? 1 : 0
-    const umNos = [...new Set(rows.slice(start).map(row => (row[column] || '').trim()).filter(Boolean))]
-    if (!umNos.length) { error.value = '模板中没有可导入的 UM 号'; return }
-    const accountsByUm = new Map<string, AccountOption>()
-    for (const account of accounts.value) {
-      const umNo = account.um_no?.trim().toLocaleLowerCase()
-      if (umNo && !accountsByUm.has(umNo)) accountsByUm.set(umNo, account)
-    }
-    const matched: AccountOption[] = []
-    const unknown: string[] = []
-    for (const umNo of umNos) {
-      const account = accountsByUm.get(umNo.toLocaleLowerCase())
-      if (account) matched.push(account)
-      else unknown.push(umNo)
-    }
+    if (!availabilityReady.value && !await loadAccountAvailability()) { error.value = '请先确认投放日期和账号策划状态'; return }
+    const result = recognizeAccountImport(text, accounts.value, plannedAccountSet.value)
     accountSelectionMode.value = 'upload'
-    importedAccountIds.value = [...new Set(matched.map(item => item.account_id))]
-    sampledIds.value = availabilityReady.value ? importedAccountIds.value.filter(id => !isAccountPlanned(id)) : []
+    importedAccountIds.value = result.identifiedIds
+    sampledIds.value = result.selectedIds
+    importDataRowCount.value = result.totalRows
+    targetCount.value = result.totalRows
     accountPage.value = 1
-    importMatchedCount.value = importedAccountIds.value.length
-    importUnknownUmNos.value = unknown
-    if (matched.length) notice.value = ''
-    else error.value = '没有匹配到账号，请检查 UM 号或确认账号数据已同步'
-  } catch {
-    error.value = '文件读取失败，请使用下载的 CSV 模板填写后再导入'
+    accountReview.value = false
+    importMatchedCount.value = result.selectedIds.length
+    importDuplicateRows.value = result.duplicates
+    importUnmatchedRows.value = result.unmatched
+    importPlannedRows.value = result.planned
+    if (hasImportIssues.value) await showImportIssues()
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : '文件读取失败，请使用下载的 CSV 模板填写后再导入'
   } finally {
     if (importFileInput.value) importFileInput.value.value = ''
   }
@@ -499,8 +472,13 @@ async function saveAccountStep() {
   error.value = ''
   if (!taskName.value.trim()) { error.value = '请输入任务名称'; return }
   if (!publishDate.value) { error.value = '请选择投放日期'; return }
-  if (targetCount.value === '') { error.value = '请输入计划账号数量'; return }
-  if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) { error.value = '计划账号数量须为 1 至 1000 之间的整数'; return }
+  if (accountSelectionMode.value === 'filter') {
+    if (targetCount.value === '') { error.value = '请输入计划账号数量'; return }
+    if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) { error.value = '计划账号数量须为 1 至 1000 之间的整数'; return }
+  } else {
+    if (!importDataRowCount.value) { error.value = '请先导入账号模板'; return }
+    targetCount.value = importDataRowCount.value
+  }
   if (!sampledIds.value.length) { error.value = '请先选择账号'; return }
   if (!await loadAccountAvailability()) return
   if (!sampledIds.value.length) { error.value = '所选账号当日已手动策划，请重新选择'; return }
@@ -563,11 +541,9 @@ async function submit() {
       task_name: taskName.value.trim(),
       publish_date: publishDate.value,
       account_ids: sampledIds.value,
-      target_count: Number(targetCount.value),
+      target_count: selectedCount,
       topic_ids: selectedTopicIds.value,
       note: '',
-      city: cityFilter.value || undefined,
-      keyword: keyword.value.trim() || undefined,
     })
     await api.submitManualPreview(preview.preview_id)
     await loadTasks()
@@ -612,7 +588,6 @@ function closeEligibilityNotice(returnToSelection = false) {
       :loading="tasksLoading"
       :initialized="store.initialized"
       @plan-details="openTaskDetails"
-      @generate-content="startTaskProduction"
       @content-flow="openContentFlow"
     />
   </section>
@@ -639,23 +614,38 @@ function closeEligibilityNotice(returnToSelection = false) {
       <div class="card-head"><div><h2>选择账号</h2></div><span class="manual-selected-count">已选 {{ sampledIds.length }} 个</span></div>
       <div class="card-body manual-step-body">
         <fieldset class="manual-selection-lock" :disabled="accountReview">
-        <div class="manual-account-mode-row">
-          <label class="field"><span>计划账号数量 <em>*</em></span><input v-model.number="targetCount" type="number" min="1" max="1000" placeholder="请输入计划账号数量" :aria-invalid="Boolean(targetCountError)" :aria-describedby="targetCountError ? 'manual-target-count-error' : undefined" required /><small v-if="targetCountError" id="manual-target-count-error" class="field-error" role="alert">{{ targetCountError }}</small></label>
+        <div class="manual-account-selection-row">
+          <div class="manual-account-selection-heading">账号选择方式</div>
           <div class="manual-selection-modes" role="tablist" aria-label="账号选择方式">
-            <button :class="['manual-mode-tab', { active: accountSelectionMode === 'filter' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'filter'" @click="setAccountSelectionMode('filter')">筛选选择</button>
+            <button :class="['manual-mode-tab', { active: accountSelectionMode === 'filter' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'filter'" @click="setAccountSelectionMode('filter')">维度筛选</button>
             <button :class="['manual-mode-tab', { active: accountSelectionMode === 'upload' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'upload'" @click="setAccountSelectionMode('upload')">模板导入</button>
           </div>
         </div>
-        <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters"><label class="field"><span>&#x751F;&#x547D;&#x5468;&#x671F;</span><select v-model="lifecycleFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field manual-follower-field"><span>&#x7C89;&#x4E1D;&#x91CF;</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" min="0" placeholder="&#x8D77;&#x59CB;&#x7C89;&#x4E1D;&#x91CF;" /><i>&#x81F3;</i><input v-model.number="followersMax" type="number" min="0" placeholder="&#x622A;&#x6B62;&#x7C89;&#x4E1D;&#x91CF;" /></div></label><label class="field"><span>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</span><select v-model="accountTypeFilter"><option value="">&#x5168;&#x90E8;</option><option value="&#x8BA4;&#x8BC1;">&#x8BA4;&#x8BC1;</option><option value="&#x975E;&#x8BA4;&#x8BC1;">&#x975E;&#x8BA4;&#x8BC1;</option></select></label><label class="field"><span>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</span><select v-model="organizationFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x5E73;&#x53F0;</span><select v-model="platformFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x4E1A;&#x52A1;&#x7EBF;</span><select v-model="businessLineFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in businessLineOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x5730;&#x57DF;</span><select v-model="cityFilter"><option value="">&#x5168;&#x90E8;</option><option v-for="item in cityOptions" :key="item" :value="item">{{ item }}</option></select></label><label class="field"><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="keyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" /></label><label class="field"><span>&#x5C5E;&#x4E3B; UM &#x53F7;</span><input v-model="umNoFilter" type="search" placeholder="&#x8F93;&#x5165;&#x5C5E;&#x4E3B; UM &#x53F7;" /></label><div class="manual-filter-actions"><button class="btn primary" type="button" @click="applyAccountFilters">&#x67E5;&#x8BE2;</button></div></div>
+        <label v-if="accountSelectionMode === 'filter'" class="field manual-plan-account-count"><span>计划账号数量 <em>*</em></span><div class="manual-plan-account-input-wrap"><input v-model.number="targetCount" type="number" inputmode="numeric" min="1" max="1000" placeholder="请输入计划账号数量" :aria-invalid="Boolean(targetCountError)" :aria-describedby="targetCountError ? 'manual-target-count-error' : undefined" required /><small v-if="targetCountError" id="manual-target-count-error" class="field-error" role="alert">{{ targetCountError }}</small></div></label>
+        <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters query-filter-grid" data-query-filters="standard">
+          <label class="field"><span>生命周期</span><select v-model="lifecycleFilter"><option value="">全部</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field manual-follower-field"><span>粉丝量</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" inputmode="numeric" min="0" placeholder="起始粉丝量" /><i>至</i><input v-model.number="followersMax" type="number" inputmode="numeric" min="0" placeholder="截止粉丝量" /></div></label>
+          <label class="field"><span>账号类型</span><select v-model="accountTypeFilter"><option value="">全部</option><option value="认证">认证</option><option value="非认证">非认证</option></select></label>
+          <label class="field"><span>属主组织</span><select v-model="organizationFilter"><option value="">全部</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field"><span>平台</span><select v-model="platformFilter"><option value="">全部</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label>
+          <label class="field"><span>账号 ID 或昵称</span><input v-model="keyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
+          <div class="query-filter-tail">
+            <label class="field"><span>属主 UM 号</span><input v-model="umNoFilter" type="search" placeholder="输入属主 UM 号" /></label>
+            <div class="manual-filter-actions query-filter-actions"><button class="btn primary" type="button" @click="applyAccountFilters">查询</button></div>
+          </div>
+        </div>
         <div v-else class="manual-upload-panel">
-          <div><b>按 UM 号导入账号</b><p>下载 CSV 模板，填写 UM 号后上传；匹配到的账号会自动勾选。</p></div>
-          <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadUmTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByUm(($event.target as HTMLInputElement).files?.[0])" /><button class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
-          <div v-if="importMatchedCount || importUnknownUmNos.length" class="manual-import-result"><b>识别成功 {{ importMatchedCount }} 个</b><div v-if="importUnknownUmNos.length"><span>未匹配 UM 号（{{ importUnknownUmNos.length }}）</span><div class="manual-unknown-list">{{ importUnknownUmNos.join('、') }}</div></div></div>
+          <b>账号模板</b>
+          <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadAccountTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByIdentifier(($event.target as HTMLInputElement).files?.[0])" /><button ref="importTrigger" class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
+          <div v-if="importDataRowCount" class="manual-import-result">
+            <span>导入 <b>{{ importDataRowCount }}</b></span><span>成功 <b>{{ importMatchedCount }}</b></span><span>重复 <b>{{ importDuplicateRows.length }}</b></span><span>异常 <b>{{ importErrorCount }}</b></span>
+            <button v-if="hasImportIssues" class="text-btn" type="button" @click="showImportIssues">查看识别结果</button>
+          </div>
         </div>
         <div class="manual-account-list-meta"><div class="manual-account-counts"><b>{{ accountSelectionMode === 'filter' ? '符合条件' : '导入识别' }} {{ matchingAccounts.length }} 个</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span><span>已选 <strong>{{ sampledIds.length }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
-        <LoadingSkeleton v-if="catalogLoading || !store.initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="&#x5168;&#x9009;&#x5F53;&#x524D;&#x7B5B;&#x9009;&#x4E0B;&#x7684;&#x53EF;&#x7B56;&#x5212;&#x8D26;&#x53F7;&#xFF08;&#x8DE8;&#x9875;&#xFF09;" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x8D26;&#x53F7;&#x6635;&#x79F0;</th><th>&#x8D26;&#x53F7; ID</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x4E1A;&#x52A1;&#x7EBF;</th><th>&#x5E73;&#x53F0;</th><th>&#x5730;&#x57DF;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x6570;</th></tr></thead><tbody>
-          <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td>{{ account.account_id }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.business_line || '\u2014' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.city || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
-          <tr v-if="visibleAccounts.length === 0"><td colspan="11"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
+        <LoadingSkeleton v-if="catalogLoading || !store.initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="&#x5168;&#x9009;&#x5F53;&#x524D;&#x7B5B;&#x9009;&#x4E0B;&#x7684;&#x53EF;&#x7B56;&#x5212;&#x8D26;&#x53F7;&#xFF08;&#x8DE8;&#x9875;&#xFF09;" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x8D26;&#x53F7;&#x6635;&#x79F0;</th><th>&#x8D26;&#x53F7; ID</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x5E73;&#x53F0;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x6570;</th></tr></thead><tbody>
+          <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td>{{ account.account_id }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
+          <tr v-if="visibleAccounts.length === 0"><td colspan="9"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
         </tbody></table></div>
         <ListPagination v-model:page="accountPage" v-model:page-size="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
         </fieldset>
@@ -668,7 +658,7 @@ function closeEligibilityNotice(returnToSelection = false) {
       <div class="card-body manual-step-body">
         <div class="manual-topic-picker">
           <aside class="manual-topic-picked">
-            <div class="manual-topic-picked-head"><b>&#x5DF2;&#x9009;&#x9009;&#x9898;</b><span>{{ selectedTopics.length }} / 100</span></div>
+            <div class="manual-topic-picked-head"><b>&#x5DF2;&#x9009;&#x9009;&#x9898;</b><span>{{ selectedTopics.length }}</span></div>
             <div v-if="selectedTopics.length" class="manual-topic-picked-list">
               <article v-for="(topic, index) in selectedTopics" :key="`${index}-${topic.topic_id}`" class="manual-topic-picked-item" tabindex="0" :title="topicTooltip(topic)"><div><small>{{ topic.topic_id }}</small><b>{{ topic.topic_title }}</b><p>{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</p><small>{{ topic.content_type || '\u2014' }}</small></div><button class="remove-topic" type="button" :disabled="topicReview" aria-label="&#x79FB;&#x9664;&#x9009;&#x9898;" @click="removeTopic(index)">&#x00D7;</button></article>
             </div>
@@ -676,16 +666,17 @@ function closeEligibilityNotice(returnToSelection = false) {
           </aside>
           <section class="manual-topic-picker-available">
             <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters" @click="topicFiltersExpanded = !topicFiltersExpanded">&#x7B5B;&#x9009;&#x6761;&#x4EF6; <span>{{ topicFiltersExpanded ? '\u2303' : '\u2304' }}</span></button></div>
-            <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters">
+            <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters query-filter-grid" data-query-filters="standard">
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898; ID <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID;&#x8FDB;&#x884C;&#x7CBE;&#x786E;&#x5339;&#x914D;">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID" /></label>
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898;&#x6807;&#x9898; <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;;&#x8FDB;&#x884C;&#x6A21;&#x7CCA;&#x641C;&#x7D22;">?</span></span><input v-model="topicQuery" type="search" placeholder="&#x8F93;&#x5165;&#x9009;&#x9898;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;" /></label>
               <label class="field"><span>&#x9009;&#x9898;&#x7C7B;&#x578B;</span><select v-model="topicMarketingFilter"><option value="">&#x5168;&#x90E8;</option><option value="true">&#x8425;&#x9500;</option><option value="false">&#x975E;&#x8425;&#x9500;</option></select></label>
               <label class="field"><span>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</span><select v-model="contentType"><option value="">&#x5168;&#x90E8;</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x4EA7;&#x54C1;</span><select v-model="relatedProduct"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x6D3B;&#x52A8;</span><select v-model="relatedActivity"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
-              <label class="field"><span>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</span><select v-model="relatedHotspot"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedHotspots" :key="value" :value="value">{{ value }}</option></select></label>
-              <button class="btn primary filter-query-inline" type="button" @click="applyTopicFilters">&#x67E5;&#x8BE2;</button>
-              <button class="text-btn manual-topic-clear-filters" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''">&#x6E05;&#x7A7A;&#x7B5B;&#x9009;</button>
+              <div class="query-filter-tail">
+                <label class="field"><span>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</span><select v-model="relatedHotspot"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedHotspots" :key="value" :value="value">{{ value }}</option></select></label>
+                <div class="manual-topic-filter-actions query-filter-actions"><button class="text-btn manual-topic-clear-filters" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicMarketingFilter = ''; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''">&#x6E05;&#x7A7A;&#x7B5B;&#x9009;</button><button class="btn primary filter-query-inline" type="button" @click="applyTopicFilters">&#x67E5;&#x8BE2;</button></div>
+              </div>
             </div>
             <div class="manual-topic-list-meta"><b>&#x7B26;&#x5408;&#x6761;&#x4EF6; {{ filteredTopics.length }} &#x4E2A;</b></div>
             <LoadingSkeleton v-if="catalogLoading || !store.initialized" />
@@ -754,6 +745,23 @@ function closeEligibilityNotice(returnToSelection = false) {
   </Teleport>
 
   <Teleport to="body">
+    <div v-if="importIssueDialogOpen" class="manual-eligibility-mask" @click.self="closeImportIssueDialog" @keydown.esc.stop="closeImportIssueDialog">
+      <section class="manual-eligibility-dialog manual-import-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-import-title">
+        <header class="manual-import-dialog-head"><h2 id="manual-import-title">部分账号识别异常</h2><button class="icon-btn" type="button" aria-label="关闭识别结果" @click="closeImportIssueDialog">×</button></header>
+        <div class="manual-import-metrics">
+          <div><small>导入</small><strong>{{ importDataRowCount }}</strong></div>
+          <div><small>成功</small><strong class="success">{{ importMatchedCount }}</strong></div>
+          <div><small>重复</small><strong>{{ importDuplicateRows.length }}</strong></div>
+          <div><small>异常</small><strong class="warning">{{ importErrorCount }}</strong></div>
+        </div>
+        <div class="manual-import-details">
+          <section v-if="importUnmatchedRows.length"><h3>未能识别账号</h3><div v-for="row in importUnmatchedRows" :key="row.rowNumber" class="manual-import-detail-row"><b>{{ importRowLabel(row) }}</b><span>{{ row.reason }}</span></div></section>
+          <section v-if="importPlannedRows.length"><h3>已投放账号</h3><div v-for="row in importPlannedRows" :key="row.rowNumber" class="manual-import-detail-row"><b>{{ importRowLabel(row) }}</b><span>{{ row.reason }}</span></div></section>
+          <p v-if="importDuplicateRows.length" class="manual-import-duplicates">重复记录：第 {{ importDuplicateRows.map(row => row.rowNumber).join('、') }} 行，同一账号仅保留首次记录。</p>
+        </div>
+        <div class="manual-eligibility-actions"><button ref="importDialogClose" class="btn primary" type="button" @click="closeImportIssueDialog">知道了</button></div>
+      </section>
+    </div>
     <Transition name="manual-eligibility-modal">
       <div v-if="eligibilityNotice" class="manual-eligibility-mask" @click.self="closeEligibilityNotice()">
         <section class="manual-eligibility-dialog" role="alertdialog" aria-modal="true" aria-labelledby="manual-eligibility-title" aria-describedby="manual-eligibility-description">
@@ -768,6 +776,8 @@ function closeEligibilityNotice(returnToSelection = false) {
 </template>
 
 <style scoped>
+.manual-account-selection-row{margin-bottom:16px}.manual-account-selection-heading{margin-bottom:8px;color:var(--neutral-700);font-size:13px;font-weight:600}.manual-account-selection-row .manual-selection-modes{margin:0}.manual-plan-account-count{display:flex;flex-direction:row;align-items:center;gap:12px;margin-bottom:16px}.manual-plan-account-count>span{flex:none}.manual-plan-account-input-wrap{width:min(240px,100%)}.manual-plan-account-input-wrap input{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface);color:var(--neutral-900)}.manual-plan-account-input-wrap small{display:block;margin-top:4px}.manual-upload-panel .manual-import-result{display:flex;align-items:center;flex-wrap:wrap;gap:16px}.manual-import-result>span{color:var(--neutral-600)}.manual-import-dialog{width:min(600px,100%)}.manual-import-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.manual-import-dialog-head h2{margin:0;font-size:18px}.manual-import-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0;padding:14px;background:var(--neutral-50);border-radius:8px}.manual-import-metrics small{display:block;color:var(--neutral-500);font-size:12px}.manual-import-metrics strong{display:block;margin-top:6px;color:var(--neutral-800);font-size:22px;font-variant-numeric:tabular-nums}.manual-import-metrics .success{color:var(--success)}.manual-import-metrics .warning{color:var(--processing)}.manual-import-details{max-height: min(360px,45vh);overflow-y:auto}.manual-import-details h3{margin:16px 0 8px;color:var(--neutral-700);font-size:13px}.manual-import-details section:first-child h3{margin-top:0}.manual-import-detail-row{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid var(--neutral-100);overflow-wrap:anywhere}.manual-import-detail-row b{font-size:12px;font-weight:500;color:var(--neutral-700)}.manual-import-detail-row span{font-size:12px;color:var(--neutral-500)}.manual-import-details .manual-import-duplicates{margin-top:12px;font-size:12px;color:var(--neutral-500)}
+@media(max-width:580px){.manual-plan-account-input-wrap{min-width:0;flex:1}.manual-import-metrics{gap:8px;padding:10px}.manual-import-metrics strong{font-size:20px}}
 .manual-stepper{display:flex;gap:0;align-items:center;min-height:64px;padding:10px 24px;margin-bottom:20px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--neutral-50);scroll-margin-top:88px}
 .manual-step{display:flex;flex:1;align-items:center;gap:8px;min-height:44px;padding:0;border:0;background:transparent;color:var(--neutral-400);font-size:14px;font-weight:500;text-align:left}
 .manual-step b{font-weight:500}

@@ -51,12 +51,10 @@ const historyAccountType = ref('')
 const historyUmNo = ref('')
 const historyOrganization = ref('')
 const historyPlatform = ref('')
-const historyBusinessLine = ref('')
-const historyCity = ref('')
 const historyLifecycle = ref('')
 const historyFollowersMin = ref<number | null>(null)
 const historyFollowersMax = ref<number | null>(null)
-const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', organization: '', platform: '', businessLine: '', city: '', lifecycle: '', followersMin: null as number | null, followersMax: null as number | null })
+const appliedAccountFilters = ref({ keyword: '', accountType: '', umNo: '', organization: '', platform: '', lifecycle: '', followersMin: null as number | null, followersMax: null as number | null })
 const accountHistoryCycleId = ref('all')
 const accountHistoryPage = ref(1)
 const accountHistoryPageSize = ref(10)
@@ -167,7 +165,7 @@ function applyBatchDetailFilters() {
 }
 function applyAccountFilters() {
   flushSearch()
-  appliedAccountFilters.value = { keyword: historyAccountKeyword.value, accountType: historyAccountType.value, umNo: historyUmNo.value, organization: historyOrganization.value, platform: historyPlatform.value, businessLine: historyBusinessLine.value, city: historyCity.value, lifecycle: historyLifecycle.value, followersMin: historyFollowersMin.value, followersMax: historyFollowersMax.value }
+  appliedAccountFilters.value = { keyword: historyAccountKeyword.value, accountType: historyAccountType.value, umNo: historyUmNo.value, organization: historyOrganization.value, platform: historyPlatform.value, lifecycle: historyLifecycle.value, followersMin: historyFollowersMin.value, followersMax: historyFollowersMax.value }
   accountListPage.value = 1
 }
 function applyAccountDetailFilters() {
@@ -210,8 +208,6 @@ const pagedGroupedCycleItems = computed(() => {
 })
 const historyOrganizationOptions = computed(() => [...new Set(accountCatalog.value.map(item => item.organization).filter(Boolean))].sort())
 const historyPlatformOptions = computed(() => [...new Set(accountCatalog.value.map(item => item.platform).filter(Boolean))].sort())
-const historyBusinessLineOptions = computed(() => [...new Set(accountCatalog.value.map(item => item.business_line).filter(Boolean))].sort())
-const historyCityOptions = computed(() => [...new Set(accountCatalog.value.map(item => item.city).filter(Boolean))].sort())
 const historyLifecycleOptions = computed(() => [...new Set(accountCatalog.value.map(item => item.lifecycle_stage).filter(Boolean))])
 const historyAccountOptions = computed(() => {
   const filters = appliedAccountFilters.value
@@ -225,8 +221,6 @@ const historyAccountOptions = computed(() => {
       (!umNo || (account?.um_no ?? '').toLocaleLowerCase().includes(umNo)) &&
       (!filters.organization || account?.organization === filters.organization) &&
       (!filters.platform || account?.platform === filters.platform) &&
-      (!filters.businessLine || account?.business_line === filters.businessLine) &&
-      (!filters.city || account?.city === filters.city) &&
       (!filters.lifecycle || account?.lifecycle_stage === filters.lifecycle) &&
       (filters.followersMin === null || (account?.followers != null && account.followers >= filters.followersMin)) &&
       (filters.followersMax === null || (account?.followers != null && account.followers <= filters.followersMax))
@@ -252,24 +246,27 @@ const filteredAccountHistory = computed(() => {
 watch(cyclePageSize, () => { cyclePage.value = 1 })
 watch(cyclePageCount, pageCount => { if (cyclePage.value > pageCount) cyclePage.value = pageCount })
 const accountHistoryGroups = computed(() => {
-  const groups = new Map<string, {
-    cycle_start: string
-    cycle_end: string
-    items: AccountPlanRecord[]
-  }>()
+  const groups = new Map<number, AccountPlanRecord[]>()
   for (const item of filteredAccountHistory.value) {
-    const key = cycleWeekStart(item.publish_date)
-    const group = groups.get(key)
-    if (group) group.items.push(item)
-    else groups.set(key, {
-      cycle_start: key,
-      cycle_end: cycleWeekEnd(key),
-      items: [item],
-    })
+    const items = groups.get(item.batch_id)
+    if (items) items.push(item)
+    else groups.set(item.batch_id, [item])
   }
-  return [...groups.values()]
-    .map(group => ({ ...group, items: group.items.sort((a, b) => a.publish_date.localeCompare(b.publish_date) || a.id - b.id) }))
-    .sort((a, b) => b.cycle_start.localeCompare(a.cycle_start))
+  return [...groups.entries()].map(([batchId, items]) => {
+    const latest = items[0]
+    const batch = batchSummaries.value.find(candidate => candidate.id === batchId)
+    items.sort((a, b) => b.publish_date.localeCompare(a.publish_date) || b.id - a.id)
+    return {
+      batch_id: batchId,
+      batch_code: latest.batch_code,
+      task_name: batch?.task_name || latest.batch_code,
+      plan_type: latest.plan_type,
+      cycle_start: batch?.cycle_start || latest.cycle_start,
+      cycle_end: batch?.cycle_end || latest.cycle_end,
+      created_at: batch?.created_at || latest.batch_created_at || '',
+      items,
+    }
+  }).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.batch_id - a.batch_id)
 })
 const accountHistoryPageCount = computed(() => Math.max(1, Math.ceil(accountHistoryGroups.value.length / accountHistoryPageSize.value)))
 const pagedAccountHistoryGroups = computed(() => {
@@ -684,17 +681,19 @@ onBeforeUnmount(() => { planDetailRequest++ })
 <template>
   <template v-if="!detailOnly">
   <div v-if="visibleError" class="banner error-banner" role="alert">{{ visibleError }}</div>
-  <div v-if="pane !== 'detail' && !selectedAccount" class="result-tabs" role="group" aria-label="策划结果查看维度"><button type="button" :class="{ active: pane === 'account' }" :aria-pressed="pane === 'account'" @click="pane = 'account'">账号视图</button><button type="button" :class="{ active: pane === 'period' }" :aria-pressed="pane === 'period'" @click="pane = 'period'">周期视图</button></div>
+  <div v-if="pane !== 'detail' && !selectedAccount" class="result-tabs" role="group" aria-label="策划结果查看方式"><button type="button" :class="{ active: pane === 'account' }" :aria-pressed="pane === 'account'" @click="pane = 'account'">账号列表</button><button type="button" :class="{ active: pane === 'period' }" :aria-pressed="pane === 'period'" @click="pane = 'period'">时间列表</button></div>
   <section v-if="listLoading" class="card"><LoadingSkeleton /></section>
   <section v-if="pane === 'period' && !listLoading" class="card">
     <div class="card-body batch-dimension-filters">
       <button class="filter-collapse-toggle" type="button" aria-controls="batch-dimension-filter-fields" :aria-expanded="batchFiltersExpanded" @click="batchFiltersExpanded = !batchFiltersExpanded"><span>&#x7B5B;&#x9009;&#x6761;&#x4EF6;</span><svg :class="{ expanded: batchFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button>
       <div id="batch-dimension-filter-fields" v-show="batchFiltersExpanded" class="batch-filter-fields">
-        <div class="batch-filter-row">
+        <div class="batch-filter-row query-filter-grid" data-query-filters="standard">
           <select v-model="batchYear"><option value="all">&#x5168;&#x90E8;&#x5E74;&#x4EFD;</option><option v-for="value in batchYearOptions" :key="value" :value="value">{{ value }} &#x5E74;</option></select>
           <select v-model="batchMonth"><option value="all">&#x5168;&#x90E8;&#x6708;&#x4EFD;</option><option v-for="value in batchMonthOptions" :key="value" :value="value">{{ Number(value) }} &#x6708;</option></select>
-          <select v-model="batchWeek"><option value="all">&#x5168;&#x90E8;&#x5468;&#x6B21;</option><option v-for="value in batchWeekOptions" :key="value" :value="String(value)">&#x7B2C;{{ value }}&#x5468;</option></select>
-          <button class="btn primary" type="button" @click="applyBatchFilters">&#x67E5;&#x8BE2;</button>
+          <div class="query-filter-tail">
+                <select v-model="batchWeek"><option value="all">&#x5168;&#x90E8;&#x5468;&#x6B21;</option><option v-for="value in batchWeekOptions" :key="value" :value="String(value)">&#x7B2C;{{ value }}&#x5468;</option></select>
+                <div class="query-filter-actions"><button class="btn primary" type="button" @click="applyBatchFilters">&#x67E5;&#x8BE2;</button></div>
+              </div>
         </div>
       </div>
     </div>
@@ -705,7 +704,7 @@ onBeforeUnmount(() => { planDetailRequest++ })
     <ListPagination v-model:page="batchListPage" v-model:page-size="batchListPageSize" :total="visibleCycles.length" unit="个批次" class="list-pagination-inset" />
   </section>
   <section v-if="pane === 'detail'" class="card">
-    <div class="card-head"><div><h2>策划明细</h2><small v-if="selectedBatch">{{ selectedBatch.batch_code }} &#xB7; {{ selectedBatch.cycle_start }} &#x81F3; {{ selectedBatch.cycle_end }}</small></div><button class="btn" type="button" @click="pane = 'period'">返回周期视图</button></div>
+    <div class="card-head"><div><h2>策划明细</h2><small v-if="selectedBatch">{{ selectedBatch.batch_code }} &#xB7; {{ selectedBatch.cycle_start }} &#x81F3; {{ selectedBatch.cycle_end }}</small></div><button class="btn" type="button" @click="pane = 'period'">返回时间列表</button></div>
     <LoadingSkeleton v-if="busy" :rows="8" />
     <template v-else-if="selectedBatch">
     <section class="batch-dashboard" aria-label="批次看板">
@@ -717,11 +716,13 @@ onBeforeUnmount(() => { planDetailRequest++ })
       <div class="batch-dashboard-item pending"><small>热点待填充条数</small><strong>{{ batchDashboard.hotspotPendingCount }}</strong></div>
     </section>
     <div class="card-body filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="batch-detail-filter-fields" :aria-expanded="batchDetailFiltersExpanded" @click="batchDetailFiltersExpanded = !batchDetailFiltersExpanded"><span>&#x7B5B;&#x9009;&#x6761;&#x4EF6;</span><svg :class="{ expanded: batchDetailFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
-    <div id="batch-detail-filter-fields" v-show="batchDetailFiltersExpanded" class="card-body detail-filter-fields">
+    <div id="batch-detail-filter-fields" v-show="batchDetailFiltersExpanded" class="card-body detail-filter-fields query-filter-grid" data-query-filters="standard">
       <label><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="cycleAccountKeyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" /></label>
       <label><span>&#x7B56;&#x5212;&#x65B9;&#x5F0F;</span><select v-model="cycleDetailPlanType"><option value="all">&#x5168;&#x90E8;</option><option value="auto">&#x81EA;&#x52A8;&#x7B56;&#x5212;</option><option value="manual">&#x624B;&#x52A8;&#x7B56;&#x5212;</option></select></label>
-      <label><span>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</span><select v-model="cycleContentType"><option value="all">&#x5168;&#x90E8;&#x5185;&#x5BB9;&#x7C7B;&#x578B;</option><option v-for="value in dimensionContentTypes" :key="value" :value="value">{{ value }}</option></select></label>
-      <button class="btn primary" type="button" @click="applyBatchDetailFilters">&#x67E5;&#x8BE2;</button>
+      <div class="query-filter-tail">
+                <label><span>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</span><select v-model="cycleContentType"><option value="all">&#x5168;&#x90E8;&#x5185;&#x5BB9;&#x7C7B;&#x578B;</option><option v-for="value in dimensionContentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+                <div class="result-filter-action-row query-filter-actions"><button class="btn primary" type="button" @click="applyBatchDetailFilters">&#x67E5;&#x8BE2;</button></div>
+              </div>
     </div>
     <div v-if="groupedCycleItems.length" class="batch-account-list planning-account-groups">
       <article v-for="group in pagedGroupedCycleItems" :key="group.account_id" class="batch-account-card planning-account-group">
@@ -753,52 +754,54 @@ onBeforeUnmount(() => { planDetailRequest++ })
     <template v-if="selectedAccount">
       <div class="card-head"><div><h2>策划明细</h2><small>{{ selectedAccount.account_name }} · {{ selectedAccount.account_id }}</small></div><button class="btn" type="button" @click="returnFromAccountDetail">{{ accountReturnPane === 'detail' ? '返回策划明细' : '返回账号列表' }}</button></div>
       <div class="card-body filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="account-detail-filter-fields" :aria-expanded="accountDetailFiltersExpanded" @click="accountDetailFiltersExpanded = !accountDetailFiltersExpanded"><span>&#x7B5B;&#x9009;&#x6761;&#x4EF6;</span><svg :class="{ expanded: accountDetailFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
-      <div id="account-detail-filter-fields" v-show="accountDetailFiltersExpanded" class="card-body detail-filter-fields">
+      <div id="account-detail-filter-fields" v-show="accountDetailFiltersExpanded" class="card-body detail-filter-fields query-filter-grid" data-query-filters="compact">
         <label><span>&#x6279;&#x6B21;</span><select v-model="accountHistoryBatchId" @change="changeAccountDetailBatch(accountHistoryBatchId)"><option value="all">&#x5168;&#x90E8;&#x6279;&#x6B21;</option><option v-for="batch in accountDetailBatchOptions" :key="batch.id" :value="String(batch.id)">{{ batch.label }}</option></select></label>
-        <label><span>&#x7B56;&#x5212;&#x65B9;&#x5F0F;</span><select v-model="accountHistoryPlanType"><option value="all">&#x5168;&#x90E8;</option><option value="auto">&#x81EA;&#x52A8;&#x7B56;&#x5212;</option><option value="manual">&#x624B;&#x52A8;&#x7B56;&#x5212;</option></select></label>
-        <button class="btn primary" type="button" @click="applyAccountDetailFilters">&#x67E5;&#x8BE2;</button>
+        <div class="query-filter-tail">
+                <label><span>&#x7B56;&#x5212;&#x65B9;&#x5F0F;</span><select v-model="accountHistoryPlanType"><option value="all">&#x5168;&#x90E8;</option><option value="auto">&#x81EA;&#x52A8;&#x7B56;&#x5212;</option><option value="manual">&#x624B;&#x52A8;&#x7B56;&#x5212;</option></select></label>
+                <div class="result-filter-action-row query-filter-actions"><button class="btn primary" type="button" @click="applyAccountDetailFilters">&#x67E5;&#x8BE2;</button></div>
+              </div>
       </div>
       <LoadingSkeleton v-if="busy" :rows="8" />
-      <div v-else-if="accountHistoryGroups.length" class="batch-account-list">
-
-        <article v-for="history in pagedAccountHistoryGroups" :key="history.cycle_start" class="batch-account-card account-history-batch">
-          <div class="batch-account-head account-history-batch-head"><div><b>{{ cyclePeriodLabel(history.cycle_start) }} · {{ history.cycle_start }} 至{{ history.cycle_end }}</b></div><span class="tag blue">{{ history.items.length }} 条策划</span></div>
-          <div class="account-week-carousel"><button class="account-week-scroll-control previous" type="button" aria-label="&#x5411;&#x5DE6;&#x6ED1;&#x52A8;&#x5468;&#x5386;" @click="scrollAccountWeek($event, -1)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg></button><div class="account-week-scroll"><div class="account-week-calendar">
-            <section v-for="day in accountWeekDays(history)" :key="day.date" class="account-week-day">
-              <header class="account-week-day-head"><div><b>{{ day.dateLabel }}</b><small>{{ day.weekday }}</small></div><span>{{ day.items.length }} 条</span></header>
-              <div v-if="day.items.length" class="account-week-day-items">
-                <article v-for="record in day.items" :key="record.id" class="account-week-plan-card" role="button" tabindex="0" @click="openPlanDetails(record)" @keydown.enter="openPlanDetails(record)">
-                  <div class="account-week-plan-tags"><span class="tag gray">{{ record.plan_type === 'manual' ? '手动策划' : '自动策划' }}</span><span :class="['tag', statusTagClass(productionStatusLabel(record))]">{{ productionStatusLabel(record) }}</span></div>
-                  <h3>{{ record.topic_title }}</h3>
-                  <div class="account-week-plan-meta"><span>{{ record.content_type || '\u2014' }}</span><span>{{ topicTypeLabel(record) }}</span></div>
-                </article>
+      <div v-else-if="accountHistoryGroups.length" class="batch-account-list account-history-batches">
+        <article v-for="history in pagedAccountHistoryGroups" :key="history.batch_id" class="batch-account-card account-history-batch">
+          <div class="batch-account-head account-history-batch-head">
+            <div class="account-history-batch-title"><b>{{ history.task_name }}</b><small>{{ history.batch_code }} ? {{ history.cycle_start }} ? {{ history.cycle_end }}</small></div>
+            <div class="account-history-batch-counts"><span class="tag gray">{{ history.plan_type === 'manual' ? '人工策划' : '自动策划' }}</span><span class="tag blue">{{ history.items.length }} &#x6761;&#x7B56;&#x5212;</span></div>
+          </div>
+          <div class="account-history-record-list">
+            <article v-for="record in history.items" :key="record.id" class="account-history-record">
+              <div class="account-history-record-date"><b>{{ record.publish_date }}</b><small>{{ weekdayLabel(record.publish_date) }}</small></div>
+              <div class="account-history-record-content">
+                <div class="account-history-record-heading"><h3>{{ record.topic_title || (record.topic_id ? '暂无选题标题' : '待定题') }}</h3><span :class="['tag', statusTagClass(productionStatusLabel(record))]">{{ productionStatusLabel(record) }}</span></div>
+                <p>{{ record.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</p>
+                <div class="account-history-record-meta"><span>{{ record.content_type || '—' }}</span><span>{{ topicTypeLabel(record) }}</span><span>{{ plannedSlotLabel(record) }}&#x69FD;&#x4F4D;</span></div>
               </div>
-              <div v-else class="account-week-day-empty">暂无计划</div>
-            </section>
-          </div></div><button class="account-week-scroll-control next" type="button" aria-label="&#x5411;&#x53F3;&#x6ED1;&#x52A8;&#x5468;&#x5386;" @click="scrollAccountWeek($event, 1)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg></button></div>
+            </article>
+          </div>
         </article>
-        <ListPagination v-model:page="accountHistoryPage" v-model:page-size="accountHistoryPageSize" :total="accountHistoryGroups.length" unit="周" />
+        <ListPagination v-model:page="accountHistoryPage" v-model:page-size="accountHistoryPageSize" :total="accountHistoryGroups.length" unit="&#x4E2A;&#x6279;&#x6B21;" />
       </div>
       <div v-else class="empty-state"><b>当前筛选范围内暂无策划数据</b></div>
     </template>
     <template v-else>
       <div class="card-body filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="account-dimension-filter-fields" :aria-expanded="accountFiltersExpanded" @click="accountFiltersExpanded = !accountFiltersExpanded"><span>&#x7B5B;&#x9009;&#x6761;&#x4EF6;</span><svg :class="{ expanded: accountFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
-      <div id="account-dimension-filter-fields" v-show="accountFiltersExpanded" class="card-body account-history-toolbar">
+      <div id="account-dimension-filter-fields" v-show="accountFiltersExpanded" class="card-body account-history-toolbar query-filter-grid" data-query-filters="standard">
         <label><span>&#x751F;&#x547D;&#x5468;&#x671F;</span><select v-model="historyLifecycle"><option value="">&#x5168;&#x90E8;</option><option v-for="item in historyLifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label>
         <label><span>&#x7C89;&#x4E1D;&#x91CF;</span><div class="account-history-follower-range"><input v-model.number="historyFollowersMin" type="number" min="0" placeholder="&#x8D77;&#x59CB;&#x7C89;&#x4E1D;&#x91CF;" /><i>&#x81F3;</i><input v-model.number="historyFollowersMax" type="number" min="0" placeholder="&#x622A;&#x6B62;&#x7C89;&#x4E1D;&#x91CF;" /></div></label>
         <label><span>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</span><select v-model="historyAccountType"><option value="">&#x5168;&#x90E8;</option><option value="&#x8BA4;&#x8BC1;">&#x8BA4;&#x8BC1;</option><option value="&#x975E;&#x8BA4;&#x8BC1;">&#x975E;&#x8BA4;&#x8BC1;</option></select></label>
         <label><span>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</span><select v-model="historyOrganization"><option value="">&#x5168;&#x90E8;</option><option v-for="item in historyOrganizationOptions" :key="item" :value="item">{{ item }}</option></select></label>
         <label><span>&#x5E73;&#x53F0;</span><select v-model="historyPlatform"><option value="">&#x5168;&#x90E8;</option><option v-for="item in historyPlatformOptions" :key="item" :value="item">{{ item }}</option></select></label>
-        <label><span>&#x4E1A;&#x52A1;&#x7EBF;</span><select v-model="historyBusinessLine"><option value="">&#x5168;&#x90E8;</option><option v-for="item in historyBusinessLineOptions" :key="item" :value="item">{{ item }}</option></select></label>
-        <label><span>&#x5730;&#x57DF;</span><select v-model="historyCity"><option value="">&#x5168;&#x90E8;</option><option v-for="item in historyCityOptions" :key="item" :value="item">{{ item }}</option></select></label>
+
         <label><span>&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;</span><input v-model="historyAccountKeyword" type="search" placeholder="&#x8F93;&#x5165;&#x8D26;&#x53F7; ID &#x6216;&#x6635;&#x79F0;" /></label>
-        <label><span>&#x5C5E;&#x4E3B; UM &#x53F7;</span><input v-model="historyUmNo" type="search" placeholder="&#x8F93;&#x5165;&#x5C5E;&#x4E3B; UM &#x53F7;" /></label>
-        <button class="btn primary" type="button" @click="applyAccountFilters">&#x67E5;&#x8BE2;</button>
+        <div class="query-filter-tail">
+                <label><span>&#x5C5E;&#x4E3B; UM &#x53F7;</span><input v-model="historyUmNo" type="search" placeholder="&#x8F93;&#x5165;&#x5C5E;&#x4E3B; UM &#x53F7;" /></label>
+                <div class="result-filter-action-row query-filter-actions"><button class="btn primary" type="button" @click="applyAccountFilters">&#x67E5;&#x8BE2;</button></div>
+              </div>
       </div>
 
-      <div ref="accountTableScroll" class="table-wrap account-dimension-table-scroll" tabindex="0" role="region" aria-label="&#x8D26;&#x53F7;&#x5217;&#x8868;"><table><thead><tr><th>&#x8D26;&#x53F7;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x4E1A;&#x52A1;&#x7EBF;</th><th>&#x5E73;&#x53F0;</th><th>&#x5730;&#x57DF;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x91CF;</th><th>&#x8D26;&#x53F7;&#x72B6;&#x6001;</th><th>&#x7B56;&#x5212;&#x7ED3;&#x679C;</th></tr></thead><tbody>
-        <tr v-for="account in pagedPlanningAccounts" :key="account.account_id"><td><div class="account-name-cell"><b>{{ account.account_name }}</b><small>{{ account.account_id }}</small></div></td><td>{{ getAccountProfile(account.account_id)?.um_no || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.organization || account.account_owner || '\u2014' }}</td><td><AccountTypeBadge :type="accountTypeLabel(account.account_id)" /></td><td>{{ getAccountProfile(account.account_id)?.business_line || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.platform || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.city || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.lifecycle_stage || '\u2014' }}</td><td>{{ followersLabel(account.account_id) }}</td><td><span :class="['tag', getAccountProfile(account.account_id)?.status === '\u542f\u7528' ? 'green' : 'gray']">{{ getAccountProfile(account.account_id)?.status || '\u2014' }}</span></td><td><button class="text-btn" type="button" @click="openPlanningAccount(account)">查看策划</button></td></tr>
-        <tr v-if="visiblePlanningAccounts.length === 0"><td colspan="11"><div class="empty-state">{{ planningAccounts.length ? '\u6ca1\u6709\u5339\u914d\u7684\u8d26\u53f7' : '\u6682\u65e0\u53c2\u4e0e\u7b56\u5212\u7684\u8d26\u53f7' }}</div></td></tr>
+      <div ref="accountTableScroll" class="table-wrap account-dimension-table-scroll" tabindex="0" role="region" aria-label="&#x8D26;&#x53F7;&#x5217;&#x8868;"><table><thead><tr><th>&#x8D26;&#x53F7;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5E73;&#x53F0;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x91CF;</th><th>&#x8D26;&#x53F7;&#x72B6;&#x6001;</th><th>&#x7B56;&#x5212;&#x7ED3;&#x679C;</th></tr></thead><tbody>
+        <tr v-for="account in pagedPlanningAccounts" :key="account.account_id"><td><div class="account-name-cell"><b>{{ account.account_name }}</b><small>{{ account.account_id }}</small></div></td><td>{{ getAccountProfile(account.account_id)?.um_no || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.organization || account.account_owner || '\u2014' }}</td><td><AccountTypeBadge :type="accountTypeLabel(account.account_id)" /></td><td>{{ getAccountProfile(account.account_id)?.platform || '\u2014' }}</td><td>{{ getAccountProfile(account.account_id)?.lifecycle_stage || '\u2014' }}</td><td>{{ followersLabel(account.account_id) }}</td><td><span :class="['tag', getAccountProfile(account.account_id)?.status === '\u542f\u7528' ? 'green' : 'gray']">{{ getAccountProfile(account.account_id)?.status || '\u2014' }}</span></td><td><button class="text-btn" type="button" @click="openPlanningAccount(account)">查看策划</button></td></tr>
+        <tr v-if="visiblePlanningAccounts.length === 0"><td colspan="9"><div class="empty-state">{{ planningAccounts.length ? '\u6ca1\u6709\u5339\u914d\u7684\u8d26\u53f7' : '\u6682\u65e0\u53c2\u4e0e\u7b56\u5212\u7684\u8d26\u53f7' }}</div></td></tr>
       </tbody></table></div>
       <ListPagination v-model:page="accountListPage" v-model:page-size="accountListPageSize" :total="visiblePlanningAccounts.length" unit="个账号" class="list-pagination-inset" />
     </template>
@@ -820,16 +823,17 @@ onBeforeUnmount(() => { planDetailRequest++ })
         <template v-if="drawerMode === 'replace' && canReplacePlanTopic(replaceTarget)">
           <h3>选择新选题</h3>
           <div class="replacement-filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="replacement-topic-filters" :aria-expanded="replacementFiltersExpanded" @click="replacementFiltersExpanded = !replacementFiltersExpanded"><span>筛选条件</span><svg :class="{ expanded: replacementFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
-          <div id="replacement-topic-filters" v-show="replacementFiltersExpanded" class="replacement-topic-filters">
+          <div id="replacement-topic-filters" v-show="replacementFiltersExpanded" class="replacement-topic-filters query-filter-grid" data-query-filters="narrow">
             <label class="field"><span class="field-label-with-tip">选题 ID <span class="field-help-tip" tabindex="0" title="输入完整选题 ID，进行精确匹配">?</span></span><input v-model="replacementTopicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="输入完整选题 ID" /></label>
             <label class="field"><span class="field-label-with-tip">选题标题 <span class="field-help-tip" tabindex="0" title="输入标题关键词，进行模糊搜索">?</span></span><input v-model="replacementQuery" type="search" placeholder="输入选题标题关键词" /></label>
             <label class="field"><span>选题类型</span><select v-model="replacementMarketingFilter"><option value="">全部</option><option value="true">营销</option><option value="false">非营销</option></select></label>
             <label class="field"><span>内容类型</span><select v-model="replacementContentType"><option value="">全部</option><option v-for="value in replacementContentTypes" :key="value" :value="value">{{ value }}</option></select></label>
             <label class="field"><span>关联产品</span><select v-model="replacementProduct"><option value="">全部</option><option v-for="value in replacementProducts" :key="value" :value="value">{{ value }}</option></select></label>
             <label class="field"><span>关联活动</span><select v-model="replacementActivity"><option value="">全部</option><option v-for="value in replacementActivities" :key="value" :value="value">{{ value }}</option></select></label>
-            <label class="field"><span>关联属地热点</span><select v-model="replacementHotspot"><option value="">全部</option><option v-for="value in replacementHotspots" :key="value" :value="value">{{ value }}</option></select></label>
-            <button class="btn primary" type="button" @click="applyReplacementFilters">&#x67E5;&#x8BE2;</button>
-            <button class="text-btn replacement-filter-clear" type="button" @click="replacementTopicIdFilter = ''; replacementQuery = ''; replacementMarketingFilter = ''; replacementContentType = ''; replacementProduct = ''; replacementActivity = ''; replacementHotspot = ''">清空筛选</button>
+            <div class="query-filter-tail">
+                <label class="field"><span>关联属地热点</span><select v-model="replacementHotspot"><option value="">全部</option><option v-for="value in replacementHotspots" :key="value" :value="value">{{ value }}</option></select></label>
+                <div class="replacement-filter-actions query-filter-actions"><button class="text-btn replacement-filter-clear" type="button" @click="replacementTopicIdFilter = ''; replacementQuery = ''; replacementMarketingFilter = ''; replacementContentType = ''; replacementProduct = ''; replacementActivity = ''; replacementHotspot = ''">清空筛选</button><button class="btn primary" type="button" @click="applyReplacementFilters">&#x67E5;&#x8BE2;</button></div>
+              </div>
           </div>
           <div class="replacement-topic-count">符合条件 {{ replacementCandidates.length }} 个选题</div>
           <div class="topic-check-list"><label v-for="topic in replacementCandidates" :key="topic.topic_id" class="topic-check"><input v-model="replacementTopicId" type="radio" :value="topic.topic_id" name="replacement-topic" /><span><button class="topic-title-link" type="button" @click.prevent.stop="detailTopic = topic">{{ topic.topic_title }}</button><small>{{ topic.topic_id }}<template v-if="topic.content_type"> · {{ topic.content_type }}</template><template v-if="topic.valid_to"> · 有效至 {{ topic.valid_to.slice(0, 10) }}</template></small><small class="replacement-topic-outline"><b>选题大纲</b>{{ topic.outline || '暂无选题大纲' }}</small></span></label></div>
@@ -875,7 +879,7 @@ onBeforeUnmount(() => { planDetailRequest++ })
 </style>
 
 <style scoped>
-.detail-filter-fields>.btn,.account-history-toolbar>.btn{grid-column:auto;justify-self:start;align-self:end}.batch-filter-row{grid-template-columns:repeat(3,minmax(130px,1fr)) auto;max-width:900px}.slot-detail-section{margin:0 0 14px;padding:16px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}.slot-detail-section>h3{margin:0 0 12px;color:var(--neutral-800);font-size:14px;line-height:20px}.slot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.slot-detail-grid>div{min-width:0;padding:10px 2px;border-bottom:1px solid var(--neutral-100)}.slot-detail-grid>div:nth-last-child(-n+2){border-bottom:0}.slot-detail-grid small,.slot-topic-label-groups small{display:block;margin-bottom:5px;color:var(--neutral-400);font-size:12px}.slot-detail-grid b{display:block;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.55;overflow-wrap:anywhere}.slot-detail-grid .slot-detail-wide{grid-column:1/-1}.slot-detail-grid .slot-detail-outline{white-space:pre-wrap}.slot-topic-label-groups{display:grid;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--neutral-100)}.slot-topic-label-groups>div{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:start;gap:8px}.slot-topic-label-groups small{margin:3px 0 0}.slot-topic-labels{display:flex;flex-wrap:wrap;gap:6px}.slot-topic-labels span{padding:4px 8px;border-radius:5px;background:var(--primary-50);color:var(--primary-600);font-size:12px;line-height:18px;overflow-wrap:anywhere}.slot-topic-label-empty{padding:4px 0;color:var(--neutral-400);font-size:12px;font-weight:400}.slot-detail-loading{padding:12px 0;color:var(--neutral-400);font-size:13px}.slot-operation-list{position:relative;display:grid;gap:0}.slot-operation-item{position:relative;display:grid;grid-template-columns:14px minmax(0,1fr);gap:10px;padding-bottom:16px}.slot-operation-item:not(:last-child)::before{position:absolute;top:10px;bottom:-2px;left:5px;width:1px;background:var(--neutral-200);content:''}.slot-operation-dot{z-index:1;width:11px;height:11px;margin-top:4px;border:2px solid var(--primary-200);border-radius:50%;background:var(--primary-600)}.slot-operation-content>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px}.slot-operation-content b{color:var(--neutral-700);font-size:13px}.slot-operation-content time,.slot-operation-content small{color:var(--neutral-400);font-size:11px}.slot-operation-content p{margin:5px 0;color:var(--neutral-600);font-size:12px;line-height:1.6;overflow-wrap:anywhere}.slot-operation-content small{display:block}@media(max-width:980px){.batch-filter-row{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.slot-detail-grid{grid-template-columns:1fr}.slot-detail-grid>div:nth-last-child(-n+2){border-bottom:1px solid var(--neutral-100)}.slot-detail-grid>div:last-child{border-bottom:0}.slot-detail-grid .slot-detail-wide{grid-column:auto}.slot-topic-label-groups>div{grid-template-columns:72px minmax(0,1fr)}.slot-operation-content>div{align-items:flex-start;flex-direction:column;gap:3px}}
+.detail-filter-fields>.btn,.account-history-toolbar>.btn{grid-column:auto;justify-self:end;align-self:end}.result-filter-action-row,.replacement-filter-actions{grid-column:1/-1;display:flex;align-items:end;justify-content:flex-end;gap:8px}.batch-filter-row{grid-template-columns:repeat(3,minmax(130px,1fr)) auto;max-width:900px}.batch-filter-row>.btn{justify-self:end}.slot-detail-section{margin:0 0 14px;padding:16px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}.slot-detail-section>h3{margin:0 0 12px;color:var(--neutral-800);font-size:14px;line-height:20px}.slot-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.slot-detail-grid>div{min-width:0;padding:10px 2px;border-bottom:1px solid var(--neutral-100)}.slot-detail-grid>div:nth-last-child(-n+2){border-bottom:0}.slot-detail-grid small,.slot-topic-label-groups small{display:block;margin-bottom:5px;color:var(--neutral-400);font-size:12px}.slot-detail-grid b{display:block;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.55;overflow-wrap:anywhere}.slot-detail-grid .slot-detail-wide{grid-column:1/-1}.slot-detail-grid .slot-detail-outline{white-space:pre-wrap}.slot-topic-label-groups{display:grid;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--neutral-100)}.slot-topic-label-groups>div{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:start;gap:8px}.slot-topic-label-groups small{margin:3px 0 0}.slot-topic-labels{display:flex;flex-wrap:wrap;gap:6px}.slot-topic-labels span{padding:4px 8px;border-radius:5px;background:var(--primary-50);color:var(--primary-600);font-size:12px;line-height:18px;overflow-wrap:anywhere}.slot-topic-label-empty{padding:4px 0;color:var(--neutral-400);font-size:12px;font-weight:400}.slot-detail-loading{padding:12px 0;color:var(--neutral-400);font-size:13px}.slot-operation-list{position:relative;display:grid;gap:0}.slot-operation-item{position:relative;display:grid;grid-template-columns:14px minmax(0,1fr);gap:10px;padding-bottom:16px}.slot-operation-item:not(:last-child)::before{position:absolute;top:10px;bottom:-2px;left:5px;width:1px;background:var(--neutral-200);content:''}.slot-operation-dot{z-index:1;width:11px;height:11px;margin-top:4px;border:2px solid var(--primary-200);border-radius:50%;background:var(--primary-600)}.slot-operation-content>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px}.slot-operation-content b{color:var(--neutral-700);font-size:13px}.slot-operation-content time,.slot-operation-content small{color:var(--neutral-400);font-size:11px}.slot-operation-content p{margin:5px 0;color:var(--neutral-600);font-size:12px;line-height:1.6;overflow-wrap:anywhere}.slot-operation-content small{display:block}@media(max-width:980px){.batch-filter-row{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:580px){.slot-detail-grid{grid-template-columns:1fr}.slot-detail-grid>div:nth-last-child(-n+2){border-bottom:1px solid var(--neutral-100)}.slot-detail-grid>div:last-child{border-bottom:0}.slot-detail-grid .slot-detail-wide{grid-column:auto}.slot-topic-label-groups>div{grid-template-columns:72px minmax(0,1fr)}.slot-operation-content>div{align-items:flex-start;flex-direction:column;gap:3px}}
 </style>
 
 
