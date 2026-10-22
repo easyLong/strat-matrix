@@ -48,6 +48,25 @@ function csvRows(text: string) {
   return rows
 }
 
+function csvCell(value: string | number) {
+  return `"${String(value).replace(/"/g, '""')}"`
+}
+
+export function buildAccountImportIssueCsv(
+  result: Pick<AccountImportResult, 'duplicates' | 'unmatched' | 'planned'>,
+) {
+  const rows = [
+    ...result.unmatched.map(row => ({ ...row, result: '未识别' })),
+    ...result.planned.map(row => ({ ...row, result: '已投放' })),
+    ...result.duplicates.map(row => ({ ...row, result: '重复' })),
+  ].sort((left, right) => left.rowNumber - right.rowNumber)
+  const lines = [
+    ['原始行号', 'UM号', '账号ID', '结果', '原因'].map(csvCell).join(','),
+    ...rows.map(row => [row.rowNumber, row.umNo, row.accountId, row.result, row.reason].map(csvCell).join(',')),
+  ]
+  return `\uFEFF${lines.join('\r\n')}\r\n`
+}
+
 export function recognizeAccountImport(
   text: string,
   accounts: AccountOption[],
