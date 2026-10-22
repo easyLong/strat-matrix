@@ -37,7 +37,8 @@ const expandedPeriod = ref<string | null>(null)
 const year = ref('all')
 const month = ref('all')
 const week = ref('all')
-const appliedFilters = ref({ year: 'all', month: 'all', week: 'all' })
+const batchQuery = ref('')
+const appliedFilters = ref({ year: 'all', month: 'all', week: 'all', batchQuery: '' })
 const page = ref(1)
 const pageSize = ref(20)
 let loaded = false
@@ -111,6 +112,12 @@ function summarizePeriods(source: BatchSummary[]): PeriodSummary[] {
   }).sort((a, b) => b.cycleStart.localeCompare(a.cycleStart))
 }
 
+function batchMatchesQuery(batch: BatchSummary, query: string) {
+  const value = query.trim().toLocaleLowerCase()
+  if (!value) return true
+  return String(batch.id) === value || batch.batch_code.toLocaleLowerCase().includes(value)
+}
+
 const allPeriods = computed(() => summarizePeriods(batches.value))
 const selectedPeriod = computed(() => allPeriods.value.find(period => period.cycleStart === requestedCycle.value) ?? null)
 const selectedBatch = computed(() => batches.value.find(batch => batch.id === requestedBatchId.value) ?? null)
@@ -120,7 +127,8 @@ const monthOptions = computed(() => [...new Set(periodKeys.value.filter(value =>
 const weekOptions = computed(() => [...new Set(periodKeys.value
   .filter(value => (year.value === 'all' || value.slice(0, 4) === year.value) && (month.value === 'all' || value.slice(5, 7) === month.value))
   .map(value => monthWeekOf(value)))].sort((a, b) => a - b))
-const periods = computed(() => allPeriods.value.filter(period =>
+const searchedPeriods = computed(() => summarizePeriods(batches.value.filter(batch => batchMatchesQuery(batch, appliedFilters.value.batchQuery))))
+const periods = computed(() => searchedPeriods.value.filter(period =>
   (appliedFilters.value.year === 'all' || period.cycleStart.slice(0, 4) === appliedFilters.value.year) &&
   (appliedFilters.value.month === 'all' || period.cycleStart.slice(5, 7) === appliedFilters.value.month) &&
   (appliedFilters.value.week === 'all' || String(monthWeekOf(period.cycleStart)) === appliedFilters.value.week),
@@ -134,7 +142,7 @@ function switchDimension(next: ResultDimension) {
 }
 
 function applyFilters() {
-  appliedFilters.value = { year: year.value, month: month.value, week: week.value }
+  appliedFilters.value = { year: year.value, month: month.value, week: week.value, batchQuery: batchQuery.value.trim() }
   expandedPeriod.value = null
   page.value = 1
 }
@@ -248,6 +256,7 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
             <div class="batch-filter-row query-filter-grid" data-query-filters="standard">
               <select v-model="year"><option value="all">全部年份</option><option v-for="value in yearOptions" :key="value" :value="value">{{ value }} 年</option></select>
               <select v-model="month"><option value="all">全部月份</option><option v-for="value in monthOptions" :key="value" :value="value">{{ Number(value) }} 月</option></select>
+              <input v-model="batchQuery" type="search" aria-label="批次号或批次 ID" placeholder="输入批次号或批次 ID" @keydown.enter.prevent="applyFilters" />
               <div class="query-filter-tail">
                 <select v-model="week"><option value="all">全部周次</option><option v-for="value in weekOptions" :key="value" :value="String(value)">第 {{ value }} 周</option></select>
                 <div class="query-filter-actions"><button class="btn primary" type="button" @click="applyFilters">查询</button></div>
@@ -296,7 +305,7 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
                   </td>
                 </tr>
               </template>
-              <tr v-if="periods.length === 0"><td colspan="9"><div class="empty-state"><b>暂无策划周期</b></div></td></tr>
+              <tr v-if="periods.length === 0"><td colspan="9"><div class="empty-state"><b>暂无符合条件的策划周期</b></div></td></tr>
             </tbody>
           </table>
         </div>
