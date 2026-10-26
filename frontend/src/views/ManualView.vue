@@ -12,7 +12,7 @@ import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
-import { recognizeAccountImport, type AccountImportRow } from '../ui/accountImport'
+import { buildAccountImportIssueCsv, recognizeAccountImport, type AccountImportRow } from '../ui/accountImport'
 import { createRequestId } from '../ui/requestId'
 
 const store = usePlanningStore()
@@ -456,6 +456,21 @@ function downloadAccountTemplate() {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+function downloadImportIssues() {
+  if (!hasImportIssues.value) return
+  const csv = buildAccountImportIssueCsv({
+    duplicates: importDuplicateRows.value,
+    unmatched: importUnmatchedRows.value,
+    planned: importPlannedRows.value,
+  })
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '手动策划账号导入异常结果.csv'
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 async function showImportIssues() {
   importIssueDialogOpen.value = true
   await nextTick()
@@ -821,7 +836,7 @@ function closeEligibilityNotice(returnToSelection = false) {
           <section v-if="importPlannedRows.length"><h3>已投放账号</h3><div v-for="row in importPlannedRows" :key="row.rowNumber" class="manual-import-detail-row"><b>{{ importRowLabel(row) }}</b><span>{{ row.reason }}</span></div></section>
           <p v-if="importDuplicateRows.length" class="manual-import-duplicates">重复记录：第 {{ importDuplicateRows.map(row => row.rowNumber).join('、') }} 行，同一账号仅保留首次记录。</p>
         </div>
-        <div class="manual-eligibility-actions"><button ref="importDialogClose" class="btn primary" type="button" @click="closeImportIssueDialog">知道了</button></div>
+        <div class="manual-eligibility-actions"><button class="btn" type="button" @click="downloadImportIssues">下载异常结果 CSV</button><button ref="importDialogClose" class="btn primary" type="button" @click="closeImportIssueDialog">知道了</button></div>
       </section>
     </div>
     <Transition name="manual-eligibility-modal">
