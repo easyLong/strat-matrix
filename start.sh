@@ -205,8 +205,12 @@ if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; 
   fi
   (
     cd "$APP_ROOT/frontend"
-    if [[ ! -d node_modules ]]; then
-      "$NPM_BIN" ci
+    # The production build needs devDependencies such as typescript,
+    # vue-tsc, Vite and @types/node. A server may already have a partial
+    # node_modules directory from an --omit=dev install, so checking only
+    # the directory is not enough.
+    if [[ ! -d node_modules || ! -d node_modules/@types/node ]]; then
+      "$NPM_BIN" ci --include=dev
     fi
     "$NPM_BIN" run build
   )

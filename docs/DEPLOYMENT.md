@@ -100,7 +100,7 @@ chmod +x start.sh stop.sh status.sh
 2. 启动尚未运行的FastAPI后端。
 3. 启动周度规则策划与热点调度进程（默认开启，按服务端配置的北京时间执行）。
 4. 标签、选题向量、账号向量及 AI 准备 Worker 默认不随服务启动；需要时手动启动对应 Worker。
-5. 默认执行前端生产构建，依赖不存在时执行`npm ci`；前端构建在前端启动前、后端启动后进行。
+5. 默认执行前端生产构建；前端依赖缺失或 `node_modules/@types/node` 不存在时执行 `npm ci --include=dev`，确保 TypeScript、Vite 和 Node 类型依赖完整。前端构建在前端启动前、后端启动后进行。
 6. 启动尚未运行的Vite Preview前端，将PID写入`run/`、日志写入`logs/`。
 
 Matching Executor Worker 默认关闭。完成匹配策略审批后，如需处理 V1/V2 匹配任务，可通过进程环境变量启动：`MATCHING_EXECUTOR_WORKER_ENABLED=1 ./start.sh`；查看状态时使用 `MATCHING_EXECUTOR_WORKER_ENABLED=1 ./status.sh`。默认启动不会消费匹配队列。
