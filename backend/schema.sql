@@ -653,6 +653,7 @@ CREATE TABLE IF NOT EXISTS godp_manual_preview (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '手动策划预览记录主键ID',
     preview_code VARCHAR(64) NOT NULL COMMENT '手动策划预览唯一编码',
     task_name VARCHAR(120) NOT NULL DEFAULT '' COMMENT '手动策划任务名称',
+    content_mode VARCHAR(24) NOT NULL DEFAULT 'legacy' COMMENT '人工策划内容模式：non_marketing非营销，legacy历史混合选题流程',
     publish_date DATE NOT NULL COMMENT '本次策划统一投放日期',
     allocations_json LONGTEXT NOT NULL COMMENT '账号与选题的确定分配结果JSON',
     note VARCHAR(500) NOT NULL DEFAULT '' COMMENT '手动策划备注说明',

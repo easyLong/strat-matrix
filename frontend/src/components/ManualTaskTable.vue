@@ -96,7 +96,7 @@ function contentStatusText(task: ManualTaskSummary) {
       </thead>
       <tbody>
         <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }">
-          <td>{{ task.publish_date }}</td>
+          <td>{{ task.publish_date || '—' }}</td>
           <td class="numeric">{{ task.planned_account_count }}</td>
           <td class="numeric">{{ task.topic_count }}</td>
           <td><span :class="['tag', planningTone(task)]">{{ planningLabel(task) }}</span></td>
@@ -115,9 +115,9 @@ function contentStatusText(task: ManualTaskSummary) {
           <td class="date-cell">{{ formatDateTime(task.updated_at) }}</td>
           <td class="action-cell">
             <div class="manual-task-actions">
-              <button v-if="task.batch_id" class="text-btn" type="button" @click="emit('planDetails', task)">查看策划</button>
+              <button v-if="task.batch_id || task.content_mode === 'marketing'" class="text-btn" type="button" @click="emit('planDetails', task)">查看策划</button>
               <button v-if="task.batch_id" class="text-btn manual-content-flow-link" type="button" @click="emit('contentFlow', task)">查看内容流水</button>
-              <span v-if="!task.batch_id" class="manual-action-empty">—</span>
+              <span v-if="!task.batch_id && task.content_mode !== 'marketing'" class="manual-action-empty">—</span>
             </div>
           </td>
         </tr>

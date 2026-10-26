@@ -23,6 +23,7 @@ from .matching_execution_api import router as matching_execution_router
 from .topic_label_model_api import router as topic_label_model_router
 from .embedding_model_api import router as embedding_model_router
 from .content_production_api import router as content_production_router
+from .manual_marketing_api import router as manual_marketing_router
 from .ordinary_planning import PlanningError, lifecycle_stage, load_accounts
 from .manual_availability import ensure_manual_accounts_available, planned_manual_accounts
 from .planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, PRODUCTION_STATUS_SQL, planning_status_label, production_status
@@ -77,6 +78,7 @@ app.include_router(matching_execution_router)
 app.include_router(topic_label_model_router)
 app.include_router(embedding_model_router)
 app.include_router(content_production_router)
+app.include_router(manual_marketing_router)
 
 
 @app.middleware("http")
@@ -1209,6 +1211,8 @@ def preview_manual_plan(payload: ManualPreviewInput) -> dict:
             topics = available_topics(cursor, unique_topic_ids)
             if len(topics) != len(unique_topic_ids):
                 raise HTTPException(status_code=422, detail="所选选题包含不可用、未审核或已过期的选题")
+            if payload.content_mode == 'non_marketing' and any(topic['is_marketing'] for topic in topics.values()):
+                raise HTTPException(status_code=422, detail='非营销策划只能选择非营销选题')
             items = []
             for account in candidates:
                 compatible = [topics[topic_id] for topic_id in payload.topic_ids
@@ -1224,9 +1228,9 @@ def preview_manual_plan(payload: ManualPreviewInput) -> dict:
             expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
             cursor.execute(
                 "INSERT INTO godp_manual_preview "
-                "(preview_code, task_name, publish_date, allocations_json, note, expires_at, create_by, update_by) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (preview_id, payload.task_name, payload.publish_date,
+                "(preview_code, task_name, content_mode, publish_date, allocations_json, note, expires_at, create_by, update_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (preview_id, payload.task_name, payload.content_mode or 'legacy', payload.publish_date,
                  json.dumps([item.model_dump() for item in items], ensure_ascii=False),
                  payload.note, expires_at.replace(tzinfo=None), operator, operator),
             )
@@ -1256,7 +1260,7 @@ def execute_manual_preview(preview_id: str, task_id: int, operator: str) -> None
         with connection() as db, db.cursor() as cursor:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
             cursor.execute(
-                "SELECT publish_date, allocations_json, note, status, expires_at, batch_id "
+                "SELECT publish_date, allocations_json, note, status, expires_at, batch_id, content_mode "
                 "FROM godp_manual_preview WHERE preview_code=%s AND del_flag='N' FOR UPDATE",
                 (preview_id,),
             )
@@ -1285,6 +1289,8 @@ def execute_manual_preview(preview_id: str, task_id: int, operator: str) -> None
             topics = available_topics(cursor, topic_ids)
             if len(topics) != len(topic_ids):
                 raise HTTPException(status_code=409, detail="选题状态已变化，请重新提交")
+            if preview.get('content_mode') == 'non_marketing' and any(topic['is_marketing'] for topic in topics.values()):
+                raise HTTPException(status_code=409, detail='选题已变为营销类型，请重新选择非营销选题')
             cursor.execute(
                 "SELECT account_code, marketing_eligible FROM godp_account WHERE account_code IN (" +
                 ",".join(["%s"] * len(items)) + ")",
@@ -1382,6 +1388,7 @@ def list_manual_tasks(limit: int = 20) -> list[dict]:
             cursor.execute(
                 "SELECT id, task_code, preview_code, task_name, publish_date, planned_account_count, "
                 "result_count, failure_count, topic_count, status, failure_reason, t.batch_id, "
+                "COALESCE((SELECT p.content_mode FROM godp_manual_preview p WHERE p.preview_code=t.preview_code LIMIT 1),'legacy') AS content_mode, "
                 "CASE WHEN status IN ('执行中','进行中') THEN '待生产' "
                 "WHEN status <> '已完成' THEN '待生产' "
                 "WHEN t.batch_id IS NULL OR COALESCE(cs.slot_count, 0)=0 THEN '待生产' "

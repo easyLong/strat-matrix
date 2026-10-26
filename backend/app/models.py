@@ -191,6 +191,7 @@ class ManualPlanCreate(BaseModel):
 
 
 class ManualPreviewInput(BaseModel):
+    content_mode: Literal['non_marketing'] | None = None
     task_name: str = Field(min_length=1, max_length=120)
     publish_date: date
     account_ids: list[str] = Field(default_factory=list, max_length=1000)
@@ -250,7 +251,9 @@ class ManualTaskSummary(BaseModel):
     preview_code: str
     task_name: str
     batch_code: str = ""
-    publish_date: date
+    publish_date: date | None
+    content_mode: Literal['marketing', 'non_marketing', 'legacy'] = 'legacy'
+    content_per_account: int = 1
     planned_account_count: int
     result_count: int
     failure_count: int

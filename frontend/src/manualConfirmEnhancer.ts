@@ -146,6 +146,8 @@ function enhanceAccountTable(table: HTMLTableElement) {
 }
 
 function enhanceTopicTable(table: HTMLTableElement) {
+  // The current Vue confirmation owns its four columns and paginated cells.
+  if (table.dataset.nativeConfirm === 'true') return
   const headers = table.querySelectorAll<HTMLTableCellElement>('thead th')
   if (headers.length >= 4) {
     if (headers[0].textContent !== '内容类型') headers[0].textContent = '内容类型'

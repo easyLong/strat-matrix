@@ -7,11 +7,13 @@ import ListPagination from '../components/ListPagination.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
 import ManualTaskTable from '../components/ManualTaskTable.vue'
 import ContentFlowDrawer from '../components/ContentFlowDrawer.vue'
+import MarketingTaskDetails from '../components/MarketingTaskDetails.vue'
 import { useDebouncedFields } from '../composables/useDebouncedFields'
 import { api } from '../api'
 import { usePlanningStore } from '../store'
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
 import { recognizeAccountImport, type AccountImportRow } from '../ui/accountImport'
+import { createRequestId } from '../ui/requestId'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -22,6 +24,15 @@ const accountListRef = ref<HTMLElement | null>(null)
 const topicListRef = ref<HTMLElement | null>(null)
 const accountSelectionMode = ref<'filter' | 'upload'>('filter')
 const taskName = ref('')
+const contentMode = ref<'marketing' | 'non_marketing'>('non_marketing')
+const isMarketing = computed(() => contentMode.value === 'marketing')
+const contentPerAccount = ref<number | ''>('')
+const marketingRequestId = ref('')
+const marketingDetails = ref<Awaited<ReturnType<typeof api.marketingTaskDetails>> | null>(null)
+const workflowSteps = computed(() => isMarketing.value
+  ? [{ number: 1, label: '创建策划' }, { number: 2, label: '选择账号' }, { number: 4, label: '确认策划' }]
+  : [{ number: 1, label: '创建策划' }, { number: 2, label: '选择账号' }, { number: 3, label: '选择选题' }, { number: 4, label: '确认策划' }])
+const validContentCount = computed(() => Number.isInteger(contentPerAccount.value) && Number(contentPerAccount.value) >= 1 && Number(contentPerAccount.value) <= 100)
 const publishDate = ref('')
 const targetCount = ref<number | ''>('')
 const keyword = ref('')
@@ -39,6 +50,7 @@ const topicFiltersExpanded = ref(false)
 const tasks = ref<ManualTaskSummary[]>([])
 const contentFlowBatchId = ref<number | null>(null)
 const sampledIds = ref<string[]>([])
+watch([taskName, contentPerAccount, sampledIds], () => { marketingRequestId.value = createRequestId() }, { flush: 'sync' })
 const selectedTopicIds = ref<string[]>([])
 const topicIdFilter = ref('')
 const topicQuery = ref('')
@@ -84,13 +96,13 @@ const plannedAccountTooltip = ref<{ accountId: string; left: number; top: number
 let availabilityRequest = 0
 const importFileInput = ref<HTMLInputElement | null>(null)
 let refreshTimer: number | undefined
-const availabilityReady = computed(() => !!publishDate.value && availabilityDate.value === publishDate.value && !availabilityLoading.value && !availabilityError.value)
+const availabilityReady = computed(() => isMarketing.value ? store.databaseReady : !!publishDate.value && availabilityDate.value === publishDate.value && !availabilityLoading.value && !availabilityError.value)
 const plannedAccountSet = computed(() => new Set(plannedAccountIds.value))
 const importedAccounts = computed(() => {
   const ids = new Set(importedAccountIds.value)
   return accounts.value.filter(account => ids.has(account.account_id))
 })
-function isAccountPlanned(accountId: string) { return !!publishDate.value && availabilityDate.value === publishDate.value && plannedAccountSet.value.has(accountId) }
+function isAccountPlanned(accountId: string) { return !isMarketing.value && !!publishDate.value && availabilityDate.value === publishDate.value && plannedAccountSet.value.has(accountId) }
 
 async function revealStepProgress() {
   await nextTick()
@@ -110,7 +122,7 @@ const eligibleAccounts = computed(() => accounts.value.filter(account => {
   const filters = appliedAccountFilters.value
   const search = filters.keyword.trim().toLocaleLowerCase()
   const accountType = account.account_type || (account.certified === true ? '\u8ba4\u8bc1' : account.certified === false ? '\u975e\u8ba4\u8bc1' : '')
-  return (!search || `${account.account_name} ${account.account_alias} ${account.account_id}`.toLocaleLowerCase().includes(search)) &&
+  return (!isMarketing.value || accountType === '认证') && (!search || `${account.account_name} ${account.account_alias} ${account.account_id}`.toLocaleLowerCase().includes(search)) &&
     (!filters.accountType || accountType === filters.accountType) &&
     (!filters.umNo.trim() || (account.um_no || '').toLocaleLowerCase().includes(filters.umNo.trim().toLocaleLowerCase())) &&
     (!filters.organization || account.organization === filters.organization) &&
@@ -168,6 +180,7 @@ const relatedProducts = computed(() => [...new Set(topics.value.map(item => item
 const relatedActivities = computed(() => [...new Set(topics.value.map(item => item.related_activity).filter(Boolean))].sort())
 const relatedHotspots = computed(() => [...new Set(topics.value.map(item => item.related_hotspot).filter(Boolean))].sort())
 const filteredTopics = computed(() => topics.value.filter(topic =>
+  !topic.is_marketing &&
   (!appliedTopicFilters.value.topicId.trim() || topic.topic_id === appliedTopicFilters.value.topicId.trim()) &&
   (!appliedTopicFilters.value.query.trim() || topic.topic_title.toLocaleLowerCase().includes(appliedTopicFilters.value.query.trim().toLocaleLowerCase())) &&
   (!appliedTopicFilters.value.marketing || String(topic.is_marketing) === appliedTopicFilters.value.marketing) &&
@@ -185,13 +198,14 @@ const submitTopicsPage = computed(() => selectedTopics.value.slice((submitTopicP
 const accountSelectionPool = computed(() => availabilityReady.value ? matchingAccounts.value.filter(account => !isAccountPlanned(account.account_id)) : [])
 const allAccountsSelected = computed(() => accountSelectionPool.value.length > 0 && accountSelectionPool.value.every(account => sampledIds.value.includes(account.account_id)))
 const someAccountsSelected = computed(() => !allAccountsSelected.value && accountSelectionPool.value.some(account => sampledIds.value.includes(account.account_id)))
-const canSubmit = computed(() => store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && publishDate.value !== '' && targetCount.value !== '' && Number.isInteger(targetCount.value) && targetCount.value >= 1 && targetCount.value <= 1000 && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0)
+const canSubmit = computed(() => store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && sampledIds.value.length > 0 && (isMarketing.value ? validContentCount.value : publishDate.value !== '' && selectedTopicIds.value.length > 0))
 const targetCountError = computed(() => targetCount.value !== '' && (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) ? '数量须为 1 至 1000 之间的整数' : '')
 
 watch(topicPageSize, () => { topicPage.value = 1 })
 watch(topicPageCount, count => { topicPage.value = Math.min(topicPage.value, count) })
 watch(selectedAccounts, () => { submitAccountPage.value = 1 })
 watch(selectedTopics, () => { submitTopicPage.value = 1 })
+watch(submitTopicPageSize, () => { submitTopicPage.value = 1 })
 
 function applyDefaultAccountSelection() {
   if (accountSelectionMode.value !== 'filter') return
@@ -208,18 +222,36 @@ watch(eligibleAccounts, () => { accountPage.value = 1 }, { flush: 'sync' })
 watch(accountPageSize, () => { accountPage.value = 1 })
 watch(accountPageCount, count => { accountPage.value = Math.min(accountPage.value, count) })
 
-watch([publishDate, () => store.databaseReady], () => {
+watch([publishDate, contentMode, () => store.databaseReady], () => {
   sampledIds.value = []
   accountPage.value = 1
   accountReview.value = false
   void loadAccountAvailability(true)
 }, { immediate: true, flush: 'sync' })
 
+watch(contentMode, () => {
+  selectedTopicIds.value = []
+  targetCount.value = ''
+  accountTypeFilter.value = isMarketing.value ? '认证' : ''
+  appliedAccountFilters.value = { ...appliedAccountFilters.value, accountType: accountTypeFilter.value }
+  importedAccountIds.value = []
+  importDataRowCount.value = 0
+  importMatchedCount.value = 0
+  importDuplicateRows.value = []; importUnmatchedRows.value = []; importPlannedRows.value = []
+  topicReview.value = false
+  marketingRequestId.value = createRequestId()
+})
+
 async function loadAccountAvailability(reselect = false): Promise<boolean> {
   const request = ++availabilityRequest
   const selectedDate = publishDate.value
   availabilityDate.value = ''
   availabilityError.value = ''
+  if (isMarketing.value) {
+    availabilityLoading.value = false
+    plannedAccountIds.value = []
+    return store.databaseReady
+  }
   availabilityLoading.value = !!selectedDate && store.databaseReady
   if (!selectedDate || !store.databaseReady) {
     plannedAccountIds.value = []
@@ -256,14 +288,19 @@ async function loadCatalog() {
 async function loadTasks() {
   tasksLoading.value = true
   try {
-    const rows = await api.manualTasks()
-    tasks.value = rows
+    const [rows, marketingRows] = await Promise.all([api.manualTasks(), api.marketingTasks()])
+    tasks.value = [...rows, ...marketingRows].sort((a, b) => b.created_at.localeCompare(a.created_at))
     error.value = ''
   } catch (exc) { error.value = exc instanceof Error ? exc.message : '\u8bfb\u53d6\u624b\u52a8\u7b56\u5212\u4efb\u52a1\u5931\u8d25' }
   finally { tasksLoading.value = false }
 }
 
-function openTaskDetails(task: ManualTaskSummary) {
+async function openTaskDetails(task: ManualTaskSummary) {
+  if (task.content_mode === 'marketing') {
+    try { marketingDetails.value = await api.marketingTaskDetails(task.task_code) }
+    catch (exc) { error.value = exc instanceof Error ? exc.message : '读取营销策划失败' }
+    return
+  }
   if (!task.batch_id) return
   void router.push({ path: '/results', query: { batch: String(task.batch_id), plan_type: 'manual', from: 'manual' } })
 }
@@ -289,6 +326,9 @@ onBeforeUnmount(() => {
 })
 
 function startCreate() {
+  contentMode.value = 'non_marketing'
+  contentPerAccount.value = ''
+  marketingRequestId.value = createRequestId()
   publishDate.value = ''
   targetCount.value = ''
   step.value = 1
@@ -440,7 +480,7 @@ async function importAccountsByIdentifier(file?: File) {
     let text = new TextDecoder('utf-8').decode(bytes)
     if (text.includes('\uFFFD')) text = new TextDecoder('gb18030').decode(bytes)
     if (!availabilityReady.value && !await loadAccountAvailability()) { error.value = '请先确认投放日期和账号策划状态'; return }
-    const result = recognizeAccountImport(text, accounts.value, plannedAccountSet.value)
+    const result = recognizeAccountImport(text, isMarketing.value ? accounts.value.filter(account => account.account_type === '认证' || (!account.account_type && account.certified === true)) : accounts.value, isMarketing.value ? new Set() : plannedAccountSet.value)
     accountSelectionMode.value = 'upload'
     importedAccountIds.value = result.identifiedIds
     sampledIds.value = result.selectedIds
@@ -463,7 +503,7 @@ async function importAccountsByIdentifier(file?: File) {
 function savePlanStep() {
   error.value = ''
   if (!taskName.value.trim()) { error.value = '请输入任务名称'; return }
-  if (!publishDate.value) { error.value = '请选择投放日期'; return }
+  if (isMarketing.value ? !validContentCount.value : !publishDate.value) { error.value = isMarketing.value ? '每账号生产数量须为 1 至 100 之间的整数' : '请选择投放日期'; return }
   step.value = 2
   void revealStepProgress()
 }
@@ -471,11 +511,11 @@ function savePlanStep() {
 async function saveAccountStep() {
   error.value = ''
   if (!taskName.value.trim()) { error.value = '请输入任务名称'; return }
-  if (!publishDate.value) { error.value = '请选择投放日期'; return }
+  if (!isMarketing.value && !publishDate.value) { error.value = '请选择投放日期'; return }
   if (accountSelectionMode.value === 'filter') {
     if (targetCount.value === '') { error.value = '请输入计划账号数量'; return }
     if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) { error.value = '计划账号数量须为 1 至 1000 之间的整数'; return }
-  } else {
+  } else if (accountSelectionMode.value === 'upload') {
     if (!importDataRowCount.value) { error.value = '请先导入账号模板'; return }
     targetCount.value = importDataRowCount.value
   }
@@ -508,7 +548,7 @@ function confirmAccountReview() {
     return
   }
   accountReview.value = true
-  step.value = 3
+  step.value = isMarketing.value ? 4 : 3
   void revealStepProgress()
 }
 
@@ -530,6 +570,13 @@ async function submit() {
   notice.value = ''
   eligibilityNotice.value = ''
   try {
+    if (isMarketing.value) {
+      await api.createMarketingTask({ request_id: marketingRequestId.value, task_name: taskName.value.trim(), account_ids: [...sampledIds.value], content_per_account: Number(contentPerAccount.value) })
+      mode.value = 'list'
+      notice.value = '营销策划已提交'
+      await loadTasks()
+      return
+    }
     const selectedCount = sampledIds.value.length
     if (!await loadAccountAvailability()) return
     if (sampledIds.value.length !== selectedCount) {
@@ -538,6 +585,7 @@ async function submit() {
       return
     }
     const preview = await api.previewManual({
+      content_mode: 'non_marketing',
       task_name: taskName.value.trim(),
       publish_date: publishDate.value,
       account_ids: sampledIds.value,
@@ -570,6 +618,7 @@ function closeEligibilityNotice(returnToSelection = false) {
 </script>
 
 <template>
+  <MarketingTaskDetails v-if="marketingDetails" :details="marketingDetails" @close="marketingDetails = null" />
   <ContentFlowDrawer v-if="contentFlowBatchId" :batch-id="contentFlowBatchId" @close="contentFlowBatchId = null" @changed="loadTasks" />
   <div class="page-head manual-page-head">
     <div class="manual-head-actions">
@@ -594,8 +643,8 @@ function closeEligibilityNotice(returnToSelection = false) {
 
   <template v-else>
     <div ref="stepperRef" class="manual-stepper" aria-label="手动策划流程">
-      <button v-for="(label, index) in ['创建策划', '选择账号', '选择选题', '确认策划']" :key="label" :class="['manual-step', { active: step === index + 1, done: step > index + 1 }]" type="button" :disabled="index + 1 > step || busy" :aria-current="step === index + 1 ? 'step' : undefined" @click="returnToStep(index + 1)">
-        <span>{{ step > index + 1 ? '✓' : index + 1 }}</span><b>{{ label }}</b>
+      <button v-for="(item, index) in workflowSteps" :key="item.number" :class="['manual-step', { active: step === item.number, done: step > item.number }]" type="button" :disabled="item.number > step || busy" :aria-current="step === item.number ? 'step' : undefined" @click="returnToStep(item.number)">
+        <span>{{ step > item.number ? '✓' : index + 1 }}</span><b>{{ item.label }}</b>
       </button>
     </div>
 
@@ -605,7 +654,9 @@ function closeEligibilityNotice(returnToSelection = false) {
       <div class="card-body manual-step-body">
         <div class="manual-create-meta">
           <label class="field"><span>任务名称 <em>*</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入任务名称" required /></label>
-          <label class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" required /></label>
+          <label class="field"><span>内容类型 <em>*</em></span><select v-model="contentMode"><option value="marketing">营销</option><option value="non_marketing">非营销</option></select></label>
+          <label v-if="isMarketing" class="field"><span>每账号生产数量 <em>*</em></span><input v-model.number="contentPerAccount" type="number" inputmode="numeric" min="1" max="100" placeholder="请输入每账号生产条数" required /></label>
+          <label v-else class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" required /></label>
         </div>
         <div class="footer-actions manual-step-actions"><button class="btn primary" type="button" :disabled="busy" @click="savePlanStep">下一步</button></div>
       </div>
@@ -625,7 +676,7 @@ function closeEligibilityNotice(returnToSelection = false) {
         <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters query-filter-grid" data-query-filters="standard">
           <label class="field"><span>生命周期</span><select v-model="lifecycleFilter"><option value="">全部</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label>
           <label class="field manual-follower-field"><span>粉丝量</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" inputmode="numeric" min="0" placeholder="起始粉丝量" /><i>至</i><input v-model.number="followersMax" type="number" inputmode="numeric" min="0" placeholder="截止粉丝量" /></div></label>
-          <label class="field"><span>账号类型</span><select v-model="accountTypeFilter"><option value="">全部</option><option value="认证">认证</option><option value="非认证">非认证</option></select></label>
+          <label class="field"><span>账号类型</span><select v-model="accountTypeFilter" :disabled="isMarketing"><option v-if="!isMarketing" value="">全部</option><option value="认证">认证</option><option v-if="!isMarketing" value="非认证">非认证</option></select></label>
           <label class="field"><span>属主组织</span><select v-model="organizationFilter"><option value="">全部</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label>
           <label class="field"><span>平台</span><select v-model="platformFilter"><option value="">全部</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label>
           <label class="field"><span>账号 ID 或昵称</span><input v-model="keyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
@@ -642,14 +693,22 @@ function closeEligibilityNotice(returnToSelection = false) {
             <button v-if="hasImportIssues" class="text-btn" type="button" @click="showImportIssues">查看识别结果</button>
           </div>
         </div>
-        <div class="manual-account-list-meta"><div class="manual-account-counts"><b>{{ accountSelectionMode === 'filter' ? '符合条件' : '导入识别' }} {{ matchingAccounts.length }} 个</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span><span>已选 <strong>{{ sampledIds.length }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
+        <div class="manual-account-list-meta"><div class="manual-account-counts"><b>{{ accountSelectionMode === 'filter' ? '符合条件' : '导入识别' }} {{ matchingAccounts.length }} 个</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span v-if="!isMarketing" class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span><span>已选 <strong>{{ sampledIds.length }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
         <LoadingSkeleton v-if="catalogLoading || !store.initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="&#x5168;&#x9009;&#x5F53;&#x524D;&#x7B5B;&#x9009;&#x4E0B;&#x7684;&#x53EF;&#x7B56;&#x5212;&#x8D26;&#x53F7;&#xFF08;&#x8DE8;&#x9875;&#xFF09;" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x8D26;&#x53F7;&#x6635;&#x79F0;</th><th>&#x8D26;&#x53F7; ID</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x5E73;&#x53F0;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x6570;</th></tr></thead><tbody>
           <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td>{{ account.account_id }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
           <tr v-if="visibleAccounts.length === 0"><td colspan="9"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
         </tbody></table></div>
         <ListPagination v-model:page="accountPage" v-model:page-size="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
         </fieldset>
-        <div class="footer-actions manual-step-actions"><div v-if="accountReview" class="manual-step-review" role="status"><span class="manual-step-review-icon" aria-hidden="true">✓</span><strong>&#x8BA1;&#x5212;&#x8D26;&#x53F7;&#x6570; <em>{{ targetCount }}</em> &#x4E2A;&#xFF0C;&#x5B9E;&#x9645;&#x9009;&#x62E9; <em>{{ sampledIds.length }}</em> &#x4E2A;</strong><span v-if="Number(targetCount) !== sampledIds.length" class="manual-count-difference">{{ sampledIds.length < Number(targetCount) ? '未达计划' : '超出计划' }} {{ Math.abs(Number(targetCount) - sampledIds.length) }} 个</span><button class="btn" type="button" @click="accountReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmAccountReview">下一步</button></div><button v-else class="btn primary" type="button" :disabled="!sampledIds.length || !availabilityReady || busy" @click="saveAccountStep">{{ availabilityLoading ? '查询中…' : '保存' }}</button></div>
+        <div class="footer-actions manual-step-actions">
+          <div v-if="accountReview" class="manual-step-review" role="status">
+            <span class="manual-step-review-icon" aria-hidden="true">✓</span>
+            <strong>计划账号数 <em>{{ targetCount }}</em> 个，实际选择 <em>{{ sampledIds.length }}</em> 个<template v-if="isMarketing">，每账号 <em>{{ contentPerAccount }}</em> 条</template></strong>
+            <span v-if="Number(targetCount) !== sampledIds.length" class="manual-count-difference">{{ sampledIds.length < Number(targetCount) ? '未达计划' : '超出计划' }} {{ Math.abs(Number(targetCount) - sampledIds.length) }} 个</span>
+            <button class="btn" type="button" @click="accountReview = false">返回调整</button><button class="btn primary" type="button" @click="confirmAccountReview">下一步</button>
+          </div>
+          <button v-else class="btn primary" type="button" :disabled="!sampledIds.length || !availabilityReady || busy" @click="saveAccountStep">{{ availabilityLoading ? '查询中…' : '保存' }}</button>
+        </div>
       </div>
     </section>
 
@@ -669,7 +728,6 @@ function closeEligibilityNotice(returnToSelection = false) {
             <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters query-filter-grid" data-query-filters="standard">
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898; ID <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID;&#x8FDB;&#x884C;&#x7CBE;&#x786E;&#x5339;&#x914D;">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID" /></label>
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898;&#x6807;&#x9898; <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;;&#x8FDB;&#x884C;&#x6A21;&#x7CCA;&#x641C;&#x7D22;">?</span></span><input v-model="topicQuery" type="search" placeholder="&#x8F93;&#x5165;&#x9009;&#x9898;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;" /></label>
-              <label class="field"><span>&#x9009;&#x9898;&#x7C7B;&#x578B;</span><select v-model="topicMarketingFilter"><option value="">&#x5168;&#x90E8;</option><option value="true">&#x8425;&#x9500;</option><option value="false">&#x975E;&#x8425;&#x9500;</option></select></label>
               <label class="field"><span>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</span><select v-model="contentType"><option value="">&#x5168;&#x90E8;</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x4EA7;&#x54C1;</span><select v-model="relatedProduct"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x6D3B;&#x52A8;</span><select v-model="relatedActivity"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
@@ -695,7 +753,7 @@ function closeEligibilityNotice(returnToSelection = false) {
       <div class="card-head"><div><h2>确认策划</h2></div></div>
       <div class="card-body manual-step-body">
         <div class="manual-submit-summary">
-          <div><span>任务名称</span><b>{{ taskName }}</b></div><div><span>投放日期</span><b>{{ publishDate }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个</small></b></div><div><span>选题</span><b class="manual-review-total">{{ selectedTopics.length }} <small>个</small></b></div>
+          <div><span>任务名称</span><b>{{ taskName }}</b></div><div><span>内容类型</span><b>{{ isMarketing ? '营销' : '非营销' }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个 · 计划 {{ targetCount }} 个</small></b></div><div v-if="isMarketing"><span>每账号生产数量</span><b class="manual-review-total">{{ contentPerAccount }} <small>条 · 共 {{ selectedAccounts.length * Number(contentPerAccount) }} 条</small></b></div>
         </div>
         <div class="manual-submit-groups">
           <section class="manual-submit-group">
@@ -713,13 +771,17 @@ function closeEligibilityNotice(returnToSelection = false) {
             </div>
             <ListPagination v-model:page="submitAccountPage" v-model:page-size="submitAccountPageSize" :total="selectedAccounts.length" unit="个账号" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" />
           </section>
-          <section class="manual-submit-group">
+          <section v-if="isMarketing" class="manual-submit-group">
+            <div class="manual-submit-group-head"><h3>选题</h3><span>待生成</span></div>
+            <div class="empty-state">待生成</div>
+          </section>
+          <section v-else class="manual-submit-group">
             <div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div>
             <div class="manual-submit-items manual-submit-table">
-              <table class="manual-submit-topic-table">
+              <table class="manual-submit-topic-table" data-native-confirm="true">
                 <colgroup><col style="width:21%" /><col style="width:27%" /><col style="width:34%" /><col style="width:18%" /></colgroup>
                 <thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>内容类型</th></tr></thead>
-                <tbody><tr v-for="(topic, index) in submitTopicsPage" :key="`${(submitTopicPage - 1) * submitTopicPageSize + index}-${topic.topic_id}`">
+                <tbody><tr v-for="topic in submitTopicsPage" :key="topic.topic_id">
                   <td><HoverHint :text="topic.topic_id" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate identifier">{{ topic.topic_id }}</span></HoverHint></td>
                   <td><HoverHint :text="topic.topic_title" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate topic-title">{{ topic.topic_title }}</span></HoverHint></td>
                   <td><HoverHint :text="topic.outline || '暂无选题大纲'" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate topic-outline">{{ topic.outline || '暂无选题大纲' }}</span></HoverHint></td>
@@ -729,7 +791,7 @@ function closeEligibilityNotice(returnToSelection = false) {
             </div>
             <ListPagination v-model:page="submitTopicPage" v-model:page-size="submitTopicPageSize" :total="selectedTopics.length" unit="个选题" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" />
           </section>
-        </div>        <div class="footer-actions manual-step-actions"><button class="btn" type="button" @click="returnToStep(3)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交手动策划' }}</button></div>
+        </div>        <div class="footer-actions manual-step-actions"><button class="btn" type="button" @click="returnToStep(isMarketing ? 2 : 3)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交人工策划' }}</button></div>
       </div>
     </section>
     </Transition>

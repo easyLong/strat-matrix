@@ -190,6 +190,7 @@ export interface ManualPlanInput {
 }
 
 export interface ManualPreviewInput {
+  content_mode?: 'non_marketing'
   task_name: string
   publish_date: string
   account_ids: string[]
@@ -220,7 +221,9 @@ export interface ManualTaskSummary {
   preview_code: string
   task_name: string
   batch_code: string
-  publish_date: string
+  publish_date: string | null
+  content_mode?: 'marketing' | 'non_marketing' | 'legacy'
+  content_per_account?: number
   planned_account_count: number
   result_count: number
   failure_count: number

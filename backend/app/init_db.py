@@ -115,6 +115,8 @@ def sync_column_comments(cursor, schema: str) -> int:
 
 
 def main() -> None:
+    from .init_manual_marketing_db import main as init_manual_marketing
+    init_manual_marketing()
     schema_path = Path(__file__).resolve().parents[1] / "schema.sql"
     source = schema_path.read_text(encoding="utf-8")
     source = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("--"))

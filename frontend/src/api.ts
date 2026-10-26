@@ -120,6 +120,10 @@ export const api = {
   submitManualPreview: (previewId: string) =>
     request<ManualTaskSummary>(`/manual-plans/previews/${encodeURIComponent(previewId)}/submit`, { method: 'POST' }),
   manualTasks: () => request<ManualTaskSummary[]>('/manual-plans/tasks'),
+  marketingTasks: () => request<ManualTaskSummary[]>('/manual-plans/marketing-tasks'),
+  createMarketingTask: (input: { request_id: string; task_name: string; account_ids: string[]; content_per_account: number }) =>
+    request<ManualTaskSummary>('/manual-plans/marketing-tasks', { method: 'POST', body: JSON.stringify(input) }),
+  marketingTaskDetails: (code: string) => request<{ task: ManualTaskSummary; accounts: AccountOption[]; topics: TopicOption[] }>(`/manual-plans/marketing-tasks/${encodeURIComponent(code)}`),
   planningCycles: () => request<PlanningCycleSummary[]>('/planning-cycles'),
   planningCycleItems: (cycleId: string, limit = 5000) =>
     request<AccountPlanRecord[]>(`/planning-cycles/${encodeURIComponent(cycleId)}/items?limit=${limit}`),

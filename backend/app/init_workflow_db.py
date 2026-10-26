@@ -8,6 +8,8 @@ from .system_config_catalog import CATALOG
 
 
 def main():
+    from .init_manual_marketing_db import main as init_manual_marketing
+    init_manual_marketing()
     init_pipeline()
     init_commit()
     source = (Path(__file__).resolve().parents[1] / 'content_production_schema.sql').read_text(encoding='utf-8')
