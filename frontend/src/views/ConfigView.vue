@@ -7,7 +7,7 @@ import { recommendedTaxonomy, tagNames } from '../topicTaxonomy'
 import { formatDateTime } from '../planningTime'
 import { api, type TagTaxonomyItem } from '../api'
 import { usePlanningStore } from '../store'
-import type { ConfigVersionSummary, LifecycleRule, StrategyConfig } from '../types'
+import type { ConfigVersionSummary, LifecycleCondition, LifecycleRule, StrategyConfig } from '../types'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -49,6 +49,7 @@ const scheduleDay = computed({ get: () => draft.value.schedule_day, set: value =
 const scheduleTime = computed({ get: () => draft.value.schedule_time, set: value => { draft.value.schedule_time = value } })
 const hotspotRatio = computed({ get: () => draft.value.hotspot_ratio, set: value => { draft.value.hotspot_ratio = value } })
 const lifecycleEditing = ref(false)
+const activeLifecycleStage = ref('')
 const remoteConfigPending = ref(false)
 let configSyncTimer: number | undefined
 let configSyncBusy = false
@@ -89,6 +90,11 @@ function coldStartSummary(rules: LifecycleRule[]) {
 
 function lifecycleRuleSummary(rule: LifecycleRule, rules: LifecycleRule[] = draft.value.lifecycle_rules) {
   if (rule.catchAll) return coldStartSummary(rules)
+  if (rule.condition_mode === 'grouped') return lifecycleGroups(rule).map(group => group.map(condition => {
+    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
+    const operator = lifecycleOperatorOptions.find(option => option.value === condition.operator)
+    return `${metric?.label ?? condition.field} ${operator?.label ?? condition.operator} ${condition.value} ${metric?.unit ?? ''}`
+  }).join(' 且 ')).map(group => `（${group}）`).join(' 或 ')
   return rule.conditions.map((condition, index) => {
     const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
     const operator = lifecycleOperatorOptions.find(option => option.value === condition.operator)
@@ -181,15 +187,42 @@ function displayVersionNumber(version: ConfigVersionSummary) {
   return index < 0 ? version.version : versions.value.length - index
 }
 
-function addLifecycleCondition(rule: LifecycleRule) {
-  if (rule.catchAll) return
-  rule.conditions.push({ field: 'valid_content_count', operator: 'gte', value: 0, join: 'AND' })
+function lifecycleGroups(rule: LifecycleRule): LifecycleCondition[][] {
+  const groups: LifecycleCondition[][] = []
+  for (const condition of rule.conditions) {
+    if (!groups.length || condition.join === 'OR') groups.push([])
+    groups[groups.length - 1]!.push(condition)
+  }
+  return groups
 }
-
-function removeLifecycleCondition(rule: LifecycleRule, index: number) {
-  if (rule.catchAll) return
-  if (rule.conditions.length <= 1) return
-  rule.conditions.splice(index, 1)
+function setLifecycleGroups(rule: LifecycleRule, groups: LifecycleCondition[][]) {
+  rule.conditions = groups.flatMap((group, groupIndex) => group.map((condition, index) => ({ ...condition, join: groupIndex > 0 && index === 0 ? 'OR' : 'AND' })))
+}
+function editLifecycleRule(rule: LifecycleRule) {
+  if (rule.condition_mode !== 'grouped') {
+    let groups: LifecycleCondition[][] = []
+    rule.conditions.forEach((condition, index) => {
+      if (index === 0 || condition.join === 'OR') groups.push([{ ...condition }])
+      else groups = groups.map(group => [...group, { ...condition }])
+    })
+    setLifecycleGroups(rule, groups)
+    rule.condition_mode = 'grouped'
+  }
+  activeLifecycleStage.value = rule.name
+}
+function addLifecycleCondition(rule: LifecycleRule, groupIndex: number) {
+  const groups = lifecycleGroups(rule)
+  groups[groupIndex]!.push({ field: 'valid_content_count', operator: 'gte', value: 0, join: 'AND' })
+  setLifecycleGroups(rule, groups)
+}
+function addLifecycleGroup(rule: LifecycleRule) {
+  setLifecycleGroups(rule, [...lifecycleGroups(rule), [{ field: 'valid_content_count', operator: 'gte', value: 0, join: 'OR' }]])
+}
+function removeLifecycleCondition(rule: LifecycleRule, groupIndex: number, conditionIndex: number) {
+  const groups = lifecycleGroups(rule)
+  groups[groupIndex]!.splice(conditionIndex, 1)
+  if (!groups[groupIndex]!.length) groups.splice(groupIndex, 1)
+  if (groups.length) setLifecycleGroups(rule, groups)
 }
 
 function togglePlanningDay(day: number) {
@@ -480,7 +513,27 @@ function confirmCancelEditing() {
       <div class="card-head"><div><h2>策划规则配置</h2></div></div>
       <div class="card-body">
         <div class="lifecycle-definition-head"><div><b>生命周期阶段判定</b></div></div>
-        <div class="lifecycle-definition-list"><div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition" :class="{ 'is-catch-all': rule.catchAll }"><div class="lifecycle-stage-name"><b>{{ rule.name }}</b></div><div v-if="rule.catchAll" class="lifecycle-catch-all">{{ coldStartDefinition }}</div><div v-else class="lifecycle-condition-list"><div v-for="(condition, index) in rule.conditions" :key="`${rule.name}-${index}`" class="lifecycle-condition-row"><select v-model="condition.field" :disabled="!lifecycleEditing" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><select v-model="condition.operator" :disabled="!lifecycleEditing" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model.number="condition.value" :disabled="!lifecycleEditing" type="number" step="1" aria-label="阈值" /><span class="condition-unit">{{ metricUnit(condition.field) }}</span><select v-if="index > 0" v-model="condition.join" :disabled="!lifecycleEditing" class="condition-join" aria-label="条件关系"><option value="AND">且</option><option value="OR">或</option></select><button v-if="lifecycleEditing && rule.conditions.length > 1" class="icon-btn condition-remove" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, index)">×</button></div><button v-if="lifecycleEditing" class="text-btn condition-add" type="button" @click="addLifecycleCondition(rule)">＋ 添加条件</button></div></div></div>
+        <div class="lifecycle-definition-list">
+          <div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition lifecycle-grouped-rule">
+            <div class="lifecycle-rule-heading"><b>{{ rule.name }}</b><span class="lifecycle-rule-summary">{{ lifecycleRuleSummary(rule) }}</span><button v-if="!rule.catchAll && lifecycleEditing" class="text-btn" type="button" @click="activeLifecycleStage === rule.name ? activeLifecycleStage = '' : editLifecycleRule(rule)">{{ activeLifecycleStage === rule.name ? '确认' : '编辑' }}</button></div>
+            <template v-if="!rule.catchAll && activeLifecycleStage === rule.name">
+              <template v-for="(group, groupIndex) in lifecycleGroups(rule)" :key="groupIndex">
+                <div v-if="groupIndex" class="lifecycle-or">或</div>
+                <div class="lifecycle-condition-group">
+                  <div v-for="(condition, conditionIndex) in group" :key="conditionIndex" class="lifecycle-group-row">
+                    <span v-if="conditionIndex" class="lifecycle-and">且</span><span v-else class="lifecycle-and-placeholder"></span>
+                    <select v-model="condition.field" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
+                    <select v-model="condition.operator" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
+                    <input v-model.number="condition.value" type="number" min="0" step="1" aria-label="阈值" /><span>{{ metricUnit(condition.field) }}</span>
+                    <button v-if="rule.conditions.length > 1" class="icon-btn" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, groupIndex, conditionIndex)">×</button>
+                  </div>
+                  <button class="text-btn" type="button" @click="addLifecycleCondition(rule, groupIndex)">＋ 添加且条件</button>
+                </div>
+              </template>
+              <button class="text-btn lifecycle-add-group" type="button" @click="addLifecycleGroup(rule)">＋ 添加或条件组</button>
+            </template>
+          </div>
+        </div>
         <div class="lifecycle-definition-head"><div><b>阶段经营目标</b></div></div>
         <div class="stage-table-wrap">
           <table class="stage-table"><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th><th>合计</th></tr></thead>
@@ -600,6 +653,9 @@ function confirmCancelEditing() {
 </template>
 
 <style scoped>
+.config-stack .lifecycle-grouped-rule{display:block;padding:12px 14px}
+.lifecycle-rule-heading{display:flex;align-items:center;gap:14px;min-height:32px}.lifecycle-rule-heading>b{flex:0 0 90px}.lifecycle-rule-heading .text-btn{margin-left:auto;white-space:nowrap}.lifecycle-rule-summary{flex:1;padding:7px 10px;border-radius:6px;background:var(--neutral-50);color:var(--neutral-600);font-size:12px;line-height:20px}
+.lifecycle-condition-group{margin:10px 0;padding:12px;border:1px solid var(--neutral-200);border-radius:7px}.lifecycle-group-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--neutral-500);font-size:12px}.lifecycle-group-row select,.lifecycle-group-row input{height:32px;padding:0 8px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface)}.lifecycle-group-row select:first-of-type{width:155px}.lifecycle-group-row select:nth-of-type(2){width:64px}.lifecycle-group-row input{width:86px}.lifecycle-and,.lifecycle-or{color:var(--primary-600);background:var(--primary-50);border-radius:12px;padding:3px 8px;font-size:12px}.lifecycle-and-placeholder{width:28px}.lifecycle-or{display:inline-block}.lifecycle-add-group{margin-top:4px}@media(max-width:600px){.lifecycle-rule-heading{flex-wrap:wrap}.lifecycle-rule-summary{flex-basis:100%;order:3}.lifecycle-group-row{flex-wrap:wrap}}
 .config-stack{gap:20px;margin-bottom:20px}
 .config-stack>.card{margin-bottom:0}
 .config-stack .card-head{padding:16px 24px}

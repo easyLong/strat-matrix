@@ -11,6 +11,7 @@ import type { AccountOption, AccountPlanRecord, BatchDetail, BatchSummary } from
 import { statusTone } from '../ui/status'
 import { productionStatusLabel } from '../ui/slotContentStatus'
 import { summarizeContentTypes } from '../ui/contentTypeStats'
+import { formatDateTime } from '../planningTime'
 
 type DetailMode = 'batch' | 'cycle' | 'account'
 type PlanningWeek = { start: string; end: string; items: AccountPlanRecord[] }
@@ -29,10 +30,14 @@ const props = withDefaults(defineProps<{
   batches: BatchSummary[]
   accountId?: string
   returnLabel?: string
-}>(), { mode: 'cycle', accountId: '', returnLabel: '' })
+  initialBatchesExpanded?: boolean
+  showCycleLink?: boolean
+}>(), { mode: 'cycle', accountId: '', returnLabel: '', initialBatchesExpanded: false, showCycleLink: false })
 
 const emit = defineEmits<{
   back: []
+  openBatch: [batch: BatchSummary]
+  viewCycle: []
 }>()
 
 const loading = ref(false)
@@ -42,11 +47,17 @@ const historyItems = ref<AccountPlanRecord[]>([])
 const accountCatalog = ref<AccountOption[]>([])
 const expandedAccounts = ref(new Set<string>())
 const filtersExpanded = ref(false)
+const batchesExpanded = ref(props.initialBatchesExpanded)
+const batchPage = ref(1)
+const batchPageSize = ref(10)
+const pagedCycleBatches = computed(() => props.batches.slice((batchPage.value - 1) * batchPageSize.value, batchPage.value * batchPageSize.value))
 const accountKeyword = ref('')
 const contentType = ref('all')
 const selectedPlan = ref<AccountPlanRecord | null>(null)
-const cycleFilter = ref('all')
-const appliedFilters = ref({ account: '', cycle: 'all', batch: 'all', planType: 'all', contentType: 'all' })
+const dateStart = ref('')
+const dateEnd = ref('')
+const dateFilterError = ref('')
+const appliedFilters = ref({ account: '', start: '', end: '', batch: 'all', planType: 'all', contentType: 'all' })
 const page = ref(1)
 const pageSize = ref(20)
 const historyPage = ref(1)
@@ -128,13 +139,13 @@ const allItems = computed<AccountPlanRecord[]>(() => isAccountMode.value ? histo
 }))))
 
 const contentTypes = computed(() => [...new Set(allItems.value.map(item => item.content_type).filter(Boolean))].sort())
-const cycleOptions = computed(() => [...new Set(allItems.value.map(item => weekStart(item.publish_date)))].sort().reverse())
 const filteredItems = computed(() => {
   const filters = appliedFilters.value
   const keyword = filters.account.trim().toLocaleLowerCase()
   return allItems.value.filter(item =>
     (!keyword || `${item.account_name} ${item.account_id}`.toLocaleLowerCase().includes(keyword)) &&
-    (filters.cycle === 'all' || weekStart(item.publish_date) === filters.cycle) &&
+    (!filters.start || item.publish_date >= filters.start) &&
+    (!filters.end || item.publish_date <= filters.end) &&
     (filters.batch === 'all' || String(item.batch_id) === filters.batch) &&
     (filters.planType === 'all' || item.plan_type === filters.planType) &&
     (filters.contentType === 'all' || item.content_type === filters.contentType),
@@ -177,6 +188,8 @@ const pagedAccountHistoryRows = computed(() => accountHistoryRows.value.slice(
   (historyPage.value - 1) * historyPageSize.value,
   historyPage.value * historyPageSize.value,
 ))
+const accountWeeks = computed(() => accountGroups.value.length ? weeksFor(accountGroups.value[0]!) : [])
+const pagedAccountWeeks = computed(() => accountWeeks.value.slice((historyPage.value - 1) * historyPageSize.value, historyPage.value * historyPageSize.value))
 
 function weeksFor(group: AccountGroup): PlanningWeek[] {
   const weeks = new Map<string, AccountPlanRecord[]>()
@@ -230,7 +243,7 @@ async function load(silent = false) {
     ])
     if (request !== loadRequest) return
     if (records.status === 'rejected') throw records.reason
-    if (isAccountMode.value) historyItems.value = records.value as AccountPlanRecord[]
+    if (isAccountMode.value) historyItems.value = (records.value as AccountPlanRecord[]).filter(item => item.account_id === props.accountId)
     else details.value = records.value as BatchDetail[]
     if (accounts.status === 'fulfilled') accountCatalog.value = accounts.value
     if (isAccountMode.value) expandedAccounts.value = new Set([props.accountId])
@@ -242,9 +255,15 @@ async function load(silent = false) {
 }
 
 function applyFilters() {
+  if (isAccountMode.value && dateStart.value && dateEnd.value && dateStart.value > dateEnd.value) {
+    dateFilterError.value = '开始日期不能晚于结束日期'
+    return
+  }
+  dateFilterError.value = ''
   appliedFilters.value = {
     account: isAccountMode.value ? '' : accountKeyword.value,
-    cycle: isAccountMode.value ? cycleFilter.value : 'all',
+    start: isAccountMode.value ? dateStart.value : '',
+    end: isAccountMode.value ? dateEnd.value : '',
     batch: isBatchMode.value ? String(currentBatch.value?.id) : 'all',
     planType: fixedPlanType.value ?? 'all',
     contentType: contentType.value,
@@ -256,7 +275,9 @@ function applyFilters() {
 watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => props.batches.map(batch => batch.id).join(',')], () => {
   accountKeyword.value = ''
   contentType.value = 'all'
-  cycleFilter.value = isAccountMode.value ? props.cycleStart || 'all' : props.cycleStart
+  dateStart.value = isAccountMode.value ? props.cycleStart : ''
+  dateEnd.value = isAccountMode.value && props.cycleStart ? weekEnd(props.cycleStart) : ''
+  dateFilterError.value = ''
   filtersExpanded.value = false
   applyFilters()
   expandedAccounts.value = new Set()
@@ -284,12 +305,13 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
         </div>
         <div v-else-if="isAccountMode" class="planning-detail-scope">
           <HoverHint text="账号" :show-icon="false" class="tag gray planning-context-tag"><span class="planning-scope-label">{{ scopeLabel }}</span></HoverHint>
-          <HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ appliedFilters.cycle === 'all' ? '全部周期' : cyclePeriodLabel(appliedFilters.cycle) }}</HoverHint>
+          <HoverHint text="投放日期" :show-icon="false" class="tag gray planning-context-tag">{{ appliedFilters.start || appliedFilters.end ? `${appliedFilters.start || '不限'} 至 ${appliedFilters.end || '不限'}` : '全部日期' }}</HoverHint>
         </div>
         <div v-else class="planning-detail-scope"><HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ scopeLabel }}</HoverHint></div>
       </div>
       <div class="planning-detail-actions">
         <button v-if="isBatchMode && currentBatch" class="btn" type="button" @click="contentFlowBatchId = currentBatch.id">查看内容流水</button>
+        <button v-if="isBatchMode && showCycleLink" class="btn" type="button" @click="emit('viewCycle')">返回周期全部批次</button>
         <button class="btn" type="button" @click="emit('back')">{{ backLabel }}</button>
       </div>
     </div>
@@ -299,14 +321,22 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
     <template v-else>
       <section class="planning-dashboard" aria-label="策划概览">
         <div><small>账号数</small><strong>{{ dashboard.accounts }}</strong></div>
-        <div><small>{{ isBatchMode ? '选题数' : '批次数' }}</small><strong>{{ isBatchMode ? dashboard.topics : dashboard.batches }}</strong></div>
+        <div><small>{{ isBatchMode ? '选题数' : '批次数' }}</small><strong>{{ isBatchMode ? dashboard.topics : isAccountMode ? dashboard.batches : batches.length }}</strong><button v-if="!isBatchMode && !isAccountMode" class="text-btn cycle-batch-toggle" type="button" :aria-expanded="batchesExpanded" aria-controls="cycle-batch-list" @click="batchesExpanded = !batchesExpanded">{{ batchesExpanded ? '收起批次' : '查看批次' }}</button></div>
         <div><small>策划总数</small><strong>{{ dashboard.plans }}</strong></div>
         <div><small>AI 策划</small><strong>{{ dashboard.autoPlans }}</strong></div>
         <div><small>人工策划</small><strong>{{ dashboard.manualPlans }}</strong></div>
       </section>
 
+      <section v-if="!isBatchMode && !isAccountMode && batchesExpanded" id="cycle-batch-list" class="cycle-batch-list">
+        <div class="cycle-batch-title"><b>本周期批次</b><span>{{ batches.length }} 个批次</span></div>
+        <div class="table-wrap"><table><thead><tr><th>批次</th><th>策划方式</th><th>账号数</th><th>策划状态</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody><tr v-for="batch in pagedCycleBatches" :key="batch.id"><td><div class="cycle-batch-identity"><b>{{ batch.task_name || '—' }}</b><small>{{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td><td>{{ batch.account_count }}</td><td>{{ batch.planning_status || batch.status }}</td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="emit('openBatch', batch)">查看策划</button></td></tr><tr v-if="!batches.length"><td colspan="6" class="empty-state">暂无批次</td></tr></tbody>
+        </table></div>
+        <ListPagination v-if="batches.length > 10" v-model:page="batchPage" v-model:page-size="batchPageSize" :total="batches.length" unit="个批次" />
+      </section>
+
       <section v-if="isBatchMode" class="batch-topic-types" aria-labelledby="batch-topic-types-title">
-        <h3 id="batch-topic-types-title">选题内容类型</h3>
+        <h3 id="batch-topic-types-title">选题二级分类</h3>
         <dl>
           <div v-for="type in topicTypeCounts" :key="type.name" :title="type.hint">
             <dt>{{ type.name }}</dt><dd :class="{ empty: type.count === 0 }">{{ type.count }}</dd>
@@ -321,34 +351,35 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
         </button>
         <div v-show="filtersExpanded" class="detail-filter-fields query-filter-grid" data-query-filters="compact">
           <label v-if="!isAccountMode"><span>账号 ID 或昵称</span><input v-model="accountKeyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
-          <label v-if="isAccountMode"><span>周期</span><select v-model="cycleFilter"><option value="all">全部周期</option><option v-for="value in cycleOptions" :key="value" :value="value">{{ cyclePeriodLabel(value) }}</option></select></label>
+          <label v-if="isAccountMode"><span>开始日期</span><input v-model="dateStart" type="date" :max="dateEnd || undefined" /></label>
+          <label v-if="isAccountMode"><span>结束日期</span><input v-model="dateEnd" type="date" :min="dateStart || undefined" /></label>
           <div class="query-filter-tail">
-                <label><span>内容类型</span><select v-model="contentType"><option value="all">全部内容类型</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+                <label><span>选题二级分类</span><select v-model="contentType"><option value="all">全部选题二级分类</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
                 <div class="query-filter-actions"><button class="btn primary detail-query-btn" type="button" @click="applyFilters">查询</button></div>
               </div>
         </div>
+        <p v-if="dateFilterError" class="inline-error" role="alert">{{ dateFilterError }}</p>
       </div>
 
       <template v-if="isAccountMode">
-        <div class="table-wrap account-plan-table-wrap">
-          <table class="account-plan-table" aria-label="账号策划列表">
-            <colgroup><col style="width:155px" /><col style="width:20%" /><col /><col style="width:90px" /><col style="width:110px" /><col style="width:240px" /><col style="width:100px" /></colgroup>
-            <thead><tr><th scope="col">投放日期 / 星期</th><th scope="col">选题标题</th><th scope="col">选题大纲</th><th scope="col">内容类型</th><th scope="col">策划方式</th><th scope="col">批次信息</th><th scope="col">内容状态</th></tr></thead>
-            <tbody>
-              <tr v-for="item in pagedAccountHistoryRows" :key="item.id">
-                <td class="account-plan-date">{{ item.publish_date }} {{ weekdayLabel(item.publish_date) }}</td>
-                <td class="account-plan-text">{{ item.topic_title || (item.topic_id ? '暂无选题标题' : '待定题') }}</td>
-                <td class="account-plan-text">{{ item.outline || '—' }}</td>
-                <td>{{ item.content_type || '—' }}</td>
-                <td>{{ item.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td>
-                <td class="account-plan-batch"><span>{{ batchById.get(item.batch_id)?.task_name || '未命名批次' }}</span><small>{{ item.batch_code || batchById.get(item.batch_id)?.batch_code || '—' }}</small></td>
-                <td>{{ productionStatusLabel(item) }}</td>
-              </tr>
-              <tr v-if="!accountHistoryRows.length"><td colspan="7" class="empty-state">暂无策划记录</td></tr>
-            </tbody>
-          </table>
+        <div v-if="accountGroups.length" class="planning-account-list">
+          <div v-for="week in pagedAccountWeeks" :key="week.start" class="planning-week-section">
+            <div class="planning-week-heading"><span>{{ cyclePeriodLabel(week.start) }} · {{ week.start }} 至 {{ week.end }}</span><span>{{ week.items.length }} 条策划</span></div>
+            <div class="planning-week-wrap"><div class="planning-week-grid">
+              <section v-for="day in daysFor(week)" :key="day.date" class="planning-day">
+                <header><div><b>{{ day.label }}</b><small>{{ day.weekday }}</small></div><span>{{ day.items.length }} 条</span></header>
+                <div v-if="day.items.length" class="planning-day-items">
+                  <button v-for="item in day.items" :key="item.id" type="button" class="planning-plan-card navigable" @click="selectedPlan = item">
+                    <div class="account-week-plan-tags"><span class="tag gray">{{ item.plan_type === 'manual' ? '人工策划' : '自动策划' }}</span><span :class="['tag', statusTone(productionStatusLabel(item))]">{{ productionStatusLabel(item) }}</span></div>
+                    <b>{{ item.topic_title || '待确定选题' }}</b><small>{{ item.content_type || '—' }}</small><span class="planning-plan-batch">{{ item.batch_code }}</span>
+                  </button>
+                </div><div v-else class="planning-day-empty">暂无计划</div>
+              </section>
+            </div></div>
+          </div>
         </div>
-        <ListPagination v-if="accountHistoryRows.length" v-model:page="historyPage" v-model:page-size="historyPageSize" :total="accountHistoryRows.length" unit="条" class="list-pagination-inset" />
+        <div v-else class="empty-state">暂无策划记录</div>
+        <ListPagination v-if="accountWeeks.length" v-model:page="historyPage" v-model:page-size="historyPageSize" :total="accountWeeks.length" unit="周" class="list-pagination-inset" />
       </template>
       <div v-else-if="accountGroups.length" class="planning-account-list">
         <article v-for="group in pagedAccountGroups" :key="group.account_id" :class="['planning-account-card', { expanded: expandedAccounts.has(group.account_id) }]">
@@ -361,11 +392,11 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
                   <span v-if="group.lifecycle_stage && group.lifecycle_stage !== '—'" class="tag purple">{{ group.lifecycle_stage }}</span>
                 </div>
                 <div class="planning-account-meta">
-                  <span>{{ group.account_id }}</span>
-                  <span v-if="group.profile?.organization">{{ group.profile.organization }}</span>
-                  <span v-if="group.profile?.um_no">UM {{ group.profile.um_no }}</span>
-                  <span v-if="group.profile?.platform">{{ group.profile.platform }}</span>
-                  <span class="planning-account-persona-inline"><b>人设</b>{{ group.profile?.persona || '未配置' }}</span>
+                  <span>账号 ID：{{ group.account_id || '—' }}</span>
+                  <span>属主 UM 号：{{ group.profile?.um_no || '—' }}</span>
+                  <span>所属组织：{{ group.profile?.organization || '—' }}</span>
+                  <span>平台：{{ group.profile?.platform || '—' }}</span>
+                  <span class="planning-account-persona-inline" :title="group.profile?.persona || '未配置'">人设：{{ group.profile?.persona || '未配置' }}</span>
                 </div>
               </div>
             </div>
@@ -412,6 +443,7 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
 </template>
 
 <style scoped>
+.cycle-batch-toggle{margin-top:3px;align-self:flex-start;font-size:12px}.cycle-batch-list{margin:0 20px 16px;border:1px solid var(--neutral-200);border-radius:8px;overflow:hidden}.cycle-batch-title{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--neutral-50);font-size:13px}.cycle-batch-title span,.cycle-batch-identity small{color:var(--neutral-500);font-size:12px}.cycle-batch-identity{display:flex;flex-direction:column;gap:3px}.cycle-batch-list table{min-width:720px}
 .batch-topic-types{margin:0 20px 16px;padding:0 0 4px}.batch-topic-types h3{margin:0 0 8px;color:var(--neutral-700);font-size:13px;line-height:22px;font-weight:600}.batch-topic-types dl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:20px;margin:0}.batch-topic-types dl>div{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--neutral-100)}.batch-topic-types dt{color:var(--neutral-500);font-size:12px;line-height:20px;overflow-wrap:anywhere}.batch-topic-types dd{flex:none;margin:0;color:var(--neutral-800);font-size:14px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums}.batch-topic-types dd.empty{color:var(--neutral-400);font-weight:400}
 @media(max-width:1200px){.batch-topic-types dl{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:980px){.batch-topic-types{margin:0 12px 16px}.batch-topic-types dl{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:16px}}@media(max-width:580px){.batch-topic-types dl{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px}}
 .account-plan-table-wrap{margin:0 20px 20px}.account-plan-table{table-layout:fixed;min-width:1180px}.account-plan-table th,.account-plan-table td{padding:14px 12px;vertical-align:top;line-height:22px}.account-plan-table td{color:var(--neutral-700)}.account-plan-date{white-space:nowrap;font-variant-numeric:tabular-nums}.account-plan-text{white-space:pre-wrap;overflow-wrap:anywhere}.account-plan-batch{overflow-wrap:anywhere}.account-plan-batch>span{display:block}.account-plan-batch>small{margin-top:3px;font-size:12px;line-height:18px}.account-plan-table .empty-state{text-align:center;padding:32px 12px;color:var(--neutral-400)}

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS godp_manual_marketing_task (
     content_per_account INT NOT NULL COMMENT '每个认证账号要求生产的营销内容条数',
     account_count INT NOT NULL COMMENT '本次实际选择的去重认证账号数',
     account_snapshot_json LONGTEXT NOT NULL COMMENT '提交时校验后的账号信息快照JSON数组',
+    topic_snapshot_json LONGTEXT NULL COMMENT '提交时选中的选题信息快照JSON数组',
     status VARCHAR(24) NOT NULL DEFAULT '待处理' COMMENT '营销生产需求处理状态，默认待处理，不代表内容已生成或已过审',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     create_by VARCHAR(50) NOT NULL DEFAULT '运营人员' COMMENT '创建人',

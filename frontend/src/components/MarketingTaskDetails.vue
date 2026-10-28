@@ -2,9 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AccountTypeBadge from './AccountTypeBadge.vue'
 import ListPagination from './ListPagination.vue'
-import type { AccountOption, ManualTaskSummary } from '../types'
+import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
 
-const props = defineProps<{ details: { task: ManualTaskSummary; accounts: AccountOption[] } }>()
+const props = defineProps<{ details: { task: ManualTaskSummary; accounts: AccountOption[]; topics: TopicOption[] } }>()
 const emit = defineEmits<{ close: [] }>()
 const page = ref(1)
 const size = ref(20)
@@ -32,7 +32,7 @@ onBeforeUnmount(() => { document.removeEventListener('keydown', keyboard); previ
         <div class="marketing-detail-counts"><span>账号数 <b>{{ details.accounts.length }}</b></span><span>每账号 <b>{{ details.task.content_per_account }}</b> 条</span><span>总生产数量 <b>{{ details.task.content_total_count }}</b> 条</span><span class="tag gray">{{ details.task.status }}</span></div>
         <div class="table-wrap"><table><thead><tr><th>账号昵称</th><th>账号 ID</th><th>属主 UM 号</th><th>账号类型</th></tr></thead><tbody><tr v-for="account in rows" :key="account.account_id"><td>{{ account.account_name }}</td><td>{{ account.account_id }}</td><td>{{ account.um_no || '—' }}</td><td><AccountTypeBadge type="认证" /></td></tr></tbody></table></div>
         <ListPagination v-model:page="page" v-model:page-size="size" :total="details.accounts.length" unit="个账号" />
-        <section><h3>选题</h3><div class="empty-state">待生成</div></section>
+        <section><h3>选题</h3><div v-if="details.topics.length" class="table-wrap"><table><thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>选题二级分类</th></tr></thead><tbody><tr v-for="topic in details.topics" :key="topic.topic_id"><td>{{ topic.topic_id }}</td><td>{{ topic.topic_title }}</td><td>{{ topic.outline || '—' }}</td><td>{{ topic.content_type || '—' }}</td></tr></tbody></table></div><div v-else class="empty-state">暂无选题</div></section>
       </section>
     </div>
   </Teleport>

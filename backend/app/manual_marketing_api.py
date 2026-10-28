@@ -19,6 +19,7 @@ class MarketingTaskInput(BaseModel):
     request_id: UUID
     task_name: str = Field(min_length=1, max_length=120)
     account_ids: list[str] = Field(min_length=1, max_length=1000)
+    topic_ids: list[str] = Field(min_length=1, max_length=100)
     content_per_account: int = Field(ge=1, le=100, strict=True)
 
     @field_validator('task_name')
@@ -40,7 +41,7 @@ def summary(row):
     return dict(
         id=-row['id'], task_code=row['task_code'], preview_code='', task_name=row['task_name'],
         batch_code=row['task_code'], publish_date=None, planned_account_count=row['account_count'],
-        result_count=0, failure_count=0, topic_count=0, status=row['status'], planning_status=row['status'],
+        result_count=0, failure_count=0, topic_count=len(json.loads(row.get('topic_snapshot_json') or '[]')), status=row['status'], planning_status=row['status'],
         content_status='待生产', content_failed_count=0, content_completed_count=0,
         content_total_count=row['account_count'] * row['content_per_account'],
         content_completed_account_count=0, failure_reason='', batch_id=None, last_error='',
@@ -56,10 +57,10 @@ def database_error(exc):
 @router.post('', response_model=ManualTaskSummary, status_code=201)
 def create_marketing_task(payload: MarketingTaskInput):
     # Import at call time: the account catalog applies the existing source eligibility rules.
-    from .main import list_accounts
+    from .main import list_accounts, list_topics
 
     canonical = json.dumps({'task_name': payload.task_name, 'account_ids': sorted(payload.account_ids),
-                            'content_per_account': payload.content_per_account}, sort_keys=True)
+                            'topic_ids': payload.topic_ids, 'content_per_account': payload.content_per_account}, sort_keys=True)
     fingerprint = hashlib.sha256(canonical.encode()).hexdigest()
     request_id = str(payload.request_id)
     try:
@@ -74,6 +75,10 @@ def create_marketing_task(payload: MarketingTaskInput):
             selected = [catalog.get(account_id) for account_id in payload.account_ids]
             if any(row is None for row in selected):
                 raise HTTPException(status_code=409, detail='部分账号已停用或不存在，请重新选择')
+            topic_catalog = {row['topic_id']: row for row in list_topics(limit=1000) if not row.get('is_marketing')}
+            topics = [topic_catalog.get(topic_id) for topic_id in payload.topic_ids]
+            if any(topic is None for topic in topics):
+                raise HTTPException(status_code=409, detail='部分选题已停用或不存在，请重新选择')
             if any((row.get('account_type') or ('认证' if row.get('certified') is True else '')) != '认证'
                    for row in selected):
                 raise HTTPException(status_code=422, detail='营销内容仅支持认证账号，请重新选择')
@@ -84,10 +89,10 @@ def create_marketing_task(payload: MarketingTaskInput):
             if len(cursor.fetchall()) != len(selected):
                 raise HTTPException(status_code=409, detail='账号状态已变化，请重新选择')
             cursor.execute('INSERT INTO godp_manual_marketing_task '
-                           '(task_code,request_id,request_hash,task_name,content_per_account,account_count,account_snapshot_json) '
-                           'VALUES (%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',
+                           '(task_code,request_id,request_hash,task_name,content_per_account,account_count,account_snapshot_json,topic_snapshot_json) '
+                           'VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',
                            ('MAN-MKT-' + uuid4().hex.upper(), request_id, fingerprint, payload.task_name,
-                            payload.content_per_account, len(selected), json.dumps(selected, ensure_ascii=False)))
+                            payload.content_per_account, len(selected), json.dumps(selected, ensure_ascii=False), json.dumps(topics, ensure_ascii=False, default=str)))
             cursor.execute('SELECT * FROM godp_manual_marketing_task WHERE request_id=%s', (request_id,))
             row = cursor.fetchone()
             if row['request_hash'] != fingerprint:
@@ -117,6 +122,6 @@ def marketing_task_details(task_code: str):
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail='营销任务不存在')
-            return {'task': summary(row), 'accounts': json.loads(row['account_snapshot_json']), 'topics': []}
+            return {'task': summary(row), 'accounts': json.loads(row['account_snapshot_json']), 'topics': json.loads(row.get('topic_snapshot_json') or '[]')}
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise database_error(exc) from exc

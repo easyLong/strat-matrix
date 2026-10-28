@@ -41,6 +41,21 @@ def matches(condition: LifecycleCondition, metrics: dict[str, int | float]) -> b
     }[condition.operator]
 
 
+def matches_rule(rule, metrics: dict[str, int | float]) -> bool:
+    if rule.condition_mode == 'grouped':
+        groups: list[list[LifecycleCondition]] = []
+        for condition in rule.conditions:
+            if not groups or condition.join == 'OR':
+                groups.append([])
+            groups[-1].append(condition)
+        return any(all(matches(condition, metrics) for condition in group) for group in groups)
+    passed = matches(rule.conditions[0], metrics)
+    for condition in rule.conditions[1:]:
+        result = matches(condition, metrics)
+        passed = passed and result if condition.join == 'AND' else passed or result
+    return passed
+
+
 def lifecycle_stage(config: StrategyConfig, metrics: dict[str, int | float]) -> str:
     rules = {rule.name: rule for rule in config.lifecycle_rules}
     growth = rules.get("流量增长期")
@@ -51,11 +66,7 @@ def lifecycle_stage(config: StrategyConfig, metrics: dict[str, int | float]) -> 
     for rule in config.lifecycle_rules:
         if rule.catchAll or rule.name in {"流量增长期", "冷启动期"}:
             continue
-        passed = matches(rule.conditions[0], metrics)
-        for condition in rule.conditions[1:]:
-            result = matches(condition, metrics)
-            passed = passed and result if condition.join == "AND" else passed or result
-        if passed:
+        if matches_rule(rule, metrics):
             return rule.name
 
     if growth and cold:
@@ -66,11 +77,7 @@ def lifecycle_stage(config: StrategyConfig, metrics: dict[str, int | float]) -> 
         ]
         if low_boundary and any(metrics[condition.field] < condition.value for condition in low_boundary):
             return cold.name
-        passed = matches(growth.conditions[0], metrics)
-        for condition in growth.conditions[1:]:
-            result = matches(condition, metrics)
-            passed = passed and result if condition.join == "AND" else passed or result
-        if passed:
+        if matches_rule(growth, metrics):
             return growth.name
     if cold:
         return cold.name

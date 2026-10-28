@@ -23,6 +23,7 @@ class LifecycleRule(BaseModel):
     name: str
     conditions: list[LifecycleCondition] = Field(default_factory=list)
     catchAll: bool = False
+    condition_mode: Literal['legacy', 'grouped'] = 'legacy'
 
 
 def default_lifecycle_rules() -> list[LifecycleRule]:

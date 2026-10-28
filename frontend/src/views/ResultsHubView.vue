@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ContentProgress from '../components/ContentProgress.vue'
 import ListPagination from '../components/ListPagination.vue'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
+import PlanningExport from '../components/PlanningExport.vue'
 import { api } from '../api'
 import { formatDateTime } from '../planningTime'
 import { usePlanningStore } from '../store'
@@ -51,6 +52,7 @@ const showingAccountDetail = computed(() => !showingBatchDetail.value && Boolean
 const showingPeriodDetail = computed(() => !showingBatchDetail.value && !showingAccountDetail.value && Boolean(requestedCycle.value))
 const dimension = computed<ResultDimension>(() => showingAccountDetail.value ? 'account' : route.query.dimension === 'period' || showingBatchDetail.value || showingPeriodDetail.value ? 'period' : 'account')
 const fromManualTask = computed(() => showingBatchDetail.value && route.query.from === 'manual')
+const fromCycleDetail = computed(() => showingBatchDetail.value && route.query.from === 'cycle' && Boolean(requestedCycle.value))
 
 function cycleWeekStart(date: string) {
   const value = new Date(`${date}T00:00:00Z`)
@@ -171,7 +173,16 @@ function openBatch(batch: BatchSummary, cycleStart?: string) {
 
 function returnFromBatchDetail() {
   if (fromManualTask.value) void router.push('/manual')
+  else if (fromCycleDetail.value) void router.push({ path: '/results', query: { dimension: 'period', cycle: requestedCycle.value, show_batches: '1' } })
   else returnToPeriodList()
+}
+
+function openBatchFromCycle(batch: BatchSummary) {
+  void router.push({ path: '/results', query: { dimension: 'period', cycle: requestedCycle.value, batch: String(batch.id), from: 'cycle' } })
+}
+
+function returnToBatchCycle() {
+  if (selectedBatch.value) void router.push({ path: '/results', query: { dimension: 'period', cycle: cycleWeekStart(selectedBatch.value.cycle_start), show_batches: '1' } })
 }
 
 async function loadBatches() {
@@ -225,8 +236,10 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
       :cycle-start="cycleWeekStart(selectedBatch.cycle_start)"
       :cycle-end="cycleWeekEnd(selectedBatch.cycle_start)"
       :batches="[selectedBatch]"
-      :return-label="fromManualTask ? '返回任务列表' : '返回时间列表'"
+      :return-label="fromManualTask ? '返回任务列表' : fromCycleDetail ? '返回周期全部批次' : '返回时间列表'"
+      :show-cycle-link="!fromCycleDetail"
       @back="returnFromBatchDetail"
+      @view-cycle="returnToBatchCycle"
     />
     <section v-else-if="showingBatchDetail" class="card"><div class="empty-state"><b>未找到该批次</b></div></section>
 
@@ -236,7 +249,9 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
       :cycle-start="selectedPeriod.cycleStart"
       :cycle-end="selectedPeriod.cycleEnd"
       :batches="selectedPeriod.batches"
+      :initial-batches-expanded="route.query.show_batches === '1'"
       @back="returnToPeriodList"
+      @open-batch="openBatchFromCycle"
     />
     <section v-else-if="showingPeriodDetail" class="card"><div class="empty-state"><b>未找到该策划周期</b></div></section>
 
@@ -282,6 +297,7 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
                   <td><div class="period-actions">
                     <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
                     <button class="text-btn" type="button" @click="openPeriod(period)">查看策划</button>
+                    <PlanningExport inline :batches="period.batches" :filename="`策划明细_${period.cycleStart}_${period.cycleEnd}.csv`" />
                   </div></td>
                 </tr>
                 <tr v-if="expandedPeriod === period.cycleStart" class="period-expansion-row">
@@ -299,7 +315,7 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
                         <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
                         <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
                         <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
-                        <td><button class="text-btn" type="button" @click="openBatch(batch, period.cycleStart)">查看策划</button></td>
+                        <td><div class="period-actions"><button class="text-btn" type="button" @click="openBatch(batch, period.cycleStart)">查看策划</button><PlanningExport inline :batches="[batch]" :filename="`策划明细_${batch.batch_code}.csv`" /></div></td>
                       </tr></tbody>
                     </table></div></div>
                   </td>

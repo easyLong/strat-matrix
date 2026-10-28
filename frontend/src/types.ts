@@ -15,6 +15,7 @@ export interface LifecycleRule {
   name: string
   conditions: LifecycleCondition[]
   catchAll: boolean
+  condition_mode?: 'legacy' | 'grouped'
 }
 
 export interface StrategyConfig {

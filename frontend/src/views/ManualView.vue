@@ -29,9 +29,7 @@ const isMarketing = computed(() => contentMode.value === 'marketing')
 const contentPerAccount = ref<number | ''>('')
 const marketingRequestId = ref('')
 const marketingDetails = ref<Awaited<ReturnType<typeof api.marketingTaskDetails>> | null>(null)
-const workflowSteps = computed(() => isMarketing.value
-  ? [{ number: 1, label: '创建策划' }, { number: 2, label: '选择账号' }, { number: 4, label: '确认策划' }]
-  : [{ number: 1, label: '创建策划' }, { number: 2, label: '选择账号' }, { number: 3, label: '选择选题' }, { number: 4, label: '确认策划' }])
+const workflowSteps = computed(() => [{ number: 1, label: '创建策划' }, { number: 2, label: '选择账号' }, { number: 3, label: '选择选题' }, { number: 4, label: '确认策划' }])
 const validContentCount = computed(() => Number.isInteger(contentPerAccount.value) && Number(contentPerAccount.value) >= 1 && Number(contentPerAccount.value) <= 100)
 const publishDate = ref('')
 const targetCount = ref<number | ''>('')
@@ -52,6 +50,7 @@ const contentFlowBatchId = ref<number | null>(null)
 const sampledIds = ref<string[]>([])
 watch([taskName, contentPerAccount, sampledIds], () => { marketingRequestId.value = createRequestId() }, { flush: 'sync' })
 const selectedTopicIds = ref<string[]>([])
+watch(selectedTopicIds, () => { marketingRequestId.value = createRequestId() }, { flush: 'sync' })
 const topicIdFilter = ref('')
 const topicQuery = ref('')
 const topicMarketingFilter = ref('')
@@ -198,7 +197,7 @@ const submitTopicsPage = computed(() => selectedTopics.value.slice((submitTopicP
 const accountSelectionPool = computed(() => availabilityReady.value ? matchingAccounts.value.filter(account => !isAccountPlanned(account.account_id)) : [])
 const allAccountsSelected = computed(() => accountSelectionPool.value.length > 0 && accountSelectionPool.value.every(account => sampledIds.value.includes(account.account_id)))
 const someAccountsSelected = computed(() => !allAccountsSelected.value && accountSelectionPool.value.some(account => sampledIds.value.includes(account.account_id)))
-const canSubmit = computed(() => store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && sampledIds.value.length > 0 && (isMarketing.value ? validContentCount.value : publishDate.value !== '' && selectedTopicIds.value.length > 0))
+const canSubmit = computed(() => store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0 && (isMarketing.value ? validContentCount.value : publishDate.value !== ''))
 const targetCountError = computed(() => targetCount.value !== '' && (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) ? '数量须为 1 至 1000 之间的整数' : '')
 
 watch(topicPageSize, () => { topicPage.value = 1 })
@@ -563,7 +562,7 @@ function confirmAccountReview() {
     return
   }
   accountReview.value = true
-  step.value = isMarketing.value ? 4 : 3
+  step.value = 3
   void revealStepProgress()
 }
 
@@ -586,7 +585,7 @@ async function submit() {
   eligibilityNotice.value = ''
   try {
     if (isMarketing.value) {
-      await api.createMarketingTask({ request_id: marketingRequestId.value, task_name: taskName.value.trim(), account_ids: [...sampledIds.value], content_per_account: Number(contentPerAccount.value) })
+      await api.createMarketingTask({ request_id: marketingRequestId.value, task_name: taskName.value.trim(), account_ids: [...sampledIds.value], topic_ids: [...selectedTopicIds.value], content_per_account: Number(contentPerAccount.value) })
       mode.value = 'list'
       notice.value = '营销策划已提交'
       await loadTasks()
@@ -669,7 +668,7 @@ function closeEligibilityNotice(returnToSelection = false) {
       <div class="card-body manual-step-body">
         <div class="manual-create-meta">
           <label class="field"><span>任务名称 <em>*</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入任务名称" required /></label>
-          <label class="field"><span>内容类型 <em>*</em></span><select v-model="contentMode"><option value="marketing">营销</option><option value="non_marketing">非营销</option></select></label>
+          <label class="field"><span>选题类型 <em>*</em></span><select v-model="contentMode"><option value="marketing">营销</option><option value="non_marketing">非营销</option></select></label>
           <label v-if="isMarketing" class="field"><span>每账号生产数量 <em>*</em></span><input v-model.number="contentPerAccount" type="number" inputmode="numeric" min="1" max="100" placeholder="请输入每账号生产条数" required /></label>
           <label v-else class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" required /></label>
         </div>
@@ -743,7 +742,7 @@ function closeEligibilityNotice(returnToSelection = false) {
             <div id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters query-filter-grid" data-query-filters="standard">
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898; ID <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID;&#x8FDB;&#x884C;&#x7CBE;&#x786E;&#x5339;&#x914D;">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="&#x8F93;&#x5165;&#x5B8C;&#x6574;&#x9009;&#x9898; ID" /></label>
               <label class="field"><span class="field-label-with-tip">&#x9009;&#x9898;&#x6807;&#x9898; <span class="field-help-tip" tabindex="0" title="&#x8F93;&#x5165;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;;&#x8FDB;&#x884C;&#x6A21;&#x7CCA;&#x641C;&#x7D22;">?</span></span><input v-model="topicQuery" type="search" placeholder="&#x8F93;&#x5165;&#x9009;&#x9898;&#x6807;&#x9898;&#x5173;&#x952E;&#x8BCD;" /></label>
-              <label class="field"><span>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</span><select v-model="contentType"><option value="">&#x5168;&#x90E8;</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
+              <label class="field"><span>选题二级分类</span><select v-model="contentType"><option value="">&#x5168;&#x90E8;</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x4EA7;&#x54C1;</span><select v-model="relatedProduct"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>&#x5173;&#x8054;&#x6D3B;&#x52A8;</span><select v-model="relatedActivity"><option value="">&#x5168;&#x90E8;</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
               <div class="query-filter-tail">
@@ -753,7 +752,7 @@ function closeEligibilityNotice(returnToSelection = false) {
             </div>
             <div class="manual-topic-list-meta"><b>&#x7B26;&#x5408;&#x6761;&#x4EF6; {{ filteredTopics.length }} &#x4E2A;</b></div>
             <LoadingSkeleton v-if="catalogLoading || !store.initialized" />
-            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th class="manual-topic-checkbox-cell">选择</th><th>&#x9009;&#x9898; ID</th><th>&#x9009;&#x9898;&#x6807;&#x9898;</th><th>&#x9009;&#x9898;&#x5927;&#x7EB2;</th><th>&#x9009;&#x9898;&#x7C7B;&#x578B;</th><th>&#x5185;&#x5BB9;&#x7C7B;&#x578B;</th><th>&#x5173;&#x8054;&#x4EA7;&#x54C1;</th><th>&#x5173;&#x8054;&#x6D3B;&#x52A8;</th><th>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</th><th>&#x6709;&#x6548;&#x671F;</th></tr></thead><tbody>
+            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th class="manual-topic-checkbox-cell">选择</th><th>&#x9009;&#x9898; ID</th><th>&#x9009;&#x9898;&#x6807;&#x9898;</th><th>&#x9009;&#x9898;&#x5927;&#x7EB2;</th><th>&#x9009;&#x9898;&#x7C7B;&#x578B;</th><th>选题二级分类</th><th>&#x5173;&#x8054;&#x4EA7;&#x54C1;</th><th>&#x5173;&#x8054;&#x6D3B;&#x52A8;</th><th>&#x5173;&#x8054;&#x5C5E;&#x5730;&#x70ED;&#x70B9;</th><th>&#x6709;&#x6548;&#x671F;</th></tr></thead><tbody>
               <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-disabled="topicReview || (!selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100) || undefined" @click="toggleTopicRow(topic.topic_id, $event)" @keydown.enter.self.prevent="toggleTopicRow(topic.topic_id, $event)" @keydown.space.self.prevent="toggleTopicRow(topic.topic_id, $event)"><td class="manual-topic-checkbox-cell"><input type="checkbox" :checked="selectedTopicIds.includes(topic.topic_id)" :disabled="topicReview || (!selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100)" :aria-label="`选择选题 ${topic.topic_title}`" @change="setTopicSelected(topic.topic_id, ($event.target as HTMLInputElement).checked)" /></td><td>{{ topic.topic_id }}</td><td><HoverHint :text="topic.topic_title" :show-icon="false" class="manual-topic-title-tooltip"><span class="manual-topic-title-value">{{ topic.topic_title }}</span></HoverHint></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '&#x4E0D;&#x9650;' }}<i>&#x81F3;</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '&#x4E0D;&#x9650;' }}</span></td></tr>
               <tr v-if="filteredTopics.length === 0"><td colspan="10"><div class="empty-state">&#x6CA1;&#x6709;&#x7B26;&#x5408;&#x6761;&#x4EF6;&#x7684;&#x53EF;&#x7528;&#x9009;&#x9898;</div></td></tr>
             </tbody></table></div>
@@ -768,7 +767,7 @@ function closeEligibilityNotice(returnToSelection = false) {
       <div class="card-head"><div><h2>确认策划</h2></div></div>
       <div class="card-body manual-step-body">
         <div class="manual-submit-summary">
-          <div><span>任务名称</span><b>{{ taskName }}</b></div><div><span>内容类型</span><b>{{ isMarketing ? '营销' : '非营销' }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个 · 计划 {{ targetCount }} 个</small></b></div><div v-if="isMarketing"><span>每账号生产数量</span><b class="manual-review-total">{{ contentPerAccount }} <small>条 · 共 {{ selectedAccounts.length * Number(contentPerAccount) }} 条</small></b></div>
+          <div><span>任务名称</span><b>{{ taskName }}</b></div><div><span>选题类型</span><b>{{ isMarketing ? '营销' : '非营销' }}</b></div><div><span>策划账号</span><b class="manual-review-total">{{ selectedAccounts.length }} <small>个 · 计划 {{ targetCount }} 个</small></b></div><div v-if="isMarketing"><span>每账号生产数量</span><b class="manual-review-total">{{ contentPerAccount }} <small>条 · 共 {{ selectedAccounts.length * Number(contentPerAccount) }} 条</small></b></div>
         </div>
         <div class="manual-submit-groups">
           <section class="manual-submit-group">
@@ -786,16 +785,12 @@ function closeEligibilityNotice(returnToSelection = false) {
             </div>
             <ListPagination v-model:page="submitAccountPage" v-model:page-size="submitAccountPageSize" :total="selectedAccounts.length" unit="个账号" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" />
           </section>
-          <section v-if="isMarketing" class="manual-submit-group">
-            <div class="manual-submit-group-head"><h3>选题</h3><span>待生成</span></div>
-            <div class="empty-state">待生成</div>
-          </section>
-          <section v-else class="manual-submit-group">
+          <section class="manual-submit-group">
             <div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div>
             <div class="manual-submit-items manual-submit-table">
               <table class="manual-submit-topic-table" data-native-confirm="true">
                 <colgroup><col style="width:21%" /><col style="width:27%" /><col style="width:34%" /><col style="width:18%" /></colgroup>
-                <thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>内容类型</th></tr></thead>
+                <thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>选题二级分类</th></tr></thead>
                 <tbody><tr v-for="topic in submitTopicsPage" :key="topic.topic_id">
                   <td><HoverHint :text="topic.topic_id" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate identifier">{{ topic.topic_id }}</span></HoverHint></td>
                   <td><HoverHint :text="topic.topic_title" :show-icon="false" overflow-only class="manual-submit-tooltip"><span class="manual-submit-truncate topic-title">{{ topic.topic_title }}</span></HoverHint></td>
@@ -806,7 +801,7 @@ function closeEligibilityNotice(returnToSelection = false) {
             </div>
             <ListPagination v-model:page="submitTopicPage" v-model:page-size="submitTopicPageSize" :total="selectedTopics.length" unit="个选题" :page-size-options="[10, 20, 50]" class="manual-submit-pagination" />
           </section>
-        </div>        <div class="footer-actions manual-step-actions"><button class="btn" type="button" @click="returnToStep(isMarketing ? 2 : 3)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交人工策划' }}</button></div>
+        </div>        <div class="footer-actions manual-step-actions"><button class="btn" type="button" @click="returnToStep(3)">上一步</button><button class="btn primary" type="button" :disabled="!canSubmit" @click="submit"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '正在提交…' : '提交人工策划' }}</button></div>
       </div>
     </section>
     </Transition>

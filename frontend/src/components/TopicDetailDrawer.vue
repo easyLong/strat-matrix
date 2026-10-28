@@ -34,7 +34,7 @@ onBeforeUnmount(() => { requestId++; document.removeEventListener('keydown', key
 </script>
 <template>
   <Teleport to="body"><div class="drawer-mask topic-detail-mask" @click.self="emit('close')"><aside ref="panel" class="drawer topic-detail-drawer" role="dialog" aria-modal="true" aria-label="选题详情"><div class="drawer-head"><h2>选题详情</h2><button class="icon-btn" type="button" aria-label="关闭选题详情" @click="emit('close')">×</button></div><div class="drawer-body">
-    <div class="topic-detail-heading"><span class="topic-detail-id">{{ detail.topic_id }}</span><h3>{{ detail.topic_title }}</h3><div class="topic-detail-meta"><span>{{ detail.content_type || '未设置内容类型' }}</span><span>{{ detail.topic_type || (detail.is_marketing ? '营销' : '普通') }}</span><span v-if="detail.label_status">{{ detail.label_status }}</span></div></div>
+    <div class="topic-detail-heading"><span class="topic-detail-id">{{ detail.topic_id }}</span><h3>{{ detail.topic_title }}</h3><div class="topic-detail-meta"><span>{{ detail.content_type || '未设置选题二级分类' }}</span><span>{{ detail.is_marketing ? '营销' : '非营销' }}</span><span v-if="detail.label_status">{{ detail.label_status }}</span></div></div>
     <section class="topic-detail-outline"><h4>选题大纲</h4><p>{{ detail.outline || '暂无选题大纲' }}</p></section>
     <div class="topic-detail-validity"><span>有效期</span><b>{{ detail.valid_from?.slice(0, 10) || '不限' }} 至 {{ detail.valid_to?.slice(0, 10) || '不限' }}</b></div>
     <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div><div v-if="loading" class="topic-detail-loading" role="status">正在读取标签…</div><TopicLabelDetails v-else :topic="detail" :items="items" />

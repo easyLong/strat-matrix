@@ -83,12 +83,13 @@ function contentStatusText(task: ManualTaskSummary) {
     <table class="manual-task-table">
       <thead>
         <tr>
+          <th><HoverHint text="名称+批次号" :show-icon="false" class="manual-batch-heading">批次</HoverHint></th>
           <th>投放日期</th>
           <th>账号数</th>
           <th>选题数</th>
           <th>策划状态</th>
           <th>内容状态</th>
-          <th><HoverHint text="名称+批次号" :show-icon="false" class="manual-batch-heading">批次</HoverHint></th>
+          <th>创建人</th>
           <th>发起时间</th>
           <th>更新时间</th>
           <th>操作</th>
@@ -96,6 +97,12 @@ function contentStatusText(task: ManualTaskSummary) {
       </thead>
       <tbody>
         <tr v-for="task in tasks" :key="task.id" :class="{ 'has-failures': task.failure_count > 0 }">
+          <td class="batch-identity-cell">
+            <div class="manual-batch-identity">
+              <b :title="task.task_name || undefined">{{ task.task_name || '—' }}</b>
+              <small :title="task.batch_code || undefined">{{ task.batch_code || '—' }}</small>
+            </div>
+          </td>
           <td>{{ task.publish_date || '—' }}</td>
           <td class="numeric">{{ task.planned_account_count }}</td>
           <td class="numeric">{{ task.topic_count }}</td>
@@ -105,12 +112,7 @@ function contentStatusText(task: ManualTaskSummary) {
               <span :class="['tag', contentTone(task)]">{{ contentStatusText(task) }}</span>
             </div>
           </td>
-          <td class="batch-identity-cell">
-            <div class="manual-batch-identity">
-              <b :title="task.task_name || undefined">{{ task.task_name || '—' }}</b>
-              <small :title="task.batch_code || undefined">{{ task.batch_code || '—' }}</small>
-            </div>
-          </td>
+          <td>{{ task.created_by || '—' }}</td>
           <td class="date-cell">{{ formatDateTime(task.created_at) }}</td>
           <td class="date-cell">{{ formatDateTime(task.updated_at) }}</td>
           <td class="action-cell">
@@ -121,7 +123,7 @@ function contentStatusText(task: ManualTaskSummary) {
             </div>
           </td>
         </tr>
-        <tr v-if="tasks.length === 0"><td colspan="9"><div class="empty-state">暂无人工策划任务</div></td></tr>
+        <tr v-if="tasks.length === 0"><td colspan="10"><div class="empty-state">暂无人工策划任务</div></td></tr>
       </tbody>
     </table>
   </div>
