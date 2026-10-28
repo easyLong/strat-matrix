@@ -571,7 +571,7 @@ function confirmCancelEditing() {
       <section class="config-readonly-panel">
         <div class="config-readonly-panel-head"><h3>生命周期阶段判定</h3></div>
         <div class="stage-table-wrap">
-          <table class="stage-table config-readonly-stage-table"><thead><tr><th>阶段</th><th>进入条件</th></tr></thead>
+          <table class="stage-table config-readonly-stage-table lifecycle-summary-table"><thead><tr><th>阶段</th><th>进入条件</th></tr></thead>
             <tbody><tr v-for="rule in lifecycleRules" :key="rule.name">
               <td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, lifecycleRules) }}</td>
             </tr></tbody>
@@ -653,6 +653,8 @@ function confirmCancelEditing() {
 </template>
 
 <style scoped>
+.config-overview-body .lifecycle-summary-table th:first-child { width: 160px; }
+.config-overview-body .lifecycle-summary-table th:nth-child(2), .config-overview-body .lifecycle-summary-table td:nth-child(2) { width: auto; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .config-stack .lifecycle-grouped-rule{display:block;padding:12px 14px}
 .lifecycle-rule-heading{display:flex;align-items:center;gap:14px;min-height:32px}.lifecycle-rule-heading>b{flex:0 0 90px}.lifecycle-rule-heading .text-btn{margin-left:auto;white-space:nowrap}.lifecycle-rule-summary{flex:1;padding:7px 10px;border-radius:6px;background:var(--neutral-50);color:var(--neutral-600);font-size:12px;line-height:20px}
 .lifecycle-condition-group{margin:10px 0;padding:12px;border:1px solid var(--neutral-200);border-radius:7px}.lifecycle-group-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--neutral-500);font-size:12px}.lifecycle-group-row select,.lifecycle-group-row input{height:32px;padding:0 8px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface)}.lifecycle-group-row select:first-of-type{width:155px}.lifecycle-group-row select:nth-of-type(2){width:64px}.lifecycle-group-row input{width:86px}.lifecycle-and,.lifecycle-or{color:var(--primary-600);background:var(--primary-50);border-radius:12px;padding:3px 8px;font-size:12px}.lifecycle-and-placeholder{width:28px}.lifecycle-or{display:inline-block}.lifecycle-add-group{margin-top:4px}@media(max-width:600px){.lifecycle-rule-heading{flex-wrap:wrap}.lifecycle-rule-summary{flex-basis:100%;order:3}.lifecycle-group-row{flex-wrap:wrap}}

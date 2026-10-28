@@ -131,10 +131,11 @@ function contentStatusText(task: ManualTaskSummary) {
 
 <style scoped>
 .manual-task-table-wrap{max-height:calc(100vh - 260px);overflow:auto}
-.manual-task-table{width:100%;min-width:1040px;border-collapse:collapse}
+.manual-task-table{width:100%;min-width:1280px;border-collapse:collapse}
 .manual-task-table th{position:sticky;top:0;z-index:2;padding:12px 14px;background:var(--neutral-50);color:var(--neutral-500);font-size:12px;font-weight:500;line-height:20px;text-align:left;white-space:nowrap}
 .manual-batch-heading{font:inherit}
 .manual-task-table td{height:56px;padding:10px 14px;border-top:1px solid var(--neutral-100);color:var(--neutral-600);font-size:13px;line-height:20px;vertical-align:middle}
+.manual-task-table td:nth-child(2),.manual-task-table td:nth-child(7){white-space:nowrap}
 .manual-task-table tbody tr:hover{background:var(--hover-bg)}
 .manual-task-table tbody tr.has-failures{background:var(--processing-row)}
 .manual-task-table tbody tr.has-failures:hover{background:var(--processing-bg)}
@@ -155,5 +156,5 @@ tr.has-failures:hover .action-cell{background:var(--processing-bg)}
 .manual-content-flow-link{color:var(--neutral-600)}
 .manual-content-flow-link:hover{color:var(--primary-600)}
 .manual-action-empty{color:var(--neutral-300)}
-@media(max-width:900px){.manual-task-table{min-width:960px}.manual-task-table .batch-identity-cell{min-width:230px}.action-cell{min-width:216px}.manual-task-actions{gap:10px}}
+@media(max-width:900px){.manual-task-table{min-width:1280px}.manual-task-table .batch-identity-cell{min-width:230px}.action-cell{min-width:216px}.manual-task-actions{gap:10px}}
 </style>

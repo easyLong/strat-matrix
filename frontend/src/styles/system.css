@@ -191,6 +191,48 @@ tbody tr.selected b { color: var(--primary-600); }
 @media(max-width:580px) { .detail-filter-fields { grid-template-columns: 1fr; } }
 @media(max-width:780px) { :root { --sidebar-width: 72px; } .sidebar-brand { justify-content: center; padding: 16px; } .sidebar-brand strong,.sidebar-title,.sidebar-foot { display: none; } .sidebar nav { padding: 0 10px; margin-top: 16px; } .sidebar .nav-item { justify-content: center; padding: 0; } .sidebar .nav-item span { display: none; } .topbar { padding: 0 20px; } .main { padding: 20px; } .page-head { flex-direction: row; flex-wrap: wrap; } }
 @media(max-width:580px) { .sidebar { width: var(--sidebar-width); height: 100dvh; top: 0; border: 0; } .sidebar nav { display: grid; grid-template-columns: 1fr; gap: 8px; } .sidebar .nav-item { height: 44px; flex-direction: row; } .sidebar .nav-item.router-link-active::before { left: 0; right: auto; top: 12px; bottom: 12px; width: 3px; height: auto; } .main { padding: 16px 12px 32px; } .topbar { padding: 0 12px; } .card-head,.card-body,.drawer-body { padding: 16px; } .page-actions { gap: 6px; } .btn { padding: 0 12px; } .account-pagination { flex-wrap: wrap; } }
+
+/* 数营平台基础规范：适用于三个业务页面的共享控件。 */
+.sidebar { background: var(--surface); color: var(--neutral-600); border-right: 1px solid var(--neutral-200); }
+.sidebar-brand { border-bottom-color: var(--neutral-100); }
+.sidebar-brand strong { color: var(--neutral-900); }
+.sidebar-title { color: var(--neutral-400); }
+.sidebar .nav-item { color: var(--neutral-600); border-radius: 4px; }
+.sidebar .nav-item:hover { background: var(--primary-50); color: var(--primary-600); }
+.sidebar .nav-item.router-link-active { background: var(--primary-50); color: var(--primary-800); }
+.sidebar .nav-item.router-link-active .nav-icon { color: var(--primary-600); }
+.sidebar-foot { background: var(--neutral-50); color: var(--neutral-500); border-radius: 4px; }
+.main { padding: 16px 16px 24px; }
+.main .card { margin-bottom: 12px; border-radius: 4px; }
+.main .card-head { padding: 16px 20px; }
+.main .card-body { padding: 16px 20px; }
+.main .card-head h2 { font-size: 16px; line-height: 24px; }
+.btn { height: 32px; padding: 0 12px; border-radius: 4px; }
+.field input:not([type='checkbox']):not([type='radio']), .field select, .field textarea, .field-input,
+.account-history-toolbar input, .account-history-toolbar select,
+.batch-filter-row input, .batch-filter-row select,
+.detail-filter-fields input, .detail-filter-fields select { min-height: 32px; height: 32px; border-radius: 4px; }
+.field textarea { height: auto; }
+.field select { box-sizing: border-box; width: 100%; padding: 0 12px; border: 1px solid var(--neutral-200); background: var(--surface); color: var(--neutral-900); font: inherit; }
+.input-unit { height: 32px; border-radius: 4px; }
+.input-unit input { height: 30px; min-height: 30px; }
+.main .result-tabs { gap: 20px; padding: 0; margin-bottom: 12px; border: 0; border-radius: 0; border-bottom: 1px solid var(--neutral-200); background: transparent; }
+.main .result-tabs button { position: relative; min-width: 0; height: 40px; padding: 0 4px; border-radius: 0; background: transparent; box-shadow: none; }
+.main .result-tabs button.active { color: var(--primary-600); background: transparent; box-shadow: none; }
+.main .result-tabs button.active::after { display: block; position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--primary-600); content: ''; }
+.main .manual-stepper { min-height: 56px; padding: 6px 16px; border-radius: 4px; }
+.main .config-stack { gap: 12px; }
+.main .manual-topic-picked, .main .cycle-batch-list, .main .planning-account-card { border-radius: 4px; }
+.main .planning-week-section { border-radius: 4px; }
+.drawer { border-radius: 4px 0 0 4px; }
+@media(max-width:580px) { .main { padding: 12px 12px 24px; } .main .card-head, .main .card-body { padding: 12px; } }
+@media(max-width:580px) {
+  .main .manual-stepper { overflow-x: auto; justify-content: flex-start; }
+  .main .manual-stepper .manual-step { flex: 0 0 auto; min-width: max-content; white-space: nowrap; }
+  .main .manual-account-filters.query-filter-grid[data-query-filters], .main .manual-topic-filters.query-filter-grid[data-query-filters] { grid-template-columns: minmax(0, 1fr); }
+  .main .manual-account-filters .query-filter-tail, .main .manual-topic-filters .query-filter-tail { grid-column: 1 / -1; }
+  .main .manual-plan-account-input-wrap { min-width: 0; flex: 1; }
+}
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 .batch-count { color: var(--neutral-400); font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .batch-count.completed { color: var(--success); font-weight: 600; }
