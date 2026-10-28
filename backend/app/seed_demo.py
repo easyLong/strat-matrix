@@ -44,6 +44,11 @@ TOPICS = [
 
 MARKETING_TOPIC = ("DEMO-M001", "演示营销选题：线上服务入口介绍")
 TOPIC_CATEGORIES = ("生活", "安全", "家庭", "服务", "安全", "服务", "安全", "生活", "家庭", "职场", "生活", "科普")
+CONTENT_TYPES = (
+    "三公里好物种草", "产品权益种草", "三公里活动营销", "产品营销",
+    "通用活动", "金融科普", "热点解读", "属地推荐",
+    "一句话讨论", "财商教育", "客群兴趣内容", "人设故事",
+)
 
 
 def automatic_items(
@@ -161,7 +166,7 @@ def main() -> None:
                 (account_code, datetime.now(timezone.utc).replace(tzinfo=None), account_payload),
             )
 
-        for (topic_code, title), category in [*zip(TOPICS, TOPIC_CATEGORIES), (MARKETING_TOPIC, "营销")]:
+        for index, ((topic_code, title), category) in enumerate([*zip(TOPICS, TOPIC_CATEGORIES), (MARKETING_TOPIC, "营销")]):
             cursor.execute(
                 "INSERT INTO godp_topic "
                 "(topic_code, title, category, is_marketing, status, create_by, update_by) "
@@ -175,7 +180,7 @@ def main() -> None:
                 "title": title,
                 "summary": f"围绕“{title}”整理可直接执行的内容要点。",
                 "outline": f"从用户场景、关键步骤和风险提示三个部分展开“{title}”。",
-                "content_type": "营销内容" if category == "营销" else "知识科普",
+                "content_type": "产品营销" if category == "营销" else CONTENT_TYPES[index % len(CONTENT_TYPES)],
                 "source": "demo-seed",
                 "category": category,
                 "is_marketing": category == "营销",

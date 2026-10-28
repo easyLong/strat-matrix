@@ -13,6 +13,9 @@ def main():
         cursor.execute("SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_manual_marketing_task' AND COLUMN_NAME='topic_snapshot_json'")
         if not cursor.fetchone()['n']:
             cursor.execute("ALTER TABLE godp_manual_marketing_task ADD COLUMN topic_snapshot_json LONGTEXT NULL COMMENT '提交时选中的选题信息快照JSON数组'")
+        cursor.execute("SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_manual_marketing_task' AND COLUMN_NAME='allocation_count'")
+        if not cursor.fetchone()['n']:
+            cursor.execute("ALTER TABLE godp_manual_marketing_task ADD COLUMN allocation_count INT NOT NULL DEFAULT 0 COMMENT '需要由外部系统分配的营销内容数量' AFTER task_name")
         cursor.execute("SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_manual_preview'")
         if cursor.fetchone()['n']:
             cursor.execute("SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_manual_preview' AND COLUMN_NAME='content_mode'")

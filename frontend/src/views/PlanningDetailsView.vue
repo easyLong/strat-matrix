@@ -46,7 +46,7 @@ const details = ref<BatchDetail[]>([])
 const historyItems = ref<AccountPlanRecord[]>([])
 const accountCatalog = ref<AccountOption[]>([])
 const expandedAccounts = ref(new Set<string>())
-const filtersExpanded = ref(false)
+const filtersExpanded = ref(true)
 const batchesExpanded = ref(props.initialBatchesExpanded)
 const batchPage = ref(1)
 const batchPageSize = ref(10)
@@ -174,11 +174,11 @@ const dashboard = computed(() => ({
   accounts: new Set(filteredItems.value.map(item => item.account_id)).size,
   batches: new Set(filteredItems.value.map(item => item.batch_id)).size,
   topics: new Set(filteredItems.value.map(item => item.topic_id).filter(Boolean)).size,
-  plans: filteredItems.value.length,
-  autoPlans: filteredItems.value.filter(item => item.plan_type === 'auto').length,
-  manualPlans: filteredItems.value.filter(item => item.plan_type === 'manual').length,
 }))
-const topicTypeCounts = computed(() => summarizeContentTypes(filteredItems.value))
+const topicTypeCounts = computed(() => summarizeContentTypes(filteredItems.value)
+  .map((item, index) => ({ item, index }))
+  .sort((a, b) => b.item.count - a.item.count || a.index - b.index)
+  .map(({ item }) => item))
 
 const pagedAccountGroups = computed(() => accountGroups.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const accountHistoryRows = computed(() => [...filteredItems.value].sort((a, b) =>
@@ -278,7 +278,7 @@ watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => pr
   dateStart.value = isAccountMode.value ? props.cycleStart : ''
   dateEnd.value = isAccountMode.value && props.cycleStart ? weekEnd(props.cycleStart) : ''
   dateFilterError.value = ''
-  filtersExpanded.value = false
+  filtersExpanded.value = true
   applyFilters()
   expandedAccounts.value = new Set()
   selectedPlan.value = null
@@ -320,12 +320,23 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
     <div v-else-if="error" class="banner error-banner" role="alert">{{ error }}</div>
     <template v-else>
       <section class="planning-dashboard" aria-label="策划概览">
-        <div><small>账号数</small><strong>{{ dashboard.accounts }}</strong></div>
-        <div><small>{{ isBatchMode ? '选题数' : '批次数' }}</small><strong>{{ isBatchMode ? dashboard.topics : isAccountMode ? dashboard.batches : batches.length }}</strong><button v-if="!isBatchMode && !isAccountMode" class="text-btn cycle-batch-toggle" type="button" :aria-expanded="batchesExpanded" aria-controls="cycle-batch-list" @click="batchesExpanded = !batchesExpanded">{{ batchesExpanded ? '收起批次' : '查看批次' }}</button></div>
-        <div><small>策划总数</small><strong>{{ dashboard.plans }}</strong></div>
-        <div><small>AI 策划</small><strong>{{ dashboard.autoPlans }}</strong></div>
-        <div><small>人工策划</small><strong>{{ dashboard.manualPlans }}</strong></div>
+        <div v-if="isAccountMode">
+          <HoverHint class="dashboard-label" text="当前账号历史策划记录中去重后的批次数量" :show-icon="true">覆盖批次</HoverHint>
+          <strong>{{ dashboard.batches }}</strong>
+        </div>
+        <div v-else>
+          <HoverHint class="dashboard-label" text="当前批次或周期内去重后的账号数量" :show-icon="true">参与账号</HoverHint>
+          <strong>{{ dashboard.accounts }}</strong>
+        </div>
+        <div>
+          <HoverHint class="dashboard-label" text="当前查看范围内去重后的选题 ID 数量" :show-icon="true">使用选题</HoverHint>
+          <strong>{{ dashboard.topics }}</strong>
+        </div>
       </section>
+
+      <div v-if="!isBatchMode && !isAccountMode" class="cycle-batch-action">
+        <button class="text-btn cycle-batch-toggle" type="button" :aria-expanded="batchesExpanded" aria-controls="cycle-batch-list" @click="batchesExpanded = !batchesExpanded">{{ batchesExpanded ? '收起批次' : '查看批次' }}</button>
+      </div>
 
       <section v-if="!isBatchMode && !isAccountMode && batchesExpanded" id="cycle-batch-list" class="cycle-batch-list">
         <div class="cycle-batch-title"><b>本周期批次</b><span>{{ batches.length }} 个批次</span></div>
@@ -336,7 +347,16 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
       </section>
 
       <section v-if="isBatchMode" class="batch-topic-types" aria-labelledby="batch-topic-types-title">
-        <h3 id="batch-topic-types-title">选题二级分类</h3>
+        <h3 id="batch-topic-types-title"><HoverHint text="按去重后的选题 ID 统计各二级分类分布" :show-icon="true">选题二级分类分布</HoverHint></h3>
+        <dl>
+          <div v-for="type in topicTypeCounts" :key="type.name" :title="type.hint">
+            <dt>{{ type.name }}</dt><dd :class="{ empty: type.count === 0 }">{{ type.count }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section v-else class="batch-topic-types" aria-labelledby="detail-topic-types-title">
+        <h3 id="detail-topic-types-title"><HoverHint text="按去重后的选题 ID 统计各二级分类分布" :show-icon="true">选题二级分类分布</HoverHint></h3>
         <dl>
           <div v-for="type in topicTypeCounts" :key="type.name" :title="type.hint">
             <dt>{{ type.name }}</dt><dd :class="{ empty: type.count === 0 }">{{ type.count }}</dd>
@@ -444,16 +464,17 @@ onBeforeUnmount(() => { loadRequest++; window.clearInterval(productionTimer) })
 
 <style scoped>
 .cycle-batch-toggle{margin-top:3px;align-self:flex-start;font-size:12px}.cycle-batch-list{margin:0 20px 16px;border:1px solid var(--neutral-200);border-radius:8px;overflow:hidden}.cycle-batch-title{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--neutral-50);font-size:13px}.cycle-batch-title span,.cycle-batch-identity small{color:var(--neutral-500);font-size:12px}.cycle-batch-identity{display:flex;flex-direction:column;gap:3px}.cycle-batch-list table{min-width:720px}
-.batch-topic-types{margin:0 20px 16px;padding:0 0 4px}.batch-topic-types h3{margin:0 0 8px;color:var(--neutral-700);font-size:13px;line-height:22px;font-weight:600}.batch-topic-types dl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:20px;margin:0}.batch-topic-types dl>div{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--neutral-100)}.batch-topic-types dt{color:var(--neutral-500);font-size:12px;line-height:20px;overflow-wrap:anywhere}.batch-topic-types dd{flex:none;margin:0;color:var(--neutral-800);font-size:14px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums}.batch-topic-types dd.empty{color:var(--neutral-400);font-weight:400}
+.cycle-batch-action{display:flex;justify-content:flex-end;margin:-8px 20px 12px}
+.batch-topic-types{margin:0 20px 16px;padding:0 0 4px}.batch-topic-types h3{margin:0 0 8px;color:var(--neutral-700);font-size:13px;line-height:22px;font-weight:600}.batch-topic-types h3 .hover-hint{font-size:13px;font-weight:600;color:var(--neutral-700)}.batch-topic-types dl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));column-gap:20px;margin:0}.batch-topic-types dl>div{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--neutral-100)}.batch-topic-types dt{color:var(--neutral-500);font-size:12px;line-height:20px;overflow-wrap:anywhere}.batch-topic-types dd{flex:none;margin:0;color:var(--neutral-800);font-size:14px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums}.batch-topic-types dd.empty{color:var(--neutral-400);font-weight:400}
 @media(max-width:1200px){.batch-topic-types dl{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:980px){.batch-topic-types{margin:0 12px 16px}.batch-topic-types dl{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:16px}}@media(max-width:580px){.batch-topic-types dl{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px}}
 .account-plan-table-wrap{margin:0 20px 20px}.account-plan-table{table-layout:fixed;min-width:1180px}.account-plan-table th,.account-plan-table td{padding:14px 12px;vertical-align:top;line-height:22px}.account-plan-table td{color:var(--neutral-700)}.account-plan-date{white-space:nowrap;font-variant-numeric:tabular-nums}.account-plan-text{white-space:pre-wrap;overflow-wrap:anywhere}.account-plan-batch{overflow-wrap:anywhere}.account-plan-batch>span{display:block}.account-plan-batch>small{margin-top:3px;font-size:12px;line-height:18px}.account-plan-table .empty-state{text-align:center;padding:32px 12px;color:var(--neutral-400)}
 @media(max-width:980px){.account-plan-table-wrap{margin:0 12px 16px}}
 .planning-detail-head{align-items:flex-start;flex-wrap:wrap}.planning-detail-heading{flex:1 1 260px;min-width:0}.planning-detail-actions{display:flex;flex:0 0 auto;align-items:center;align-self:flex-start;justify-content:flex-end;flex-wrap:wrap;gap:8px;max-width:100%;margin-left:auto}.planning-detail-actions .btn{white-space:nowrap}.planning-detail-scope .planning-context-tag{min-width:0;max-width:100%;min-height:24px;padding:3px 8px;border-radius:6px;background:var(--neutral-100);color:var(--neutral-500);font-size:12px;line-height:18px;font-weight:500}.planning-batch-code{min-width:0;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .planning-batch-scope .planning-context-tag.orange{background:var(--processing-bg);color:var(--processing)}.planning-batch-scope .planning-context-tag.blue{background:var(--primary-50);color:var(--primary-600)}
 .planning-detail-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px;min-width:0}.planning-scope-label{max-width:560px;overflow:hidden;text-overflow:ellipsis;font-size:12px}.planning-week-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--neutral-200);background:var(--neutral-50)}.planning-week-heading>span{color:var(--neutral-400);font-size:11px}.detail-query-btn{align-self:end;height:36px;min-width:80px;white-space:nowrap}
-.planning-dashboard{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:16px 20px 16px;border:1px solid var(--neutral-200);border-radius:12px;overflow:hidden;background:var(--neutral-200)}
+.planning-dashboard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:16px 20px 16px;border:1px solid var(--neutral-200);border-radius:12px;overflow:hidden;background:var(--neutral-200)}
 .planning-dashboard>div{display:flex;flex-direction:column;gap:8px;min-height:74px;padding:14px 16px;background:var(--surface)}
-.planning-dashboard small{color:var(--neutral-500);font-size:12px}.planning-dashboard strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.planning-dashboard .dashboard-label{justify-content:flex-start;color:var(--neutral-500);font-size:12px}.planning-dashboard strong{color:var(--neutral-800);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
 .detail-filter-shell{margin:0 20px 16px;padding:12px 14px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}
 .detail-filter-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:12px;align-items:end;margin-top:12px}.detail-filter-fields label{display:flex;flex-direction:column;gap:6px;min-width:0}.detail-filter-fields label>span{color:var(--neutral-500);font-size:12px}.detail-filter-fields input,.detail-filter-fields select{width:100%;height:36px}
 .planning-account-list{display:grid;gap:8px;padding:0 20px 20px}.planning-account-card{overflow:hidden;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface);transition:border-color .14s ease,background .14s ease}.planning-account-card:hover{border-color:var(--neutral-300)}.planning-account-card.expanded{border-color:var(--primary-200)}

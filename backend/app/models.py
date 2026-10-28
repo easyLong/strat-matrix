@@ -255,6 +255,7 @@ class ManualTaskSummary(BaseModel):
     publish_date: date | None
     content_mode: Literal['marketing', 'non_marketing', 'legacy'] = 'legacy'
     content_per_account: int = 1
+    allocation_count: int = 0
     planned_account_count: int
     result_count: int
     failure_count: int
@@ -422,5 +423,6 @@ class AutoFailure(BaseModel):
     batch_code: str
     account_id: str | None = None
     account_name: str
+    um_no: str | None = None
     reason: str
 

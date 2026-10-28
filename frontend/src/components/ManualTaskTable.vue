@@ -104,7 +104,7 @@ function contentStatusText(task: ManualTaskSummary) {
             </div>
           </td>
           <td>{{ task.publish_date || '—' }}</td>
-          <td class="numeric">{{ task.planned_account_count }}</td>
+          <td class="numeric">{{ task.content_mode === 'marketing' && task.allocation_count ? '待分配' : task.planned_account_count }}</td>
           <td class="numeric">{{ task.topic_count }}</td>
           <td><span :class="['tag', planningTone(task)]">{{ planningLabel(task) }}</span></td>
           <td>

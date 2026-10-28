@@ -8,7 +8,7 @@ import PlanningExport from '../components/PlanningExport.vue'
 import { api } from '../api'
 import { formatDateTime } from '../planningTime'
 import { usePlanningStore } from '../store'
-import type { BatchSummary, PlanningAccountSummary } from '../types'
+import type { AutoFailure, BatchSummary, PlanningAccountSummary } from '../types'
 import { statusTone } from '../ui/status'
 import PlanningDetailsView from './PlanningDetailsView.vue'
 import LegacyResultsView from './ResultsView.vue'
@@ -20,7 +20,7 @@ type PeriodSummary = {
   batches: BatchSummary[]
   autoBatches: BatchSummary[]
   manualBatches: BatchSummary[]
-  planningCount: number
+  accountCount: number
   completedCount: number
   failedCount: number
   updatedAt: string | null
@@ -33,13 +33,17 @@ const router = useRouter()
 const batches = ref<BatchSummary[]>([])
 const loading = ref(false)
 const error = ref('')
-const filtersExpanded = ref(false)
+const filtersExpanded = ref(true)
 const expandedPeriod = ref<string | null>(null)
-const year = ref('all')
-const month = ref('all')
-const week = ref('all')
+const startDate = ref('')
+const endDate = ref('')
 const batchQuery = ref('')
-const appliedFilters = ref({ year: 'all', month: 'all', week: 'all', batchQuery: '' })
+const dateFilterError = ref('')
+const appliedFilters = ref({ startDate: '', endDate: '', batchQuery: '' })
+const failurePeriod = ref<PeriodSummary | null>(null)
+const failureDetails = ref<AutoFailure[]>([])
+const failureLoading = ref(false)
+const failureError = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 let loaded = false
@@ -66,22 +70,8 @@ function cycleWeekEnd(date: string) {
   return value.toISOString().slice(0, 10)
 }
 
-function monthWeekOf(date: string) {
-  const monday = new Date(`${cycleWeekStart(date)}T00:00:00Z`)
-  return Math.floor((monday.getUTCDate() - 1) / 7) + 1
-}
-
-function cyclePeriodLabel(date: string) {
-  const monday = new Date(`${cycleWeekStart(date)}T00:00:00Z`)
-  return `${monday.getUTCFullYear()}年${monday.getUTCMonth() + 1}月第${monthWeekOf(date)}周`
-}
-
-function batchPlanningCount(batch: BatchSummary) {
-  return batch.content_count || batch.result_count || batch.completed_count + batch.failed_count
-}
-
-function modePlanningCount(rows: BatchSummary[]) {
-  return rows.reduce((total, batch) => total + batchPlanningCount(batch), 0)
+function modeAccountCount(rows: BatchSummary[]) {
+  return rows.reduce((total, batch) => total + batch.account_count, 0)
 }
 
 function summarizePeriods(source: BatchSummary[]): PeriodSummary[] {
@@ -106,7 +96,7 @@ function summarizePeriods(source: BatchSummary[]): PeriodSummary[] {
       batches: ordered,
       autoBatches,
       manualBatches,
-      planningCount: modePlanningCount(ordered),
+      accountCount: modeAccountCount(ordered),
       completedCount: ordered.reduce((total, batch) => total + batch.completed_count, 0),
       failedCount: ordered.reduce((total, batch) => total + batch.failed_count, 0),
       updatedAt,
@@ -123,17 +113,10 @@ function batchMatchesQuery(batch: BatchSummary, query: string) {
 const allPeriods = computed(() => summarizePeriods(batches.value))
 const selectedPeriod = computed(() => allPeriods.value.find(period => period.cycleStart === requestedCycle.value) ?? null)
 const selectedBatch = computed(() => batches.value.find(batch => batch.id === requestedBatchId.value) ?? null)
-const periodKeys = computed(() => allPeriods.value.map(period => period.cycleStart))
-const yearOptions = computed(() => [...new Set(periodKeys.value.map(value => value.slice(0, 4)))].sort((a, b) => b.localeCompare(a)))
-const monthOptions = computed(() => [...new Set(periodKeys.value.filter(value => year.value === 'all' || value.slice(0, 4) === year.value).map(value => value.slice(5, 7)))].sort())
-const weekOptions = computed(() => [...new Set(periodKeys.value
-  .filter(value => (year.value === 'all' || value.slice(0, 4) === year.value) && (month.value === 'all' || value.slice(5, 7) === month.value))
-  .map(value => monthWeekOf(value)))].sort((a, b) => a - b))
 const searchedPeriods = computed(() => summarizePeriods(batches.value.filter(batch => batchMatchesQuery(batch, appliedFilters.value.batchQuery))))
 const periods = computed(() => searchedPeriods.value.filter(period =>
-  (appliedFilters.value.year === 'all' || period.cycleStart.slice(0, 4) === appliedFilters.value.year) &&
-  (appliedFilters.value.month === 'all' || period.cycleStart.slice(5, 7) === appliedFilters.value.month) &&
-  (appliedFilters.value.week === 'all' || String(monthWeekOf(period.cycleStart)) === appliedFilters.value.week),
+  (!appliedFilters.value.startDate || period.cycleEnd >= appliedFilters.value.startDate) &&
+  (!appliedFilters.value.endDate || period.cycleStart <= appliedFilters.value.endDate),
 ))
 const pagedPeriods = computed(() => periods.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 
@@ -144,9 +127,57 @@ function switchDimension(next: ResultDimension) {
 }
 
 function applyFilters() {
-  appliedFilters.value = { year: year.value, month: month.value, week: week.value, batchQuery: batchQuery.value.trim() }
+  if (startDate.value && endDate.value && startDate.value > endDate.value) {
+    dateFilterError.value = '开始时间不能晚于结束时间'
+    return
+  }
+  dateFilterError.value = ''
+  appliedFilters.value = { startDate: startDate.value, endDate: endDate.value, batchQuery: batchQuery.value.trim() }
   expandedPeriod.value = null
   page.value = 1
+}
+
+async function showFailureDetails(period: PeriodSummary) {
+  failurePeriod.value = period
+  failureDetails.value = []
+  failureError.value = ''
+  failureLoading.value = true
+  try {
+    const details = await api.planningFailures(period.cycleStart)
+    if (failurePeriod.value?.cycleStart === period.cycleStart) failureDetails.value = details
+  } catch (exc) {
+    if (failurePeriod.value?.cycleStart === period.cycleStart) {
+      failureError.value = exc instanceof Error ? exc.message : '读取失败详情失败'
+    }
+  } finally {
+    if (failurePeriod.value?.cycleStart === period.cycleStart) failureLoading.value = false
+  }
+}
+
+function closeFailureDetails() {
+  failurePeriod.value = null
+  failureDetails.value = []
+  failureError.value = ''
+}
+
+function csvCell(value: unknown) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`
+}
+
+function downloadFailureUms() {
+  const rows = failureDetails.value.filter(item => item.um_no)
+  if (!rows.length || !failurePeriod.value) return
+  const lines = [
+    ['属主UM号', '账号名称', '账号ID', '批次号', '失败原因'].map(csvCell).join(','),
+    ...rows.map(item => [item.um_no, item.account_name, item.account_id, item.batch_code, item.reason].map(csvCell).join(',')),
+  ]
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `失败账号UM号_${failurePeriod.value.cycleStart}_${failurePeriod.value.cycleEnd}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 function togglePeriod(cycleStart: string) {
@@ -199,8 +230,6 @@ async function loadBatches() {
   }
 }
 
-watch(year, () => { month.value = 'all'; week.value = 'all' })
-watch(month, () => { week.value = 'all' })
 watch([periods, pageSize], () => { page.value = Math.min(page.value, Math.max(1, Math.ceil(periods.value.length / pageSize.value))) })
 watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDetail, showingAccountDetail], ([ready, currentDimension, batchDetail, periodDetail, accountDetail]) => {
   if (ready && (currentDimension === 'period' || batchDetail || periodDetail || accountDetail) && !loaded) void loadBatches()
@@ -269,32 +298,31 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
           </button>
           <div id="period-dimension-filter-fields" v-show="filtersExpanded" class="batch-filter-fields">
             <div class="batch-filter-row query-filter-grid" data-query-filters="standard">
-              <select v-model="year"><option value="all">全部年份</option><option v-for="value in yearOptions" :key="value" :value="value">{{ value }} 年</option></select>
-              <select v-model="month"><option value="all">全部月份</option><option v-for="value in monthOptions" :key="value" :value="value">{{ Number(value) }} 月</option></select>
-              <input v-model="batchQuery" type="search" aria-label="批次号或批次 ID" placeholder="输入批次号或批次 ID" @keydown.enter.prevent="applyFilters" />
-              <div class="query-filter-tail">
-                <select v-model="week"><option value="all">全部周次</option><option v-for="value in weekOptions" :key="value" :value="String(value)">第 {{ value }} 周</option></select>
-                <div class="query-filter-actions"><button class="btn primary" type="button" @click="applyFilters">查询</button></div>
-              </div>
+              <label><span>开始时间</span><input v-model="startDate" type="date" :max="endDate || undefined" aria-label="开始时间" @keydown.enter.prevent="applyFilters" /></label>
+              <label><span>结束时间</span><input v-model="endDate" type="date" :min="startDate || undefined" aria-label="结束时间" @keydown.enter.prevent="applyFilters" /></label>
+              <label><span>批次号或批次 ID</span><input v-model="batchQuery" type="search" aria-label="批次号或批次 ID" placeholder="输入批次号或批次 ID" @keydown.enter.prevent="applyFilters" /></label>
+              <div class="query-filter-actions"><button class="btn primary" type="button" @click="applyFilters">查询</button></div>
             </div>
+            <p v-if="dateFilterError" class="inline-error" role="alert">{{ dateFilterError }}</p>
           </div>
         </div>
 
         <div class="table-wrap">
           <table class="period-summary-table">
-            <thead><tr><th>策划周期</th><th>批次构成</th><th>AI 自动策划</th><th>人工策划</th><th>策划总数</th><th>完成数</th><th>失败数</th><th>最后更新</th><th>操作</th></tr></thead>
+            <thead><tr><th>策划周期</th><th>批次构成</th><th>AI 自动策划</th><th>人工策划</th><th>账号数</th><th>完成数</th><th>失败数</th><th>最后更新</th><th>操作</th></tr></thead>
             <tbody>
               <template v-for="period in pagedPeriods" :key="period.cycleStart">
                 <tr class="period-summary-row">
-                  <td><div class="account-name-cell"><b>{{ cyclePeriodLabel(period.cycleStart) }}</b><small>{{ period.cycleStart }} 至 {{ period.cycleEnd }}</small></div></td>
+                  <td><div class="account-name-cell"><b>{{ period.cycleStart }} 至 {{ period.cycleEnd }}</b></div></td>
                   <td><span class="tag blue">{{ period.batches.length }} 个批次</span></td>
-                  <td><div class="period-type-stat"><b>{{ period.autoBatches.length }} 批</b><small>{{ modePlanningCount(period.autoBatches) }} 条策划</small></div></td>
-                  <td><div class="period-type-stat"><b>{{ period.manualBatches.length }} 批</b><small>{{ modePlanningCount(period.manualBatches) }} 条策划</small></div></td>
-                  <td><b>{{ period.planningCount }}</b></td>
+                  <td><div class="period-type-stat"><b>{{ period.autoBatches.length }} 批</b><small>{{ modeAccountCount(period.autoBatches) }} 个账号</small></div></td>
+                  <td><div class="period-type-stat"><b>{{ period.manualBatches.length }} 批</b><small>{{ modeAccountCount(period.manualBatches) }} 个账号</small></div></td>
+                  <td><b>{{ period.accountCount }}</b></td>
                   <td class="batch-count" :class="{ completed: period.completedCount > 0 }">{{ period.completedCount }}</td>
                   <td class="batch-count" :class="{ failed: period.failedCount > 0 }">{{ period.failedCount }}</td>
                   <td>{{ formatDateTime(period.updatedAt) }}</td>
                   <td><div class="period-actions">
+                    <button v-if="period.failedCount > 0" class="text-btn failure-action" type="button" @click="showFailureDetails(period)">查看失败详情</button>
                     <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
                     <button class="text-btn" type="button" @click="openPeriod(period)">查看策划</button>
                     <PlanningExport inline :batches="period.batches" :filename="`策划明细_${period.cycleStart}_${period.cycleEnd}.csv`" />
@@ -329,10 +357,48 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
       </section>
     </template>
   </template>
+
+  <div v-if="failurePeriod" class="drawer-mask" @click.self="closeFailureDetails">
+    <aside class="drawer failure-drawer" role="dialog" aria-modal="true" aria-labelledby="failure-detail-title">
+      <div class="drawer-head">
+        <div><small>失败详情</small><h2 id="failure-detail-title">{{ failurePeriod.cycleStart }} 至 {{ failurePeriod.cycleEnd }}</h2></div>
+        <button class="icon-btn" type="button" aria-label="关闭失败详情" @click="closeFailureDetails">×</button>
+      </div>
+      <div class="drawer-body">
+        <div class="failure-detail-toolbar">
+          <div><b>失败账号</b><span>{{ failureDetails.length }} 个</span></div>
+          <button class="btn" type="button" :disabled="failureLoading || !failureDetails.some(item => item.um_no)" @click="downloadFailureUms">导出失败 UM 号</button>
+        </div>
+        <p class="failure-guidance">以下账号未完成本周期策划，可转人工策划补充。</p>
+        <div v-if="failureLoading" class="empty-state">正在读取失败详情…</div>
+        <div v-else-if="failureError" class="banner error-banner" role="alert">{{ failureError }}</div>
+        <div v-else-if="failureDetails.length === 0" class="empty-state">暂无失败账号明细</div>
+        <div v-else class="table-wrap failure-table-wrap">
+          <table class="failure-detail-table">
+            <thead><tr><th>账号</th><th>属主 UM 号</th><th>批次</th><th>失败原因</th></tr></thead>
+            <tbody><tr v-for="(item, index) in failureDetails" :key="`${item.batch_code}-${item.account_id ?? index}`">
+              <td><div class="failure-account"><b>{{ item.account_name }}</b><small>{{ item.account_id || '批次级异常' }}</small></div></td>
+              <td>{{ item.um_no || '—' }}</td>
+              <td>{{ item.batch_code }}</td>
+              <td>{{ item.reason || '未提供失败原因' }}</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </div>
+    </aside>
+  </div>
 </template>
 
 <style scoped>
 .legacy-account-view :deep(.result-tabs){display:none}
+.batch-filter-row>label{display:flex;min-width:0;flex-direction:column;gap:6px;color:var(--neutral-500);font-size:12px;font-weight:600}
+.batch-filter-row>label>input{width:100%;box-sizing:border-box}
+.failure-action{color:var(--danger)!important}
+.failure-drawer{width:min(860px,96vw)}
+.failure-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--neutral-50)}
+.failure-detail-toolbar>div{display:flex;align-items:baseline;gap:10px}.failure-detail-toolbar b{color:var(--neutral-800);font-size:14px}.failure-detail-toolbar span{color:var(--danger);font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.failure-guidance{margin:12px 0 16px;color:var(--neutral-500);font-size:13px;line-height:1.6}
+.failure-table-wrap{max-height:min(560px,62vh);overflow:auto}.failure-detail-table{min-width:680px}.failure-account{display:flex;flex-direction:column;gap:3px}.failure-account b{color:var(--neutral-700);font-size:13px}.failure-account small{color:var(--neutral-400);font-size:11px}
 .period-summary-row>td{vertical-align:middle}.period-type-stat{display:flex;flex-direction:column;gap:3px;white-space:nowrap}.period-type-stat b{color:var(--neutral-700);font-size:13px}.period-type-stat small{color:var(--neutral-400);font-size:11px}.period-actions{display:flex;align-items:center;gap:12px;white-space:nowrap}
 .period-expansion-row>td{padding:0!important;background:var(--neutral-50)}.period-batch-panel{padding:14px 18px 18px;border-top:1px solid var(--neutral-200);border-bottom:1px solid var(--neutral-200)}.period-batch-panel>.table-wrap{margin:0;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface)}
 @media(max-width:980px){.period-summary-table{min-width:980px}.period-batch-panel{padding:12px}}

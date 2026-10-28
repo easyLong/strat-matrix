@@ -45,6 +45,14 @@ CATEGORY_TYPES = [
     ("营销", "营销内容"),
 ]
 
+# The second-level topic classification is the fixed 12-agent catalogue used
+# by the planning UI and content production chain.
+CONTENT_TYPES = [
+    "三公里好物种草", "产品权益种草", "三公里活动营销", "产品营销",
+    "通用活动", "金融科普", "热点解读", "属地推荐",
+    "一句话讨论", "财商教育", "客群兴趣内容", "人设故事",
+]
+
 
 def account_rows(now: datetime) -> tuple[list[tuple], list[tuple]]:
     records: list[tuple] = []
@@ -84,7 +92,8 @@ def topic_rows(now: datetime) -> tuple[list[tuple], list[tuple]]:
     for index in range(600):
         subject = SUBJECTS[index % len(SUBJECTS)]
         action = ACTIONS[index // len(SUBJECTS)]
-        category, content_type = CATEGORY_TYPES[index % len(CATEGORY_TYPES)]
+        category, _ = CATEGORY_TYPES[index % len(CATEGORY_TYPES)]
+        content_type = CONTENT_TYPES[index % len(CONTENT_TYPES)]
         topic_id = f"DEMO-LT{index + 1:03d}"
         title = f"批量演示选题：{subject}{action}"
         is_marketing = category == "营销"

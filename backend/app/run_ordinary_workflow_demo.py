@@ -25,6 +25,11 @@ from .content_production import batch_flow, enqueue_batch, mock_worker_once, rec
 
 
 ACCOUNT = 'E2E-ORD-ACCOUNT-001'
+CONTENT_TYPES = (
+    '三公里好物种草', '产品权益种草', '三公里活动营销', '产品营销',
+    '通用活动', '金融科普', '热点解读', '属地推荐',
+    '一句话讨论', '财商教育', '客群兴趣内容', '人设故事',
+)
 
 
 def seed_sources(start):
@@ -50,7 +55,7 @@ def seed_sources(start):
     ]
     records = [dict(topic_id=f'E2E-ORD-TOPIC-{i:03d}', title=title, outline=outline,
                     summary=outline, source='单账号普通策划闭环验收', category='家庭金融',
-                    content_type='图文', topic_type='normal', is_marketing=False,
+                    content_type=CONTENT_TYPES[(i - 1) % len(CONTENT_TYPES)], topic_type='normal', is_marketing=False,
                     approval_status='approved', enabled=True, updated_at=now.isoformat(),
                     valid_from=(now-timedelta(days=1)).isoformat(),
                     valid_to=datetime.combine(start+timedelta(days=90), datetime.min.time(), timezone.utc).isoformat())

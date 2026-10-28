@@ -225,6 +225,7 @@ export interface ManualTaskSummary {
   publish_date: string | null
   content_mode?: 'marketing' | 'non_marketing' | 'legacy'
   content_per_account?: number
+  allocation_count?: number
   planned_account_count: number
   result_count: number
   failure_count: number
@@ -295,6 +296,7 @@ export interface AutoFailure {
   batch_code: string
   account_id: string | null
   account_name: string
+  um_no?: string | null
   reason: string
 }
 

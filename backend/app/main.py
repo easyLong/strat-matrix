@@ -1437,9 +1437,12 @@ def cycle_records() -> tuple[list[dict], list[dict]]:
             placeholders = ",".join(["%s"] * len(batches))
             cursor.execute(
                 "SELECT i.batch_id, i.account_id, i.account_name, i.slot_type, i.topic_id, "
-                "i.topic_type, i.status, t.is_marketing AS source_is_marketing, s.production_status "
+                "i.topic_type, i.status, t.is_marketing AS source_is_marketing, s.production_status, "
+                "account_source.payload_json AS account_source_payload "
                 "FROM godp_planning_item i LEFT JOIN godp_slot_state s ON s.item_id=i.id "
                 "LEFT JOIN godp_topic t ON t.topic_code=i.topic_id AND t.del_flag='N' "
+                "LEFT JOIN godp_account_source account_source "
+                "ON account_source.account_id=i.account_id AND account_source.del_flag='N' "
                 f"WHERE i.del_flag='N' AND i.batch_id IN ({placeholders})",
                 [batch["id"] for batch in batches],
             )
@@ -1478,6 +1481,44 @@ def hotspot_is_pending(item: dict) -> bool:
         not item["topic_id"] or
         (item["account_id"].startswith("DEMO-") and item.get("production_status") in (None, "planned"))
     )
+
+
+def failure_account_um(item: dict) -> str | None:
+    payload = item.get("account_source_payload")
+    if not payload:
+        return None
+    try:
+        source = json.loads(payload) if isinstance(payload, str) else payload
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(source, dict):
+        return None
+    value = source.get("um_no") or source.get("owner_um")
+    return str(value).strip() or None if value is not None else None
+
+
+def cycle_failure_rows(relevant: list[dict], items: list[dict]) -> list[dict]:
+    by_batch: dict[int, list[dict]] = {}
+    for item in items:
+        by_batch.setdefault(item["batch_id"], []).append(item)
+    failures = []
+    for batch in relevant:
+        rows = by_batch.get(batch["id"], [])
+        item_failures = [item for item in rows if is_execution_error(item["status"])]
+        for item in item_failures:
+            failures.append({"batch_code": batch["batch_code"],
+                             "account_id": item["account_id"],
+                             "account_name": item["account_name"],
+                             "um_no": failure_account_um(item),
+                             "reason": item["status"]})
+        if is_execution_error(batch["status"]) and not item_failures:
+            reason = f"批次状态：{batch['status']}"
+            if batch["note"]:
+                reason += f"；批次备注：{batch['note']}"
+            failures.append({"batch_code": batch["batch_code"], "account_id": None,
+                             "account_name": "批次级异常", "um_no": None,
+                             "reason": reason})
+    return failures
 
 
 @app.get("/api/planning-cycles/{cycle_id}/items", response_model=list[AccountPlanRecord])
@@ -1677,24 +1718,15 @@ def list_auto_failures(cycle_id: date) -> list[dict]:
                 and monday(batch["cycle_start"]) == cycle_id]
     if not relevant:
         raise HTTPException(status_code=404, detail="自动策划周期不存在")
-    by_batch: dict[int, list[dict]] = {}
-    for item in items:
-        by_batch.setdefault(item["batch_id"], []).append(item)
-    failures = []
-    for batch in relevant:
-        rows = by_batch.get(batch["id"], [])
-        item_failures = [item for item in rows if is_execution_error(item["status"])]
-        for item in item_failures:
-            failures.append({"batch_code": batch["batch_code"],
-                             "account_id": item["account_id"],
-                             "account_name": item["account_name"],
-                             "reason": item["status"]})
-        if is_execution_error(batch["status"]) and not item_failures:
-            reason = f"批次状态：{batch['status']}"
-            if batch["note"]:
-                reason += f"；批次备注：{batch['note']}"
-            failures.append({"batch_code": batch["batch_code"], "account_id": None,
-                             "account_name": "批次级异常",
-                             "reason": reason})
-    return failures
+    return cycle_failure_rows(relevant, items)
+
+
+@app.get("/api/planning-cycles/{cycle_id}/failures", response_model=list[AutoFailure])
+def list_cycle_failures(cycle_id: date) -> list[dict]:
+    """Return account-level planning failures for every batch in a cycle."""
+    batches, items = cycle_records()
+    relevant = [batch for batch in batches if monday(batch["cycle_start"]) == cycle_id]
+    if not relevant:
+        raise HTTPException(status_code=404, detail="策划周期不存在")
+    return cycle_failure_rows(relevant, items)
 

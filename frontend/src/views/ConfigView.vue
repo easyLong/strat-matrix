@@ -516,7 +516,7 @@ function confirmCancelEditing() {
         <div class="lifecycle-definition-list">
           <div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition lifecycle-grouped-rule">
             <div class="lifecycle-rule-heading"><b>{{ rule.name }}</b><span class="lifecycle-rule-summary">{{ lifecycleRuleSummary(rule) }}</span><button v-if="!rule.catchAll && lifecycleEditing" class="text-btn" type="button" @click="activeLifecycleStage === rule.name ? activeLifecycleStage = '' : editLifecycleRule(rule)">{{ activeLifecycleStage === rule.name ? '确认' : '编辑' }}</button></div>
-            <template v-if="!rule.catchAll && activeLifecycleStage === rule.name">
+            <template v-if="!rule.catchAll">
               <template v-for="(group, groupIndex) in lifecycleGroups(rule)" :key="groupIndex">
                 <div v-if="groupIndex" class="lifecycle-or">或</div>
                 <div class="lifecycle-condition-group">
@@ -656,7 +656,7 @@ function confirmCancelEditing() {
 .config-overview-body .lifecycle-summary-table th:first-child { width: 160px; }
 .config-overview-body .lifecycle-summary-table th:nth-child(2), .config-overview-body .lifecycle-summary-table td:nth-child(2) { width: auto; text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .config-stack .lifecycle-grouped-rule{display:block;padding:12px 14px}
-.lifecycle-rule-heading{display:flex;align-items:center;gap:14px;min-height:32px}.lifecycle-rule-heading>b{flex:0 0 90px}.lifecycle-rule-heading .text-btn{margin-left:auto;white-space:nowrap}.lifecycle-rule-summary{flex:1;padding:7px 10px;border-radius:6px;background:var(--neutral-50);color:var(--neutral-600);font-size:12px;line-height:20px}
+.lifecycle-rule-heading{display:flex;align-items:center;gap:14px;min-height:32px}.lifecycle-rule-heading>b{flex:0 0 90px}.config-stack .lifecycle-rule-heading>.text-btn{display:none}.lifecycle-rule-summary{flex:1;padding:7px 10px;border-radius:6px;background:var(--neutral-50);color:var(--neutral-600);font-size:12px;line-height:20px}
 .lifecycle-condition-group{margin:10px 0;padding:12px;border:1px solid var(--neutral-200);border-radius:7px}.lifecycle-group-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--neutral-500);font-size:12px}.lifecycle-group-row select,.lifecycle-group-row input{height:32px;padding:0 8px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface)}.lifecycle-group-row select:first-of-type{width:155px}.lifecycle-group-row select:nth-of-type(2){width:64px}.lifecycle-group-row input{width:86px}.lifecycle-and,.lifecycle-or{color:var(--primary-600);background:var(--primary-50);border-radius:12px;padding:3px 8px;font-size:12px}.lifecycle-and-placeholder{width:28px}.lifecycle-or{display:inline-block}.lifecycle-add-group{margin-top:4px}@media(max-width:600px){.lifecycle-rule-heading{flex-wrap:wrap}.lifecycle-rule-summary{flex-basis:100%;order:3}.lifecycle-group-row{flex-wrap:wrap}}
 .config-stack{gap:20px;margin-bottom:20px}
 .config-stack>.card{margin-bottom:0}
