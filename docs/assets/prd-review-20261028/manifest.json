@@ -1,0 +1,336 @@
+{
+  "captured_at": "2026-10-28T13:17:50.813Z",
+  "base": "http://127.0.0.1:930",
+  "figures": [
+    {
+      "id": "CFG-01",
+      "title": "配置只读总览",
+      "file": "CFG-01.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".config-page-head .page-actions"
+        },
+        {
+          "number": 2,
+          "selector": ".config-at-glance"
+        },
+        {
+          "number": 3,
+          "selector": ".lifecycle-summary-table"
+        }
+      ]
+    },
+    {
+      "id": "CFG-05",
+      "title": "历史配置列表",
+      "file": "CFG-05.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": []
+    },
+    {
+      "id": "CFG-06",
+      "title": "历史版本完整配置及修改摘要",
+      "file": "CFG-06.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": []
+    },
+    {
+      "id": "CFG-02",
+      "title": "内容策划配置编辑",
+      "file": "CFG-02.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".day-picker"
+        },
+        {
+          "number": 2,
+          "selector": ".schedule-picker"
+        }
+      ]
+    },
+    {
+      "id": "CFG-03",
+      "title": "生命周期条件组编辑",
+      "file": "CFG-03.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".lifecycle-condition-group"
+        },
+        {
+          "number": 2,
+          "selector": ".lifecycle-add-group"
+        }
+      ]
+    },
+    {
+      "id": "CFG-04",
+      "title": "选题标签分类与标签操作",
+      "file": "CFG-04.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": []
+    },
+    {
+      "id": "CFG-04A",
+      "title": "标签改名与停用菜单",
+      "file": "CFG-04A.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": []
+    },
+    {
+      "id": "CFG-07",
+      "title": "取消编辑二次确认",
+      "file": "CFG-07.png",
+      "url": "http://127.0.0.1:930/config",
+      "markers": []
+    },
+    {
+      "id": "MAN-01",
+      "title": "人工策划任务列表",
+      "file": "MAN-01.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".manual-head-actions"
+        },
+        {
+          "number": 2,
+          "selector": ".manual-task-card thead"
+        },
+        {
+          "number": 3,
+          "selector": ".manual-task-pagination"
+        }
+      ]
+    },
+    {
+      "id": "MAN-02",
+      "title": "非营销创建策划",
+      "file": "MAN-02.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-03",
+      "title": "选择账号及维度筛选",
+      "file": "MAN-03.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".manual-account-selection-row"
+        },
+        {
+          "number": 2,
+          "selector": ".manual-plan-account-count"
+        },
+        {
+          "number": 3,
+          "selector": ".manual-account-filters"
+        }
+      ]
+    },
+    {
+      "id": "MAN-04",
+      "title": "模板导入方式",
+      "file": "MAN-04.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-05",
+      "title": "部分账号识别异常",
+      "file": "MAN-05.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-06",
+      "title": "账号选择保存后的冻结与衔接",
+      "file": "MAN-06.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-07",
+      "title": "非营销选择选题",
+      "file": "MAN-07.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".manual-topic-picked"
+        },
+        {
+          "number": 2,
+          "selector": ".manual-topic-filters"
+        },
+        {
+          "number": 3,
+          "selector": ".manual-topic-table"
+        }
+      ]
+    },
+    {
+      "id": "MAN-08",
+      "title": "非营销确认策划",
+      "file": "MAN-08.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-09",
+      "title": "营销创建策划",
+      "file": "MAN-09.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-10",
+      "title": "营销单选选题及分配数量",
+      "file": "MAN-10.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-10A",
+      "title": "营销分配数量输入局部",
+      "file": "MAN-10A.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "MAN-11",
+      "title": "营销确认策划",
+      "file": "MAN-11.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "RES-01",
+      "title": "策划结果账号列表",
+      "file": "RES-01.png",
+      "url": "http://127.0.0.1:930/results",
+      "markers": [
+        {
+          "number": 1,
+          "selector": ".result-tabs"
+        },
+        {
+          "number": 2,
+          "selector": "#account-dimension-filter-fields"
+        },
+        {
+          "number": 3,
+          "selector": ".account-dimension-table-scroll"
+        }
+      ]
+    },
+    {
+      "id": "RES-09",
+      "title": "账号导出选择日期",
+      "file": "RES-09.png",
+      "url": "http://127.0.0.1:930/results",
+      "markers": []
+    },
+    {
+      "id": "RES-02",
+      "title": "账号策划详情概览与日期筛选",
+      "file": "RES-02.png",
+      "url": "http://127.0.0.1:930/results?dimension=account&account=DEMO-P-H",
+      "markers": []
+    },
+    {
+      "id": "RES-03",
+      "title": "账号周历与同日策划",
+      "file": "RES-03.png",
+      "url": "http://127.0.0.1:930/results?dimension=account&account=DEMO-P-H",
+      "markers": []
+    },
+    {
+      "id": "RES-07",
+      "title": "单条策划详情",
+      "file": "RES-07.png",
+      "url": "http://127.0.0.1:930/results?dimension=account&account=DEMO-P-H",
+      "markers": []
+    },
+    {
+      "id": "RES-04",
+      "title": "策划结果时间列表",
+      "file": "RES-04.png",
+      "url": "http://127.0.0.1:930/results?dimension=period",
+      "markers": []
+    },
+    {
+      "id": "RES-10",
+      "title": "失败账号及失败原因",
+      "file": "RES-10.png",
+      "url": "http://127.0.0.1:930/results?dimension=period",
+      "markers": []
+    },
+    {
+      "id": "RES-05",
+      "title": "周期行展开批次",
+      "file": "RES-05.png",
+      "url": "http://127.0.0.1:930/results?dimension=period",
+      "markers": []
+    },
+    {
+      "id": "RES-06",
+      "title": "周期策划详情与批次列表",
+      "file": "RES-06.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-11-16",
+      "markers": []
+    },
+    {
+      "id": "RES-06A",
+      "title": "批次策划详情及返回周期入口",
+      "file": "RES-06A.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-11-16&batch=110&from=cycle",
+      "markers": []
+    },
+    {
+      "id": "RES-06B",
+      "title": "批次内账号展开的日历",
+      "file": "RES-06B.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-11-16&batch=110&from=cycle",
+      "markers": []
+    },
+    {
+      "id": "RES-08",
+      "title": "替换选题筛选与候选",
+      "file": "RES-08.png",
+      "url": "http://127.0.0.1:930/results?batch=116",
+      "markers": []
+    },
+    {
+      "id": "RES-11",
+      "title": "异步内容流水",
+      "file": "RES-11.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    },
+    {
+      "id": "RES-11A",
+      "title": "内容流水执行记录",
+      "file": "RES-11A.png",
+      "url": "http://127.0.0.1:930/results?batch=110",
+      "markers": []
+    },
+    {
+      "id": "ERR-01",
+      "title": "创建策划必填校验",
+      "file": "ERR-01.png",
+      "url": "http://127.0.0.1:930/manual",
+      "markers": []
+    }
+  ],
+  "errors": [],
+  "blocked_writes": []
+}
