@@ -1,5 +1,7 @@
 # strat-matrix 服务器部署说明
 
+2026-10-28 升级新增营销任务总分配数量字段。已有部署应先在 `backend` 目录执行 `python -m app.init_manual_marketing_db`，再构建前端并重启后端；具体命令与兼容边界见[近期修改汇总](近期修改汇总_2026-10-28.md)。营销创建请求已改为单个选题和总分配数量，前后端须同时更新。
+
 单账号普通选题闭环新增流程Worker及持久化任务表，迁移命令为 `cd backend && python -m app.init_workflow_db`。现有启动脚本已接入迁移和Worker管理，运行及验收说明见 [ORDINARY_WORKFLOW.md](ORDINARY_WORKFLOW.md)。内容生产默认关闭；本地模拟模式须显式配置。
 
 本文档适用于一台 Linux 服务器，采用以下进程结构：
@@ -57,7 +59,7 @@ MYSQL_DATABASE=strat_matrix
 
 MySQL `godp_system_config` 保存前后端监听地址/端口、模型标识和鉴权密钥，见[系统配置说明](SYSTEM_CONFIG.md)。安装后端依赖后，在 `backend` 执行 `python -m app.init_system_config --migrate-env --clean-env` 初始化当前配置并物理删除其余旧参数。需要跨系统接口时，再设置 `INTEGRATION_TOKEN`。
 
-页面作为整体业务模块嵌入客户系统，直接进入策划配置、AI自动策划、手动策划和策划结果。登录、用户账号和角色由宿主系统负责。当前人工操作审计统一标记为“运营人员”，自动任务标记为 `system`。
+页面作为整体业务模块嵌入客户系统，一级页面为 AI策划配置、人工策划和策划结果。登录、用户账号和角色由宿主系统负责。当前人工操作审计统一标记为“运营人员”，自动任务标记为 `system`。
 
 `/api/integrations/` 和 `/api/internal/` 下的系统接口使用 `X-Integration-Token` 机器令牌。
 
