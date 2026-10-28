@@ -322,10 +322,10 @@ watch([() => store.databaseReady, dimension, showingBatchDetail, showingPeriodDe
                   <td class="batch-count" :class="{ failed: period.failedCount > 0 }">{{ period.failedCount }}</td>
                   <td>{{ formatDateTime(period.updatedAt) }}</td>
                   <td><div class="period-actions">
-                    <button v-if="period.failedCount > 0" class="text-btn failure-action" type="button" @click="showFailureDetails(period)">查看失败详情</button>
                     <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
                     <button class="text-btn" type="button" @click="openPeriod(period)">查看策划</button>
                     <PlanningExport inline :batches="period.batches" :filename="`策划明细_${period.cycleStart}_${period.cycleEnd}.csv`" />
+                    <button v-if="period.failedCount > 0" class="text-btn failure-action" type="button" @click="showFailureDetails(period)">查看失败详情</button>
                   </div></td>
                 </tr>
                 <tr v-if="expandedPeriod === period.cycleStart" class="period-expansion-row">
