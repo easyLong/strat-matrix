@@ -35,5 +35,6 @@ export function productionStatusLabel(
 }
 
 export function canReplacePlanTopic(item: PlanItem): boolean {
-  return item.allow_replace && Boolean(item.topic_id?.trim()) && productionStatusLabel(item) !== '生产中'
+  return item.allow_replace && Boolean(item.topic_id?.trim())
+    && !['生产中', '已完成'].includes(productionStatusLabel(item))
 }

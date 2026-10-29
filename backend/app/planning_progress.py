@@ -22,11 +22,14 @@ def production_status(row: dict) -> str:
         return state
     if row.get("published_at") or row.get("status") == "已发布":
         return "published"
-    return {
-        "已生成": "generated", "生成完成": "generated", "生产完成": "generated",
+    labels = {
+        "已完成": "generated", "已生成": "generated", "生成完成": "generated", "生产完成": "generated",
+        "已发布": "published",
         "生成失败": "failed", "生产失败": "failed", "生产异常": "failed",
-        "生成中": "ready", "生产中": "ready",
-    }.get(row.get("status"), "planned")
+        "生成中": "ready", "生产中": "ready", "上传中": "ready",
+        "待生产": "planned", "待生成": "planned", "未生成": "planned",
+    }
+    return labels.get(state) or labels.get(row.get("status"), "planned")
 
 
 def planning_status_label(status: str | None, failed_count: int = 0) -> str:

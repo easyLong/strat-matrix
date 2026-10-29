@@ -82,6 +82,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function allManualTasks(path: string): Promise<ManualTaskSummary[]> {
+  const tasks = new Map<string, ManualTaskSummary>()
+  const limit = 100
+  for (let offset = 0; ; offset += limit) {
+    const rows = await request<ManualTaskSummary[]>(`${path}?limit=${limit}&offset=${offset}`)
+    const previousSize = tasks.size
+    for (const row of rows) tasks.set(row.task_code, row)
+    if (rows.length < limit) return [...tasks.values()]
+    if (tasks.size === previousSize) throw new Error('任务分页读取异常，请重试')
+  }
+}
+
 export const api = {
   health: () => request<{ service: string; database: string }>('/health'),
   config: () => request<ConfigResponse>('/config'),
@@ -119,8 +131,8 @@ export const api = {
     request<ManualPreviewResponse>('/manual-plans/previews', { method: 'POST', body: JSON.stringify(input) }),
   submitManualPreview: (previewId: string) =>
     request<ManualTaskSummary>(`/manual-plans/previews/${encodeURIComponent(previewId)}/submit`, { method: 'POST' }),
-  manualTasks: () => request<ManualTaskSummary[]>('/manual-plans/tasks'),
-  marketingTasks: () => request<ManualTaskSummary[]>('/manual-plans/marketing-tasks'),
+  manualTasks: () => allManualTasks('/manual-plans/tasks'),
+  marketingTasks: () => allManualTasks('/manual-plans/marketing-tasks'),
   createMarketingTask: (input: { request_id: string; task_name: string; topic_id: string; allocation_count: number }) =>
     request<ManualTaskSummary>('/manual-plans/marketing-tasks', { method: 'POST', body: JSON.stringify(input) }),
   marketingTaskDetails: (code: string) => request<{ task: ManualTaskSummary; accounts: AccountOption[]; topics: TopicOption[] }>(`/manual-plans/marketing-tasks/${encodeURIComponent(code)}`),

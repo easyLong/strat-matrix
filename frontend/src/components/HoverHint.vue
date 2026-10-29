@@ -79,7 +79,7 @@ onBeforeUnmount(() => {
     @mouseenter="hovered = true; show()" @mouseleave="hovered = false; scheduleClose()"
     @focus="focused = true; show()" @blur="focused = false; scheduleClose()" @click="show">
     <slot />
-    <svg v-if="showIcon" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v5m0-9v1" /></svg>
+    <span v-if="showIcon" class="field-help-tip" aria-hidden="true">?</span>
   </button>
   <Teleport to="body">
     <div v-if="open" :id="tooltipId" ref="tooltip" class="hover-hint-tooltip" :style="position" role="tooltip"
@@ -91,7 +91,7 @@ onBeforeUnmount(() => {
 .hover-hint{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:var(--neutral-500);font:inherit;font-size:13px;white-space:nowrap;cursor:help}
 .hover-hint:hover,.hover-hint:focus-visible{color:var(--primary-600)}
 .hover-hint:focus-visible{outline:2px solid var(--primary-600);outline-offset:3px;border-radius:4px}
-.hover-hint svg{flex-shrink:0}
+.hover-hint .field-help-tip{flex-shrink:0;color:inherit}
 .hover-hint-tooltip{position:fixed;z-index:1200;box-sizing:border-box;width:max-content;max-width:min(320px,calc(100vw - 24px));padding:10px 12px;border:1px solid var(--neutral-200);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-3);color:var(--neutral-700);font-size:13px;line-height:20px;white-space:normal;overflow-wrap:anywhere}
 </style>
 

@@ -674,6 +674,13 @@ def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, acco
                       topic_id: str, publish_date: str, operator: str = "system") -> bool:
     """Create local slot state; output only for synced customer facts."""
     slot_id = f"SLOT-{item_id}"
+    # Local version/state is required for replacement even when no external
+    # integration event can be sent (demo or not-yet-synced source data).
+    cursor.execute(
+        "INSERT INTO godp_slot_state "
+        "(item_id, slot_id, version, topic_id, create_by, update_by) VALUES (%s, %s, 1, %s, %s, %s)",
+        (item_id, slot_id, topic_id, operator, operator),
+    )
     if batch_code.startswith("DEMO-"):
         return False
     cursor.execute(
@@ -693,11 +700,6 @@ def queue_manual_slot(cursor, item_id: int, batch_id: int, batch_code: str, acco
     )
     if not account_ready or cursor.fetchone() is None:
         return False
-    cursor.execute(
-        "INSERT INTO godp_slot_state "
-        "(item_id, slot_id, version, topic_id, create_by, update_by) VALUES (%s, %s, 1, %s, %s, %s)",
-        (item_id, slot_id, topic_id, operator, operator),
-    )
     queue_event(cursor, "planning", "SLOT_PLAN_CREATED", {
         "planning_cycle_id": publish_date,
         "planning_batch_id": batch_id,

@@ -61,10 +61,32 @@ class TopicReplacementTests(unittest.TestCase):
         self.assertTrue(api.replacement_block_reason(empty, "auto"))
         self.assertIn("已发布", api.replacement_block_reason(slot_row(production_status="published"), "auto"))
 
-    def test_existing_replacement_rules_after_production_are_preserved(self):
-        for state in ("generated", "failed"):
-            with self.subTest(state=state):
-                self.assertEqual(api.replacement_block_reason(slot_row(production_status=state), "auto"), "")
+    def test_failed_topics_remain_replaceable(self):
+        self.assertEqual(api.replacement_block_reason(slot_row(production_status="failed"), "auto"), "")
+
+    def test_completed_content_is_blocked_for_both_planning_types(self):
+        for plan_type in ("auto", "manual"):
+            for state in ("generated", "已完成", "已生成", "生成完成", "生产完成"):
+                with self.subTest(plan_type=plan_type, state=state):
+                    item = api.enrich_plan_item(slot_row(production_status=state), plan_type)
+                    self.assertFalse(item["allow_replace"])
+                    self.assertEqual(item["replace_block_reason"], "内容已完成，选题不可替换")
+
+    def test_completed_candidate_and_submit_endpoints_reject_without_writes(self):
+        for state in ("generated", "published"):
+            for submit in (False, True):
+                with self.subTest(state=state, submit=submit), \
+                        database_row(slot_row(production_status=state)) as (db, cursor), \
+                        patch.object(api, "available_replacement_topics") as candidates:
+                    with self.assertRaises(HTTPException) as raised:
+                        if submit:
+                            api.replace_topic(17, ReplaceTopicInput(new_topic_id="TOPIC-002", expected_version=1))
+                        else:
+                            api.list_replacement_candidates(17)
+                    self.assertEqual(raised.exception.status_code, 409)
+                    candidates.assert_not_called()
+                    db.commit.assert_not_called()
+                    cursor.execute.assert_called_once()
 
     def test_read_response_marks_running_slot_as_not_replaceable(self):
         item = api.enrich_plan_item(slot_row(production_status="ready"), "auto")

@@ -93,11 +93,11 @@ def create_marketing_task(payload: MarketingTaskInput):
 
 
 @router.get('', response_model=list[ManualTaskSummary])
-def list_marketing_tasks(limit: int = 20):
+def list_marketing_tasks(limit: int = 20, offset: int = 0):
     try:
         with connection() as db, db.cursor() as cursor:
-            cursor.execute('SELECT * FROM godp_manual_marketing_task WHERE del_flag=\'N\' ORDER BY id DESC LIMIT %s',
-                           (max(1, min(limit, 100)),))
+            cursor.execute('SELECT * FROM godp_manual_marketing_task WHERE del_flag=\'N\' ORDER BY id DESC LIMIT %s OFFSET %s',
+                           (max(1, min(limit, 100)), max(0, offset)))
             return [summary(row) for row in cursor.fetchall()]
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
         raise database_error(exc) from exc

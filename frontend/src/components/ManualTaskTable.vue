@@ -3,21 +3,19 @@ import LoadingSkeleton from './LoadingSkeleton.vue'
 import HoverHint from './HoverHint.vue'
 import type { ManualTaskSummary } from '../types'
 import { formatDateTime } from '../planningTime'
+import { manualPlanningLabel as planningLabel, manualContentLabel as contentLabel } from '../ui/manualTask'
 
 defineProps<{
   tasks: ManualTaskSummary[]
   loading: boolean
   initialized: boolean
+  filtered?: boolean
 }>()
 
 const emit = defineEmits<{
   planDetails: [task: ManualTaskSummary]
   contentFlow: [task: ManualTaskSummary]
 }>()
-
-function planningLabel(task: ManualTaskSummary) {
-  return task.planning_status || task.status || '—'
-}
 
 function planningTone(task: ManualTaskSummary) {
   const label = planningLabel(task)
@@ -26,20 +24,6 @@ function planningTone(task: ManualTaskSummary) {
   if (/进行中|执行中|处理中|策划中|生成中/.test(label)) return 'blue'
   if (/完成|成功/.test(label)) return 'green'
   return 'gray'
-}
-
-function contentLabel(task: ManualTaskSummary) {
-  const raw = (task.content_status || '').trim()
-  const hasCompleted = task.content_completed_count > 0 || task.content_completed_account_count > 0
-  const hasFailures = task.content_failed_count > 0
-  if (hasCompleted && hasFailures) return '部分失败'
-  if (hasFailures && !hasCompleted) return '生成失败'
-  if (/待生产|待生成|未生成/.test(raw)) return '待生成'
-  if (/生产中|生成中|上传中/.test(raw)) return '生成中'
-  if (/已完成|已生成|已发布/.test(raw)) return '已完成'
-  if (/失败|异常|错误/.test(raw)) return '生成失败'
-  if (!raw && !task.batch_id) return '—'
-  return raw || '待生成'
 }
 
 function contentTone(task: ManualTaskSummary) {
@@ -83,7 +67,7 @@ function contentStatusText(task: ManualTaskSummary) {
     <table class="manual-task-table">
       <thead>
         <tr>
-          <th><HoverHint text="名称+批次号" :show-icon="false" class="manual-batch-heading">批次</HoverHint></th>
+          <th><HoverHint text="名称+批次号" class="manual-batch-heading">批次</HoverHint></th>
           <th>投放日期</th>
           <th>账号数</th>
           <th>选题数</th>
@@ -123,7 +107,7 @@ function contentStatusText(task: ManualTaskSummary) {
             </div>
           </td>
         </tr>
-        <tr v-if="tasks.length === 0"><td colspan="10"><div class="empty-state">暂无人工策划任务</div></td></tr>
+        <tr v-if="tasks.length === 0"><td colspan="10"><div class="empty-state">{{ filtered ? '没有符合筛选条件的策划任务' : '暂无人工策划任务' }}</div></td></tr>
       </tbody>
     </table>
   </div>

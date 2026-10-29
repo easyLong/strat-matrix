@@ -135,6 +135,8 @@ def replacement_block_reason(row: dict, plan_type: str | None = None) -> str:
         return "内容已发布，当前结果不可替换"
     if production_status(row) == "ready":
         return "内容生产中，选题不可替换"
+    if production_status(row) == "generated":
+        return "内容已完成，选题不可替换"
     return ""
 
 
@@ -1381,8 +1383,9 @@ def submit_manual_preview(preview_id: str, background_tasks: BackgroundTasks) ->
 
 
 @app.get("/api/manual-plans/tasks", response_model=list[ManualTaskSummary])
-def list_manual_tasks(limit: int = 20) -> list[dict]:
+def list_manual_tasks(limit: int = 20, offset: int = 0) -> list[dict]:
     limit = max(1, min(limit, 100))
+    offset = max(0, offset)
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
@@ -1412,7 +1415,7 @@ def list_manual_tasks(limit: int = 20) -> list[dict]:
                 "FROM godp_planning_item i LEFT JOIN godp_slot_state s "
                 "ON s.item_id=i.id AND s.del_flag='N' "
                 "WHERE i.del_flag='N' GROUP BY i.batch_id) cs ON cs.batch_id=t.batch_id "
-                "WHERE t.del_flag='N' ORDER BY t.id DESC LIMIT %s", (limit,),
+                "WHERE t.del_flag='N' ORDER BY t.id DESC LIMIT %s OFFSET %s", (limit, offset),
             )
             rows = cursor.fetchall()
             for row in rows:

@@ -14,6 +14,7 @@ import { usePlanningStore } from '../store'
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types'
 import { buildAccountImportIssueCsv, recognizeAccountImport, type AccountImportRow } from '../ui/accountImport'
 import { createRequestId } from '../ui/requestId'
+import { manualPlanningLabel, manualContentLabel, matchesManualTask, type ManualTaskFilters } from '../ui/manualTask'
 
 const store = usePlanningStore()
 const router = useRouter()
@@ -52,6 +53,22 @@ const topicFiltersExpanded = ref(true)
 const tasks = ref<ManualTaskSummary[]>([])
 const taskPage = ref(1)
 const taskPageSize = ref(10)
+const taskFilters = ref<ManualTaskFilters>({ batch: '', dateStart: '', dateEnd: '', creator: '', planningStatus: '', contentStatus: '' })
+const appliedTaskFilters = ref<ManualTaskFilters>({ ...taskFilters.value })
+const taskDateError = ref('')
+const taskFiltersActive = computed(() => Object.values(appliedTaskFilters.value).some(Boolean))
+const taskPlanningStatuses = computed(() => [...new Set(['生成中', '已完成', '生成失败', ...tasks.value.map(manualPlanningLabel)])])
+const taskContentStatuses = computed(() => [...new Set(['待分配', '待生成', '生成中', '已完成', '生成失败', '部分失败', ...tasks.value.map(manualContentLabel)])])
+const filteredTasks = computed(() => tasks.value.filter(task => matchesManualTask(task, appliedTaskFilters.value)))
+function applyTaskFilters() {
+  taskDateError.value = ''
+  if (taskFilters.value.dateStart && taskFilters.value.dateEnd && taskFilters.value.dateStart > taskFilters.value.dateEnd) {
+    taskDateError.value = '投放开始日期不能晚于结束日期'
+    return
+  }
+  appliedTaskFilters.value = { ...taskFilters.value, batch: taskFilters.value.batch.trim(), creator: taskFilters.value.creator.trim() }
+  taskPage.value = 1
+}
 const contentFlowBatchId = ref<number | null>(null)
 const sampledIds = ref<string[]>([])
 watch([taskName, allocationCount], () => { marketingRequestId.value = createRequestId() }, { flush: 'sync' })
@@ -198,7 +215,7 @@ const filteredTopics = computed(() => topics.value.filter(topic =>
   (!appliedTopicFilters.value.activity || topic.related_activity === appliedTopicFilters.value.activity) &&
   (!appliedTopicFilters.value.hotspot || topic.related_hotspot === appliedTopicFilters.value.hotspot),
 ))
-const pagedTasks = computed(() => tasks.value.slice((taskPage.value - 1) * taskPageSize.value, taskPage.value * taskPageSize.value))
+const pagedTasks = computed(() => filteredTasks.value.slice((taskPage.value - 1) * taskPageSize.value, taskPage.value * taskPageSize.value))
 const topicPageCount = computed(() => Math.max(1, Math.ceil(filteredTopics.value.length / topicPageSize.value)))
 const pagedTopics = computed(() => filteredTopics.value.slice((topicPage.value - 1) * topicPageSize.value, topicPage.value * topicPageSize.value))
 const selectedAccounts = computed(() => sampledIds.value.map(id => accounts.value.find(item => item.account_id === id)).filter((item): item is AccountOption => !!item))
@@ -216,7 +233,7 @@ const targetCountError = computed(() => targetCount.value !== '' && (!Number.isI
 watch(topicPageSize, () => { topicPage.value = 1 })
 watch(topicPageCount, count => { topicPage.value = Math.min(topicPage.value, count) })
 watch(taskPageSize, () => { taskPage.value = 1 })
-watch(tasks, () => { taskPage.value = Math.min(taskPage.value, Math.max(1, Math.ceil(tasks.value.length / taskPageSize.value))) })
+watch(filteredTasks, () => { taskPage.value = Math.min(taskPage.value, Math.max(1, Math.ceil(filteredTasks.value.length / taskPageSize.value))) })
 watch(selectedAccounts, () => { submitAccountPage.value = 1 })
 watch(selectedTopics, () => { submitTopicPage.value = 1 })
 watch(submitTopicPageSize, () => { submitTopicPage.value = 1 })
@@ -302,6 +319,7 @@ async function loadCatalog() {
 }
 
 async function loadTasks() {
+  if (tasksLoading.value) return
   tasksLoading.value = true
   try {
     const [rows, marketingRows] = await Promise.all([api.manualTasks(), api.marketingTasks()])
@@ -676,14 +694,26 @@ function closeEligibilityNotice(returnToSelection = false) {
 
   <section v-if="mode === 'list'" class="card manual-task-card">
     <div class="card-head"><div><h2>策划任务列表</h2></div></div>
+    <form class="card-body manual-task-filter-panel" aria-label="策划任务筛选" novalidate @submit.prevent="applyTaskFilters">
+      <div class="manual-task-filters query-filter-grid" data-query-filters="standard">
+        <label class="field"><span>批次</span><input v-model="taskFilters.batch" type="search" placeholder="输入批次名称或批次号" /></label>
+        <label class="field manual-task-date-field"><span>投放起止日期</span><div class="manual-task-date-range"><input v-model="taskFilters.dateStart" type="date" aria-label="投放开始日期" :max="taskFilters.dateEnd || undefined" :aria-invalid="!!taskDateError" :aria-describedby="taskDateError ? 'manual-task-date-error' : undefined" /><span>至</span><input v-model="taskFilters.dateEnd" type="date" aria-label="投放结束日期" :min="taskFilters.dateStart || undefined" :aria-invalid="!!taskDateError" :aria-describedby="taskDateError ? 'manual-task-date-error' : undefined" /></div></label>
+        <label class="field"><span>创建人</span><input v-model="taskFilters.creator" type="search" placeholder="输入创建人" /></label>
+        <label class="field"><span>策划状态</span><select v-model="taskFilters.planningStatus" aria-label="策划状态"><option value="">全部</option><option v-for="status in taskPlanningStatuses" :key="status" :value="status">{{ status === '—' ? '暂无状态' : status }}</option></select></label>
+        <label class="field"><span>内容状态</span><select v-model="taskFilters.contentStatus" aria-label="内容状态"><option value="">全部</option><option v-for="status in taskContentStatuses" :key="status" :value="status">{{ status === '—' ? '暂无状态' : status }}</option></select></label>
+        <div class="query-filter-actions"><button class="btn primary" type="submit">查询</button></div>
+      </div>
+      <p v-if="taskDateError" id="manual-task-date-error" class="inline-error" role="alert">{{ taskDateError }}</p>
+    </form>
     <ManualTaskTable
       :tasks="pagedTasks"
       :loading="tasksLoading"
       :initialized="store.initialized"
+      :filtered="taskFiltersActive"
       @plan-details="openTaskDetails"
       @content-flow="openContentFlow"
     />
-    <ListPagination v-if="tasks.length" v-model:page="taskPage" v-model:page-size="taskPageSize" :total="tasks.length" unit="个任务" :page-size-options="[10, 20, 50]" class="manual-task-pagination" />
+    <ListPagination v-if="tasks.length" v-model:page="taskPage" v-model:page-size="taskPageSize" :total="filteredTasks.length" unit="个任务" :page-size-options="[10, 20, 50]" class="manual-task-pagination" />
   </section>
 
   <template v-else>
@@ -967,4 +997,9 @@ function closeEligibilityNotice(returnToSelection = false) {
 @media(max-width:700px){.manual-topic-picker{grid-template-columns:1fr}.manual-topic-picked{position:static;grid-row:1}.manual-topic-picked-list{max-height:240px}}
 @media(max-width:580px){.manual-step-body{padding-bottom:124px}.manual-step-actions{min-height:76px;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}.manual-step-actions .manual-step-review{width:100%;flex-wrap:wrap}.manual-step-actions .manual-step-review>strong{flex-basis:calc(100% - 36px)}.manual-step-actions .manual-step-review .btn{flex:1}}
 @media(max-width:580px){.manual-marketing-allocation-row{align-items:flex-start;flex-direction:column}.manual-marketing-allocation{margin-left:0}}
+.manual-task-filters > .manual-task-date-field { flex-basis: calc(var(--filter-field-width) * 2 + 12px); width: calc(var(--filter-field-width) * 2 + 12px); }
+.manual-task-date-range { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.manual-task-date-range input { flex: 1 1 0; width: 0; min-width: 0; }
+.manual-task-date-range > span { color: var(--neutral-400); font-size: 12px; }
+@container query-filters (max-width: 640px) { .manual-task-filters > .manual-task-date-field { flex-basis: 100%; width: 100%; } }
 </style>
