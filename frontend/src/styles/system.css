@@ -229,8 +229,6 @@ tbody tr.selected b { color: var(--primary-600); }
 @media(max-width:580px) {
   .main .manual-stepper { overflow-x: auto; justify-content: flex-start; }
   .main .manual-stepper .manual-step { flex: 0 0 auto; min-width: max-content; white-space: nowrap; }
-  .main .manual-account-filters.query-filter-grid[data-query-filters], .main .manual-topic-filters.query-filter-grid[data-query-filters] { grid-template-columns: minmax(0, 1fr); }
-  .main .manual-account-filters .query-filter-tail, .main .manual-topic-filters .query-filter-tail { grid-column: 1 / -1; }
   .main .manual-plan-account-input-wrap { min-width: 0; flex: 1; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
@@ -249,13 +247,34 @@ tbody tr.selected b { color: var(--primary-600); }
 .account-week-scroll-control.next { right: 4px; }
 .account-week-scroll-control svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 
-/* Keep the last filter and its query actions together when the filters wrap. */
-.query-filter-grid[data-query-filters] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; }
-.query-filter-grid[data-query-filters="compact"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.query-filter-grid[data-query-filters="narrow"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.query-filter-tail { grid-column: span 2; display: flex; align-items: flex-end; gap: 12px; min-width: 0; }
-.query-filter-tail > label, .query-filter-tail > select { flex: 1 1 0; min-width: 0; }
-.query-filter-grid .query-filter-actions { grid-column: auto; display: flex; flex: 0 0 auto; align-items: center; align-self: end; justify-content: flex-start; gap: 8px; white-space: nowrap; }
-.query-filter-grid .query-filter-actions > .btn { flex: 0 0 auto; height: 36px; min-width: 80px; }
-@media(max-width:980px) { .query-filter-grid[data-query-filters] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Size filters against their own panel, including split panes and drawers. */
+.query-filter-grid[data-query-filters] { container: query-filters / inline-size; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.query-filter-grid[data-query-filters] .query-filter-tail { display: contents; }
+.query-filter-grid[data-query-filters] > :is(label, select),
+.query-filter-grid[data-query-filters] > .query-filter-tail > :is(label, select) {
+  --filter-field-width: calc((100% - 36px) / 4);
+  box-sizing: border-box; flex: 0 0 var(--filter-field-width); width: var(--filter-field-width); min-width: 0; margin: 0;
+}
+.query-filter-grid[data-query-filters] label :is(input, select),
+.query-filter-grid[data-query-filters] > select,
+.query-filter-grid[data-query-filters] .query-filter-tail > select { box-sizing: border-box; height: 32px; min-height: 32px; }
+.query-filter-grid[data-query-filters] :is(.manual-follower-range, .account-history-follower-range) { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; min-height: 32px; }
+.query-filter-grid[data-query-filters] :is(.manual-follower-range, .account-history-follower-range) input { flex: 1 1 0; width: 0; min-width: 0; height: 30px; min-height: 30px; padding: 0; }
+.query-filter-grid[data-query-filters] .query-filter-actions { display: flex; flex: 1 0 auto; align-items: center; align-self: flex-end; justify-content: flex-end; margin-left: auto; gap: 8px; white-space: nowrap; }
+.query-filter-grid[data-query-filters] .query-filter-actions > .btn { flex: 0 0 auto; height: 32px; min-height: 32px; min-width: 80px; }
+@container query-filters (max-width: 900px) {
+  .query-filter-grid[data-query-filters] > :is(label, select),
+  .query-filter-grid[data-query-filters] > .query-filter-tail > :is(label, select) { --filter-field-width: calc((100% - 24px) / 3); }
+}
+@container query-filters (max-width: 640px) {
+  .query-filter-grid[data-query-filters] > :is(label, select),
+  .query-filter-grid[data-query-filters] > .query-filter-tail > :is(label, select) { --filter-field-width: calc((100% - 12px) / 2); }
+}
+@container query-filters (max-width: 480px) {
+  .query-filter-grid[data-query-filters] > label:has(.manual-follower-range, .account-history-follower-range) { --filter-field-width: 100%; }
+}
+@container query-filters (max-width: 380px) {
+  .query-filter-grid[data-query-filters] > :is(label, select),
+  .query-filter-grid[data-query-filters] > .query-filter-tail > :is(label, select) { --filter-field-width: 100%; }
+}
 @media(max-width:1100px) { .account-week-calendar { grid-template-columns: repeat(7,minmax(160px,1fr)); width: max-content; min-width: 100%; } }
