@@ -33,38 +33,7 @@ CREATE TABLE IF NOT EXISTS godp_strategy_config (
     UNIQUE KEY uk_config_key (config_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营策划配置';
 
-CREATE TABLE IF NOT EXISTS godp_account (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号记录主键ID',
-    account_code VARCHAR(64) NOT NULL COMMENT '客户账号唯一编码',
-    account_name VARCHAR(120) NOT NULL COMMENT '账号展示名称',
-    city VARCHAR(50) NOT NULL DEFAULT '' COMMENT '账号所属城市',
-    persona VARCHAR(500) NOT NULL DEFAULT '' COMMENT '账号人设描述，用于账号画像与选题匹配',
-    marketing_eligible TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否具备营销资格：1是0否',
-    status VARCHAR(32) NOT NULL DEFAULT '启用' COMMENT '账号启用状态',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_account_code (account_code),
-    KEY idx_account_city_persona (city, persona)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号档案';
 
-CREATE TABLE IF NOT EXISTS godp_topic (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题记录主键ID',
-    topic_code VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',
-    title VARCHAR(255) NOT NULL COMMENT '选题标题',
-    category VARCHAR(50) NOT NULL DEFAULT '' COMMENT '选题分类',
-    is_marketing TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为营销选题：1是0否',
-    status VARCHAR(32) NOT NULL DEFAULT '可用' COMMENT '选题启用状态',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_topic_code (topic_code),
-    KEY idx_topic_category (category, status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='选题目录';
 
 CREATE TABLE IF NOT EXISTS godp_planning_batch (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '策划批次主键ID',
@@ -133,141 +102,13 @@ CREATE TABLE IF NOT EXISTS godp_auto_plan_run (
     KEY idx_auto_plan_batch (batch_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自动策划运行与输入快照';
 
-CREATE TABLE IF NOT EXISTS godp_account_source (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号来源记录主键ID',
-    account_id VARCHAR(64) NOT NULL COMMENT '客户账号唯一编码',
-    source_updated_at DATETIME(6) NOT NULL COMMENT '客户系统账号最后更新时间（UTC）',
-    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '账号来源记录当前是否有效：1有效0已被全量快照停用',
-    payload_json LONGTEXT NOT NULL COMMENT '客户账号同步原始内容JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_account_source_id (account_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户账号事实本地副本';
 
-CREATE TABLE IF NOT EXISTS godp_topic_source (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题来源记录主键ID',
-    topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',
-    source_updated_at DATETIME(6) NOT NULL COMMENT '客户系统选题最后更新时间（UTC）',
-    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '普通选题来源记录当前是否有效：1有效0已被全量快照停用',
-    approval_status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '选题审核状态',
-    valid_from DATETIME(6) NULL COMMENT '选题有效期开始时间（UTC）',
-    valid_to DATETIME(6) NULL COMMENT '选题有效期结束时间（UTC）',
-    payload_json LONGTEXT NOT NULL COMMENT '客户选题同步原始内容JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_topic_source_id (topic_id),
-    KEY idx_topic_source_validity (approval_status, valid_from, valid_to)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户选题事实本地副本';
 
-CREATE TABLE IF NOT EXISTS godp_source_sync_run (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号或普通选题全量同步运行记录主键ID',
-    source_type VARCHAR(16) NOT NULL COMMENT '来源数据类型：account账号或topic普通选题',
-    source_batch_id VARCHAR(64) NOT NULL COMMENT '客户全量同步批次唯一编码',
-    source_snapshot_at DATETIME(6) NOT NULL COMMENT '客户全量快照时间或服务端接收时间，按UTC保存',
-    payload_json LONGTEXT NOT NULL COMMENT '本次全量同步完整请求内容JSON',
-    result_json LONGTEXT NOT NULL COMMENT '本次全量同步入库及停用数量JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_source_sync_type_batch (source_type, source_batch_id),
-    KEY idx_source_sync_snapshot (source_type, source_snapshot_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-01与IF-02成功全量快照记录';
 
-CREATE TABLE IF NOT EXISTS godp_marketing_topic_source (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '营销选题来源记录主键ID',
-    topic_id VARCHAR(64) NOT NULL COMMENT '营销选题来源系统唯一编码',
-    account_id VARCHAR(64) NOT NULL COMMENT '该营销选题绑定的客户账号编码',
-    source_batch_id VARCHAR(64) NOT NULL COMMENT '最近一次包含该选题的营销同步批次编码',
-    source_snapshot_at DATETIME(6) NOT NULL COMMENT '最近一次来源全量快照时间，按UTC保存',
-    approval_status VARCHAR(16) NOT NULL COMMENT '营销选题审核状态：pending、approved或rejected',
-    approved_at DATETIME(6) NULL COMMENT '营销选题审核通过时间，按UTC保存',
-    valid_from DATETIME(6) NULL COMMENT '营销选题有效期开始时间，按UTC保存',
-    valid_to DATETIME(6) NULL COMMENT '营销选题有效期结束时间，按UTC保存',
-    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '来源选题是否启用：1启用0停用',
-    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否出现在最近一次成功全量快照：1是0否',
-    payload_json LONGTEXT NOT NULL COMMENT '营销选题完整来源记录JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_marketing_topic_source_id (topic_id),
-    KEY idx_marketing_topic_account (account_id, active_in_snapshot, approval_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-03营销选题及账号绑定的本地快照';
 
-CREATE TABLE IF NOT EXISTS godp_marketing_sync_run (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '营销选题同步运行记录主键ID',
-    source_batch_id VARCHAR(64) NOT NULL COMMENT '客户营销选题全量同步批次唯一编码',
-    source_snapshot_at DATETIME(6) NOT NULL COMMENT '客户全量快照时间，按UTC保存',
-    payload_json LONGTEXT NOT NULL COMMENT '营销选题全量同步请求内容JSON',
-    result_json LONGTEXT NOT NULL COMMENT '营销选题同步结果和变更数量JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_marketing_sync_batch (source_batch_id),
-    KEY idx_marketing_sync_snapshot (source_snapshot_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-03营销选题全量同步成功记录';
 
-CREATE TABLE IF NOT EXISTS godp_hotspot_topic_source (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '热点选题来源记录主键ID',
-    topic_id VARCHAR(64) NOT NULL COMMENT '热点选题来源系统唯一编码',
-    source_batch_id VARCHAR(64) NOT NULL COMMENT '最近一次包含该选题的热点同步批次编码',
-    source_snapshot_at DATETIME(6) NOT NULL COMMENT '最近一次来源全量快照时间，按UTC保存',
-    valid_from DATETIME(6) NULL COMMENT '热点选题有效期开始时间，按UTC保存',
-    valid_to DATETIME(6) NULL COMMENT '热点选题有效期结束时间，按UTC保存',
-    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '来源选题是否启用：1启用0停用',
-    active_in_snapshot TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否出现在最近一次成功全量快照：1是0否',
-    payload_json LONGTEXT NOT NULL COMMENT '热点选题完整来源记录JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_hotspot_topic_source_id (topic_id),
-    KEY idx_hotspot_topic_validity (active_in_snapshot, enabled, valid_from, valid_to)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-04热点选题本地全量快照';
 
-CREATE TABLE IF NOT EXISTS godp_hotspot_sync_run (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '热点选题同步运行记录主键ID',
-    source_batch_id VARCHAR(64) NOT NULL COMMENT '客户热点选题全量同步批次唯一编码',
-    source_snapshot_at DATETIME(6) NOT NULL COMMENT '客户全量快照时间，按UTC保存',
-    payload_json LONGTEXT NOT NULL COMMENT '热点选题全量同步请求内容JSON',
-    result_json LONGTEXT NOT NULL COMMENT '热点选题同步结果和变更数量JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_hotspot_sync_batch (source_batch_id),
-    KEY idx_hotspot_sync_snapshot (source_snapshot_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IF-04热点选题全量同步成功记录';
 
-CREATE TABLE IF NOT EXISTS godp_content_history (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '历史内容记录主键ID',
-    content_id VARCHAR(64) NOT NULL COMMENT '客户内容唯一编码',
-    account_id VARCHAR(64) NOT NULL COMMENT '内容所属客户账号编码',
-    topic_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '内容关联客户选题编码',
-    published_at DATETIME(6) NULL COMMENT '内容实际发布时间（UTC）',
-    source_updated_at DATETIME(6) NOT NULL COMMENT '客户系统内容最后更新时间（UTC）',
-    payload_json LONGTEXT NOT NULL COMMENT '历史运营数据原始内容JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_content_history_id (content_id),
-    KEY idx_content_history_account_time (account_id, published_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户历史运营事实本地副本';
 
 CREATE TABLE IF NOT EXISTS godp_slot_state (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '槽位状态记录主键ID',
@@ -279,6 +120,11 @@ CREATE TABLE IF NOT EXISTS godp_slot_state (
     content_id VARCHAR(64) NULL COMMENT '客户内容生产系统返回的内容编码',
     generated_at DATETIME(6) NULL COMMENT '内容生成完成时间（UTC）',
     published_at DATETIME(6) NULL COMMENT '内容实际发布时间（UTC）',
+    production_task_id VARCHAR(64) NULL COMMENT '内容侧本次领取的生产任务编码，重新领取时更新',
+    production_lease_expires_at DATETIME(6) NULL COMMENT '内容侧本次领取到期时间，按UTC保存',
+    production_attempt_count INT NOT NULL DEFAULT 0 COMMENT '内容侧累计领取生产次数',
+    production_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '当前版本内容生产失败原因',
+    production_reported_at DATETIME(6) NULL COMMENT '最近采纳的内容生产结果时间，按UTC保存',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
@@ -286,65 +132,13 @@ CREATE TABLE IF NOT EXISTS godp_slot_state (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_slot_state_item (item_id),
     UNIQUE KEY uk_slot_state_slot (slot_id),
+    UNIQUE KEY uk_slot_production_task (production_task_id),
+    KEY idx_slot_production_scan (production_status, production_lease_expires_at, id),
     KEY idx_slot_state_topic (topic_id, production_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本项目槽位当前版本和内容状态';
 
-CREATE TABLE IF NOT EXISTS godp_integration_outbox (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '待投递事件记录主键ID',
-    event_id VARCHAR(64) NOT NULL COMMENT '跨系统事件唯一编码',
-    destination VARCHAR(32) NOT NULL COMMENT '事件接收系统标识',
-    event_type VARCHAR(40) NOT NULL COMMENT '事件业务类型',
-    payload_json LONGTEXT NOT NULL COMMENT '待投递事件完整内容JSON',
-    delivery_status VARCHAR(24) NOT NULL DEFAULT 'pending' COMMENT '事件投递状态',
-    attempts INT NOT NULL DEFAULT 0 COMMENT '已尝试投递次数',
-    last_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近一次投递失败原因',
-    delivered_at DATETIME(6) NULL COMMENT '事件成功投递时间（UTC）',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_outbox_event (event_id),
-    KEY idx_outbox_delivery (delivery_status, destination, id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='跨系统待投递事件';
 
-CREATE TABLE IF NOT EXISTS godp_content_receipt (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '内容状态回传记录主键ID',
-    event_id VARCHAR(64) NOT NULL COMMENT '客户回传事件唯一编码',
-    slot_id VARCHAR(64) NOT NULL COMMENT '回传关联的稳定槽位编码',
-    version INT NOT NULL COMMENT '回传关联的内容版本号',
-    production_status VARCHAR(32) NOT NULL COMMENT '客户回传的内容生产状态',
-    content_id VARCHAR(64) NULL COMMENT '客户内容生产系统的内容编码',
-    payload_json LONGTEXT NOT NULL COMMENT '客户状态回传原始内容JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_content_receipt_event (event_id),
-    KEY idx_content_receipt_slot (slot_id, version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='内容生产状态回传记录';
 
-CREATE TABLE IF NOT EXISTS godp_publication_receipt (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '发布状态回传记录主键ID',
-    event_id VARCHAR(64) NOT NULL COMMENT '客户发布状态事件唯一编码',
-    planning_result_id BIGINT NOT NULL COMMENT '关联策划结果条目ID，无外键',
-    result_version INT NOT NULL COMMENT '客户确认的策划结果版本号',
-    topic_id VARCHAR(64) NOT NULL COMMENT '客户实际发布的选题编码',
-    topic_type VARCHAR(16) NOT NULL COMMENT '客户实际发布的选题类型：普通、营销或热点',
-    publish_status VARCHAR(16) NOT NULL COMMENT '客户回传的发布状态：未发布或已发布',
-    validation_status VARCHAR(16) NOT NULL COMMENT '回传校验结果：accepted通过或mismatch不一致',
-    content_id VARCHAR(64) NULL COMMENT '客户内容系统中的内容编码',
-    occurred_at DATETIME(6) NOT NULL COMMENT '客户发布状态发生时间，按UTC保存',
-    payload_json LONGTEXT NOT NULL COMMENT '发布状态回传完整请求内容JSON',
-    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '创建人',
-    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
-    update_by VARCHAR(50) NOT NULL DEFAULT 'integration' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
-    UNIQUE KEY uk_publication_receipt_event (event_id),
-    KEY idx_publication_receipt_result (planning_result_id, result_version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户发布状态回传与一致性校验记录';
 
 CREATE TABLE IF NOT EXISTS godp_topic_tag (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题标签记录主键ID',
@@ -586,8 +380,8 @@ CREATE TABLE IF NOT EXISTS godp_topic_profile (
 CREATE TABLE IF NOT EXISTS godp_topic_label_job (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题首次离线标签识别任务主键ID',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
-    source_payload_json LONGTEXT NOT NULL COMMENT '首次入库时普通选题来源内容快照JSON',
-    source_updated_at DATETIME(6) NOT NULL COMMENT '首次入库时来源记录更新时间，按UTC保存',
+    source_payload_json LONGTEXT NOT NULL COMMENT '当前待识别或已识别普通选题的计算输入快照JSON',
+    source_updated_at DATETIME(6) NOT NULL COMMENT '当前计算输入的来源记录更新时间，按UTC保存',
     status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '任务状态：pending待领取、processing处理中、completed已完成、failed失败或cancelled已取消',
     attempt_count INT NOT NULL DEFAULT 0 COMMENT '任务已领取次数',
     lease_id VARCHAR(64) NULL COMMENT '当前处理租约唯一编码',
@@ -680,6 +474,10 @@ CREATE TABLE IF NOT EXISTS godp_manual_task (
     failure_count INT NOT NULL DEFAULT 0 COMMENT '未成功形成结果数量',
     topic_count INT NOT NULL DEFAULT 0 COMMENT '本次选择的选题数量',
     status VARCHAR(24) NOT NULL COMMENT '任务状态：执行中、已完成、执行失败',
+    execution_token VARCHAR(32) NULL COMMENT '当前执行领取令牌，用于拒绝过期执行结果',
+    lease_expires_at DATETIME(6) NULL COMMENT '当前执行领取到期时间，按UTC保存',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '累计执行领取次数，达到上限后终止重试',
+    next_attempt_at DATETIME(6) NULL COMMENT '下次允许重试时间，按UTC保存',
     failure_reason VARCHAR(500) NOT NULL DEFAULT '' COMMENT '任务失败原因',
     batch_id BIGINT NULL COMMENT '成功后关联的策划批次ID',
     last_error VARCHAR(500) NOT NULL DEFAULT '' COMMENT '最近一次执行异常说明',
@@ -690,7 +488,8 @@ CREATE TABLE IF NOT EXISTS godp_manual_task (
     del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_manual_task_code (task_code),
     KEY idx_manual_task_status (status, update_time),
-    KEY idx_manual_task_date (publish_date)
+    KEY idx_manual_task_date (publish_date),
+    KEY idx_manual_task_queue (status,next_attempt_at,lease_expires_at,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='手动策划任务记录';
 
 CREATE TABLE IF NOT EXISTS godp_planning_adjustment (

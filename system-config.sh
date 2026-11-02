@@ -16,6 +16,9 @@ load_system_config() {
     return 1
   fi
   local settings
+  if [[ "${1:-}" == "initialize" ]]; then
+    (cd "$APP_ROOT/backend" && "$PYTHON_BIN" -m app.init_shared_workflow_db) || return 1
+  fi
   settings="$(cd "$APP_ROOT/backend" && "$PYTHON_BIN" -m app.system_config launch-shell)" || return 1
   # The CLI emits a fixed allowlist of non-secret names, with shlex-quoted values.
   eval "$settings"

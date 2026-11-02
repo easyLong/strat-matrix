@@ -5,6 +5,12 @@ import json
 
 from fastapi import HTTPException
 
+def active_account_ids(cursor, wanted):
+    from .bank_bridge.bridge import collect
+    from .bank_bridge.contracts import AccountQuery
+    from .bank_bridge.factory import get_source
+    return {account.account_id for account in collect(get_source(cursor),'accounts',AccountQuery(account_ids=wanted))}
+
 
 def planned_manual_accounts(cursor, publish_date: date) -> set[str]:
     """Return accounts with committed manual planning results for this date."""
@@ -39,7 +45,7 @@ def pending_manual_accounts(cursor, publish_date: date,
 
 def ensure_manual_accounts_available(cursor, publish_date: date, account_ids: list[str],
                                      exclude_task_id: int | None = None) -> None:
-    """Serialize overlapping submissions using account row locks.
+    """Serialize a date's short commit transaction without locking bank tables.
 
     Call in a READ COMMITTED transaction. After waiting for an account lock,
     the availability query must see tasks committed by the previous holder.
@@ -47,12 +53,11 @@ def ensure_manual_accounts_available(cursor, publish_date: date, account_ids: li
     wanted = sorted(set(account_ids))
     if not wanted:
         raise HTTPException(status_code=422, detail="请先选择账号")
-    cursor.execute(
-        "SELECT account_code FROM godp_account WHERE account_code IN (" +
-        ",".join(["%s"] * len(wanted)) + ") AND del_flag='N' AND status='启用' "
-        "ORDER BY account_code FOR UPDATE", wanted,
-    )
-    if {row["account_code"] for row in cursor.fetchall()} != set(wanted):
+    # MySQL releases this connection-owned lock on close, including process exit.
+    cursor.execute('SELECT GET_LOCK(%s,5) acquired',(f'godp:manual:{publish_date:%Y%m%d}',))
+    if cursor.fetchone()['acquired'] != 1:
+        raise HTTPException(503,detail='该投放日期有任务正在提交，请稍后重试')
+    if active_account_ids(cursor,wanted) != set(wanted):
         raise HTTPException(status_code=409, detail="所选账号已停用或不存在，请重新选择")
     blocked = set(wanted) & (
         planned_manual_accounts(cursor, publish_date) |

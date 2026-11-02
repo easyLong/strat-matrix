@@ -74,7 +74,34 @@ def reconcile_batches(cursor, today: date) -> int:
     return changed
 
 
+def load_hotspot_candidates(cursor, instant):
+    """Read real hotspot topics through the same source contract as planning."""
+    from .bank_bridge.factory import get_source
+    from .bank_bridge.bridge import collect
+    from .bank_bridge.contracts import TopicQuery
+    candidates = list(collect(get_source(cursor), 'topics', TopicQuery(
+        source='热点', topic_type='非营销', available_only=True, valid_at=instant)))
+    signature = json.dumps([(t.topic_id, t.updated_at.isoformat()) for t in candidates])
+    identity = 'QUERY-' + sha256(signature.encode()).hexdigest()[:16]
+    return [{'topic_id': t.topic_id, 'title': t.title, 'outline': t.outline,
+             'content_type': t.content_type} for t in candidates], identity
+
+
 def run_due(now: datetime | None = None) -> dict:
+    from .bank_bridge.factory import get_source, source_mode, use_adapters
+    if source_mode() != 'java_http':
+        return _run_due(now)
+    from .bank_bridge.bridge import collect
+    from .bank_bridge.contracts import TopicQuery
+    from .bank_bridge.memory import MemorySource
+    instant = now or datetime.now(BUSINESS_ZONE)
+    topics = list(collect(get_source(None), 'topics', TopicQuery(
+        topic_type='非营销', available_only=True, valid_at=instant)))
+    with use_adapters(MemorySource(topics=topics)):
+        return _run_due(instant)
+
+
+def _run_due(now: datetime | None = None) -> dict:
     instant = now or datetime.now(BUSINESS_ZONE)
     local = instant.astimezone(BUSINESS_ZONE)
     cutoff = due_publish_date(local)
@@ -104,27 +131,8 @@ def run_due(now: datetime | None = None) -> dict:
                 return {"due_slots": 0, "hotspot_topics": 0, "ordinary_fallback": 0,
                         "status_updates": status_updates, "cutoff_date": cutoff.isoformat()}
 
-            cursor.execute(
-                "SELECT source_batch_id FROM godp_hotspot_sync_run WHERE del_flag='N' "
-                "ORDER BY source_snapshot_at DESC, id DESC LIMIT 1"
-            )
-            latest = cursor.fetchone()
-            if not latest:
-                raise PlanningError("已到热点确定时间，但 IF-04 热点选题尚未成功同步")
-            cursor.execute(
-                "SELECT topic_id, payload_json FROM godp_hotspot_topic_source "
-                "WHERE del_flag='N' AND active_in_snapshot=1 AND enabled=1 "
-                "AND source_batch_id=%s "
-                "AND (valid_from IS NULL OR valid_from<=%s) "
-                "AND (valid_to IS NULL OR valid_to>=%s) ORDER BY topic_id",
-                (latest["source_batch_id"], utc_now, utc_now),
-            )
-            hotspots = []
-            for row in cursor.fetchall():
-                source = json.loads(row["payload_json"])
-                hotspots.append({"topic_id": row["topic_id"], "title": source["title"],
-                                 "outline": source.get("outline") or "",
-                                 "content_type": source.get("content_type") or ""})
+            hotspots, source_identity = load_hotspot_candidates(cursor, instant)
+            latest = {'source_batch_id': source_identity}
 
             by_date: dict[date, list[dict]] = {}
             for item in pending:

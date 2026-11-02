@@ -42,7 +42,7 @@ def implementation_approval_errors(document: MatchingPolicyDocument) -> list[str
         "builtin-cosine-balanced-v1", "builtin-cosine-portfolio-v2",
     }:
         return []
-    from .matching_executor import ExecutorPolicyError, executor_config
+    from .core.matching_common import ExecutorPolicyError, candidate_config as executor_config
     try:
         raw = document.model_dump(mode="json")
         if document.implementation_key == "builtin-cosine-balanced-v1":

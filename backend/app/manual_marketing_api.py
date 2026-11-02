@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .db import connection
 from .models import ManualTaskSummary
+from .core.actor import current_actor
 
 router = APIRouter(prefix='/api/manual-plans/marketing-tasks')
 
@@ -40,13 +41,17 @@ def summary(row):
     allocation_count = int(row.get('allocation_count') or 0)
     is_external_allocation = allocation_count > 0
     content_total_count = allocation_count if is_external_allocation else row['account_count'] * row['content_per_account']
+    completed = row['status'] == '已完成'
     return dict(
         id=-row['id'], task_code=row['task_code'], preview_code='', task_name=row['task_name'],
         batch_code=row['task_code'], publish_date=None, planned_account_count=row['account_count'],
         result_count=0, failure_count=0, topic_count=len(json.loads(row.get('topic_snapshot_json') or '[]')), status=row['status'], planning_status=row['status'],
-        content_status='待分配' if is_external_allocation else '待生产', content_failed_count=0, content_completed_count=0,
+        content_status='已完成' if completed else (row['status'] if row['status'] in ('生产中','生产失败','待生产') else '待分配' if is_external_allocation else '待生产'),
+        content_failed_count=row.get('content_failed_count', 0),
+        content_completed_count=content_total_count if completed else row.get('content_completed_count', 0),
         content_total_count=content_total_count,
-        content_completed_account_count=0, failure_reason='', batch_id=None, last_error='',
+        content_completed_account_count=row['account_count'] if completed else 0,
+        failure_reason='', batch_id=None, last_error='',
         created_at=row['create_time'], created_by=row['create_by'], updated_at=row['update_time'],
         content_mode='marketing', content_per_account=row['content_per_account'], allocation_count=allocation_count,
     )
@@ -59,7 +64,7 @@ def database_error(exc):
 @router.post('', response_model=ManualTaskSummary, status_code=201)
 def create_marketing_task(payload: MarketingTaskInput):
     # 营销账号由外部系统后续分配；创建时仅固化一个选题和需要分配的内容数量。
-    from .main import list_topics
+    from .services.catalog import list_topics
 
     canonical = json.dumps({'task_name': payload.task_name, 'topic_id': payload.topic_id,
                             'allocation_count': payload.allocation_count}, sort_keys=True)
@@ -78,10 +83,10 @@ def create_marketing_task(payload: MarketingTaskInput):
             if topic is None:
                 raise HTTPException(status_code=409, detail='选题已停用或不存在，请重新选择')
             cursor.execute('INSERT INTO godp_manual_marketing_task '
-                           '(task_code,request_id,request_hash,task_name,allocation_count,content_per_account,account_count,account_snapshot_json,topic_snapshot_json,status) '
-                           'VALUES (%s,%s,%s,%s,%s,0,0,%s,%s,\'待分配\') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',
+                           '(task_code,request_id,request_hash,task_name,allocation_count,content_per_account,account_count,account_snapshot_json,topic_snapshot_json,status,create_by,update_by) '
+                           'VALUES (%s,%s,%s,%s,%s,0,0,%s,%s,\'待分配\',%s,%s) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',
                            ('MAN-MKT-' + uuid4().hex.upper(), request_id, fingerprint, payload.task_name,
-                            payload.allocation_count, json.dumps([], ensure_ascii=False), json.dumps([topic], ensure_ascii=False, default=str)))
+                            payload.allocation_count, json.dumps([], ensure_ascii=False), json.dumps([topic], ensure_ascii=False, default=str), current_actor(), current_actor()))
             cursor.execute('SELECT * FROM godp_manual_marketing_task WHERE request_id=%s', (request_id,))
             row = cursor.fetchone()
             if row['request_hash'] != fingerprint:

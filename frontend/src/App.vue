@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import type { RouteLocationRaw } from 'vue-router'
 import { api } from './api'
 import { usePlanningStore } from './store'
 import type { AccountOption } from './types'
+import PageBreadcrumbs from './components/PageBreadcrumbs.vue'
+import { pageBreadcrumbsKey, resolvePageBreadcrumbs, type PageBreadcrumb } from './composables/usePageBreadcrumbs'
 
 const store = usePlanningStore()
 const route = useRoute()
 const fromManualTask = computed(() => route.path === '/results' && route.query.from === 'manual' && Boolean(route.query.batch))
 const activeNav = computed(() => fromManualTask.value ? '/manual' : route.path)
-const breadcrumbs = computed<{ label: string; to?: RouteLocationRaw }[]>(() => {
+const baseBreadcrumbs = computed<PageBreadcrumb[]>(() => {
   if (fromManualTask.value) return [
     { label: '人工策划', to: '/manual' },
     { label: '策划任务列表', to: '/manual' },
-    { label: '查看策划' },
+    { label: '批次策划详情', to: route.fullPath },
   ]
   if (route.path === '/results') {
     const account = Boolean(route.query.account) && !route.query.batch
@@ -22,13 +23,22 @@ const breadcrumbs = computed<{ label: string; to?: RouteLocationRaw }[]>(() => {
     const detail = Boolean(route.query.account || route.query.batch || route.query.cycle)
     const detailTitle = account ? '账号策划详情' : route.query.batch ? '批次策划详情' : '周期策划详情'
     const view = { label: period ? '时间列表' : '账号列表', to: { path: '/results', query: period ? { dimension: 'period' } : {} } }
+    if (route.query.batch && route.query.from === 'cycle' && route.query.cycle) return [
+      { label: '策划结果', to: '/results' }, view,
+      { label: '周期策划详情', to: { path: '/results', query: { dimension: 'period', cycle: route.query.cycle, show_batches: '1' } } },
+      { label: '批次策划详情', to: route.fullPath },
+    ]
     return detail
-      ? [{ label: '策划结果', to: '/results' }, view, { label: detailTitle }]
-      : [{ label: '策划结果', to: '/results' }, { label: view.label }]
+      ? [{ label: '策划结果', to: '/results' }, view, { label: detailTitle, to: route.fullPath }]
+      : [{ label: '策划结果', to: '/results' }, view]
   }
-  if (route.path === '/manual') return [{ label: '人工策划', to: '/manual' }, { label: '策划任务列表' }]
+  if (route.path === '/manual') return store.manualCreating
+    ? [{ label: '人工策划', to: '/manual' }, { label: '策划任务列表', to: '/manual' }, { label: '新建人工策划' }]
+    : [{ label: '人工策划', to: '/manual' }, { label: '策划任务列表' }]
   return [{ label: '运营工作台' }, { label: String(route.meta.title || '') }]
 })
+const breadcrumbs = computed(() => resolvePageBreadcrumbs(baseBreadcrumbs.value))
+provide(pageBreadcrumbsKey, breadcrumbs)
 let resultsUiObserver: MutationObserver | undefined
 let profileRequest: Promise<void> | undefined
 const accountProfiles = new Map<string, AccountOption>()
@@ -238,7 +248,7 @@ const nav = [
         <div class="sidebar-foot"><span :class="['status-dot', { online: store.databaseReady }]" />{{ store.connectionMessage }}</div>
       </aside>
     <div class="app-main-shell">
-      <header class="topbar"><nav class="breadcrumb" aria-label="当前位置"><template v-for="(item, index) in breadcrumbs" :key="`${index}-${item.label}`"><svg v-if="index" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index === breadcrumbs.length - 1 ? 'page' : undefined">{{ item.label }}</span></template></nav></header>
+      <header class="topbar"><PageBreadcrumbs :items="breadcrumbs" /></header>
       <main class="main">
         <div v-if="store.initialized && !store.databaseReady" class="banner warning-banner" role="status">
           {{ store.connectionMessage }}

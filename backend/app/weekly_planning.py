@@ -19,6 +19,9 @@ from .planning_reservation import ai_preparation_exists
 def load_marketing(cursor, accounts: list[dict]) -> tuple[list[dict], str | None]:
     if not any(account["marketing_eligible"] for account in accounts):
         return [], None
+    from .bank_bridge.factory import external_source_enabled
+    if external_source_enabled():
+        raise PlanningError('行内营销库存及有效投放衔接需通过 IF-03/IF-04 实现，不能使用旧营销选题同步表')
     cursor.execute(
         "SELECT source_batch_id FROM godp_marketing_sync_run WHERE del_flag='N' "
         "ORDER BY source_snapshot_at DESC, id DESC LIMIT 1"
@@ -59,6 +62,9 @@ def round_hotspot_slots(slot_count: int, ratio: int) -> int:
 
 
 def run_weekly_planning(cycle_start: date | None = None) -> dict:
+    from .bank_bridge.factory import source_mode
+    if source_mode() == 'java_http':
+        raise PlanningError('Java资料模式使用已批准V2流程，旧规则脚本不支持行内HTTP资料')
     start = cycle_start or current_next_monday()
     if start.weekday() != 0:
         raise PlanningError("目标策划周期必须从周一开始")

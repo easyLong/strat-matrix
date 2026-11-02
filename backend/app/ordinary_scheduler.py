@@ -1,4 +1,4 @@
-"""Run rule-based weekly planning at the configured business time."""
+"""Create a persisted ordinary-only V2 pipeline at the configured business time."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from zoneinfo import ZoneInfo
 from .db import connection
 from .models import StrategyConfig
 from .ordinary_planning import PlanningError, monday
-from .weekly_planning import run_weekly_planning
+from .planning_pipeline import create_pipeline
+from .matching_policy import intact_document, implementation_approval_errors
+from .system_config import get_setting
 
 
 BUSINESS_ZONE = ZoneInfo("Asia/Shanghai")
@@ -36,16 +38,48 @@ def due_cycle(now: datetime) -> date | None:
     return week_start + timedelta(days=7) if local_now >= trigger_at else None
 
 
+def start_v2_pipeline(cycle_start: date) -> dict:
+    try:
+        policy_id = int(get_setting('AUTO_PLANNING_POLICY_ID', '0'))
+        selection = json.loads(get_setting('AUTO_PLANNING_ACCOUNT_IDS', '[]'))
+    except (ValueError, TypeError) as exc:
+        raise PlanningError('自动策划策略或账号范围配置无效') from exc
+    if not isinstance(selection, list) or len(selection) > 2000 or any(
+            not isinstance(x, str) or not x.strip() or x != x.strip() for x in selection) or len(set(selection)) != len(selection):
+        raise PlanningError('自动策划账号范围必须是不重复的账号ID数组')
+    if policy_id <= 0:
+        raise PlanningError('请先在系统配置中绑定已批准的V2自动策划策略')
+    with connection() as db, db.cursor() as cursor:
+        cursor.execute("SELECT * FROM godp_matching_policy WHERE id=%s AND del_flag='N'", (policy_id,))
+        policy = cursor.fetchone()
+        if not policy or policy['status'] != 'approved':
+            raise PlanningError('自动策划绑定的策略不存在或尚未批准')
+        document = intact_document(policy)
+        if document.implementation_key != 'builtin-cosine-portfolio-v2' or document.approval_errors() or implementation_approval_errors(document):
+            raise PlanningError('自动策划仅支持完整且已批准的V2组合策略')
+        if document.vector_space.vector_model != get_setting('EMBEDDING_MODEL_NAME', ''):
+            raise PlanningError('自动策划策略的向量模型与当前公共向量模型不一致')
+        cursor.execute("SELECT batch_id,plan_mode FROM godp_auto_plan_run "
+                       "WHERE data_scope='live' AND cycle_start=%s AND del_flag='N' ORDER BY id DESC LIMIT 1",
+                       (cycle_start,))
+        existing = cursor.fetchone()
+        if existing:
+            return {'status': 'reused', 'batch_id': existing['batch_id'], 'plan_mode': existing['plan_mode']}
+    pipeline = create_pipeline(cycle_start, selection or None, policy_id,
+                               planning_scope='ordinary_only', production_provider='disabled')
+    return {**pipeline, 'pipeline_status': pipeline['status'],
+            'status': 'reused' if pipeline['reused'] else 'created'}
+
+
 def run_due(now: datetime) -> dict:
     cycle_start = due_cycle(now)
     if cycle_start is None:
         return {"status": "waiting"}
-    result = run_weekly_planning(cycle_start=cycle_start)
-    return {"status": "reused" if result["reused"] else "created", **result}
+    return start_v2_pipeline(cycle_start)
 
 
 def log(event: dict) -> None:
-    print(json.dumps({"at": datetime.now(BUSINESS_ZONE).isoformat(), **event}, ensure_ascii=False), flush=True)
+    print(json.dumps({"at": datetime.now(BUSINESS_ZONE).isoformat(), **event}, ensure_ascii=False, default=str), flush=True)
 
 
 def serve() -> None:
@@ -57,10 +91,10 @@ def serve() -> None:
         try:
             cycle_start = due_cycle(now)
             if cycle_start and cycle_start != completed_cycle and (retry_after is None or now >= retry_after):
-                result = run_weekly_planning(cycle_start=cycle_start)
+                result = start_v2_pipeline(cycle_start)
                 completed_cycle = cycle_start
                 retry_after = None
-                log({"status": "reused" if result["reused"] else "created", **result})
+                log(result)
         except PlanningError as exc:
             retry_after = now + RETRY_INTERVAL
             log({"status": "failed", "message": str(exc), "retry_after": retry_after.isoformat()})
@@ -72,12 +106,12 @@ def serve() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="按服务端配置执行正式规则周策划")
+    parser = argparse.ArgumentParser(description="按服务端配置创建普通选题V2周策划流程")
     parser.add_argument("--once", action="store_true", help="只检查一次配置并在到期时执行")
     args = parser.parse_args()
     if args.once:
         try:
-            print(json.dumps(run_due(datetime.now(BUSINESS_ZONE)), ensure_ascii=False))
+            print(json.dumps(run_due(datetime.now(BUSINESS_ZONE)), ensure_ascii=False, default=str))
         except (PlanningError, RuntimeError, ValueError) as exc:
             parser.exit(2, f"自动策划未完成：{exc}\n")
         return

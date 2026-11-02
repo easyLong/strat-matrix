@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="${APP_ROOT:-$SCRIPT_DIR}"
 source "$APP_ROOT/system-config.sh"
-load_system_config
+load_system_config initialize
 NPM_BIN="${NPM_BIN:-npm}"
 
 mkdir -p "$RUN_DIR" "$LOG_DIR"
@@ -19,6 +19,7 @@ account_vector_worker_pid="$RUN_DIR/account-vector-worker.pid"
 ai_preparation_worker_pid="$RUN_DIR/ai-preparation-worker.pid"
 matching_executor_worker_pid="$RUN_DIR/matching-executor-worker.pid"
 planning_workflow_worker_pid="$RUN_DIR/planning-workflow-worker.pid"
+application_worker_pid="$RUN_DIR/application-worker.pid"
 
 is_running() {
   local pid_file="$1"
@@ -33,6 +34,23 @@ if [[ -z "$PYTHON_BIN" || ! -x "$PYTHON_BIN" ]]; then
   echo "Python executable not found: ${PYTHON_BIN:-python3}" >&2
   echo "Install Python 3 and dependencies: python3 -m pip install -r backend/requirements.txt" >&2
   exit 1
+fi
+
+if [[ "${APPLICATION_WORKER_ENABLED:-1}" == "1" ]]; then
+  for old_pid in "$scheduler_pid" "$hotspot_scheduler_pid" "$planning_workflow_worker_pid" "$topic_label_worker_pid" "$topic_vector_worker_pid" "$account_vector_worker_pid" "$ai_preparation_worker_pid" "$matching_executor_worker_pid"; do
+    if is_running "$old_pid"; then
+      echo "Stop legacy workers with ./stop.sh before starting the unified worker." >&2
+      exit 1
+    fi
+  done
+  ORDINARY_SCHEDULER_ENABLED=0
+  HOTSPOT_SCHEDULER_ENABLED=0
+  PLANNING_WORKFLOW_WORKER_ENABLED=0
+  TOPIC_LABEL_WORKER_ENABLED=0
+  TOPIC_VECTOR_WORKER_ENABLED=0
+  ACCOUNT_VECTOR_WORKER_ENABLED=0
+  AI_PREPARATION_WORKER_ENABLED=0
+  MATCHING_EXECUTOR_WORKER_ENABLED=0
 fi
 
 if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
@@ -75,6 +93,19 @@ if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
     cd "$APP_ROOT/backend"
     "$PYTHON_BIN" -m app.init_workflow_db
   )
+fi
+
+if [[ "${APPLICATION_WORKER_ENABLED:-1}" == "1" ]]; then
+  if is_running "$application_worker_pid"; then
+    echo "Application worker is already running (PID $(cat "$application_worker_pid"))."
+  else
+    (
+      cd "$APP_ROOT/backend"
+      exec "$PYTHON_BIN" -m app.jobs.worker
+    ) >"$LOG_DIR/application-worker.log" 2>&1 &
+    echo $! >"$application_worker_pid"
+    echo "Application worker started (PID $(cat "$application_worker_pid"))."
+  fi
 fi
 
 if is_running "$backend_pid"; then
@@ -222,6 +253,7 @@ else
   rm -f "$frontend_pid"
   (
     cd "$APP_ROOT/frontend"
+    export BACKEND_HOST BACKEND_PORT FRONTEND_HOST FRONTEND_PORT JAVA_ACCESS_MODE JAVA_GATEWAY_URL
     exec "$NPM_BIN" run preview -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
   ) >"$LOG_DIR/frontend.log" 2>&1 &
   echo $! >"$frontend_pid"

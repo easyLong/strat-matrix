@@ -14,6 +14,7 @@ from fastapi import HTTPException
 
 from app import ai_preparation as service
 from app import ai_preparation_api as api
+from app.services import preparations as vector_service
 from app import account_vector_worker as worker
 from app.account_profile import canonical_json, profile_from_preparation, profile_from_snapshot
 from app.account_vector_api import AccountVectorResult
@@ -108,13 +109,13 @@ class PreparationTests(unittest.TestCase):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(service, "connection", return_value=self.store.db))
-        self.stack.enter_context(patch.object(api, "connection", return_value=self.store.db))
+        self.stack.enter_context(patch.object(vector_service, "connection", return_value=self.store.db))
         self.stack.enter_context(patch.object(service, "today", return_value=CHECKED_AT.date()))
-        self.stack.enter_context(patch.object(api, "today", return_value=CHECKED_AT.date()))
+        self.stack.enter_context(patch.object(vector_service, "today", return_value=CHECKED_AT.date()))
         self.stack.enter_context(patch.object(service, "current_next_monday", return_value=START))
         self.stack.enter_context(patch.object(service, "datetime")).now.return_value = CHECKED_AT
         self.load_accounts = self.stack.enter_context(patch.object(service, "load_accounts",
-                                      side_effect=lambda *args: deepcopy(self.store.snapshots)))
+                                      side_effect=lambda *args, **kwargs: deepcopy(self.store.snapshots)))
         self.load_topics = self.stack.enter_context(patch.object(service, "load_matching_topics",
                                       side_effect=lambda *args: deepcopy(self.store.topics)))
 
@@ -392,7 +393,7 @@ class PreparationAuthorizationTests(unittest.TestCase):
                       {"profile_hash": "a" * 64, "vector": [1, 0], "vector_model": "test"})]
         from app.system_config import override_config
         with override_config({"INTEGRATION_TOKEN": "test-only-internal-token"}), \
-                patch.object(api, "connection") as api_db, patch.object(service, "connection") as service_db:
+                patch.object(vector_service, "connection") as api_db, patch.object(service, "connection") as service_db:
             for method, path, body in endpoints:
                 with self.subTest(path=path):
                     self.assertEqual(asyncio.run(request(method, path, body)), 401)

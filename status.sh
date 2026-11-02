@@ -40,6 +40,18 @@ check_http() {
 check_process "Backend" "$RUN_DIR/backend.pid" || true
 check_process "Frontend" "$RUN_DIR/frontend.pid" || true
 expected=2
+if [[ "${APPLICATION_WORKER_ENABLED:-1}" == "1" ]]; then
+  check_process "Application worker" "$RUN_DIR/application-worker.pid" || true
+  expected=$((expected + 1))
+  ORDINARY_SCHEDULER_ENABLED=0
+  HOTSPOT_SCHEDULER_ENABLED=0
+  PLANNING_WORKFLOW_WORKER_ENABLED=0
+  TOPIC_LABEL_WORKER_ENABLED=0
+  TOPIC_VECTOR_WORKER_ENABLED=0
+  ACCOUNT_VECTOR_WORKER_ENABLED=0
+  AI_PREPARATION_WORKER_ENABLED=0
+  MATCHING_EXECUTOR_WORKER_ENABLED=0
+fi
 if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
   check_process "Ordinary scheduler" "$RUN_DIR/ordinary-scheduler.pid" || true
   expected=$((expected + 1))

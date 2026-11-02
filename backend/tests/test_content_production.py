@@ -6,14 +6,15 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.content_production import enqueue_batch, batch_flow
+from app.content_production import enqueue_batch
+from app.legacy.content_production import batch_flow
 from app.content_production_api import ProductionResult
 from app.integration_models import OfficialUsageQuery
 
 
 class ContentProductionTests(unittest.TestCase):
     def test_utc_task_timestamps_have_an_offset_for_business_timezone_display(self):
-        with patch('app.content_production.connection') as connect:
+        with patch('app.legacy.content_production.connection') as connect:
             cursor = connect.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
             cursor.fetchall.return_value = [{'request_json': '{}', 'response_json': None,
                                              'accepted_at': datetime(2026, 10, 21, 6, 0), 'completed_at': None}]
@@ -21,12 +22,11 @@ class ContentProductionTests(unittest.TestCase):
         self.assertEqual(task['accepted_at'], '2026-10-21T06:00:00+00:00')
         self.assertIsNone(task['completed_at'])
 
-    def test_unconfigured_provider_never_marks_a_slot_running(self):
-        with patch('app.content_production.get_setting', return_value='disabled'), \
-                patch('app.content_production.connection') as db:
+    def test_retired_submission_never_marks_a_slot_running(self):
+        with patch('app.db.connection') as db:
             with self.assertRaises(HTTPException) as exc:
                 enqueue_batch(123)
-            self.assertEqual(exc.exception.status_code, 503)
+            self.assertEqual(exc.exception.status_code, 410)
             db.assert_not_called()
 
     def test_callback_only_needs_task_identity_and_result(self):

@@ -3,7 +3,7 @@ import LoadingSkeleton from './LoadingSkeleton.vue'
 import HoverHint from './HoverHint.vue'
 import type { ManualTaskSummary } from '../types'
 import { formatDateTime } from '../planningTime'
-import { manualPlanningLabel as planningLabel, manualContentLabel as contentLabel } from '../ui/manualTask'
+import { manualContentLabel as contentLabel } from '../ui/manualTask'
 
 defineProps<{
   tasks: ManualTaskSummary[]
@@ -14,17 +14,7 @@ defineProps<{
 
 const emit = defineEmits<{
   planDetails: [task: ManualTaskSummary]
-  contentFlow: [task: ManualTaskSummary]
 }>()
-
-function planningTone(task: ManualTaskSummary) {
-  const label = planningLabel(task)
-  if (/部分失败/.test(label)) return 'orange'
-  if (/失败|异常|错误/.test(label)) return 'red'
-  if (/进行中|执行中|处理中|策划中|生成中/.test(label)) return 'blue'
-  if (/完成|成功/.test(label)) return 'green'
-  return 'gray'
-}
 
 function contentTone(task: ManualTaskSummary) {
   const label = contentLabel(task)
@@ -39,15 +29,18 @@ function contentTone(task: ManualTaskSummary) {
 function contentProgress(task: ManualTaskSummary) {
   const label = contentLabel(task)
   if (label === '—') return ''
-  const totalAccounts = Math.max(task.planned_account_count || 0, 0)
-  const completedAccounts = Math.max(task.content_completed_account_count || 0, 0)
-  if (label === '待生成') return totalAccounts ? `0 / ${totalAccounts}` : '尚未开始'
+  const marketing = task.content_mode === 'marketing'
+  const total = Math.max(marketing ? (task.content_total_count || task.allocation_count || 0) : (task.planned_account_count || 0), 0)
+  const completed = Math.max(marketing
+    ? (label === '已完成' ? total : task.content_completed_count || 0)
+    : task.content_completed_account_count || 0, 0)
+  if (label === '待生成') return total ? `0 / ${total}` : '尚未开始'
   if (label === '部分失败') {
     const failed = Math.max(task.content_failed_count || 0, 0)
-    const base = totalAccounts ? `${completedAccounts} / ${totalAccounts}` : `${task.content_completed_count || 0} 已完成`
+    const base = total ? `${completed} / ${total}` : `${task.content_completed_count || 0} 已完成`
     return failed ? `${base} · ${failed} 失败` : base
   }
-  if (totalAccounts) return `${Math.min(completedAccounts, totalAccounts)} / ${totalAccounts}`
+  if (total) return `${Math.min(completed, total)} / ${total}`
   const totalContent = Math.max(task.content_total_count || 0, 0)
   if (totalContent) return `${Math.min(task.content_completed_count || 0, totalContent)} / ${totalContent}`
   return ''
@@ -71,7 +64,6 @@ function contentStatusText(task: ManualTaskSummary) {
           <th>投放日期</th>
           <th>账号数</th>
           <th>选题数</th>
-          <th>策划状态</th>
           <th>内容状态</th>
           <th>创建人</th>
           <th>发起时间</th>
@@ -90,7 +82,6 @@ function contentStatusText(task: ManualTaskSummary) {
           <td>{{ task.publish_date || '—' }}</td>
           <td class="numeric">{{ task.content_mode === 'marketing' && task.allocation_count ? '待分配' : task.planned_account_count }}</td>
           <td class="numeric">{{ task.topic_count }}</td>
-          <td><span :class="['tag', planningTone(task)]">{{ planningLabel(task) }}</span></td>
           <td>
             <div class="manual-content-status">
               <span :class="['tag', contentTone(task)]">{{ contentStatusText(task) }}</span>
@@ -102,24 +93,25 @@ function contentStatusText(task: ManualTaskSummary) {
           <td class="action-cell">
             <div class="manual-task-actions">
               <button v-if="task.batch_id || task.content_mode === 'marketing'" class="text-btn" type="button" @click="emit('planDetails', task)">查看策划</button>
-              <button v-if="task.batch_id" class="text-btn manual-content-flow-link" type="button" @click="emit('contentFlow', task)">查看内容流水</button>
               <span v-if="!task.batch_id && task.content_mode !== 'marketing'" class="manual-action-empty">—</span>
+              <HoverHint v-if="!task.batch_id && task.failure_count > 0 && task.failure_reason" :text="task.failure_reason" class="manual-task-failure">执行失败</HoverHint>
             </div>
           </td>
         </tr>
-        <tr v-if="tasks.length === 0"><td colspan="10"><div class="empty-state">{{ filtered ? '没有符合筛选条件的策划任务' : '暂无人工策划任务' }}</div></td></tr>
+        <tr v-if="tasks.length === 0"><td colspan="9"><div class="empty-state">{{ filtered ? '没有符合筛选条件的策划任务' : '暂无人工策划任务' }}</div></td></tr>
       </tbody>
     </table>
   </div>
 </template>
 
 <style scoped>
+.manual-task-failure{color:var(--danger)}
 .manual-task-table-wrap{max-height:calc(100vh - 260px);overflow:auto}
-.manual-task-table{width:100%;min-width:1280px;border-collapse:collapse}
+.manual-task-table{width:100%;min-width:1080px;border-collapse:collapse}
 .manual-task-table th{position:sticky;top:0;z-index:2;padding:12px 14px;background:var(--neutral-50);color:var(--neutral-500);font-size:12px;font-weight:500;line-height:20px;text-align:left;white-space:nowrap}
 .manual-batch-heading{font:inherit}
 .manual-task-table td{height:56px;padding:10px 14px;border-top:1px solid var(--neutral-100);color:var(--neutral-600);font-size:13px;line-height:20px;vertical-align:middle}
-.manual-task-table td:nth-child(2),.manual-task-table td:nth-child(7){white-space:nowrap}
+.manual-task-table td:nth-child(2),.manual-task-table td:nth-child(6){white-space:nowrap}
 .manual-task-table tbody tr:hover{background:var(--hover-bg)}
 .manual-task-table tbody tr.has-failures{background:var(--processing-row)}
 .manual-task-table tbody tr.has-failures:hover{background:var(--processing-bg)}
@@ -131,14 +123,12 @@ function contentStatusText(task: ManualTaskSummary) {
 .manual-task-table .date-cell{color:var(--neutral-500);font-variant-numeric:tabular-nums;white-space:nowrap}
 .manual-task-table .tag{display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}
 .manual-content-status{display:flex;align-items:center;gap:8px;min-width:118px;white-space:nowrap}
-.action-cell{position:sticky;right:0;z-index:1;min-width:230px;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-100)}
+.action-cell{position:sticky;right:0;z-index:1;min-width:90px;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-100)}
 tr:hover .action-cell{background:var(--hover-bg)}
 tr.has-failures .action-cell{background:var(--processing-row)}
 tr.has-failures:hover .action-cell{background:var(--processing-bg)}
 .manual-task-actions{display:flex;align-items:center;gap:14px;white-space:nowrap}
 .manual-task-actions .text-btn{padding:0;border:0;background:transparent;font-size:12px;line-height:20px}
-.manual-content-flow-link{color:var(--neutral-600)}
-.manual-content-flow-link:hover{color:var(--primary-600)}
 .manual-action-empty{color:var(--neutral-300)}
-@media(max-width:900px){.manual-task-table{min-width:1280px}.manual-task-table .batch-identity-cell{min-width:230px}.action-cell{min-width:216px}.manual-task-actions{gap:10px}}
+@media(max-width:900px){.manual-task-table .batch-identity-cell{min-width:230px}}
 </style>

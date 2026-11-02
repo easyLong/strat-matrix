@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .doubao_labeling import (DoubaoConfigurationError, DoubaoResponseError,
                               DoubaoUnavailable, LabelInput, label_topic)
-from .integration import require_integration_token
+from .api.security import require_integration_token
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])

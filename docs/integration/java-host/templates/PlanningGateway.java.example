@@ -1,0 +1,30 @@
+// 仅供驻场复制到行内Java工程；本仓库不编译、运行此参考模板。
+package com.stratmatrix.gateway;
+
+import java.util.List;
+import java.util.Map;
+
+/** 行内Java接入边界。这里只定义对象，不绑定Spring、SSO或HTTP客户端。 */
+public interface PlanningGateway {
+    /** 行内实现认证、权限、可信操作人及HTTP转发，策划业务仍交给Python。 */
+    Response forward(Request request);
+
+    final class Request {
+        public String method;
+        public String path;
+        /** 可选：保留原始URL编码与重复参数；驻场转发时避免重复编码。 */
+        public String rawQuery;
+        public Map<String, List<String>> query;
+        public Map<String, List<String>> headers;
+        public byte[] body;
+        /** 必须来自行内登录态，不能信任浏览器自报身份。 */
+        public String operatorId;
+    }
+
+    final class Response {
+        public int statusCode;
+        public Map<String, List<String>> headers;
+        /** 有界响应对象示意。大文件由宿主另作流式适配，不要求先整体读入内存。 */
+        public byte[] body;
+    }
+}

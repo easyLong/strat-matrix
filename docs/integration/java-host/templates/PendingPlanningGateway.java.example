@@ -1,0 +1,10 @@
+// 仅供驻场复制到行内Java工程；实现由宿主开发补充。
+package com.stratmatrix.gateway;
+
+/** 空实现：驻场嵌入行内Java工程后补充，不提供启动入口。 */
+public final class PendingPlanningGateway implements PlanningGateway {
+    @Override
+    public Response forward(Request request) {
+        throw new UnsupportedOperationException("TODO: implement bank authentication and Python HTTP forwarding on site");
+    }
+}

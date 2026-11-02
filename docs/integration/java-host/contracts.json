@@ -1,0 +1,1583 @@
+{
+  "AccountQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "页码": {
+        "default": 1,
+        "minimum": 1,
+        "title": "页码",
+        "type": "integer"
+      },
+      "每页条数": {
+        "default": 100,
+        "maximum": 500,
+        "minimum": 1,
+        "title": "每页条数",
+        "type": "integer"
+      },
+      "更新开始时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "更新开始时间"
+      },
+      "更新结束时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "更新结束时间"
+      },
+      "账号ID列表": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "账号Id列表"
+      }
+    },
+    "title": "AccountQuery",
+    "type": "object"
+  },
+  "Account": {
+    "$defs": {
+      "Interaction": {
+        "additionalProperties": false,
+        "properties": {
+          "内容ID": {
+            "minLength": 1,
+            "title": "内容Id",
+            "type": "string"
+          },
+          "账号ID": {
+            "minLength": 1,
+            "title": "账号Id",
+            "type": "string"
+          },
+          "发布时间": {
+            "format": "date-time",
+            "title": "发布时间",
+            "type": "string"
+          },
+          "内容标题": {
+            "default": "",
+            "title": "内容标题",
+            "type": "string"
+          },
+          "点赞数": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "点赞数"
+          },
+          "收藏数": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "收藏数"
+          },
+          "评论数": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "评论数"
+          },
+          "互动数据更新时间": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "互动数据更新时间"
+          }
+        },
+        "required": [
+          "内容ID",
+          "账号ID",
+          "发布时间"
+        ],
+        "title": "Interaction",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "账号ID": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "账号Id",
+        "type": "string"
+      },
+      "账号昵称": {
+        "minLength": 1,
+        "title": "账号昵称",
+        "type": "string"
+      },
+      "属主UM号": {
+        "default": "",
+        "title": "属主Um号",
+        "type": "string"
+      },
+      "属主组织": {
+        "default": "",
+        "description": "最细映射至二级分行",
+        "title": "属主组织",
+        "type": "string"
+      },
+      "平台": {
+        "default": "",
+        "title": "平台",
+        "type": "string"
+      },
+      "账号类型": {
+        "anyOf": [
+          {
+            "enum": [
+              "认证",
+              "非认证"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "账号类型"
+      },
+      "可参与策划": {
+        "title": "可参与策划",
+        "type": "boolean"
+      },
+      "粉丝量": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "粉丝量"
+      },
+      "账号信息更新时间": {
+        "format": "date-time",
+        "title": "账号信息更新时间",
+        "type": "string"
+      },
+      "账号人设": {
+        "default": "",
+        "title": "账号人设",
+        "type": "string"
+      },
+      "性别": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "性别"
+      },
+      "兴趣爱好": {
+        "items": {
+          "type": "string"
+        },
+        "title": "兴趣爱好",
+        "type": "array"
+      },
+      "表达风格": {
+        "default": "",
+        "title": "表达风格",
+        "type": "string"
+      },
+      "近三个月内容互动明细": {
+        "items": {
+          "$ref": "#/$defs/Interaction"
+        },
+        "title": "近三个月内容互动明细",
+        "type": "array"
+      }
+    },
+    "required": [
+      "账号ID",
+      "账号昵称",
+      "可参与策划",
+      "账号信息更新时间"
+    ],
+    "title": "Account",
+    "type": "object"
+  },
+  "Interaction": {
+    "additionalProperties": false,
+    "properties": {
+      "内容ID": {
+        "minLength": 1,
+        "title": "内容Id",
+        "type": "string"
+      },
+      "账号ID": {
+        "minLength": 1,
+        "title": "账号Id",
+        "type": "string"
+      },
+      "发布时间": {
+        "format": "date-time",
+        "title": "发布时间",
+        "type": "string"
+      },
+      "内容标题": {
+        "default": "",
+        "title": "内容标题",
+        "type": "string"
+      },
+      "点赞数": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "点赞数"
+      },
+      "收藏数": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "收藏数"
+      },
+      "评论数": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "评论数"
+      },
+      "互动数据更新时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "互动数据更新时间"
+      }
+    },
+    "required": [
+      "内容ID",
+      "账号ID",
+      "发布时间"
+    ],
+    "title": "Interaction",
+    "type": "object"
+  },
+  "TopicQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "页码": {
+        "default": 1,
+        "minimum": 1,
+        "title": "页码",
+        "type": "integer"
+      },
+      "每页条数": {
+        "default": 100,
+        "maximum": 500,
+        "minimum": 1,
+        "title": "每页条数",
+        "type": "integer"
+      },
+      "更新开始时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "更新开始时间"
+      },
+      "更新结束时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "更新结束时间"
+      },
+      "选题ID列表": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "选题Id列表"
+      },
+      "选题来源": {
+        "anyOf": [
+          {
+            "enum": [
+              "普通",
+              "热点"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "选题来源"
+      },
+      "选题类型": {
+        "anyOf": [
+          {
+            "enum": [
+              "营销",
+              "非营销"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "选题类型"
+      },
+      "仅可用选题": {
+        "default": false,
+        "title": "仅可用选题",
+        "type": "boolean"
+      },
+      "有效时点": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "有效时点"
+      }
+    },
+    "title": "TopicQuery",
+    "type": "object"
+  },
+  "Topic": {
+    "additionalProperties": false,
+    "properties": {
+      "选题ID": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "选题Id",
+        "type": "string"
+      },
+      "选题来源": {
+        "enum": [
+          "普通",
+          "热点"
+        ],
+        "title": "选题来源",
+        "type": "string"
+      },
+      "选题类型": {
+        "enum": [
+          "营销",
+          "非营销"
+        ],
+        "title": "选题类型",
+        "type": "string"
+      },
+      "选题标题": {
+        "minLength": 1,
+        "title": "选题标题",
+        "type": "string"
+      },
+      "选题大纲": {
+        "default": "",
+        "title": "选题大纲",
+        "type": "string"
+      },
+      "选题二级分类": {
+        "default": "",
+        "title": "选题二级分类",
+        "type": "string"
+      },
+      "热度": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "热度"
+      },
+      "可用状态": {
+        "title": "可用状态",
+        "type": "boolean"
+      },
+      "有效开始时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "有效开始时间"
+      },
+      "有效结束时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "有效结束时间"
+      },
+      "选题更新时间": {
+        "format": "date-time",
+        "title": "选题更新时间",
+        "type": "string"
+      },
+      "关联产品": {
+        "default": "",
+        "title": "关联产品",
+        "type": "string"
+      },
+      "关联活动": {
+        "default": "",
+        "title": "关联活动",
+        "type": "string"
+      },
+      "关联属地热点": {
+        "default": "",
+        "title": "关联属地热点",
+        "type": "string"
+      }
+    },
+    "required": [
+      "选题ID",
+      "选题来源",
+      "选题类型",
+      "选题标题",
+      "可用状态",
+      "选题更新时间"
+    ],
+    "title": "Topic",
+    "type": "object"
+  },
+  "MarketingQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "页码": {
+        "default": 1,
+        "minimum": 1,
+        "title": "页码",
+        "type": "integer"
+      },
+      "每页条数": {
+        "default": 100,
+        "maximum": 500,
+        "minimum": 1,
+        "title": "每页条数",
+        "type": "integer"
+      },
+      "账号ID": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "账号Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "账号ID"
+    ],
+    "title": "MarketingQuery",
+    "type": "object"
+  },
+  "MarketingContent": {
+    "additionalProperties": false,
+    "properties": {
+      "内容ID": {
+        "minLength": 1,
+        "title": "内容Id",
+        "type": "string"
+      },
+      "绑定账号ID": {
+        "minLength": 1,
+        "title": "绑定账号Id",
+        "type": "string"
+      },
+      "内容标题": {
+        "title": "内容标题",
+        "type": "string"
+      },
+      "内容正文": {
+        "title": "内容正文",
+        "type": "string"
+      },
+      "关联产品": {
+        "default": "",
+        "title": "关联产品",
+        "type": "string"
+      },
+      "关联活动": {
+        "default": "",
+        "title": "关联活动",
+        "type": "string"
+      },
+      "审核通过时间": {
+        "format": "date-time",
+        "title": "审核通过时间",
+        "type": "string"
+      }
+    },
+    "required": [
+      "内容ID",
+      "绑定账号ID",
+      "内容标题",
+      "内容正文",
+      "审核通过时间"
+    ],
+    "title": "MarketingContent",
+    "type": "object"
+  },
+  "EffectivePlacementQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "账号ID": {
+        "minLength": 1,
+        "title": "账号Id",
+        "type": "string"
+      },
+      "投放日期": {
+        "format": "date",
+        "title": "投放日期",
+        "type": "string"
+      }
+    },
+    "required": [
+      "账号ID",
+      "投放日期"
+    ],
+    "title": "EffectivePlacementQuery",
+    "type": "object"
+  },
+  "EffectivePlacement": {
+    "additionalProperties": false,
+    "properties": {
+      "投放记录ID": {
+        "minLength": 1,
+        "title": "投放记录Id",
+        "type": "string"
+      },
+      "账号ID": {
+        "minLength": 1,
+        "title": "账号Id",
+        "type": "string"
+      },
+      "内容ID": {
+        "minLength": 1,
+        "title": "内容Id",
+        "type": "string"
+      },
+      "投放日期": {
+        "format": "date",
+        "title": "投放日期",
+        "type": "string"
+      }
+    },
+    "required": [
+      "投放记录ID",
+      "账号ID",
+      "内容ID",
+      "投放日期"
+    ],
+    "title": "EffectivePlacement",
+    "type": "object"
+  },
+  "MarketingDemand": {
+    "$defs": {
+      "Topic": {
+        "additionalProperties": false,
+        "properties": {
+          "选题ID": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "选题Id",
+            "type": "string"
+          },
+          "选题来源": {
+            "enum": [
+              "普通",
+              "热点"
+            ],
+            "title": "选题来源",
+            "type": "string"
+          },
+          "选题类型": {
+            "enum": [
+              "营销",
+              "非营销"
+            ],
+            "title": "选题类型",
+            "type": "string"
+          },
+          "选题标题": {
+            "minLength": 1,
+            "title": "选题标题",
+            "type": "string"
+          },
+          "选题大纲": {
+            "default": "",
+            "title": "选题大纲",
+            "type": "string"
+          },
+          "选题二级分类": {
+            "default": "",
+            "title": "选题二级分类",
+            "type": "string"
+          },
+          "热度": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "热度"
+          },
+          "可用状态": {
+            "title": "可用状态",
+            "type": "boolean"
+          },
+          "有效开始时间": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "有效开始时间"
+          },
+          "有效结束时间": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "有效结束时间"
+          },
+          "选题更新时间": {
+            "format": "date-time",
+            "title": "选题更新时间",
+            "type": "string"
+          },
+          "关联产品": {
+            "default": "",
+            "title": "关联产品",
+            "type": "string"
+          },
+          "关联活动": {
+            "default": "",
+            "title": "关联活动",
+            "type": "string"
+          },
+          "关联属地热点": {
+            "default": "",
+            "title": "关联属地热点",
+            "type": "string"
+          }
+        },
+        "required": [
+          "选题ID",
+          "选题来源",
+          "选题类型",
+          "选题标题",
+          "可用状态",
+          "选题更新时间"
+        ],
+        "title": "Topic",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "request_id": {
+        "description": "策划侧幂等请求标识",
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Request Id",
+        "type": "string"
+      },
+      "task_code": {
+        "description": "策划侧任务编号",
+        "minLength": 1,
+        "title": "Task Code",
+        "type": "string"
+      },
+      "选题信息": {
+        "$ref": "#/$defs/Topic"
+      },
+      "生成内容数量": {
+        "maximum": 1000,
+        "minimum": 1,
+        "title": "生成内容数量",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "request_id",
+      "task_code",
+      "选题信息",
+      "生成内容数量"
+    ],
+    "title": "MarketingDemand",
+    "type": "object"
+  },
+  "DemandReceipt": {
+    "additionalProperties": false,
+    "properties": {
+      "request_id": {
+        "title": "Request Id",
+        "type": "string"
+      },
+      "accepted": {
+        "title": "Accepted",
+        "type": "boolean"
+      },
+      "external_request_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "External Request Id"
+      }
+    },
+    "required": [
+      "request_id",
+      "accepted"
+    ],
+    "title": "DemandReceipt",
+    "type": "object"
+  },
+  "ProductionQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "slot_ids": {
+        "description": "策划侧明细标识列表",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 500,
+        "minItems": 1,
+        "title": "Slot Ids",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slot_ids"
+    ],
+    "title": "ProductionQuery",
+    "type": "object"
+  },
+  "ProductionRecord": {
+    "additionalProperties": false,
+    "properties": {
+      "slot_id": {
+        "description": "策划侧明细标识",
+        "minLength": 1,
+        "title": "Slot Id",
+        "type": "string"
+      },
+      "version": {
+        "description": "策划侧结果版本",
+        "minimum": 1,
+        "title": "Version",
+        "type": "integer"
+      },
+      "内容ID": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "内容Id"
+      },
+      "内容状态": {
+        "enum": [
+          "待生产",
+          "生产中",
+          "已完成",
+          "生产失败"
+        ],
+        "title": "内容状态",
+        "type": "string"
+      },
+      "状态更新时间": {
+        "format": "date-time",
+        "title": "状态更新时间",
+        "type": "string"
+      },
+      "生产任务ID": {
+        "anyOf": [
+          {
+            "maxLength": 64,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "生产任务Id"
+      },
+      "失败原因": {
+        "default": "",
+        "maxLength": 500,
+        "title": "失败原因",
+        "type": "string"
+      }
+    },
+    "required": [
+      "slot_id",
+      "version",
+      "内容状态",
+      "状态更新时间"
+    ],
+    "title": "ProductionRecord",
+    "type": "object"
+  },
+  "MarketingStatusQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "task_codes": {
+        "description": "策划侧人工营销需求编号列表",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 500,
+        "minItems": 1,
+        "title": "Task Codes",
+        "type": "array"
+      }
+    },
+    "required": [
+      "task_codes"
+    ],
+    "title": "MarketingStatusQuery",
+    "type": "object"
+  },
+  "MarketingProductionRecord": {
+    "additionalProperties": false,
+    "properties": {
+      "task_code": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Task Code",
+        "type": "string"
+      },
+      "内容状态": {
+        "enum": [
+          "待分配",
+          "待生产",
+          "生产中",
+          "已完成",
+          "生产失败"
+        ],
+        "title": "内容状态",
+        "type": "string"
+      },
+      "完成数": {
+        "minimum": 0,
+        "title": "完成数",
+        "type": "integer"
+      },
+      "失败数": {
+        "minimum": 0,
+        "title": "失败数",
+        "type": "integer"
+      },
+      "已分配账号数": {
+        "default": 0,
+        "minimum": 0,
+        "title": "已分配账号数",
+        "type": "integer"
+      },
+      "状态更新时间": {
+        "format": "date-time",
+        "title": "状态更新时间",
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_code",
+      "内容状态",
+      "完成数",
+      "失败数",
+      "状态更新时间"
+    ],
+    "title": "MarketingProductionRecord",
+    "type": "object"
+  },
+  "AccountPlanningQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "页码": {
+        "default": 1,
+        "minimum": 1,
+        "title": "页码",
+        "type": "integer"
+      },
+      "每页条数": {
+        "default": 100,
+        "maximum": 500,
+        "minimum": 1,
+        "title": "每页条数",
+        "type": "integer"
+      },
+      "账号ID": {
+        "minLength": 1,
+        "title": "账号Id",
+        "type": "string"
+      },
+      "投放开始日期": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "投放开始日期"
+      },
+      "投放结束日期": {
+        "anyOf": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "投放结束日期"
+      }
+    },
+    "required": [
+      "账号ID"
+    ],
+    "title": "AccountPlanningQuery",
+    "type": "object"
+  },
+  "PlanningOutput": {
+    "$defs": {
+      "PlanningRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_name": {
+            "title": "Batch Name",
+            "type": "string"
+          },
+          "batch_code": {
+            "title": "Batch Code",
+            "type": "string"
+          },
+          "plan_type": {
+            "title": "Plan Type",
+            "type": "string"
+          },
+          "slot_type": {
+            "title": "Slot Type",
+            "type": "string"
+          },
+          "cycle_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Start"
+          },
+          "cycle_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle End"
+          },
+          "publish_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Date"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "maximum": 7,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          },
+          "planning_status": {
+            "title": "Planning Status",
+            "type": "string"
+          },
+          "content_status": {
+            "enum": [
+              "待定题",
+              "待生产",
+              "生产中",
+              "已完成",
+              "生产失败"
+            ],
+            "title": "Content Status",
+            "type": "string"
+          },
+          "topic_info": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Info"
+          },
+          "marketing_content_info": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marketing Content Info"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_name",
+          "batch_code",
+          "plan_type",
+          "slot_type",
+          "cycle_start",
+          "cycle_end",
+          "publish_date",
+          "weekday",
+          "planning_status",
+          "content_status",
+          "topic_info",
+          "marketing_content_info",
+          "updated_at"
+        ],
+        "title": "PlanningRecord",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "queried_at": {
+        "format": "date-time",
+        "title": "Queried At",
+        "type": "string"
+      },
+      "status": {
+        "const": "success",
+        "default": "success",
+        "title": "Status",
+        "type": "string"
+      },
+      "账号ID": {
+        "title": "账号Id",
+        "type": "string"
+      },
+      "账号昵称": {
+        "default": "",
+        "title": "账号昵称",
+        "type": "string"
+      },
+      "total_count": {
+        "minimum": 0,
+        "title": "Total Count",
+        "type": "integer"
+      },
+      "page_no": {
+        "minimum": 1,
+        "title": "Page No",
+        "type": "integer"
+      },
+      "page_size": {
+        "maximum": 500,
+        "minimum": 1,
+        "title": "Page Size",
+        "type": "integer"
+      },
+      "planning_results": {
+        "items": {
+          "$ref": "#/$defs/PlanningRecord"
+        },
+        "title": "Planning Results",
+        "type": "array"
+      }
+    },
+    "required": [
+      "queried_at",
+      "账号ID",
+      "total_count",
+      "page_no",
+      "page_size",
+      "planning_results"
+    ],
+    "title": "PlanningOutput",
+    "type": "object"
+  },
+  "UsageQuery": {
+    "additionalProperties": false,
+    "properties": {
+      "选题ID列表": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 500,
+        "minItems": 1,
+        "title": "选题Id列表",
+        "type": "array"
+      },
+      "统计开始时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "统计开始时间"
+      },
+      "统计结束时间": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "统计结束时间"
+      }
+    },
+    "required": [
+      "选题ID列表"
+    ],
+    "title": "UsageQuery",
+    "type": "object"
+  },
+  "UsageOutput": {
+    "$defs": {
+      "UsageResult": {
+        "additionalProperties": false,
+        "properties": {
+          "选题ID": {
+            "title": "选题Id",
+            "type": "string"
+          },
+          "official_use_count": {
+            "minimum": 0,
+            "title": "Official Use Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "选题ID",
+          "official_use_count"
+        ],
+        "title": "UsageResult",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "queried_at": {
+        "format": "date-time",
+        "title": "Queried At",
+        "type": "string"
+      },
+      "status": {
+        "const": "success",
+        "default": "success",
+        "title": "Status",
+        "type": "string"
+      },
+      "topic_results": {
+        "items": {
+          "$ref": "#/$defs/UsageResult"
+        },
+        "title": "Topic Results",
+        "type": "array"
+      }
+    },
+    "required": [
+      "queried_at",
+      "topic_results"
+    ],
+    "title": "UsageOutput",
+    "type": "object"
+  },
+  "TopicIdentity": {
+    "additionalProperties": false,
+    "properties": {
+      "选题ID": {
+        "minLength": 1,
+        "title": "选题Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "选题ID"
+    ],
+    "title": "TopicIdentity",
+    "type": "object"
+  },
+  "LabelOutput": {
+    "$defs": {
+      "LabelResult": {
+        "additionalProperties": false,
+        "properties": {
+          "选题ID": {
+            "title": "选题Id",
+            "type": "string"
+          },
+          "label_status": {
+            "enum": [
+              "待打标",
+              "打标中",
+              "已完成",
+              "打标失败"
+            ],
+            "title": "Label Status",
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": true,
+            "title": "Labels",
+            "type": "object"
+          }
+        },
+        "required": [
+          "选题ID",
+          "label_status",
+          "labels"
+        ],
+        "title": "LabelResult",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "queried_at": {
+        "format": "date-time",
+        "title": "Queried At",
+        "type": "string"
+      },
+      "status": {
+        "const": "success",
+        "default": "success",
+        "title": "Status",
+        "type": "string"
+      },
+      "topic_result": {
+        "$ref": "#/$defs/LabelResult"
+      }
+    },
+    "required": [
+      "queried_at",
+      "topic_result"
+    ],
+    "title": "LabelOutput",
+    "type": "object"
+  },
+  "LabelTestQuery": {
+    "$defs": {
+      "LabelTestItem": {
+        "additionalProperties": false,
+        "properties": {
+          "选题ID": {
+            "minLength": 1,
+            "title": "选题Id",
+            "type": "string"
+          },
+          "选题标题": {
+            "minLength": 1,
+            "title": "选题标题",
+            "type": "string"
+          },
+          "选题大纲": {
+            "minLength": 1,
+            "title": "选题大纲",
+            "type": "string"
+          }
+        },
+        "required": [
+          "选题ID",
+          "选题标题",
+          "选题大纲"
+        ],
+        "title": "LabelTestItem",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "选题详情数组": {
+        "items": {
+          "$ref": "#/$defs/LabelTestItem"
+        },
+        "maxItems": 100,
+        "minItems": 1,
+        "title": "选题详情数组",
+        "type": "array"
+      }
+    },
+    "required": [
+      "选题详情数组"
+    ],
+    "title": "LabelTestQuery",
+    "type": "object"
+  },
+  "LabelTestOutput": {
+    "$defs": {
+      "LabelTestResult": {
+        "additionalProperties": false,
+        "properties": {
+          "选题ID": {
+            "title": "选题Id",
+            "type": "string"
+          },
+          "label_status": {
+            "enum": [
+              "待打标",
+              "打标中",
+              "已完成",
+              "打标失败"
+            ],
+            "title": "Label Status",
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": true,
+            "title": "Labels",
+            "type": "object"
+          },
+          "label_error": {
+            "default": "",
+            "title": "Label Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "选题ID",
+          "label_status",
+          "labels"
+        ],
+        "title": "LabelTestResult",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "tested_at": {
+        "format": "date-time",
+        "title": "Tested At",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "success",
+          "failed"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "topic_results": {
+        "items": {
+          "$ref": "#/$defs/LabelTestResult"
+        },
+        "title": "Topic Results",
+        "type": "array"
+      }
+    },
+    "required": [
+      "tested_at",
+      "status",
+      "topic_results"
+    ],
+    "title": "LabelTestOutput",
+    "type": "object"
+  }
+}

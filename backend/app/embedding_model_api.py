@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .doubao_labeling import (DoubaoConfigurationError, DoubaoResponseError,
                               DoubaoUnavailable, embed_profile)
-from .integration import require_integration_token
+from .api.security import require_integration_token
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])

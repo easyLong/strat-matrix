@@ -87,7 +87,7 @@ def get_setting(key: str, default: str | None = None) -> str:
 def public_settings(frontend=False) -> dict[str, str]:
     keys = FRONTEND_KEYS if frontend else LAUNCH_KEYS
     result = {
-        key: get_setting(key, RUNTIME_DEFAULTS[key]) if key in CATALOG else RUNTIME_DEFAULTS[key]
+        key: get_setting(key, RUNTIME_DEFAULTS.get(key, CATALOG[key].default)) if key in CATALOG else RUNTIME_DEFAULTS[key]
         for key in keys
     }
     return result

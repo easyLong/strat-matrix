@@ -32,12 +32,13 @@ class ManualSlotStateTests(unittest.TestCase):
         event.assert_not_called()
 
     @patch('app.integration.queue_event')
-    def test_synced_source_has_one_local_state_and_event(self, event):
+    def test_shared_database_has_local_state_without_delivery_event(self, event):
         cursor = Mock()
         cursor.fetchone.return_value = {'id': 1}
-        self.assertTrue(self.create(cursor, 'MAN-1'))
+        self.assertFalse(self.create(cursor, 'MAN-1'))
         self.assert_state_created(cursor)
-        event.assert_called_once()
+        event.assert_not_called()
+        cursor.fetchone.assert_not_called()
 
 
 if __name__ == '__main__':

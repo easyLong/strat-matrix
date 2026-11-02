@@ -10,4 +10,12 @@ frontend/.env.local
 logs/
 run/
 .tmp-*
+.tmp_*
+backend/artifacts/
+review-export/*.html
+backend/app/bank_bridge/site_sql_private.py
+backend/app/bank_bridge/site_sql_private/
+backend/app/bank_bridge/site_java_private.py
+backend/app/bank_bridge/site_java_private/
+backend/app/bank_bridge/private-selfcheck*.json
 

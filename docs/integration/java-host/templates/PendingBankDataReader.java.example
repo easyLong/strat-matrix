@@ -1,0 +1,19 @@
+// 仅供驻场参考的空方法；本项目不创建Java查询服务。
+package com.stratmatrix.gateway;
+
+import java.util.List;
+import com.stratmatrix.gateway.BankContracts.*;
+
+/** 空实现不返回空列表或模拟成功，避免把未对接误认为真实无数据。 */
+public final class PendingBankDataReader implements BankDataReader {
+    private UnsupportedOperationException pending(String capability) {
+        return new UnsupportedOperationException("TODO: implement bank data query on site: " + capability);
+    }
+
+    @Override public Page<Account> accounts(AccountQuery query) { throw pending("accounts"); }
+    @Override public Page<Topic> topics(TopicQuery query) { throw pending("topics"); }
+    @Override public Page<MarketingContent> marketingContents(MarketingQuery query) { throw pending("marketingContents"); }
+    @Override public List<EffectivePlacement> effectiveMarketing(EffectivePlacementQuery query) { throw pending("effectiveMarketing"); }
+    @Override public List<ProductionRecord> productionResults(ProductionQuery query) { throw pending("productionResults"); }
+    @Override public List<MarketingProductionRecord> marketingResults(MarketingStatusQuery query) { throw pending("marketingResults"); }
+}

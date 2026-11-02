@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 import pymysql
 
 from .content_production import batch_flow, enqueue_batch, receive_result
-from .integration import db_error, require_integration_token
+from .api.common import db_error
+from .api.security import require_integration_token
 
 router = APIRouter()
 

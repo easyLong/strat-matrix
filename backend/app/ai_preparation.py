@@ -18,6 +18,7 @@ from .matching_readiness import evaluate_readiness, topic_state
 from .models import StrategyConfig
 from .ordinary_planning import PlanningError, current_next_monday, load_accounts
 from .planning_reservation import reservation_key
+from .bank_bridge.input_snapshot import frozen_java_inputs
 
 
 ACTOR = "ai-preparation-api"
@@ -93,7 +94,13 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
                                           or value.startswith("DEMO-") for value in account_ids)):
         raise HTTPException(422, "参与账号须为非空、无重复的正式账号编码")
     selection = canonical_json(sorted(account_ids) if account_ids is not None else None)
-    with cycle_transaction(start) as (db, cursor):
+    from .bank_bridge.factory import source_mode
+    needs_accounts = True
+    if source_mode() == 'java_http':
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute("SELECT id FROM godp_ai_preparation WHERE reservation_key=%s AND del_flag='N'", (reservation_key(start),))
+            needs_accounts = cursor.fetchone() is None
+    with frozen_java_inputs(account_ids=account_ids, needed=needs_accounts), cycle_transaction(start) as (db, cursor):
         cursor.execute("SELECT * FROM godp_ai_preparation WHERE reservation_key=%s "
                        "AND del_flag='N' FOR UPDATE", (reservation_key(start),))
         existing = cursor.fetchone()
@@ -117,7 +124,7 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
         if planning_scope == 'ordinary_only':
             config = config.model_copy(update={'hotspot_ratio': 0, 'marketing_max': 0})
         try:
-            accounts = load_accounts(cursor, "live", config)
+            accounts = load_accounts(cursor, "live", config, account_ids=account_ids)
         except PlanningError as exc:
             raise HTTPException(409, str(exc)) from exc
         if account_ids is not None:
@@ -217,8 +224,11 @@ def advance_preparation(preparation_id: int, expected_version: int) -> dict:
     # Obtain the immutable cycle first, then lock the cycle and record in the
     # same order as cancellation, creation and both rule planners.
     with connection() as db, db.cursor() as cursor:
-        start = select_preparation(cursor, preparation_id)["cycle_start"]
-    with cycle_transaction(start) as (db, cursor):
+        observed = select_preparation(cursor, preparation_id)
+        start = observed['cycle_start']
+    needs_topics = (observed['version'] == expected_version and observed['status'] in ('waiting_inputs', 'blocked')
+                    and observed['cycle_end'] >= today())
+    with frozen_java_inputs(topic_ids=None, needed=needs_topics), cycle_transaction(start) as (db, cursor):
         row = select_preparation(cursor, preparation_id, lock=True)
         if row["version"] != expected_version:
             raise HTTPException(409, "准备记录已更新，请重新查询版本")

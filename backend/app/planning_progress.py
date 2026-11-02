@@ -15,6 +15,12 @@ COMPLETED_ACCOUNT_COUNT_SQL = (
     "OR NULLIF(i.topic_id, '') IS NULL THEN i.account_id END)"
 )
 
+PLANNING_FAILURE_SQL = (
+    "(i.status LIKE '%%失败%%' OR i.status LIKE '%%异常%%' OR i.status LIKE '%%错误%%') "
+    "AND COALESCE(s.production_status,'')<>'failed' "
+    "AND i.status NOT IN ('生成失败','生产失败','生产异常')"
+)
+
 
 def production_status(row: dict) -> str:
     state = row.get("production_status")

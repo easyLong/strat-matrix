@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import PageBreadcrumbs from '../components/PageBreadcrumbs.vue'
+import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs'
 import LoadingSkeleton from '../components/LoadingSkeleton.vue'
 import TaxonomyPanel from '../components/TaxonomyPanel.vue'
+import ConfigOverview from '../components/config/ConfigOverview.vue'
+import ConfigHistory from '../components/config/ConfigHistory.vue'
+import LifecycleRulesEditor from '../components/config/LifecycleRulesEditor.vue'
 import { recommendedTaxonomy, tagNames } from '../topicTaxonomy'
 import { formatDateTime } from '../planningTime'
 import { api, type TagTaxonomyItem } from '../api'
@@ -48,100 +53,26 @@ const planningDays = computed(() => draft.value.planning_days)
 const scheduleDay = computed({ get: () => draft.value.schedule_day, set: value => { draft.value.schedule_day = value } })
 const scheduleTime = computed({ get: () => draft.value.schedule_time, set: value => { draft.value.schedule_time = value } })
 const hotspotRatio = computed({ get: () => draft.value.hotspot_ratio, set: value => { draft.value.hotspot_ratio = value } })
-const lifecycleEditing = ref(false)
-const activeLifecycleStage = ref('')
 const remoteConfigPending = ref(false)
 let configSyncTimer: number | undefined
 let configSyncBusy = false
 const lifecycleRules = computed(() => draft.value.lifecycle_rules)
-const lifecycleMetricOptions = [
-  { value: 'valid_content_count', label: '有效内容数', unit: '篇' },
-  { value: 'rolling_interaction_count', label: '滚动篇均互动数', unit: '次/篇' },
-  { value: 'followers_count', label: '粉丝数', unit: '人' },
-]
-const lifecycleOperatorOptions = [
-  { value: 'lt', label: '<' },
-  { value: 'lte', label: '≤' },
-  { value: 'gte', label: '≥' },
-  { value: 'gt', label: '>' },
-  { value: 'eq', label: '=' },
-]
 const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value)
 const pageDirty = computed(() => dirty.value || tagDirty.value)
 const hasUnsavedChanges = computed(() => editing.value && pageDirty.value)
-const coldStartDefinition = computed(() => coldStartSummary(draft.value.lifecycle_rules))
-
-function metricUnit(field: string) {
-  return lifecycleMetricOptions.find(option => option.value === field)?.unit ?? ''
-}
-
-function coldStartSummary(rules: LifecycleRule[]) {
-  const growth = rules.find(rule => rule.name === '流量增长期')
-  const lowBoundary = growth?.conditions.filter(condition =>
-    ['followers_count', 'valid_content_count'].includes(condition.field) && condition.operator === 'gte',
-  ) ?? []
-  if (!lowBoundary.length) return '未命中其他阶段时归入此阶段'
-  const conditions = lowBoundary.map(condition => {
-    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
-    return `${metric?.label ?? condition.field} < ${condition.value} ${metric?.unit ?? ''}`
-  })
-  return `${conditions.join(' 或 ')}；未命中其他阶段时也归入此阶段`
-}
-
-function lifecycleRuleSummary(rule: LifecycleRule, rules: LifecycleRule[] = draft.value.lifecycle_rules) {
-  if (rule.catchAll) return coldStartSummary(rules)
-  if (rule.condition_mode === 'grouped') return lifecycleGroups(rule).map(group => group.map(condition => {
-    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
-    const operator = lifecycleOperatorOptions.find(option => option.value === condition.operator)
-    return `${metric?.label ?? condition.field} ${operator?.label ?? condition.operator} ${condition.value} ${metric?.unit ?? ''}`
-  }).join(' 且 ')).map(group => `（${group}）`).join(' 或 ')
-  return rule.conditions.map((condition, index) => {
-    const metric = lifecycleMetricOptions.find(option => option.value === condition.field)
-    const operator = lifecycleOperatorOptions.find(option => option.value === condition.operator)
-    const prefix = index === 0 ? '' : condition.join === 'OR' ? ' 或 ' : ' 且 '
-    return `${prefix}${metric?.label ?? condition.field} ${operator?.label ?? condition.operator} ${condition.value} ${metric?.unit ?? ''}`
-  }).join('')
-}
-
-const versionDetailRows = computed(() => versionDetail.value
-  ? configDetailRows(versionDetail.value.config)
-  : [])
-const versionPrevious = computed(() => {
-  if (!versionDetail.value) return null
-  const index = versions.value.findIndex(item => item.version === versionDetail.value?.version)
-  return index >= 0 ? versions.value[index + 1] ?? null : null
-})
-const versionChanges = computed(() => {
-  if (!versionDetail.value || !versionPrevious.value) return []
-  const current = configDetailRows(versionDetail.value.config)
-  const previous = new Map(configDetailRows(versionPrevious.value.config).map(row => [row.key, row.value]))
-  return current.flatMap(row => {
-    const oldValue = previous.get(row.key)
-    return oldValue === row.value ? [] : [{ ...row, oldValue: oldValue ?? '无', newValue: row.value }]
-  })
-})
-
-function configDetailRows(config: StrategyConfig) {
-  const rows: { key: string; group: string; label: string; value: string }[] = [
-    { key: 'planning_days', group: '内容策划配置', label: '每周策划日', value: config.planning_days.map(day => ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] ?? `周${day}`).join('、') },
-    { key: 'schedule', group: '内容策划配置', label: '自动策划调度时间', value: `每周${['一', '二', '三', '四', '五', '六', '日'][config.schedule_day - 1]} ${config.schedule_time}` },
-    { key: 'marketing_max', group: '内容策划配置', label: '营销内容周上限', value: `${config.marketing_max} 条 / 营销账号 / 周` },
-    { key: 'hotspot_ratio', group: '内容策划配置', label: '热点选题占比', value: `${config.hotspot_ratio}%` },
-    { key: 'rolling_posts', group: '策划规则配置', label: '滚动统计窗口', value: `${config.rolling_posts} 篇` },
+usePageBreadcrumbs(() => {
+  const root = { label: 'AI策划配置', action: async () => {
+    if (busy.value) return
+    if (editing.value) await cancelEditing()
+    else closeHistory()
+  } }
+  if (historyView.value) return [
+    root,
+    { label: '历史配置', action: () => { versionDetail.value = null } },
+    ...(versionDetail.value ? [{ label: `V${displayVersionNumber(versionDetail.value)} 配置详情` }] : []),
   ]
-  for (const stage of config.stage_targets) {
-    rows.push({ key: `stage:${stage.name}:traffic`, group: '策划规则配置', label: `${stage.name} · 流量目标`, value: `${stage.traffic}%` })
-    rows.push({ key: `stage:${stage.name}:conversion`, group: '策划规则配置', label: `${stage.name} · 转化目标`, value: `${stage.conversion}%` })
-  }
-  for (const rule of config.lifecycle_rules) {
-    rows.push({ key: `lifecycle:${rule.name}`, group: '策划规则配置', label: rule.name, value: lifecycleRuleSummary(rule, config.lifecycle_rules) })
-  }
-  return rows
-}
-
-function showVersionDetail(version: ConfigVersionSummary) {
-  versionDetail.value = version
-}
+  return editing.value ? [root, { label: '编辑配置' }] : [root]
+})
 
 function requestConfirmation(options: NonNullable<typeof confirmation.value>) {
   if (confirmationResolver) confirmationResolver(false)
@@ -185,44 +116,6 @@ function movePlanningDay(event: KeyboardEvent, index: number) {
 function displayVersionNumber(version: ConfigVersionSummary) {
   const index = versions.value.findIndex(item => item.version === version.version)
   return index < 0 ? version.version : versions.value.length - index
-}
-
-function lifecycleGroups(rule: LifecycleRule): LifecycleCondition[][] {
-  const groups: LifecycleCondition[][] = []
-  for (const condition of rule.conditions) {
-    if (!groups.length || condition.join === 'OR') groups.push([])
-    groups[groups.length - 1]!.push(condition)
-  }
-  return groups
-}
-function setLifecycleGroups(rule: LifecycleRule, groups: LifecycleCondition[][]) {
-  rule.conditions = groups.flatMap((group, groupIndex) => group.map((condition, index) => ({ ...condition, join: groupIndex > 0 && index === 0 ? 'OR' : 'AND' })))
-}
-function editLifecycleRule(rule: LifecycleRule) {
-  if (rule.condition_mode !== 'grouped') {
-    let groups: LifecycleCondition[][] = []
-    rule.conditions.forEach((condition, index) => {
-      if (index === 0 || condition.join === 'OR') groups.push([{ ...condition }])
-      else groups = groups.map(group => [...group, { ...condition }])
-    })
-    setLifecycleGroups(rule, groups)
-    rule.condition_mode = 'grouped'
-  }
-  activeLifecycleStage.value = rule.name
-}
-function addLifecycleCondition(rule: LifecycleRule, groupIndex: number) {
-  const groups = lifecycleGroups(rule)
-  groups[groupIndex]!.push({ field: 'valid_content_count', operator: 'gte', value: 0, join: 'AND' })
-  setLifecycleGroups(rule, groups)
-}
-function addLifecycleGroup(rule: LifecycleRule) {
-  setLifecycleGroups(rule, [...lifecycleGroups(rule), [{ field: 'valid_content_count', operator: 'gte', value: 0, join: 'OR' }]])
-}
-function removeLifecycleCondition(rule: LifecycleRule, groupIndex: number, conditionIndex: number) {
-  const groups = lifecycleGroups(rule)
-  groups[groupIndex]!.splice(conditionIndex, 1)
-  if (!groups[groupIndex]!.length) groups.splice(groupIndex, 1)
-  if (groups.length) setLifecycleGroups(rule, groups)
 }
 
 function togglePlanningDay(day: number) {
@@ -298,7 +191,6 @@ async function loadVersions() {
 async function loadConfigData() {
   if (hasUnsavedChanges.value && !await requestConfirmation({ title: '加载最新配置？', message: '当前有未保存的配置修改，加载最新配置后这些修改将被放弃。', confirmLabel: '加载最新配置', cancelLabel: '继续编辑', danger: true })) return
   editing.value = false
-  lifecycleEditing.value = false
   loading.value = true
   error.value = ''
   try {
@@ -397,8 +289,7 @@ async function saveAll() {
     await loadVersions()
     draft.value = cloneConfig(store.config)
     editing.value = false
-    lifecycleEditing.value = false
-      notice.value = '策划配置已保存'
+        notice.value = '策划配置已保存'
   } catch (exc) {
     if (latestSavedConfig) {
       store.applyConfig(latestSavedConfig)
@@ -430,7 +321,6 @@ async function restoreVersion(version: ConfigVersionSummary) {
 function startEditing() {
   if (!store.databaseReady || busy.value || loading.value) return
   editing.value = true
-  lifecycleEditing.value = true
   error.value = ''
   notice.value = ''
 }
@@ -463,7 +353,6 @@ function confirmCancelEditing() {
     for (const code of Object.keys(tagNames)) tagItems.value[code] = (baseline[code] ?? []).map(item => ({ ...item }))
   } catch { /* Keep the current tag values if the baseline is unavailable. */ }
   editing.value = false
-  lifecycleEditing.value = false
   remoteConfigPending.value = false
   error.value = ''
   notice.value = ''
@@ -495,7 +384,7 @@ function confirmCancelEditing() {
   <template v-if="editing && !loading && store.initialized">
   <fieldset class="form-fieldset config-stack" :disabled="!store.databaseReady || busy || loading">
     <section class="card">
-      <div class="card-head"><div><h2>内容策划配置</h2></div></div>
+      <div class="card-head"><div><h2>策划内容配置</h2></div></div>
       <div class="card-body">
         <div class="form-grid config-control-grid">
           <div class="field"><span>每周策划日</span><div class="day-picker"><button v-for="day in [{ n: 1, label: '周一' }, { n: 2, label: '周二' }, { n: 3, label: '周三' }, { n: 4, label: '周四' }, { n: 5, label: '周五' }, { n: 6, label: '周六' }, { n: 7, label: '周日' }]" :key="day.n" class="day-chip" :class="{ active: planningDays.includes(day.n) }" type="button" :aria-pressed="planningDays.includes(day.n)" @keydown="movePlanningDay($event, day.n - 1)" @click="togglePlanningDay(day.n)">{{ day.label }}</button></div></div>
@@ -512,28 +401,7 @@ function confirmCancelEditing() {
     <section class="card">
       <div class="card-head"><div><h2>策划规则配置</h2></div></div>
       <div class="card-body">
-        <div class="lifecycle-definition-head"><div><b>生命周期阶段判定</b></div></div>
-        <div class="lifecycle-definition-list">
-          <div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition lifecycle-grouped-rule">
-            <div class="lifecycle-rule-heading"><b>{{ rule.name }}</b><span class="lifecycle-rule-summary">{{ lifecycleRuleSummary(rule) }}</span><button v-if="!rule.catchAll && lifecycleEditing" class="text-btn" type="button" @click="activeLifecycleStage === rule.name ? activeLifecycleStage = '' : editLifecycleRule(rule)">{{ activeLifecycleStage === rule.name ? '确认' : '编辑' }}</button></div>
-            <template v-if="!rule.catchAll">
-              <template v-for="(group, groupIndex) in lifecycleGroups(rule)" :key="groupIndex">
-                <div v-if="groupIndex" class="lifecycle-or">或</div>
-                <div class="lifecycle-condition-group">
-                  <div v-for="(condition, conditionIndex) in group" :key="conditionIndex" class="lifecycle-group-row">
-                    <span v-if="conditionIndex" class="lifecycle-and">且</span><span v-else class="lifecycle-and-placeholder"></span>
-                    <select v-model="condition.field" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
-                    <select v-model="condition.operator" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
-                    <input v-model.number="condition.value" type="number" min="0" step="1" aria-label="阈值" /><span>{{ metricUnit(condition.field) }}</span>
-                    <button v-if="rule.conditions.length > 1" class="icon-btn" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, groupIndex, conditionIndex)">×</button>
-                  </div>
-                  <button class="text-btn" type="button" @click="addLifecycleCondition(rule, groupIndex)">＋ 添加且条件</button>
-                </div>
-              </template>
-              <button class="text-btn lifecycle-add-group" type="button" @click="addLifecycleGroup(rule)">＋ 添加或条件组</button>
-            </template>
-          </div>
-        </div>
+        <LifecycleRulesEditor v-model="draft.lifecycle_rules" />
         <div class="lifecycle-definition-head"><div><b>阶段经营目标</b></div></div>
         <div class="stage-table-wrap">
           <table class="stage-table"><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th><th>合计</th></tr></thead>
@@ -554,84 +422,9 @@ function confirmCancelEditing() {
   </fieldset>
   </template>
   <template v-else-if="!historyView && !loading && store.initialized">
-  <section class="card config-overview-card">
-    <div class="card-head"><div><h2>内容策划配置</h2></div></div>
-    <div class="card-body config-overview-body">
-      <div class="config-at-glance">
-        <div class="config-glance-item config-glance-days"><span>每周策划日</span><div class="config-glance-days-list"><b v-for="day in planningDays" :key="day">{{ ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] }}</b></div></div>
-        <div class="config-glance-item"><span>自动策划调度时间</span><b>每周{{ ['一', '二', '三', '四', '五', '六', '日'][scheduleDay - 1] }} {{ scheduleTime }}</b></div>
-        <div class="config-glance-item"><span>营销内容周上限</span><b>{{ draft.marketing_max }} 条 / 营销账号</b></div>
-        <div class="config-glance-item"><span>热点选题占比</span><b>{{ draft.hotspot_ratio }}%</b></div>
-      </div>
-    </div>
-  </section>
-  <section class="card config-overview-card">
-    <div class="card-head"><div><h2>策划规则配置</h2></div></div>
-    <div class="card-body config-overview-body">
-      <section class="config-readonly-panel">
-        <div class="config-readonly-panel-head"><h3>生命周期阶段判定</h3></div>
-        <div class="stage-table-wrap">
-          <table class="stage-table config-readonly-stage-table lifecycle-summary-table"><thead><tr><th>阶段</th><th>进入条件</th></tr></thead>
-            <tbody><tr v-for="rule in lifecycleRules" :key="rule.name">
-              <td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, lifecycleRules) }}</td>
-            </tr></tbody>
-          </table>
-        </div>
-      </section>
-      <section class="config-readonly-panel">
-        <div class="config-readonly-panel-head"><h3>阶段经营目标</h3></div>
-        <div class="stage-table-wrap">
-          <table class="stage-table config-readonly-stage-table"><thead><tr><th>生命周期阶段</th><th>流量目标</th><th>转化目标</th></tr></thead>
-            <tbody><tr v-for="stage in draft.stage_targets" :key="stage.name">
-              <td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td>
-            </tr></tbody>
-          </table>
-        </div>
-      </section>
-      <section class="config-readonly-panel">
-        <div class="config-readonly-panel-head"><h3>滚动统计窗口</h3><span><b>{{ draft.rolling_posts }} 篇</b></span></div>
-      </section>
-      <section class="config-readonly-panel config-readonly-tag-panel">
-        <div class="config-readonly-panel-head"><h3>选题标签配置</h3></div>
-        <TaxonomyPanel :model-value="tagItems" />
-      </section>
-    </div>
-  </section>
+  <ConfigOverview :config="draft" :tag-items="tagItems" />
   </template>
-  <section v-if="historyView && !loading && store.initialized" class="card">
-    <div class="table-wrap"><table><thead><tr><th>版本</th><th>生成时间</th><th>配置摘要</th><th>操作人</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>每周 {{ version.config.planning_days.length }} 天 · 营销上限 {{ version.config.marketing_max }} · 滚动 {{ version.config.rolling_posts }} 篇 · 五阶段目标与定义</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version" class="text-btn" type="button" :disabled="busy" @click="restoreVersion(version)">恢复此版本</button></div></td></tr>
-      <tr v-if="versions.length === 0"><td colspan="5"><div class="empty-state">暂无配置记录</div></td></tr>
-    </tbody></table></div>
-  </section>
-
-  <div v-if="versionDetail" class="drawer-mask show" @click.self="versionDetail = null">
-    <aside class="drawer" role="dialog" aria-modal="true" :aria-label="`总配置版本 V${versionDetail.version} 详情`">
-      <div class="drawer-head"><div><small>总配置 · {{ formatDateTime(versionDetail.created_at) }}</small><h2>V{{ displayVersionNumber(versionDetail) }} 配置详情</h2></div><button class="icon-btn" type="button" aria-label="关闭" @click="versionDetail = null">×</button></div>
-      <div class="drawer-body">
-        <h3>修改摘要</h3>
-        <p v-if="versionPrevious" class="muted">与总配置 V{{ displayVersionNumber(versionPrevious) }} 对比</p>
-        <div v-if="versionPrevious && versionChanges.length" class="table-wrap"><table><thead><tr><th>配置项</th><th>原值</th><th>新值</th></tr></thead><tbody><tr v-for="change in versionChanges" :key="change.key"><td>{{ change.label }}</td><td>{{ change.oldValue }}</td><td>{{ change.newValue }}</td></tr></tbody></table></div>
-        <div v-else class="detail-note">{{ versionPrevious ? '该版本与上一版本配置内容相同。' : '没有更早的模块版本可供比较。' }}</div>
-        <h3>完整配置</h3>
-        <div class="config-version-group">
-          <b>内容策划配置</b>
-          <div class="table-wrap"><table><tbody><tr v-for="row in versionDetailRows.filter(item => item.group === '内容策划配置')" :key="row.key"><th>{{ row.label }}</th><td>{{ row.value }}</td></tr></tbody></table></div>
-        </div>
-        <div class="config-version-group">
-          <b>策划规则配置</b>
-          <div class="table-wrap"><table><thead><tr><th>生命周期阶段判定</th><th>进入条件</th></tr></thead><tbody>
-            <tr v-for="rule in versionDetail.config.lifecycle_rules" :key="rule.name"><td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, versionDetail.config.lifecycle_rules) }}</td></tr>
-          </tbody></table></div>
-          <div class="table-wrap"><table><thead><tr><th>阶段经营目标</th><th>流量目标</th><th>转化目标</th></tr></thead><tbody>
-            <tr v-for="stage in versionDetail.config.stage_targets" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td></tr>
-          </tbody></table></div>
-          <div class="detail-note">滚动统计窗口：{{ versionDetail.config.rolling_posts }} 篇</div>
-        </div>
-      </div>
-      <div class="drawer-foot"><button class="btn" type="button" @click="versionDetail = null">关闭</button></div>
-    </aside>
-  </div>
+  <ConfigHistory v-if="historyView && !loading && store.initialized" v-model:detail="versionDetail" :versions="versions" :disabled="busy" @restore="restoreVersion" />
   <div v-if="confirmation" class="app-confirm-mask" @click.self="dismissConfirmation">
     <section ref="confirmationPanel" class="app-confirm" role="alertdialog" aria-modal="true" aria-labelledby="app-confirm-title" aria-describedby="app-confirm-description" @keydown.stop="handleConfirmationKeys">
       <div class="app-confirm-icon" :class="{ danger: confirmation.danger }" aria-hidden="true">{{ confirmation.danger ? '!' : 'i' }}</div>
@@ -653,11 +446,6 @@ function confirmCancelEditing() {
 </template>
 
 <style scoped>
-.config-overview-body .lifecycle-summary-table th:first-child { width: 160px; }
-.config-overview-body .lifecycle-summary-table th:nth-child(2), .config-overview-body .lifecycle-summary-table td:nth-child(2) { width: auto; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.config-stack .lifecycle-grouped-rule{display:block;padding:12px 14px}
-.lifecycle-rule-heading{display:flex;align-items:center;gap:14px;min-height:32px}.lifecycle-rule-heading>b{flex:0 0 90px}.config-stack .lifecycle-rule-heading>.text-btn{display:none}.lifecycle-rule-summary{flex:1;padding:7px 10px;border-radius:6px;background:var(--neutral-50);color:var(--neutral-600);font-size:12px;line-height:20px}
-.lifecycle-condition-group{margin:10px 0;padding:12px;border:1px solid var(--neutral-200);border-radius:7px}.lifecycle-group-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--neutral-500);font-size:12px}.lifecycle-group-row select,.lifecycle-group-row input{height:32px;padding:0 8px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface)}.lifecycle-group-row select:first-of-type{width:155px}.lifecycle-group-row select:nth-of-type(2){width:64px}.lifecycle-group-row input{width:86px}.lifecycle-and,.lifecycle-or{color:var(--primary-600);background:var(--primary-50);border-radius:12px;padding:3px 8px;font-size:12px}.lifecycle-and-placeholder{width:28px}.lifecycle-or{display:inline-block}.lifecycle-add-group{margin-top:4px}@media(max-width:600px){.lifecycle-rule-heading{flex-wrap:wrap}.lifecycle-rule-summary{flex-basis:100%;order:3}.lifecycle-group-row{flex-wrap:wrap}}
 .config-stack{gap:20px;margin-bottom:20px}
 .config-stack>.card{margin-bottom:0}
 .config-stack .card-head{padding:16px 24px}
@@ -680,31 +468,16 @@ function confirmCancelEditing() {
 .config-stack .stage-table{min-width:460px}
 .config-stack .stage-table th,.config-stack .stage-table td{height:44px;padding:6px 12px;font-size:13px;font-variant-numeric:tabular-nums}
 .config-stack .stage-table .tag{margin-left:0;padding:2px 7px;font-size:11px}
-.config-stack .lifecycle-definition-head{margin:14px 0 10px;padding-top:12px;font-size:13px}
-.config-stack .lifecycle-definition-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
-.config-stack .lifecycle-definition{min-width:0;grid-template-columns:minmax(0,1fr);gap:8px;padding:11px 12px;background:var(--neutral-50);border-color:var(--neutral-200)}
 .config-stack .lifecycle-stage-name{padding:0}
 .config-stack .lifecycle-stage-name b{font-size:14px;line-height:22px;font-weight:600}
-.config-stack .lifecycle-condition-list{gap:6px}
-.config-stack .lifecycle-condition-row{display:grid;grid-template-columns:minmax(110px,1fr) 48px 68px 40px 44px 22px;gap:6px;max-width:560px}
-.config-stack .lifecycle-condition-row select,.config-stack .lifecycle-condition-row input{width:100%;min-width:0;height:32px;padding:0 6px;border-radius:6px;font-size:13px}
-.config-stack .lifecycle-condition-row input{text-align:center}
 .config-stack .condition-unit{grid-column:4;font-size:11px}
 .config-stack .condition-join{grid-column:5;width:44px!important}
 .config-stack .condition-remove{grid-column:6;width:22px;height:26px;font-size:18px!important}
 .config-stack .condition-remove:hover{color:var(--danger);background:var(--danger-bg);border-radius:5px}
 .config-stack .condition-add{justify-self:start;padding:2px 0;font-size:11px}
-.config-stack .lifecycle-definition.is-catch-all{grid-column:1/-1;grid-template-columns:100px minmax(0,1fr);align-items:center;background:var(--neutral-50)}
 .config-stack .lifecycle-catch-all{font-size:12px;line-height:1.6;color:var(--neutral-500)}
-@media(max-width:1100px){.config-stack .lifecycle-definition-list{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:780px){.config-stack .config-control-grid{grid-template-columns:minmax(0,1fr);gap:12px}.config-stack .card-body{padding:12px}.config-stack .lifecycle-definition.is-catch-all{grid-template-columns:minmax(0,1fr);gap:5px}}
-@media(max-width:580px){.config-stack .lifecycle-condition-row{grid-template-columns:48px 64px minmax(0,1fr) 44px 22px}.config-stack .lifecycle-condition-row select:first-child{grid-column:1/-1;grid-row:1;min-width:0}.config-stack .lifecycle-condition-row select:nth-child(2){grid-column:1;grid-row:2}.config-stack .lifecycle-condition-row input{grid-column:2;grid-row:2}.config-stack .condition-unit{grid-column:3;grid-row:2}.config-stack .condition-join{grid-column:4;grid-row:2}.config-stack .condition-remove{grid-column:5;grid-row:2}.config-stack .lifecycle-definition{padding:10px}.config-readonly-stage-table{min-width:540px}}
-.config-readonly-panel-head h3{font-size:14px;line-height:22px;font-weight:600}
-.config-readonly-stage-table th,.config-readonly-stage-table td{padding:8px;font-size:13px;line-height:20px}
-.config-readonly-stage-table th:nth-child(1){width:22%}
-.config-readonly-stage-table th:nth-child(2),.config-readonly-stage-table th:nth-child(3){width:10%}
-.config-readonly-stage-table th:nth-child(4){width:58%}
-.config-readonly-tag-title{font-size:12px;line-height:18px}
+@media(max-width:780px){.config-stack .config-control-grid{grid-template-columns:minmax(0,1fr);gap:12px}.config-stack .card-body{padding:12px}}
+@media(max-width:580px){.config-stack .condition-unit{grid-column:3;grid-row:2}.config-stack .condition-join{grid-column:4;grid-row:2}.config-stack .condition-remove{grid-column:5;grid-row:2}}
 .tag-content-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tag-tabs-with-hint{display:flex;align-items:center;flex-wrap:wrap;gap:0 20px;padding:0 24px;border-bottom:1px solid var(--neutral-200)}
 .tag-tabs-with-hint .tag-tabs{min-width:0;max-width:100%;padding:0;border-bottom:0}
@@ -730,9 +503,6 @@ function confirmCancelEditing() {
 .tag-pills>.pill-edit.selected{border-color:var(--label-color);box-shadow:0 0 0 1px var(--label-color)}
 .tag-pills>.pill-edit:focus-visible{outline:2px solid var(--primary-600);outline-offset:2px}
 .tag-pills>.pill-edit:disabled{cursor:default;opacity:.6}
-.config-readonly-tag-row .tag-pills{gap:6px}
-.config-readonly-tag-row .tag{padding:2px 7px;border:1px solid var(--label-border);border-radius:4px;background:var(--label-background);color:var(--label-color);font-size:11px;line-height:16px}
-.config-readonly-tag-row .tag.disabled{border-style:dashed;border-color:var(--neutral-200);background:var(--neutral-50);color:var(--neutral-400)}
 .app-confirm-mask{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;background:var(--mask)}
 .app-confirm{width:min(400px,100%);padding:26px 28px 22px;border:1px solid #e7ebf2;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-4);text-align:left;animation:app-confirm-in .16s ease-out}
 .app-confirm-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 0 16px;border:1px solid var(--primary-100);border-radius:50%;background:#f2f7ff;color:var(--primary-600);font-size:21px;font-weight:750}
@@ -749,5 +519,4 @@ function confirmCancelEditing() {
 
 <style scoped>
 .config-page-head .page-actions{margin-left:auto}
-.config-readonly-columns{grid-template-columns:minmax(0,1fr)}.config-readonly-tag-panel{padding:0;overflow:hidden}.config-readonly-tag-panel .config-readonly-panel-head{padding:15px 18px;margin:0}
 </style>

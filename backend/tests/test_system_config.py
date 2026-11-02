@@ -76,13 +76,17 @@ class SystemConfigTests(unittest.TestCase):
         with patch.object(config, "connection", return_value=self.db):
             frontend = config.public_settings(frontend=True)
             shell = config.public_settings()
-        self.assertEqual(len(frontend), 4)
+        self.assertEqual(len(frontend), 6)
+        self.assertIn('JAVA_GATEWAY_URL', frontend)
+        self.assertNotIn('JAVA_API_TOKEN', frontend)
         self.assertEqual(frontend["BACKEND_PORT"], "6931")
         self.assertEqual(frontend["FRONTEND_PORT"], "931")
         self.assertNotIn("ARK_API_KEY", shell)
         self.assertNotIn("INTEGRATION_TOKEN", shell)
         self.assertEqual(shell["BACKEND_PORT"], "6931")
         self.assertNotIn("TOPIC_VECTOR_MODEL_CONFIGURED", shell)
+        self.assertEqual(shell['JAVA_ACCESS_MODE'], 'local_development')
+        self.assertIn('JAVA_GATEWAY_URL', shell)
 
     def test_secret_masking_also_uses_catalog_classification(self):
         self.cursor.fetchall.return_value = [{"config_key": "ARK_API_KEY", "config_value": "private", "is_secret": 0,

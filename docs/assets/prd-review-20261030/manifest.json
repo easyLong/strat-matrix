@@ -1,0 +1,167 @@
+{
+  "captured_at": "2026-10-30T01:06:58.119Z",
+  "figures": [
+    {
+      "id": "CFG-01",
+      "file": "CFG-01.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "CFG-05",
+      "file": "CFG-05.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "CFG-06",
+      "file": "CFG-06.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "CFG-02",
+      "file": "CFG-02.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "CFG-03",
+      "file": "CFG-03.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "CFG-04",
+      "file": "CFG-04.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "CFG-07",
+      "file": "CFG-07.png",
+      "url": "http://127.0.0.1:930/config"
+    },
+    {
+      "id": "MAN-01",
+      "file": "MAN-01.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-02",
+      "file": "MAN-02.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-03",
+      "file": "MAN-03.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-04",
+      "file": "MAN-04.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-05",
+      "file": "MAN-05.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-06",
+      "file": "MAN-06.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-07",
+      "file": "MAN-07.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-08",
+      "file": "MAN-08.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-09",
+      "file": "MAN-09.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-10",
+      "file": "MAN-10.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "MAN-11",
+      "file": "MAN-11.png",
+      "url": "http://127.0.0.1:930/manual"
+    },
+    {
+      "id": "RES-01",
+      "file": "RES-01.png",
+      "url": "http://127.0.0.1:930/results"
+    },
+    {
+      "id": "RES-09",
+      "file": "RES-09.png",
+      "url": "http://127.0.0.1:930/results"
+    },
+    {
+      "id": "RES-02",
+      "file": "RES-02.png",
+      "url": "http://127.0.0.1:930/results?dimension=account&account=E2E-ORD10-010"
+    },
+    {
+      "id": "RES-03",
+      "file": "RES-03.png",
+      "url": "http://127.0.0.1:930/results?dimension=account&account=E2E-ORD10-010"
+    },
+    {
+      "id": "RES-04",
+      "file": "RES-04.png",
+      "url": "http://127.0.0.1:930/results?dimension=period"
+    },
+    {
+      "id": "RES-10",
+      "file": "RES-10.png",
+      "url": "http://127.0.0.1:930/results?dimension=period"
+    },
+    {
+      "id": "RES-05",
+      "file": "RES-05.png",
+      "url": "http://127.0.0.1:930/results?dimension=period"
+    },
+    {
+      "id": "RES-06",
+      "file": "RES-06.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-10-26&show_batches=1"
+    },
+    {
+      "id": "RES-06A",
+      "file": "RES-06A.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-10-26&batch=125&from=cycle"
+    },
+    {
+      "id": "RES-11",
+      "file": "RES-11.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-10-26&batch=125&from=cycle"
+    },
+    {
+      "id": "RES-06B",
+      "file": "RES-06B.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-10-26&batch=125&from=cycle"
+    },
+    {
+      "id": "RES-07",
+      "file": "RES-07.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-10-26&batch=125&from=cycle"
+    },
+    {
+      "id": "RES-08",
+      "file": "RES-08.png",
+      "url": "http://127.0.0.1:930/results?dimension=period&cycle=2026-10-26&batch=125&from=cycle"
+    },
+    {
+      "id": "ERR-01",
+      "file": "ERR-01.png",
+      "url": "http://127.0.0.1:930/manual"
+    }
+  ],
+  "errors": [],
+  "blocked_writes": []
+}

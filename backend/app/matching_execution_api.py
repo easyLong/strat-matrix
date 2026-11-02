@@ -3,10 +3,11 @@
 from fastapi import APIRouter, Depends, Query
 import pymysql
 
-from .ai_preparation_api import guarded
+from .api.common import invoke as guarded
 from .ai_preparation import utc_text
 from .db import connection
-from .integration import db_error, require_integration_token
+from .api.common import db_error
+from .api.security import require_integration_token
 from .matching_contracts import (ClaimTask, LeaseHeartbeat, MatchingEvaluation, MatchingFailure,
                                  MatchingTaskCreate, PolicyConfirmation, PolicyCreate, TaskVersion)
 from .matching_policy import confirm_policy, create_policy, policy_summary, select_policy

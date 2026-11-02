@@ -37,6 +37,9 @@ def v2_policy_payload():
 class SupplementalTaskTests(unittest.TestCase):
     def setUp(self):
         execution_fixtures.MatchingExecutionTests.setUp(self)
+        # These algorithm fixtures emulate the original SQL snapshot entirely
+        # in memory. Provider-based reads have separate bank-bridge tests.
+        self.stack.enter_context(patch('app.bank_bridge.factory.external_source_enabled', return_value=False))
         self.snapshot = None
         self.fail_snapshot_write = False
         first = deepcopy(self.store.topics[0])

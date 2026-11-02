@@ -1,0 +1,209 @@
+// 数据对象交接参考；进入行内后按宿主包名与实体规范调整。
+package com.stratmatrix.gateway;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.List;
+
+/** DTOs mirror contracts.json. Wire aliases and bank entity mapping are implemented on site. */
+public final class BankContracts {
+    private BankContracts() {}
+    public static final class Page<T> {
+        /** 满足查询条件的总数 */
+        public Integer total;
+        /** 当前页码，从1开始 */
+        public Integer page_no;
+        /** 每页条数 */
+        public Integer page_size;
+        /** 本页数据列表 */
+        public List<T> items;
+    }
+    public static final class AccountQuery {
+        /** 页码 */
+        public Integer page_no;
+        /** 每页条数 */
+        public Integer page_size;
+        /** 更新开始时间 */
+        public OffsetDateTime updated_from;
+        /** 更新结束时间 */
+        public OffsetDateTime updated_to;
+        /** 账号ID列表 */
+        public List<String> account_ids;
+    }
+    public static final class TopicQuery {
+        /** 页码 */
+        public Integer page_no;
+        /** 每页条数 */
+        public Integer page_size;
+        /** 更新开始时间 */
+        public OffsetDateTime updated_from;
+        /** 更新结束时间 */
+        public OffsetDateTime updated_to;
+        /** 选题ID列表 */
+        public List<String> topic_ids;
+        /** 选题来源 */
+        public String source;
+        /** 选题类型 */
+        public String topic_type;
+        /** 仅可用选题 */
+        public Boolean available_only;
+        /** 有效时点 */
+        public OffsetDateTime valid_at;
+    }
+    public static final class MarketingQuery {
+        /** 页码 */
+        public Integer page_no;
+        /** 每页条数 */
+        public Integer page_size;
+        /** 账号ID */
+        public String account_id;
+    }
+    public static final class EffectivePlacementQuery {
+        /** 账号ID */
+        public String account_id;
+        /** 投放日期 */
+        public LocalDate publish_date;
+    }
+    public static final class ProductionQuery {
+        /** slot_ids: 策划侧明细标识列表 */
+        public List<String> slot_ids;
+    }
+    public static final class MarketingStatusQuery {
+        /** task_codes: 策划侧人工营销需求编号列表 */
+        public List<String> task_codes;
+    }
+    public static final class Interaction {
+        /** 内容ID */
+        public String content_id;
+        /** 账号ID */
+        public String account_id;
+        /** 发布时间 */
+        public OffsetDateTime published_at;
+        /** 内容标题 */
+        public String title;
+        /** 点赞数 */
+        public Integer likes;
+        /** 收藏数 */
+        public Integer favorites;
+        /** 评论数 */
+        public Integer comments;
+        /** 互动数据更新时间 */
+        public OffsetDateTime updated_at;
+    }
+    public static final class Account {
+        /** 账号ID */
+        public String account_id;
+        /** 账号昵称 */
+        public String nickname;
+        /** 属主UM号 */
+        public String owner_um;
+        /** 属主组织: 最细映射至二级分行 */
+        public String organization;
+        /** 平台 */
+        public String platform;
+        /** 账号类型 */
+        public String account_type;
+        /** 可参与策划 */
+        public Boolean eligible;
+        /** 粉丝量 */
+        public Integer followers;
+        /** 账号信息更新时间 */
+        public OffsetDateTime updated_at;
+        /** 账号人设 */
+        public String persona;
+        /** 性别 */
+        public String gender;
+        /** 兴趣爱好 */
+        public List<String> interests;
+        /** 表达风格 */
+        public String expression_style;
+        /** 近三个月内容互动明细 */
+        public List<Interaction> interactions;
+    }
+    public static final class Topic {
+        /** 选题ID */
+        public String topic_id;
+        /** 选题来源 */
+        public String source;
+        /** 选题类型 */
+        public String topic_type;
+        /** 选题标题 */
+        public String title;
+        /** 选题大纲 */
+        public String outline;
+        /** 选题二级分类 */
+        public String content_type;
+        /** 热度 */
+        public Double heat;
+        /** 可用状态 */
+        public Boolean available;
+        /** 有效开始时间 */
+        public OffsetDateTime valid_from;
+        /** 有效结束时间 */
+        public OffsetDateTime valid_to;
+        /** 选题更新时间 */
+        public OffsetDateTime updated_at;
+        /** 关联产品 */
+        public String related_product;
+        /** 关联活动 */
+        public String related_activity;
+        /** 关联属地热点 */
+        public String related_hotspot;
+    }
+    public static final class MarketingContent {
+        /** 内容ID */
+        public String content_id;
+        /** 绑定账号ID */
+        public String account_id;
+        /** 内容标题 */
+        public String title;
+        /** 内容正文 */
+        public String body;
+        /** 关联产品 */
+        public String related_product;
+        /** 关联活动 */
+        public String related_activity;
+        /** 审核通过时间 */
+        public OffsetDateTime approved_at;
+    }
+    public static final class EffectivePlacement {
+        /** 投放记录ID */
+        public String placement_id;
+        /** 账号ID */
+        public String account_id;
+        /** 内容ID */
+        public String content_id;
+        /** 投放日期 */
+        public LocalDate publish_date;
+    }
+    public static final class ProductionRecord {
+        /** slot_id: 策划侧明细标识 */
+        public String slot_id;
+        /** version: 策划侧结果版本 */
+        public Integer version;
+        /** 内容ID */
+        public String content_id;
+        /** 内容状态 */
+        public String status;
+        /** 状态更新时间 */
+        public OffsetDateTime updated_at;
+        /** 生产任务ID */
+        public String production_task_id;
+        /** 失败原因 */
+        public String error;
+    }
+    public static final class MarketingProductionRecord {
+        /** task_code */
+        public String task_code;
+        /** 内容状态 */
+        public String status;
+        /** 完成数 */
+        public Integer completed_count;
+        /** 失败数 */
+        public Integer failed_count;
+        /** 已分配账号数 */
+        public Integer account_count;
+        /** 状态更新时间 */
+        public OffsetDateTime updated_at;
+    }
+}

@@ -48,11 +48,12 @@ def connection():
 
 
 def check_database() -> bool:
+    from .retired_tables import RETIRED_TABLES
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute("SHOW TABLES")
             tables = {next(iter(row.values())) for row in cursor.fetchall()}
-            return {
+            return ({
                 "godp_system_config",
                 "godp_strategy_config",
                 "godp_account",
@@ -95,7 +96,7 @@ def check_database() -> bool:
                 "godp_manual_task",
                 "godp_planning_adjustment",
                 "godp_auto_plan_run",
-            }.issubset(tables)
+            } - set(RETIRED_TABLES)).issubset(tables)
     except (pymysql.MySQLError, RuntimeError, ValueError):
         return False
 

@@ -1,9 +1,5 @@
 import type { ManualTaskSummary } from '../types'
 
-export function manualPlanningLabel(task: ManualTaskSummary) {
-  return task.planning_status || task.status || '—'
-}
-
 export function manualContentLabel(task: ManualTaskSummary) {
   const raw = (task.content_status || '').trim()
   const hasCompleted = task.content_completed_count > 0 || task.content_completed_account_count > 0
@@ -23,8 +19,17 @@ export interface ManualTaskFilters {
   dateStart: string
   dateEnd: string
   creator: string
-  planningStatus: string
   contentStatus: string
+}
+
+export interface ManualTaskListState {
+  page: number
+  pageSize: number
+  filters: ManualTaskFilters
+  appliedFilters: ManualTaskFilters
+  scrollY: number
+  tableScrollTop: number
+  tableScrollLeft: number
 }
 
 export function matchesManualTask(task: ManualTaskSummary, filters: ManualTaskFilters) {
@@ -35,6 +40,5 @@ export function matchesManualTask(task: ManualTaskSummary, filters: ManualTaskFi
     (!creator || (task.created_by || '').toLocaleLowerCase().includes(creator)) &&
     (!filters.dateStart || (!!date && date >= filters.dateStart)) &&
     (!filters.dateEnd || (!!date && date <= filters.dateEnd)) &&
-    (!filters.planningStatus || manualPlanningLabel(task) === filters.planningStatus) &&
     (!filters.contentStatus || manualContentLabel(task) === filters.contentStatus)
 }

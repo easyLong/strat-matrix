@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import pymysql
 
 from .db import connection
-from .integration import db_error, require_integration_token
+from .api.common import db_error
+from .api.security import require_integration_token
 from .matching_readiness import evaluate_readiness
 from .matching_inputs import load_matching_topics
 

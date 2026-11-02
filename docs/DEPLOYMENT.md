@@ -1,5 +1,9 @@
 # strat-matrix 服务器部署说明
 
+**2026-11-02架构更新：** Java代码直接写入行内已有工程；本仓库只有[接入参考文档及模板](integration/java-host/README.md)，不提供Java源码模块、构建或服务，本地Vue/Python无需JDK。未来行内补齐后设置 `JAVA_ACCESS_MODE=bank`，Vite或Nginx将 `/api/` 映射至Java `/api/plan/`，再映射为Python `/api/`；目前只是预留约定。工程归属见[V0.2备忘](行内整合架构改造备忘_V0.2.md)，统一唤醒与后台执行器尚未完成。
+
+当前启动脚本默认运行自主轮询Worker，适用于现有开发版本；不能把它直接视为已符合宿主统一调度的行内部署方案。先按[当前实现状态](CURRENT_STATE.md)核对待改造项，再由行内接入验收决定生产运行方式。
+
 2026-10-28 升级新增营销任务总分配数量字段。已有部署应先在 `backend` 目录执行 `python -m app.init_manual_marketing_db`，再构建前端并重启后端；具体命令与兼容边界见[近期修改汇总](近期修改汇总_2026-10-28.md)。营销创建请求已改为单个选题和总分配数量，前后端须同时更新。
 
 单账号普通选题闭环新增流程Worker及持久化任务表，迁移命令为 `cd backend && python -m app.init_workflow_db`。现有启动脚本已接入迁移和Worker管理，运行及验收说明见 [ORDINARY_WORKFLOW.md](ORDINARY_WORKFLOW.md)。内容生产默认关闭；本地模拟模式须显式配置。
@@ -160,7 +164,7 @@ sudo systemctl reload nginx
 
 配置文件将：
 
-- `/api/` 转发到 `127.0.0.1:6930`
+- `/api/` 转发到行内Java接入层；示例中的占位上游必须替换成实际地址
 - 页面请求转发到 `127.0.0.1:930`
 
 如果使用 HTTPS，可通过 Certbot 配置证书：

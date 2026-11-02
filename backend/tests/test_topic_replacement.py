@@ -7,6 +7,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from app import main as api
+from app.services import results as result_service, catalog as catalog_service
 from app.models import ReplaceTopicInput
 
 
@@ -31,12 +32,20 @@ def slot_row(**changes):
 
 @contextmanager
 def database_row(row):
-    with patch.object(api, "connection") as connect:
+    with patch.object(result_service, "connection") as connect, patch.object(catalog_service, "connection") as catalog_connect:
         db = connect.return_value.__enter__.return_value
         cursor = db.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value = row
+        catalog_connect.return_value.__enter__.return_value = db
         yield db, cursor
 
+
+
+@contextmanager
+def mock_candidates(**kwargs):
+    with patch.object(result_service, 'available_replacement_topics', **kwargs) as mock, \
+            patch.object(catalog_service, 'available_replacement_topics', new=mock):
+        yield mock
 
 class TopicReplacementTests(unittest.TestCase):
     def test_waiting_topics_remain_replaceable_for_both_planning_types(self):
@@ -77,7 +86,7 @@ class TopicReplacementTests(unittest.TestCase):
             for submit in (False, True):
                 with self.subTest(state=state, submit=submit), \
                         database_row(slot_row(production_status=state)) as (db, cursor), \
-                        patch.object(api, "available_replacement_topics") as candidates:
+                        mock_candidates() as candidates:
                     with self.assertRaises(HTTPException) as raised:
                         if submit:
                             api.replace_topic(17, ReplaceTopicInput(new_topic_id="TOPIC-002", expected_version=1))
@@ -96,7 +105,7 @@ class TopicReplacementTests(unittest.TestCase):
 
     def test_candidate_endpoint_rejects_running_slot_before_loading_topics(self):
         with database_row(slot_row(production_status="ready")) as (db, cursor), \
-                patch.object(api, "available_replacement_topics") as candidates:
+                mock_candidates() as candidates:
             with self.assertRaises(HTTPException) as raised:
                 api.list_replacement_candidates(17)
             self.assertEqual(raised.exception.status_code, 409)
@@ -107,7 +116,7 @@ class TopicReplacementTests(unittest.TestCase):
 
     def test_replace_endpoint_rejects_running_slot_without_writes(self):
         with database_row(slot_row(production_status="ready")) as (db, cursor), \
-                patch.object(api, "available_replacement_topics") as candidates:
+                mock_candidates() as candidates:
             with self.assertRaises(HTTPException) as raised:
                 api.replace_topic(17, ReplaceTopicInput(new_topic_id="TOPIC-002", expected_version=1))
             self.assertEqual(raised.exception.status_code, 409)
@@ -115,13 +124,13 @@ class TopicReplacementTests(unittest.TestCase):
             candidates.assert_not_called()
             db.commit.assert_not_called()
             cursor.execute.assert_called_once()
-            self.assertIn("FOR UPDATE", cursor.execute.call_args.args[0])
+            self.assertTrue(cursor.execute.call_args.args[0].startswith("SELECT"))
 
     def test_submit_rechecks_production_after_candidates_were_loaded(self):
         row = slot_row()
         with database_row(row) as (db, cursor), \
-                patch.object(api, "available_replacement_topics", return_value=[]) as candidates, \
-                patch.object(api, "attach_topic_labels"):
+                mock_candidates(return_value=[]) as candidates, \
+                patch.object(catalog_service, "attach_topic_labels"):
             self.assertEqual(api.list_replacement_candidates(17), [])
             row["production_status"] = "ready"
             with self.assertRaises(HTTPException) as raised:
@@ -131,7 +140,7 @@ class TopicReplacementTests(unittest.TestCase):
             candidates.assert_called_once()
             db.commit.assert_not_called()
             self.assertEqual(cursor.execute.call_count, 2)
-            self.assertIn("FOR UPDATE", cursor.execute.call_args.args[0])
+            self.assertTrue(cursor.execute.call_args.args[0].startswith("SELECT"))
 
 
 if __name__ == "__main__":

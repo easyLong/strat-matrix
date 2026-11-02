@@ -62,8 +62,9 @@ def rename_legacy_config_keys(cursor) -> int:
     return renamed
 
 
-def seed_config(cursor, imported: dict[str, str] | None = None) -> int:
-    rename_legacy_config_keys(cursor)
+def seed_config(cursor, imported: dict[str, str] | None = None, *, migrate_legacy: bool = True) -> int:
+    if migrate_legacy:
+        rename_legacy_config_keys(cursor)
     values = {key: spec.default for key, spec in CATALOG.items()}
     values.update({key: value for key, value in (imported or {}).items() if key in CATALOG})
     for key, value in values.items():

@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 import pymysql
 
 from .db import connection
-from .integration import db_error, require_integration_token
+from .api.common import db_error
+from .api.security import require_integration_token
 from .planning_pipeline import (cancel_pipeline, create_pipeline,
                                 pipeline_summary, read_pipeline, select_stages)
 from .planning_pipeline_runner import (advance_pipeline_to_commit,

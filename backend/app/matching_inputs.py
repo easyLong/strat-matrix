@@ -2,6 +2,10 @@
 
 
 def load_matching_topics(cursor, checked_at) -> list[dict]:
+    from .bank_bridge.factory import external_source_enabled
+    if external_source_enabled():
+        from .bank_bridge.bridge import matching_topics
+        return matching_topics(cursor, checked_at)
     cursor.execute(
         "SELECT s.topic_id, s.payload_json, s.source_updated_at, s.active_in_snapshot, s.valid_from, s.valid_to, "
         "t.status AS topic_status, t.is_marketing, tag.label_status, tag.tags_json, "

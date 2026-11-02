@@ -209,9 +209,10 @@ class ReadinessApiTests(unittest.TestCase):
         batch, accounts, topics = fixture()
         db, cursor = MagicMock(), MagicMock()
         db.cursor.return_value.__enter__.return_value = cursor
-        cursor.fetchall.side_effect = ([batch], accounts, topics)
+        cursor.fetchall.side_effect = ([batch], accounts)
         with patch("app.matching_readiness_api.connection") as connection, \
-                patch("app.matching_readiness_api.datetime") as clock:
+                patch("app.matching_readiness_api.datetime") as clock, \
+                patch('app.matching_readiness_api.load_matching_topics', return_value=topics):
             connection.return_value.__enter__.return_value = db
             clock.now.return_value = CHECKED_AT
             report = matching_readiness(123)

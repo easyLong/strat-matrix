@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { api } from './api'
 import type { BatchSummary, ConfigResponse, ManualPlanInput, StrategyConfig } from './types'
+import type { ManualTaskListState } from './ui/manualTask'
 
 export const defaultConfig: StrategyConfig = {
   marketing_max: 1,
@@ -28,6 +29,9 @@ export const defaultConfig: StrategyConfig = {
 export const usePlanningStore = defineStore('planning', {
   state: () => ({
     initialized: false,
+    manualCreating: false,
+    manualTaskListState: null as ManualTaskListState | null,
+    resultAccountListState:null as {page:number;pageSize:number;draft:Record<string,unknown>;applied:Record<string,unknown>}|null,
     databaseReady: false,
     connectionMessage: '正在连接服务…',
     config: structuredClone(defaultConfig) as StrategyConfig,
@@ -47,7 +51,7 @@ export const usePlanningStore = defineStore('planning', {
         this.connectionMessage = '后端未启动，页面为只读预览'
       }
       if (this.databaseReady) {
-        const results = await Promise.allSettled([this.refreshConfig(), this.refreshBatches()])
+        const results = await Promise.allSettled([this.refreshConfig()])
         if (results.some(result => result.status === 'rejected')) {
           this.connectionMessage = '数据库已连接，部分页面数据加载失败'
         }

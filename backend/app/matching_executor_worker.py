@@ -62,14 +62,17 @@ def _record_failure(job: dict, code: str) -> None:
         LOG.error("匹配任务 %s 失败状态回写异常：%s", job.get("task_id"), type(exc).__name__)
 
 
-def run_once() -> int:
+def run_once(task_id: int | None = None, max_jobs: int = 100) -> int:
     failures = 0
+    processed = 0
     for implementation_key, executor in EXECUTORS.items():
         after_id = 0
         while True:
+            if processed >= max_jobs:
+                return failures
             response = claim_task(
                 ClaimTask(after_id=after_id, lease_seconds=lease_seconds()),
-                implementation_key=implementation_key,
+                implementation_key=implementation_key, task_id=task_id,
             )
             next_after_id = response.get("next_after_id", after_id)
             job = response.get("job")
@@ -79,6 +82,7 @@ def run_once() -> int:
                     continue
                 break
             after_id = next_after_id
+            processed += 1
             try:
                 proposal = executor(job)
             except (ExecutorPolicyError, ExecutorInputError, ValidationError, ValueError, TypeError, KeyError):

@@ -2,8 +2,11 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, type ContentProductionTask } from '../api'
 import { formatDateTime } from '../planningTime'
+import PageBreadcrumbs from './PageBreadcrumbs.vue'
+import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs'
 const props = defineProps<{ batchId: number }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
+usePageBreadcrumbs(() => [{ label: '内容流水' }], { append: true, close: () => emit('close') })
 const tasks = ref<ContentProductionTask[]>([])
 const error = ref('')
 const loading = ref(true)
@@ -47,6 +50,7 @@ onBeforeUnmount(() => { disposed = true; window.clearInterval(timer); document.r
   <Teleport to="body"><div class="drawer-mask content-flow-mask" @click.self="emit('close')"><aside ref="panel" class="drawer content-flow-drawer" role="dialog" aria-modal="true" aria-label="内容流水">
     <div class="drawer-head"><h2>内容流水</h2><button class="icon-btn" aria-label="关闭内容流水" @click="emit('close')">×</button></div>
     <div class="drawer-body">
+      <PageBreadcrumbs compact />
       <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
       <div v-if="loading" role="status">加载中…</div>
       <div v-else-if="!tasks.length" class="empty-state">暂无内容流水</div>

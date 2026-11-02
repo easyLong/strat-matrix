@@ -6,7 +6,7 @@ the normal versioned save operation.
 """
 import json
 from pathlib import Path
-from .integration import TagTaxonomyInput, get_tag_taxonomy, put_tag_taxonomy
+from .services.labels import TagTaxonomyInput, get_tag_taxonomy, put_tag_taxonomy
 
 
 def retire_unassigned(current: dict) -> dict:

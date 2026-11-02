@@ -209,7 +209,7 @@ def create_task(payload: MatchingTaskCreate) -> dict:
         return task_summary(task)
 
 
-def claim_task(payload: ClaimTask, *, implementation_key: str | None = None) -> dict:
+def claim_task(payload: ClaimTask, *, implementation_key: str | None = None, task_id: int | None = None) -> dict:
     """Claim the next runnable task, optionally restricted to one executor implementation.
 
     Public API callers keep the historical unfiltered behavior. In-process
@@ -221,7 +221,8 @@ def claim_task(payload: ClaimTask, *, implementation_key: str | None = None) -> 
         if implementation_key is None:
             cursor.execute("SELECT id FROM godp_matching_task WHERE del_flag='N' AND id>%s "
                            "AND (status='queued' OR (status='processing' AND lease_expires_at<=%s)) "
-                           "ORDER BY id LIMIT 1", (payload.after_id, now.replace(tzinfo=None)))
+                           + ("AND id=%s " if task_id is not None else "") +
+                           "ORDER BY id LIMIT 1", (payload.after_id, now.replace(tzinfo=None), *([task_id] if task_id is not None else [])))
         else:
             cursor.execute(
                 "SELECT t.id FROM godp_matching_task t "
@@ -230,8 +231,8 @@ def claim_task(payload: ClaimTask, *, implementation_key: str | None = None) -> 
                 "AND (t.status='queued' OR (t.status='processing' AND t.lease_expires_at<=%s)) "
                 "AND JSON_VALID(p.document_json)=1 "
                 "AND JSON_UNQUOTE(JSON_EXTRACT(p.document_json,'$.implementation_key'))=%s "
-                "ORDER BY t.id LIMIT 1",
-                (payload.after_id, now.replace(tzinfo=None), implementation_key),
+                + ("AND t.id=%s " if task_id is not None else "") + "ORDER BY t.id LIMIT 1",
+                (payload.after_id, now.replace(tzinfo=None), implementation_key, *([task_id] if task_id is not None else [])),
             )
         candidate = cursor.fetchone()
     if not candidate:

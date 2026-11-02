@@ -81,7 +81,7 @@ class PlanningProgressTests(unittest.TestCase):
         def database():
             yield Database()
 
-        with patch("app.main.connection", database):
+        with patch("app.services.results.connection", database):
             batch = list_batches()[0]
         self.assertEqual(batch["planning_status"], "已完成")
         self.assertEqual(batch["failed_count"], 0)

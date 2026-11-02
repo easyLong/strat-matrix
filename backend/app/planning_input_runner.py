@@ -3,10 +3,10 @@
 import logging
 from .db import connection
 from .doubao_labeling import LabelInput, label_topic, embed_profile
-from .integration import (TopicTagsInput, claim_topic_label_job, list_topic_label_jobs, put_topic_tags)
-from .topic_vector_api import TopicVectorResult, topic_vector_jobs, save_topic_vector
-from .account_vector_api import AccountVectorResult
-from .ai_preparation_api import preparation_account_jobs, save_preparation_account_vector
+from .services.labels import (TopicTagsInput, claim_topic_label_job, list_topic_label_jobs, put_topic_tags)
+from .services.topic_vectors import TopicVectorResult, topic_vector_jobs, save_topic_vector
+from .services.account_vectors import AccountVectorResult
+from .services.preparations import preparation_account_jobs, save_preparation_account_vector
 
 LOG = logging.getLogger('planning-input-runner')
 
@@ -20,7 +20,7 @@ def retry_due(table, key, identity):
     return row and (row['status'] != 'failed' or row['age'] >= 60)
 
 
-def prepare_inputs(preparation_id):
+def prepare_inputs(preparation_id=None):
     counts = {'labels': 0, 'topic_vectors': 0, 'account_vectors': 0}
     after = 0
     while True:
@@ -64,6 +64,8 @@ def prepare_inputs(preparation_id):
         if page['next_after_id'] <= after:
             break
         after = page['next_after_id']
+    if preparation_id is None:
+        return counts
     after = 0
     while True:
         page = preparation_account_jobs(after_id=after, limit=100, preparation_id=preparation_id)

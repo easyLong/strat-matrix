@@ -1,120 +1,135 @@
-# 多账号智能策划 · 开发版 V0.4
+# 多账号智能策划
 
-当前一级页面为 **AI策划配置、人工策划、策划结果**，策划结果提供账号列表和时间列表。最新口径与升级步骤见[近期修改汇总（2026-10-28）](docs/近期修改汇总_2026-10-28.md)，人工流程见[人工策划双流程](docs/人工策划双流程_2026-10-23.md)。内容生成由后台执行，已有正式批次提供“查看内容流水”。[前端调整恢复清单](docs/前端调整恢复清单_2026-10-22.md)和[会话交接](docs/会话交接_2026-10-22.md)保留为历史参考。
+本项目作为整体业务页面嵌入客户系统，包含 **AI策划配置、人工策划、策划结果** 三个入口。宿主系统负责登录和操作人身份；本项目负责策划、结果查询及与内容生产的衔接。
 
-最新全局需求见 [PRD V1.3 营销衔接修订稿](docs/多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.md)（2026-10-28；[Word](docs/多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.docx)、[PDF](docs/多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.pdf)），已纳入最新三页面图文需求、自动策划、内容生产与同库对接，并补充自动营销优先引用当日已有有效投放内容；第 10 章的待确认项尚待评审，文档不表示全部功能已实现。
+[文档索引](docs/README.md) · [当前实现与交接状态](docs/CURRENT_STATE.md) · [架构改造备忘V0.2](docs/行内整合架构改造备忘_V0.2.md) · [持久化执行与统一查询](docs/README.md#execution-query-release) · [前端业务组件](docs/README.md#frontend-business-components)
 
-原 V1.0 正式版与 [PRD V1.1 近期口径同步稿](docs/多账号智能策划_PRD_V1.1_近期口径同步稿.md)保留追溯。通用组件遵循 `docs/UI设计规范_后台产品通用版_V1.0.md`。历史实现对照见[PRD V1.1 开发对照](docs/PRD_V1.1_开发对照.md)，历史文档变更与排版核对见[修订记录](docs/PRD_V1.1_修订记录.md)。
+行内目标为Vue → 行内已有Java工程 → Python FastAPI。Java的转发、身份权限、调度和资料SQL直接写入行内工程；本仓库不建设Java模块，只提供[方法、字段及接入参考](docs/integration/java-host/README.md)。Vue与Python独立开发运行，保留策划业务和算法；Python只维护策划库，内容侧经授权只读策划结果并生产。工程归属见[V0.2备忘](docs/行内整合架构改造备忘_V0.2.md)，统一唤醒及后台执行仍待改造。
 
-周度规则策划的定时调度、手动触发命令和数据准入规则见[周度规则策划首版](docs/ORDINARY_PLANNING.md)。
+## 整体流程
 
-已实现[单账号普通选题正式闭环](docs/ORDINARY_WORKFLOW.md)：数据同步、真实模型画像与向量、V2匹配、正式策划提交及本地模拟内容生产回传和去重计数。后台Worker由启动脚本管理，已有规则定时调度暂未切换。
-
-本项目作为整体业务页面嵌入客户系统。入口、登录和用户角色由宿主系统负责，本项目不建设独立登录页、运营账号管理或角色权限后台。
-
-## 技术结构
-
-- `frontend/`：Vue 3 + TypeScript + Vite + Vue Router + Pinia。
-- `backend/`：Python 3.11 + FastAPI + PyMySQL。
-- `backend/schema.sql`：MySQL 建表脚本。所有表使用 `godp_` 前缀、自增 ID 和规定的审计字段；不使用外键、存储过程、函数或视图。
-
-## 启动
-
-数据库连接配置读取根目录 `.env`（兼容旧 `docs/.env`），只保留 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`。MySQL `godp_system_config` 保存前后端监听地址/端口、模型标识和鉴权密钥，说明见[系统配置说明](docs/SYSTEM_CONFIG.md)。
-
-先确认数据库和访问权限，再在项目根目录执行：
-
-```powershell
-cd backend
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m app.init_db
-uvicorn app.main:app --reload --port 6930
+```mermaid
+flowchart LR
+    Vue[Vue页面] --> Java[行内Java接入层：预留]
+    Java --> Python[Python FastAPI后端]
+    Python --> Prepare
+    Bank[行内业务库] --> DataAPI[Java内部资料查询接口：预留]
+    DataAPI --> Source[Python数据源适配器]
+    Source --> Prepare[标签、画像、向量准备]
+    Prepare --> Match[V2匹配与组合]
+    Manual[人工策划] --> Result[正式策划明细]
+    Match --> Result
+    Result --> Store[(策划自有库)]
+    Store --> Content[内容侧只读扫描、自行生产]
+    Content --> Status[行内生产状态]
+    Status --> StatusAPI[Java状态查询接口]
+    StatusAPI --> Feedback[Python读取状态、更新本库与成功计数]
+    Feedback --> Query[列表、日历、统计、导出]
 ```
 
-另开终端：
+行内业务库保存账号、选题、营销内容和互动事实，由Java查询。策划侧通过稳定ID关联自有数据，在独立策划库保存配置、派生数据、任务、正式结果和必要快照，不直接访问业务库。内容侧的只读账号、扫描、领取、生产及重试由行内实现；Python不提供内容领取与回传入口，只通过Java读取状态并在本库更新投影、使用事实和计数。
 
-```powershell
-cd frontend
+当前普通选题主链已在开发数据源、真实模型和 MySQL 下验收；Python侧Java读取适配通过本地模拟查询验证，Java只作为交接参考材料。真实Java转发、宿主身份权限、实际SQL及内容Agent尚未接通。历史同库验收仅用于验证策划业务。
+
+## 技术与运行结构
+
+- 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia。
+- 后端：Python、FastAPI、PyMySQL。
+- 数据库：目标为行内业务库与策划库隔离；Python的MySQL连接仅指向策划库，基础资料通过Java接口读取。
+- 后台当前实现：统一 Worker 轮询周策划、热点 T-1、自动流程和人工任务。行内目标为宿主统一唤醒、FastAPI内受控执行及持久化恢复，尚未完成，不能把当前Worker直接作为行内调度接入。
+- 模型：共用一个文本模型入口和一个向量模型入口。当前适配火山方舟豆包，业务配置使用 `MODEL_NAME`、`EMBEDDING_MODEL_NAME` 和 `ARK_API_KEY`。
+
+项目采用模块化单体，业务归为配置管理、数据准备、策划执行、内容生产衔接、结果查询五部分。已提取 `api/`、`services/`、`core/`、`adapters/`、`jobs/`，HTTP 与准备流程复用已迁移的应用服务，V1/V2 共用候选规则。人工非营销任务已改为持久化领取，结果列表、详情及导出已统一查询范围；其余 SQL、模型适配和页面组件继续按用例收拢。
+
+## 当前代码入口
+
+| 职责 | 当前入口 |
+| --- | --- |
+| 前端路由与三个页面 | `frontend/src/router.ts`、`frontend/src/views/` |
+| ASGI 入口、HTTP 装配与页面接口 | `backend/app/main.py`、`bootstrap.py`、`api/` |
+| 标签、向量、准备、配置、人工策划和结果用例 | `backend/app/services/` |
+| 公共算法与序列化规则 | `backend/app/core/` |
+| 结果 SQL 投影与行内资料批量读取 | `backend/app/adapters/` |
+| 行内查询契约、Java HTTP资料与状态适配 | `backend/app/bank_bridge/` |
+| 行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
+| 行内Java驻场实现步骤与边界说明 | `docs/integration/java-host/README.md` |
+| 行内生产状态读取与策划库状态投影 | `backend/app/services/content_status.py` |
+| 普通选题变化发现与模型准备 | `source_discovery.py`、`planning_input_runner.py` |
+| 后台统一入口、周触发与流程推进 | `jobs/worker.py`、`ordinary_scheduler.py`、`planning_workflow_worker.py` |
+| 人工任务提交、领取、恢复与重试 | `services/manual_planning.py`、`services/manual_tasks.py` |
+| 统一结果范围、列表、详情与CSV | `services/result_scope.py`、`result_lists.py`、`plan_queries.py`、`result_export.py` |
+| 输入冻结、匹配任务与正式提交 | `ai_preparation.py`、`matching_tasks.py`、`planning_result_commit.py` |
+| V2 算法 | `matching_executor_v2.py`、`matching_algorithm_v2.py`、`matching_portfolio_v2.py` |
+| 生产状态投影与成功计数 | `services/content_status.py`；内容侧自行扫描并生产 |
+| 配置读取与目录 | `system_config.py`、`system_config_catalog.py` |
+
+表中的 Python 文件均位于 `backend/app/`。`main.py` 与 `integration.py` 已缩为兼容入口，不再承载业务 SQL。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
+
+## 初始化与配置
+
+数据库连接从根目录 `.env` 读取，仅包含 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`；兼容历史 `docs/.env`。端口、模型、鉴权及自动策划绑定配置保存在 MySQL `godp_system_config`。
+
+在 `backend/` 下使用已安装依赖的 Python 环境：
+
+```bash
+python -m pip install -r requirements.txt
+python -m app.init_db
+```
+
+已有库升级本轮生产扫描扩展字段：
+
+```bash
+python -m app.init_shared_workflow_db
+```
+
+所有策划自有表使用 `godp_` 前缀，表与字段均需中文说明及规定的审计字段，不使用外键、存储过程、数据库函数或视图。
+
+`bank_bridge/factory.py` 按MySQL配置装配本地开发夹具或Java HTTP数据源，拒绝 `bank_sql` 与 `local_sql`。夹具不随Git或驻场包交付。行内源表SQL由Java执行，Python不持有业务库凭据；具体URL、鉴权与字段映射待驻场补齐。
+
+周自动策划由 `AUTO_PLANNING_POLICY_ID` 绑定已批准的 V2 策略，`AUTO_PLANNING_ACCOUNT_IDS` 指定试运行账号范围；当前周主链使用 `ordinary_only`。配置语义及当前Java读取边界见[当前实现状态](docs/CURRENT_STATE.md)；历史同库闭环只作业务验证参考。
+
+## 启动与检查
+
+本地开发启动后端和前端（各在独立终端）：
+
+```bash
+# backend/
+uvicorn app.main:app --host 0.0.0.0 --port 6930
+
+# frontend/
 npm install
 npm run dev
 ```
 
-访问 `http://localhost:930`，直接进入业务页面。后端未启动或数据库不可用时，页面会显示连接状态。
+访问 `http://localhost:930`。本地独立开发由Vite代理Python；行内模式只代理 `JAVA_GATEWAY_URL`，未配置时明确失败。还需在 `backend/` 下运行 `python -m app.jobs.worker`。Java不启动，也不属于本地运行依赖；待驻场补接入转发、资料查询及认证权限。
 
-## 当前能力与边界
+服务器启动、停止和状态检查使用根目录的 `start.sh`、`stop.sh`、`status.sh`；监听地址和端口使用 MySQL 中的配置，完整部署说明从文档索引查阅。
 
-- 访问方式：直接进入业务页面；配置、标签、手动策划及替换操作保留审计记录，人工操作统一标记为“运营人员”，自动任务使用 `system`。
-- AI策划配置：查看态与编辑态分开，提供内容策划配置、策划规则配置、选题标签和历史配置。生命周期条件按组内且、组外或展示，编辑时直接展开。
-- AI 自动策划：周度规则调度与热点 T-1 调度已接入；V2 匹配及单账号普通选题正式闭环已实现，运行需已批准策略、模型配置及相应 Worker。具体边界见[普通选题正式闭环](docs/ORDINARY_WORKFLOW.md)。
-- 人工策划：营销为创建任务、单选选题并填写总分配数量、确认策划三步，账号由外部系统后续分配；非营销保留投放日期、账号选择、多选选题和确认四步。任务列表分页，保留“查看策划”入口。
-- 策划结果：提供账号列表、时间列表以及账号、周期、批次策划详情；统计去重账号或批次、去重选题和 12 类选题分布。支持明细导出、失败原因查看和失败账号 UM 导出。周期账号数当前按各批次相加，详细口径见近期修改汇总。
+在 `backend/` 下运行单元测试：
 
-可以在 `backend/` 目录运行 `python -m app.seed_demo` 写入演示配置、账号目录、选题目录与策划批次，并为 `DEMO-` 记录补齐选题大纲、内容类型和计划槽位状态，便于验收结果详情、人工替换和调整历史。脚本只处理固定演示前缀，真实业务记录不会被修改。这些记录不代表真实 AI 运行或内容生产结果。
+```bash
+python -m unittest discover -s tests
+```
 
-需要较大目录时可运行 `python -m app.seed_large_demo`，幂等生成 100 个 `DEMO-LA` 账号和 600 个 `DEMO-LT` 选题，同时写入认证、粉丝量、选题大纲、内容类型和审核有效资料。
+在 `frontend/` 下验证业务规则、类型与构建：
 
-按运营前端原型初始化完整验收数据时运行 `python -m app.seed_prototype`。该脚本会写入原型中的 68 个账号、12 个示例选题、T1–T5 标签体系、5 个自动策划周期（39/40/42/54/60 个账号、117/120/126/146/180 条自动内容）、9/12/18/20/24 条手动策划任务和策划配置。选题二级分类已按 12 个 Agent 名称调整。脚本会软删除并重建演示目录和策划记录，请先确认使用环境。仅展示失败详情时可使用 `python -m app.seed_failure_demo`，建立固定的 18 账号失败演示批次。
+```bash
+npm test
+npm run build
+```
 
-已有原型数据需要按当前日期更新自动策划页时，可运行 `python -m app.refresh_auto_demo`：补齐历史策划、本周按 T-1 22:00 保留热点空槽，不提前生成下周批次。备份、时间口径与操作范围见[自动策划展示数据更新](docs/AUTO_PLANNING_DEMO.md)。
+前端业务组件按 `components/config/`、`components/manual/`、`components/planning/` 分组。人工账号、选题选择状态分别由 `useManualAccountSelection`、`useManualTopicSelection` 管理；页面负责步骤衔接、提交和路由，账号/周期/批次共用日历、统计和计划详情抽屉。具体职责见[前端业务组件](docs/README.md#frontend-business-components)。
 
-## 本地系统对接版
+真实模型验收需要显式运行 `python -m app.run_shared_workflow_acceptance` 并传入未占用的周一周期及已批准策略 ID。该命令会写入测试数据并调用模型，参数和限制见同库闭环说明。
 
-以下同步接口说明属于已有本地实现，历史 IF 编号不作为本次行内对接的最终编号。同库查询与扩展表方案见[同库对接能力定义 V1.16](docs/多账号智能策划_同库对接能力定义_V1.16_评审稿.md)，行内 SQL、实际来源表及营销账号分配仍需联调。营销人工创建接口的最新字段见[人工策划双流程](docs/人工策划双流程_2026-10-23.md)。
+## 开发边界
 
-运行 `python -m app.init_db` 会补建本地来源数据、内容历史、槽位状态、待投递事件、回传记录及标签表，并将 `backend/schema.sql` 中的中文表说明和字段说明同步到已有表；已有业务记录保留。接口划分及数据归属见 [`docs/接口预留清单_V0.1.md`](docs/接口预留清单_V0.1.md)。
+- 人工非营销：投放日期、账号和选题确认后形成策划明细。
+- 人工营销：一个选题与生成内容总数量形成需求，账号分配和审核结果由下游衔接；已有过审营销库存直接引用。
+- 账号、周期、批次是查看结果的三种范围，分别显示约定的详情名称，复用结果查询和详情组件。
+- 前端页面接口、行内能力包装与后台任务入口职责分别明确，核心业务规则只有一个维护位置。
+- 旧同步、主动投递和旧内容生产接口已停用，部分代码与 14 张旧表仍待清理。旧表物理删除受数据库 DROP 权限限制，状态与备份说明见文档索引。
+- `seed_demo`、`seed_large_demo`、`seed_prototype` 等历史种子仍有旧表依赖；`run_ordinary_workflow_demo` 已关闭并指向新的验收命令。历史实现隔离于 `legacy/`，不进入驻场包。
 
-本项目提供下列**跨系统入站接口**，调用方在请求头发送 `X-Integration-Token`。令牌保存于 MySQL `godp_system_config` 的 `INTEGRATION_TOKEN` 配置项，配置查询默认脱敏。
-
-| 路径 | 用途 |
-| --- | --- |
-| `POST /api/integrations/accounts/sync` | 批量接收账号事实 |
-| `POST /api/integrations/topics/sync` | 批量接收选题和审核有效期事实 |
-| `POST /api/integrations/marketing-topics/sync` | IF-03 接收带账号绑定的营销选题全量快照 |
-| `POST /api/integrations/hotspot-topics/sync` | IF-04 接收热点选题全量快照 |
-| `POST /api/integrations/content-history/sync` | 批量接收已发布内容与运营表现 |
-| `POST /api/integrations/content-status` | 接收内容生成或发布状态 |
-| `GET /api/integrations/accounts/{account_id}/current-plan` | IF-05 按账号查询当前可生产的有效策划结果 |
-| `POST /api/integrations/publication-status` | IF-06 校验并回写实际发布状态 |
-| `GET /api/integrations/topics/{topic_id}/labels` | IF-08 查询普通选题 T1–T6 标签识别结果 |
-| `POST /api/integrations/topics/official-usage/query` | IF-09 批量查询三类选题正式使用次数 |
-
-IF-01、IF-02 及历史内容同步请求均包含 `source_batch_id`、`mode`（`full` 或 `incremental`）和 `records`，每条记录使用稳定业务 ID 和带时区的 `updated_at`。IF-01/IF-02 按 ID 与更新时间更新本地副本；全量模式最多接收 5000 条，成功后停用缺席的正式账号或普通选题；增量模式每批最多 500 条，不处理缺席记录。IF-03、IF-04 有各自独立的全量快照契约。字段完整契约可在 `http://127.0.0.1:6930/docs` 查看。
-
-IF-01 已接收账号别名、人设、粉丝量和近三个月帖子级互动，供生命周期与手动策划流量趋势计算；IF-02 已接收普通选题热度及可用状态。字段映射与计算口径见 [`docs/IF01_IF02_本地对接契约.md`](docs/IF01_IF02_本地对接契约.md)。
-
-IF-05 / IF-06 的请求、返回、选期和一致性校验规则见 [`docs/IF05_IF06_本地对接契约.md`](docs/IF05_IF06_本地对接契约.md)。IF-05 不会锁定结果；IF-06 成功标记已发布后，结果页会显示已发布并禁止替换。
-
-IF-08 / IF-09 的字段、标签状态和独立计数口径见 [`docs/IF08_IF09_本地对接契约.md`](docs/IF08_IF09_本地对接契约.md)。正式使用次数需由独立业务逻辑写入，现有内容生成槽位计数不能替代。
-
-IF-03 营销选题全量同步的字段与空快照口径见 [`docs/IF03_营销选题同步契约.md`](docs/IF03_营销选题同步契约.md)。同步数据作为独立来源事实保存，周度规则策划按账号绑定和审核时间安排营销槽位。
-
-IF-04 热点选题全量同步的字段与空快照口径见 [`docs/IF04_热点选题同步契约.md`](docs/IF04_热点选题同步契约.md)。热点来源数据独立保存；热点调度进程在 T-1 22:00 为待定槽位确定热点选题，候选不足时使用普通最热选题兜底。
-
-本项目前端仍调用 `/api/accounts`、`/api/topics`、`/api/batches` 等**内部前后端接口**。从已同步且可用的账号与选题创建手动批次，会生成 `SLOT_PLAN_CREATED` 待投递事件。项目内的策划工作进程拿到完整 Fit、T1–T7 和 Content Agent Input 后，调用受令牌保护的 `POST /api/internal/slots/{slot_id}/content-ready`，生成 `CONTENT_READY` 事件。内容生产系统再通过状态接口回传 `generated`、`failed` 或 `published`。状态和选题使用次数仅在有效回传后更新；重复 `event_id` 不重复生效。
-
-`GET /api/internal/outbox` 使用同一令牌读取本地事件，目标 `planning` 指向客户内容生产系统，目标 `topics` 指向客户选题库。`PUT /api/tag-taxonomy` 保存 T1–T5 固定标签并生成本地待投递事件；`PUT /api/internal/topic-tags/{topic_id}` 保存单个选题的识别标签，由选题方通过 IF-08 主动查询，不推送标签结果。客户尚未提供接收地址，本地版将待投递事件保存在数据库中供查看和后续投递，不会自动发送。`DEMO-` 演示记录及未通过客户同步接口建立的手工目录记录只保存在本地。
-
-T1–T5 字典的稳定 ID、改名、启停、选题标签 ID 关联和逐版历史见 [`docs/TAG_TAXONOMY.md`](docs/TAG_TAXONOMY.md)。
-
-正式普通选题首次同步会创建内部标签识别任务；可配置的本地识别进程、模型服务 JSON 契约、领取租约、失败重试和结果回写见 [`docs/TOPIC_LABEL_JOBS.md`](docs/TOPIC_LABEL_JOBS.md)。T6 候选会在同一向量模型下按相似度复用已有标签，绑定稳定 ID；旧标签按名称补 ID，历史向量不补造。未配置模型服务时识别进程默认关闭，任务不会自动产出标签。
-
-标签完成后的当前选题画像、内容变化引起的向量失效、可配置的向量执行进程、内部向量回写和 AI 候选准入见 [`docs/TOPIC_PROFILE_VECTOR.md`](docs/TOPIC_PROFILE_VECTOR.md)。具体向量服务地址尚未配置；正式周策划仍运行规则热度兜底。
-
-正式新批次同步冻结账号基本信息、人设、互动明细、阶段与经营目标，保存该批次独立的账号画像及向量准备状态。内部准备任务、共享向量接口、按批次的账号候选查询和账号向量执行进程见 [`docs/ACCOUNT_PROFILE_VECTOR.md`](docs/ACCOUNT_PROFILE_VECTOR.md)。账号画像、选题画像与 T6 标签共用系统配置中的向量模型；执行进程默认关闭，启用后支持常驻处理、失败重试和指定批次单轮处理。旧批次不使用当前来源补造历史画像。
-
-正式 AI 主链准备提供受令牌保护的 `GET /api/internal/matching-readiness?batch_id=123`，以批次账号快照和当前有效选题池检查画像完整性、单位向量、模型与维度兼容性，返回内部阻断原因，不改写现有结果。接口口径见[匹配输入准备检查](docs/MATCHING_PREPARATION.md)；正式算法参数待[算法与策略草稿](docs/ALGORITHM_STRATEGY_V1.0.md)评审确认。
-
-结果生成前的[正式AI输入准备流程](docs/AI_PREPARATION.md)已接入，按独立 `preparation_id` 冻结账号、配置、投放日期和兼容普通选题输入，支持重复请求去重、版本校验、取消释放周期和可配置的后台推进。更新后先运行 `python3 -m app.init_db` 建立三张准备表；模型服务及算法规则确认后再接入评分、分配和结果提交。
-
-[算法策略与匹配任务](docs/MATCHING_EXECUTION.md)已提供不可变策略版本、冻结输入绑定、租约领取/续租、失败重试与提案留痕。当前没有预置算法或匹配执行器，保存提案不会创建运营批次；新版本同样需初始化数据库后重启后端。
-
-第二版任务支持[兜底池、历史与正式计数补充快照](docs/MATCHING_SUPPLEMENTAL_INPUTS.md)，记录来源、窗口和未知状态，并在执行时复核版本；第一版任务指纹保持兼容。当前历史接口尚无完整窗口覆盖证明，不能将未观察到的历史视为真实空历史。
-
-本地版已产生的策划事件为 `SLOT_PLAN_CREATED` 和 `CONTENT_READY`；槽位状态变化及内容 Agent 的实际执行仍需继续接入。周度规则调度和热点 T-1 确定已在项目内部运行，内容生成失败后的再次生产需要创建新版本，本地版会阻止复用同一版本重复提交。
-
-生产部署前应由客户确认系统间鉴权、接收地址、重试和状态字段映射；本地令牌仅用于当前受控开发环境。
-
-本地依赖安装已将文档中的 Vite 6.4.1 更新为 6.4.3，修复同一版本线的已知开发服务器问题。当前开发机尚未安装 Python 3.11；代码曾在已安装的 Python 3.14 下完成导入检查，正式运行环境仍以文档要求的 3.11 为准。
+业务与界面资料以 [最新文档索引](docs/README.md) 为入口，历史 PRD 和旧接口定义保留追溯。
 

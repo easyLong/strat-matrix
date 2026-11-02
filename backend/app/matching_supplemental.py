@@ -54,6 +54,14 @@ def fallback_topic(row: dict) -> dict | None:
 def load_fallback_topics(cursor, checked_at: datetime, identifiers: list[str] | None = None) -> list[dict]:
     if identifiers == []:
         return []
+    from .bank_bridge.factory import external_source_enabled
+    if external_source_enabled():
+        from .bank_bridge.current_topics import rows
+        candidates = rows(cursor, identifiers, as_of=checked_at)
+        if len(candidates) > MAX_ROWS:
+            raise SupplementalInputError('supplemental_input_too_large')
+        return sorted([topic for row in candidates if (topic := fallback_topic(row)) is not None],
+                      key=lambda topic: topic['topic_id'])
     base = ("SELECT s.topic_id,s.payload_json,s.source_updated_at,s.valid_from,s.valid_to,t.title, "
             "tag.label_status,tag.version AS tag_version,tag.tags_json,tag.tag_ids_json, "
             "tag.taxonomy_version,tag.t6_tag_id FROM godp_topic_source s "
@@ -89,6 +97,27 @@ def load_fallback_topics(cursor, checked_at: datetime, identifiers: list[str] | 
 
 
 def load_history(cursor, account_ids: list[str], as_of: datetime, days: int) -> dict:
+    from .bank_bridge.factory import external_source_enabled
+    if external_source_enabled():
+        from .bank_bridge.bridge import collect
+        from .bank_bridge.contracts import AccountQuery
+        from .bank_bridge.factory import get_source
+        start = as_of - timedelta(days=days)
+        records = []
+        for group in chunks(sorted(set(account_ids))):
+            for account in collect(get_source(cursor), 'accounts', AccountQuery(account_ids=group)):
+                for post in account.interactions:
+                    if start <= post.published_at <= as_of:
+                        records.append({'content_id': post.content_id, 'account_id': account.account_id,
+                            'topic_id': None, 'topic_type': None, 'reference_known': False,
+                            'published_at': post.published_at.isoformat(),
+                            'source_updated_at': post.updated_at.isoformat() if post.updated_at else None,
+                            'source_payload': post.model_dump(mode='json')})
+        counts = Counter(row['account_id'] for row in records)
+        return {'source': 'bank_method', 'window_days': days, 'window_start': start.isoformat(),
+                'window_end': as_of.isoformat(), 'coverage': 'unknown', 'observed_records': records,
+                'accounts': [{'account_id': identity, 'coverage': 'unknown', 'observed_count': counts[identity]}
+                             for identity in sorted(set(account_ids))]}
     start = as_of - timedelta(days=days)
     records = []
     for group in chunks(sorted(set(account_ids))):

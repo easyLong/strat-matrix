@@ -20,16 +20,16 @@ from .matching_algorithm_v2 import (
     allocate_matrix,
 )
 from .matching_contracts import MatchingEvaluation, MatchingPolicyDocument
-from .matching_executor import (
-    IMPLEMENTATION_KEY as V1_IMPLEMENTATION_KEY,
+from .core.matching_common import (
+    CANDIDATE_CONTRACT_KEY,
     ExecutorInputError,
     ExecutorPolicyError,
-    _dot,
-    _history_by_account,
-    _role_plan,
-    _stage_targets,
-    _city_allowed,
-    executor_config,
+    dot_similarity,
+    history_by_account,
+    role_plan,
+    stage_targets,
+    city_allowed,
+    candidate_config,
 )
 from .matching_portfolio_v2 import PortfolioPolicy, optimize_portfolios
 
@@ -50,7 +50,7 @@ def portfolio_policy(document: MatchingPolicyDocument) -> PortfolioPolicy:
 
 def _cosine_similarity(topic_by_id: dict[str, dict], left: str, right: str) -> float:
     try:
-        value = _dot(topic_by_id[left]["vector"], topic_by_id[right]["vector"])
+        value = dot_similarity(topic_by_id[left]["vector"], topic_by_id[right]["vector"])
     except KeyError as exc:
         raise ExecutorInputError("portfolio candidate references an unknown topic") from exc
     return max(0.0, min(1.0, value))
@@ -89,8 +89,8 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
     # The V2 key intentionally shares the exact, already-approved cosine
     # eligibility and lifecycle-role contract. Only allocation and composition
     # differ from V1; V2 does not consume official-use ranking signals.
-    v1_policy = {**raw_policy, "implementation_key": V1_IMPLEMENTATION_KEY}
-    _, config = executor_config(v1_policy)
+    v1_policy = {**raw_policy, "implementation_key": CANDIDATE_CONTRACT_KEY}
+    _, config = candidate_config(v1_policy)
     allocation_params = document.decisions["ALG-05"].parameters
     if allocation_params["global_reuse_penalty"] != 0 \
             or allocation_params["official_usage_penalty"] != 0:
@@ -123,7 +123,7 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
     if len(account_by_id) != len(accounts) or len(topic_by_id) != len(topics):
         raise ExecutorInputError("duplicate account or topic identifiers")
 
-    history = _history_by_account(supplemental)
+    history = history_by_account(supplemental)
     slots: list[Slot] = []
     for position in positions:
         if not isinstance(position, dict):
@@ -143,7 +143,7 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
     if len({slot.slot_id for slot in slots}) != len(slots):
         raise ExecutorInputError("duplicate account publish-date slots")
 
-    role_targets = _stage_targets(inputs)
+    role_targets = stage_targets(inputs)
     slots_by_account: dict[str, list[Slot]] = {}
     for slot in slots:
         slots_by_account.setdefault(slot.account_id, []).append(slot)
@@ -156,7 +156,7 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
             raise ExecutorInputError("account lifecycle target is missing") from exc
         role_positions = [{"account_id": slot.account_id, "publish_date": slot.publish_date}
                           for slot in account_slots]
-        roles.update(_role_plan(account, role_positions, traffic_target))
+        roles.update(role_plan(account, role_positions, traffic_target))
 
     topic_roles = {topic_id: _topic_role(topic) for topic_id, topic in topic_by_id.items()}
     fallback_topic_roles = {
@@ -177,7 +177,7 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
             role: [] for role in role_slots
         }
         for topic_id, topic in sorted(topic_by_id.items()):
-            if not _city_allowed(account, topic):
+            if not city_allowed(account, topic):
                 city_excluded += len(account_slots)
                 continue
             if topic_id in history.get(account_id, set()):
@@ -192,7 +192,7 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
             role_excluded += len(account_slots) - len(matched_role_slots)
             if not matched_role_slots:
                 continue
-            cosine = _dot(account["vector"], topic["vector"])
+            cosine = dot_similarity(account["vector"], topic["vector"])
             if cosine < config.min_cosine:
                 continue
             ranked_by_role[topic_role].append((cosine, topic_id))
@@ -281,7 +281,7 @@ def execute_job_v2(job: dict) -> MatchingEvaluation:
         for topic in fallback_topics:
             fallback_counters["topics_examined"] += 1
             topic_id = str(topic.get("topic_id") or "")
-            if not _city_allowed(account, topic, fallback=True):
+            if not city_allowed(account, topic, fallback=True):
                 fallback_counters["city_excluded"] += 1
                 continue
             if topic_id in history.get(slot.account_id, set()):

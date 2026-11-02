@@ -84,7 +84,11 @@ def lifecycle_stage(config: StrategyConfig, metrics: dict[str, int | float]) -> 
     raise PlanningError("生命周期配置缺少兜底阶段")
 
 
-def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
+def load_accounts(cursor, scope: str, config: StrategyConfig, *, account_ids=None) -> list[dict]:
+    from .bank_bridge.factory import external_source_enabled
+    if external_source_enabled():
+        from .bank_bridge.bridge import planning_accounts
+        return planning_accounts(cursor, scope, config, account_ids=account_ids)
     cursor.execute(
         "SELECT a.account_code, a.account_name, a.persona, a.marketing_eligible, s.source_updated_at, "
         "s.payload_json FROM godp_account a JOIN godp_account_source s "
@@ -158,6 +162,10 @@ def load_accounts(cursor, scope: str, config: StrategyConfig) -> list[dict]:
 
 
 def load_topics(cursor, scope: str) -> list[dict]:
+    from .bank_bridge.factory import external_source_enabled
+    if external_source_enabled():
+        from .bank_bridge.bridge import planning_topics
+        return planning_topics(cursor, scope)
     cursor.execute(
         "SELECT t.topic_code, t.title, s.source_updated_at, s.payload_json, "
         "tag.tags_json FROM godp_topic t JOIN godp_topic_source s "
@@ -199,6 +207,9 @@ def load_topics(cursor, scope: str) -> list[dict]:
 
 
 def run_ordinary_planning(cycle_start: date | None = None, scope: str = "live") -> dict:
+    from .bank_bridge.factory import source_mode
+    if source_mode() == 'java_http':
+        raise PlanningError('Java资料模式使用已批准V2流程，旧规则脚本不支持行内HTTP资料')
     if scope not in ("demo", "live"):
         raise PlanningError("数据范围只能为 demo 或 live")
     start = cycle_start or current_next_monday()

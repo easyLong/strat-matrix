@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 
 from app.manual_availability import (
     ensure_manual_accounts_available, pending_manual_accounts, planned_manual_accounts,
@@ -39,6 +39,12 @@ class Cursor:
 class ManualAvailabilityTests(unittest.TestCase):
     day = date(2026, 10, 15)
 
+    def setUp(self):
+        self.patch=patch('app.manual_availability.active_account_ids',side_effect=lambda cursor,wanted:set(wanted))
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+
     def test_only_completed_batch_results_are_reported_as_planned(self):
         cursor = Cursor([[{"account_id": "A"}]])
         self.assertEqual(planned_manual_accounts(cursor, self.day), {"A"})
@@ -54,22 +60,22 @@ class ManualAvailabilityTests(unittest.TestCase):
         self.assertEqual(cursor.calls[0][1], (self.day,))
 
     def test_submission_locks_accounts_in_order_before_conflict_check(self):
-        cursor = Cursor([[{"account_code": "A"}, {"account_code": "B"}],
+        cursor = Cursor([{"acquired":1},
                          [{"account_id": "B"}], []])
         with self.assertRaises(HTTPException) as raised:
             ensure_manual_accounts_available(cursor, self.day, ["B", "A"])
         self.assertEqual(raised.exception.status_code, 409)
-        self.assertIn("ORDER BY account_code FOR UPDATE", cursor.calls[0][0])
-        self.assertEqual(cursor.calls[0][1], ["A", "B"])
+        self.assertIn("GET_LOCK", cursor.calls[0][0])
+        self.assertEqual(cursor.calls[0][1], ("godp:manual:20261015",))
 
     def test_worker_excludes_only_its_own_pending_task(self):
-        cursor = Cursor([[{"account_code": "A"}], [], []])
+        cursor = Cursor([{"acquired":1}, [], []])
         ensure_manual_accounts_available(cursor, self.day, ["A"], exclude_task_id=42)
         self.assertIn("t.id<>%s", cursor.calls[2][0])
         self.assertEqual(cursor.calls[2][1], (self.day, 42))
 
     def test_other_running_task_blocks_new_submission(self):
-        cursor = Cursor([[{"account_code": "A"}], [], [
+        cursor = Cursor([{"acquired":1}, [], [
             {"allocations_json": '[{"account_id":"A"}]'},
         ]])
         with self.assertRaises(HTTPException) as raised:
@@ -81,17 +87,18 @@ class ManualAvailabilityTests(unittest.TestCase):
             pending_manual_accounts(Cursor([[{"allocations_json": '{}'}]]), self.day)
 
     def test_disabled_accounts_are_rejected_before_allocation(self):
-        cursor = Cursor([[]])
-        with self.assertRaises(HTTPException):
+        cursor = Cursor([{"acquired":1}])
+        self.patch.stop()
+        with patch("app.manual_availability.active_account_ids", return_value=set()), self.assertRaises(HTTPException):
             ensure_manual_accounts_available(cursor, self.day, ["A"])
         self.assertEqual(len(cursor.calls), 1)
 
     def test_preview_rejects_explicitly_selected_planned_account(self):
         account = dict(account_id="A", account_name="Account A", account_alias="", city="",
                        persona="", traffic_trend="", certified=False, followers=100)
-        with patch('app.main.list_accounts', return_value=[account]), patch(
-            'app.main.manual_account_availability', return_value={"planned_account_ids": ["A"]},
-        ), patch('app.main.connection') as db:
+        with patch('app.services.manual_planning.list_accounts', return_value=[account]), patch(
+            'app.services.manual_planning.manual_account_availability', return_value={"planned_account_ids": ["A"]},
+        ), patch('app.services.manual_planning.connection') as db:
             with self.assertRaises(HTTPException) as raised:
                 preview_manual_plan(ManualPreviewInput(task_name="Test", publish_date=self.day,
                                                       account_ids=["A"], topic_ids=["T"]))
@@ -113,10 +120,8 @@ class ManualAvailabilityTests(unittest.TestCase):
         def connection():
             yield DB()
 
-        background = BackgroundTasks()
-        with patch('app.main.connection', connection):
-            self.assertEqual(submit_manual_preview("P", background), existing)
-        self.assertEqual(background.tasks, [])
+        with patch('app.services.manual_planning.connection', connection):
+            self.assertEqual(submit_manual_preview("P"), existing)
         self.assertEqual(cursor.calls[0][0], "SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
         self.assertFalse(any("INSERT INTO" in sql for sql, _ in cursor.calls))
 
@@ -136,16 +141,14 @@ class ManualAvailabilityTests(unittest.TestCase):
         def connection():
             yield DB()
 
-        background = BackgroundTasks()
-        with patch('app.main.connection', connection), patch(
-            'app.main.ensure_manual_accounts_available',
+        with patch('app.services.manual_planning.connection', connection), patch(
+            'app.services.manual_planning.ensure_manual_accounts_available',
             side_effect=HTTPException(status_code=409, detail="Already planned"),
         ):
             with self.assertRaises(HTTPException) as raised:
-                submit_manual_preview("P", background)
+                submit_manual_preview("P")
         self.assertEqual(raised.exception.status_code, 409)
         self.assertFalse(any("INSERT INTO" in sql for sql, _ in cursor.calls))
-        self.assertEqual(background.tasks, [])
 
 
 if __name__ == '__main__':

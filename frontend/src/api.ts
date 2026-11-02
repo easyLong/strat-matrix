@@ -1,3 +1,5 @@
+import { request } from './api/http'
+import { queryManualTasks, queryPlanPage, queryAccountPage, queryPeriodPage, queryPeriodContext, queryResultFailures } from './api/queries'
 import type { AccountOption, AccountPlanRecord, AdjustmentRecord, AutoCycleSummary, AutoFailure, BatchDetail, BatchSummary, ConfigResponse, ConfigVersionSummary, ManualPlanInput, ManualPreviewInput, ManualPreviewResponse, ManualTaskSummary, PlanningAccountSummary, PlanningCycleSummary, StrategyConfig, TopicOption } from './types'
 
 export interface ContentProductionTask {
@@ -60,28 +62,6 @@ function normalizeTagTaxonomy(value: unknown): TagTaxonomyResponse {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(`/api${path}`, {
-      ...options,
-      cache: options.cache ?? 'no-store',
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-    })
-  } catch {
-    throw new Error('后端服务尚未连接')
-  }
-  if (!response.ok) {
-    let message = `请求失败（${response.status}）`
-    try {
-      const body = await response.json()
-      if (typeof body.detail === 'string') message = body.detail
-    } catch { /* Use the HTTP status. */ }
-    throw new Error(message)
-  }
-  return response.json() as Promise<T>
-}
-
 async function allManualTasks(path: string): Promise<ManualTaskSummary[]> {
   const tasks = new Map<string, ManualTaskSummary>()
   const limit = 100
@@ -131,6 +111,12 @@ export const api = {
     request<ManualPreviewResponse>('/manual-plans/previews', { method: 'POST', body: JSON.stringify(input) }),
   submitManualPreview: (previewId: string) =>
     request<ManualTaskSummary>(`/manual-plans/previews/${encodeURIComponent(previewId)}/submit`, { method: 'POST' }),
+  manualTaskPage: queryManualTasks,
+  planPage: queryPlanPage,
+  accountPage: queryAccountPage,
+  periodPage: queryPeriodPage,
+  periodContext: queryPeriodContext,
+  resultFailures: queryResultFailures,
   manualTasks: () => allManualTasks('/manual-plans/tasks'),
   marketingTasks: () => allManualTasks('/manual-plans/marketing-tasks'),
   createMarketingTask: (input: { request_id: string; task_name: string; topic_id: string; allocation_count: number }) =>
