@@ -19,6 +19,7 @@ from .models import StrategyConfig
 from .ordinary_planning import PlanningError, current_next_monday, load_accounts
 from .planning_reservation import reservation_key
 from .bank_bridge.input_snapshot import frozen_java_inputs
+from .preparation_scope import scoped_topics, readiness_reasons, read_scope
 
 
 ACTOR = "ai-preparation-api"
@@ -164,7 +165,15 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
 
 def read_preparation(preparation_id: int) -> dict:
     with connection() as db, db.cursor() as cursor:
-        return summary(select_preparation(cursor, preparation_id))
+        result = summary(select_preparation(cursor, preparation_id))
+        saved = read_scope(cursor, preparation_id)
+        if saved:
+            scope, progress = saved
+            result['input_preparation'] = {**progress, 'account_count': len(scope['account_ids']),
+                                           'candidate_topic_count': len(scope['topic_sources']),
+                                           'versions': {k: scope[k] for k in
+                                                        ('taxonomy_version', 'chat_model', 'embedding_model')}}
+        return result
 
 
 def stable_tags(row: dict) -> bool:
@@ -228,7 +237,10 @@ def advance_preparation(preparation_id: int, expected_version: int) -> dict:
         start = observed['cycle_start']
     needs_topics = (observed['version'] == expected_version and observed['status'] in ('waiting_inputs', 'blocked')
                     and observed['cycle_end'] >= today())
-    with frozen_java_inputs(topic_ids=None, needed=needs_topics), cycle_transaction(start) as (db, cursor):
+    with connection() as scope_db, scope_db.cursor() as scope_cursor:
+        saved_scope = read_scope(scope_cursor, preparation_id)
+    topic_ids = sorted(saved_scope[0]['topic_sources']) if saved_scope else None
+    with frozen_java_inputs(topic_ids=topic_ids, needed=needs_topics), cycle_transaction(start) as (db, cursor):
         row = select_preparation(cursor, preparation_id, lock=True)
         if row["version"] != expected_version:
             raise HTTPException(409, "准备记录已更新，请重新查询版本")
@@ -246,12 +258,22 @@ def advance_preparation(preparation_id: int, expected_version: int) -> dict:
         assert_no_result_batch(cursor, start)
         accounts = load_preparation_accounts(cursor, preparation_id)
         checked_at = datetime.now(timezone.utc)
-        topics = load_matching_topics(cursor, checked_at)
+        topics = (load_matching_topics(cursor, checked_at, topic_ids=topic_ids) if topic_ids is not None
+                  else load_matching_topics(cursor, checked_at))
+        topics, input_scope, waiting = scoped_topics(cursor, row, topics)
         batch = {**row, "batch_id": preparation_id, "batch_code": row["preparation_code"],
                  "batch_account_count": row["account_count"]}
         report = evaluate_readiness(batch, [{**profile, "batch_id": preparation_id} for profile in accounts],
                                     topics, checked_at, profile_builder=profile_from_preparation)
+        waiting += readiness_reasons(input_scope, topics, checked_at, report['vector_space'])
         report.update(preparation_id=preparation_id, account_input_scope="preparation_snapshot")
+        report['topic_input_scope'] = 'task_candidate_scope'
+        report['candidate_topic_count'] = len(input_scope['topic_sources'])
+        report['waiting_reasons'] = waiting
+        if waiting:
+            report['blocking_reasons'].append({'code': 'task_inputs_pending',
+                                               'message': '任务范围内仍有未就绪或版本不一致的选题，详见等待原因'})
+            report.update(inputs_ready=False, status='blocked')
         report.pop("batch_id")
         report.pop("batch_code")
         space = report["vector_space"]

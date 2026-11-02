@@ -178,12 +178,15 @@ def _metrics(
             for candidate in selected:
                 labels = topic_labels.get(candidate.topic_id)
                 value = labels.get(dimension) if labels else None
+                if isinstance(value, (list, tuple)) and all(isinstance(v,str) and v.strip() for v in value):
+                    values.update(value)
+                    continue
                 if not isinstance(value, str) or not value.strip():
                     raise AlgorithmInputError(
                         f"selected topic {candidate.topic_id} is missing stable {dimension} label id"
                     )
                 values.add(value)
-            coverage_dimensions.append(len(values) / expected_count)
+            coverage_dimensions.append(min(1.0, len(values) / expected_count))
         coverage_by_account.append(math.fsum(coverage_dimensions) / 3.0)
 
         fit_values = [candidate.fit_score for candidate in selected]

@@ -38,6 +38,21 @@ def intact_document(row: dict) -> MatchingPolicyDocument:
 
 def implementation_approval_errors(document: MatchingPolicyDocument) -> list[str]:
     """Validate known executor contracts without inventing rules for unknown engines."""
+    if document.implementation_key == 'builtin-v19-quality-v1':
+        if document.quality is None or document.schema_version != 2 or document.portfolio is None:
+            return ['V19适配质量执行器须完整声明映射、召回、精判和现有组合参数']
+        from .matching_quality import QUALITY_PARAMETERS
+        if any(document.decisions[k].parameters != value for k,value in QUALITY_PARAMETERS.items()):
+            return ['V19映射、召回与精判参数契约不一致']
+        # Validate reused V2 scheduling/capacity rules with their original contract.
+        raw = document.model_dump(mode='json')
+        raw.update(implementation_key='builtin-cosine-portfolio-v2', quality=None)
+        legacy = {'ALG-01':{'similarity':'cosine_unit_vectors'},
+                  'ALG-02':{'city_gate':'allow_empty_or_exact','history_gate':'exclude_observed_account_history'},
+                  'ALG-03':{'top_k':100,'min_cosine':0.0}, 'ALG-04':{'score_scale':'positive_cosine_0_100'},
+                  'ALG-09':{'no_candidate':'fallback_then_failed','system_error':'task_failure'}}
+        for key,value in legacy.items(): raw['decisions'][key]['parameters'] = value
+        return implementation_approval_errors(MatchingPolicyDocument.model_validate(raw))
     if document.implementation_key not in {
         "builtin-cosine-balanced-v1", "builtin-cosine-portfolio-v2",
     }:

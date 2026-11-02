@@ -151,6 +151,9 @@ def planning_topics(cursor, scope):
     return sorted(result, key=lambda row: (-row['topic_heat'], row['topic_id']))
 
 
-def matching_topics(cursor, checked_at):
+def matching_topics(cursor, checked_at, topic_ids=None):
     from .current_topics import rows
-    return rows(cursor, as_of=checked_at)
+    if topic_ids is None:
+        return rows(cursor, as_of=checked_at)
+    return [topic for start in range(0, len(topic_ids), 500)
+            for topic in rows(cursor, topic_ids[start:start + 500], as_of=checked_at)]

@@ -303,7 +303,9 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
             if canonical_json({k: v for k, v in inputs.items() if k != "supplemental"}) \
                     != canonical_json(verified_inputs):
                 raise ResultCommitError("snapshot_integrity_error", "冻结匹配输入复核不一致")
-            intact_document(policy)
+            document = intact_document(policy)
+            if document.implementation_key == 'builtin-v19-quality-v1' and document.quality.evaluation_only:
+                raise ResultCommitError('quality_evaluation_only', 'V19适配质量验证策略只保存提案，暂不提交正式结果')
             evaluation = read_evaluation(task)
 
             existing = _existing_formal_batch(cursor, pipeline["cycle_start"])

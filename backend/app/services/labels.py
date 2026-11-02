@@ -220,9 +220,12 @@ def resolve_topic_tag_ids(cursor, labels: dict[str, str], requested_version: int
         ids[dimension] = matched[0]
     return ids, version
 
-def list_topic_label_jobs(limit: int = 100, after_id: int = 0) -> dict:
+def list_topic_label_jobs(limit: int = 100, after_id: int = 0, *, topic_ids: list[str] | None = None) -> dict:
     limit = max(1, min(limit, 200))
     after_id = max(0, after_id)
+    if topic_ids == []:
+        return {'jobs': []}
+    scope_sql = ('AND j.topic_id IN (' + ','.join(['%s'] * len(topic_ids)) + ') ' if topic_ids else '')
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
@@ -232,7 +235,7 @@ def list_topic_label_jobs(limit: int = 100, after_id: int = 0) -> dict:
                 "AND j.topic_id NOT LIKE 'DEMO-%%' "
                 "AND (j.status IN ('pending','failed') OR "
                 "(j.status='processing' AND j.lease_expires_at<=UTC_TIMESTAMP(6))) "
-                "ORDER BY j.id LIMIT %s", (after_id, limit),
+                + scope_sql + "ORDER BY j.id LIMIT %s", (after_id, *(topic_ids or []), limit),
             )
             rows = cursor.fetchall()
     except (pymysql.MySQLError, RuntimeError, ValueError) as exc:

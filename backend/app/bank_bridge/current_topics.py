@@ -9,6 +9,12 @@ from .factory import get_source
 
 
 def rows(cursor, topic_ids=None, *, available_only=True, as_of=None):
+    if topic_ids == []:
+        return []
+    if topic_ids is not None and len(topic_ids) > 500:
+        return [topic for start in range(0, len(topic_ids), 500)
+                for topic in rows(cursor, topic_ids[start:start + 500],
+                                  available_only=available_only, as_of=as_of)]
     now = as_of or datetime.now(timezone.utc)
     topics = [t for t in collect(get_source(cursor), 'topics', TopicQuery(
         topic_ids=topic_ids, source='普通', topic_type='非营销', available_only=available_only,

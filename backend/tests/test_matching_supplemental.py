@@ -145,6 +145,7 @@ class SupplementalTaskTests(unittest.TestCase):
         self.enqueue()
         history = tasks.read_task_inputs(1001)["inputs"]["supplemental"]["history"]
         self.assertEqual(history["coverage"], "unknown")
+        self.assertTrue(all(row["coverage"] == "unknown" for row in history["accounts"]))
         self.assertEqual(len(history["observed_records"]), 2)
         first, second = history["observed_records"]
         self.assertTrue(first["reference_known"])
@@ -158,7 +159,14 @@ class SupplementalTaskTests(unittest.TestCase):
         history = tasks.read_task_inputs(1001)["inputs"]["supplemental"]["history"]
         self.assertEqual(history["observed_records"], [])
         self.assertEqual(history["coverage"], "unknown")
-        self.assertTrue(all(row["coverage"] == "unknown" for row in history["accounts"]))
+
+    def test_scoped_task_limits_current_queries_and_fallback_selection(self):
+        with patch.object(tasks, 'read_scope', return_value=({'topic_sources': {'TOPIC-001': 'hash'}}, {})), \
+                patch.object(tasks, 'load_matching_topics', return_value=deepcopy(self.store.topics)) as current, \
+                patch.object(tasks, 'build_snapshot', wraps=tasks.build_snapshot) as builder:
+            self.enqueue()
+        self.assertEqual(current.call_args.kwargs['topic_ids'], ['TOPIC-001'])
+        self.assertEqual(builder.call_args.kwargs['fallback_ids'], ['TOPIC-001'])
 
     def test_block_unknown_settings_stop_creation_without_committing_task(self):
         for field, value, code in (("history_completeness", "require_complete", "history_coverage_unknown"),

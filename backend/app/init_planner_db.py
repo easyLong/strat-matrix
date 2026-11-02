@@ -16,7 +16,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     tables = 0
     with connection() as db, db.cursor() as cursor:
-        for name in ('schema.sql', 'pipeline_schema.sql', 'manual_marketing_schema.sql', 'content_production_schema.sql'):
+        for name in ('schema.sql', 'pipeline_schema.sql', 'manual_marketing_schema.sql', 'content_production_schema.sql', 'matching_quality_schema.sql'):
             source = (root / name).read_text(encoding='utf-8')
             for statement in statements(source):
                 if retired_statement(statement):
@@ -32,6 +32,8 @@ def main():
         from .init_shared_workflow_db import ensure_schema
         ensure_schema(cursor)
         seed_config(cursor, migrate_legacy=False)
+        from .init_account_mapping import seed_rules
+        seed_rules(cursor)
         db.commit()
         cursor.execute('SHOW TABLES')
         available = {next(iter(row.values())) for row in cursor.fetchall()}

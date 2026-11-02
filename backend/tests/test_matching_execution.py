@@ -124,6 +124,9 @@ class MatchingExecutionTests(unittest.TestCase):
         self.stack.enter_context(patch.object(preparation, "load_accounts", return_value=deepcopy(self.store.snapshots)))
         self.stack.enter_context(patch.object(preparation, "load_matching_topics", side_effect=lambda *a: deepcopy(self.store.topics)))
         self.stack.enter_context(patch.object(tasks, "load_matching_topics", side_effect=lambda *a: deepcopy(self.store.topics)))
+        self.stack.enter_context(patch.object(preparation, 'scoped_topics',
+            side_effect=lambda cursor, row, topics: (topics, {'topic_sources': {t['topic_id']: '' for t in topics}}, [])))
+        self.stack.enter_context(patch.object(preparation, 'readiness_reasons', return_value=[]))
         preparation.create_preparation(START)
         self.store.ready_accounts()
         preparation.advance_preparation(123, 1)

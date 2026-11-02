@@ -187,6 +187,7 @@ class MatchingExecutorTests(unittest.TestCase):
                 {"job": job, "next_after_id": 1001},
                 {"job": None, "next_after_id": 1001},
                 {"job": None, "next_after_id": 0},
+                {"job": None, "next_after_id": 0},
              ]) as claim, patch.object(worker, "save_evaluation",
                                       return_value={"status": "evaluated", "version": 3}) as save:
             self.assertEqual(worker.run_once(), 0)

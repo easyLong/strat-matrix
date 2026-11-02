@@ -127,6 +127,17 @@ def matching_task_result(task_id: int) -> dict:
         raise db_error(exc) from exc
 
 
+@router.get('/api/internal/matching-tasks/{task_id}/quality')
+def matching_quality_detail(task_id: int) -> dict:
+    from .matching_quality_store import read_quality_report
+    try:
+        with connection() as db, db.cursor() as cursor:
+            task = select_task(cursor, task_id)
+        return {**task_view(task), 'quality': read_quality_report(task_id)}
+    except (pymysql.MySQLError, RuntimeError, ValueError) as exc:
+        raise db_error(exc) from exc
+
+
 @router.get("/api/internal/matching-tasks/{task_id}/inputs")
 def matching_task_inputs(task_id: int) -> dict:
     try:

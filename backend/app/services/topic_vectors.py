@@ -65,13 +65,16 @@ def topic_profile_status(topic_id: str) -> dict:
             "vector_model": row["vector_model"] if status == "ready" else None,
             "last_error": row["last_error"] if status == "failed" else ""}
 
-def topic_vector_jobs(limit: int = 100, after_id: int = 0) -> dict:
+def topic_vector_jobs(limit: int = 100, after_id: int = 0, *, topic_ids: list[str] | None = None) -> dict:
     limit = max(1, min(limit, 200))
     after_id = max(0, after_id)
+    if topic_ids == []:
+        return {'jobs': [], 'next_after_id': after_id}
     try:
         with connection() as db, db.cursor() as cursor:
             from ..bank_bridge.current_topics import rows as current_rows
-            rows = [r for r in current_rows(cursor) if r.get('id') and r['id'] > after_id
+            source_rows = current_rows(cursor, topic_ids) if topic_ids is not None else current_rows(cursor)
+            rows = [r for r in source_rows if r.get('id') and r['id'] > after_id
                     and r['profile_status'] in ('pending', 'failed') and r['label_status'] == '已完成'
                     and r['tag_version'] == r['profile_tag_version']]
             rows = sorted(rows, key=lambda r: r['id'])[:limit]

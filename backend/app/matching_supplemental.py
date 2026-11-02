@@ -188,6 +188,9 @@ def build_snapshot(cursor, inputs: dict, document, as_of: datetime, *, validity_
     required = set(document.required_inputs)
     options = document.input_options
     snapshot = {"schema_version": 2, "as_of": as_of.isoformat()}
+    if document.implementation_key == 'builtin-v19-quality-v1':
+        from .matching_quality_snapshot import quality_context
+        snapshot['quality_context'] = quality_context(cursor, inputs, document)
     topic_ids = {topic["topic_id"] for topic in inputs["topics"]}
     if "fallback_topics" in required:
         topics = load_fallback_topics(cursor, validity_at or as_of, fallback_ids)

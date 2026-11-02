@@ -16,6 +16,7 @@ from .matching_inputs import load_matching_topics
 from .matching_policy import digest, intact_document, select_policy
 from .matching_readiness import topic_state
 from .planning_reservation import reservation_key
+from .preparation_scope import read_scope
 from .matching_supplemental import (SupplementalInputError, build_snapshot, read_snapshot,
                                     save_snapshot, validate_snapshot)
 
@@ -80,7 +81,10 @@ def checked_inputs(cursor, preparation: dict, policy: dict, checked_at: datetime
     for row in inputs["accounts"] + inputs["topics"]:
         if row["vector_model"] != space.vector_model or len(row["vector"]) != space.dimension:
             raise InvalidInputs("policy_vector_space_mismatch")
-    current = {topic["topic_id"]: topic for topic in load_matching_topics(cursor, checked_at)}
+    saved_scope = read_scope(cursor, preparation['id'])
+    current_topics = (load_matching_topics(cursor, checked_at, topic_ids=sorted(saved_scope[0]['topic_sources']))
+                      if saved_scope else load_matching_topics(cursor, checked_at))
+    current = {topic["topic_id"]: topic for topic in current_topics}
     for frozen in inputs["topics"]:
         row = current.get(frozen["topic_id"])
         if not row or topic_state(row, checked_at) != ("ready", (space.vector_model, space.dimension)):
@@ -187,7 +191,10 @@ def create_task(payload: MatchingTaskCreate) -> dict:
             checked_at = now_utc()
             inputs = checked_inputs(cursor, preparation, policy, checked_at)
             document = intact_document(policy)
-            supplemental = build_snapshot(cursor, inputs, document, checked_at) if document.schema_version == 2 else None
+            saved_scope = read_scope(cursor, preparation['id'])
+            fallback_scope = {'fallback_ids': sorted(saved_scope[0]['topic_sources'])} if saved_scope else {}
+            supplemental = (build_snapshot(cursor, inputs, document, checked_at, **fallback_scope)
+                            if document.schema_version == 2 else None)
         except SupplementalInputError as exc:
             raise HTTPException(409, {"message": "补充输入尚不可执行", "code": exc.code}) from exc
         except InvalidInputs as exc:
@@ -290,6 +297,21 @@ def heartbeat_task(task_id: int, payload: LeaseHeartbeat) -> dict:
         return {"task_id": task_id, "lease_id": payload.lease_id, "lease_expires_at": utc_text(expires)}
 
 
+def yield_task(task_id: int, payload: LeaseIdentity) -> dict:
+    """End one bounded quality-preparation turn without declaring business failure."""
+    with locked_task(task_id) as (db, cursor, preparation, policy, task):
+        require_lease(task, payload, now_utc())
+        if intact_document(policy).implementation_key != 'builtin-v19-quality-v1':
+            raise HTTPException(409, '仅V19分批模型准备任务允许主动让出执行')
+        require_current_inputs(db, cursor, preparation, policy, task, now_utc())
+        finish_attempt(cursor, task, 'expired', 'batch_yield')
+        cursor.execute("UPDATE godp_matching_task SET status='queued',version=version+1,"
+                       "lease_id=NULL,lease_expires_at=NULL,error_code='',update_by='matching-quality-worker' WHERE id=%s", (task_id,))
+        saved = select_task(cursor, task_id)
+        db.commit()
+        return task_summary(saved)
+
+
 def validate_positions(result: MatchingEvaluation, inputs: dict, policy: dict) -> None:
     document = intact_document(policy)
     if result.implementation_key != document.implementation_key:
@@ -344,6 +366,10 @@ def save_evaluation(task_id: int, payload: MatchingEvaluation) -> dict:
         require_lease(task, payload, now)
         inputs = require_current_inputs(db, cursor, preparation, policy, task, now)
         validate_positions(payload, inputs, policy)
+        document = intact_document(policy)
+        if document.implementation_key == 'builtin-v19-quality-v1':
+            from .matching_quality_validation import validate_quality_evaluation
+            validate_quality_evaluation(cursor,task,payload,inputs,document)
         cursor.execute("UPDATE godp_matching_task SET status='evaluated',version=version+1, "
                        "result_json=%s,result_hash=%s,completed_at=%s,error_code='', "
                        "update_by='matching-task-api' WHERE id=%s", (encoded, fingerprint, now.replace(tzinfo=None), task_id))

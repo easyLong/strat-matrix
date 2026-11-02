@@ -118,6 +118,9 @@ class PreparationTests(unittest.TestCase):
                                       side_effect=lambda *args, **kwargs: deepcopy(self.store.snapshots)))
         self.load_topics = self.stack.enter_context(patch.object(service, "load_matching_topics",
                                       side_effect=lambda *args: deepcopy(self.store.topics)))
+        self.stack.enter_context(patch.object(service, 'scoped_topics',
+            side_effect=lambda cursor, row, topics: (topics, {'topic_sources': {t['topic_id']: '' for t in topics}}, [])))
+        self.stack.enter_context(patch.object(service, 'readiness_reasons', return_value=[]))
 
     def create(self):
         return service.create_preparation(START)

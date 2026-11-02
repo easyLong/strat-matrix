@@ -56,6 +56,38 @@ class MatchingPortfolioOptions(StrictModel):
         return self
 
 
+class MatchingQualityOptions(StrictModel):
+    mapping_version: int = Field(default=1, strict=True, ge=1)
+    mapping_mode: Literal['reviewed', 'draft_preview'] = 'reviewed'
+    unknown_persona: Literal['restricted_model', 'hold'] = 'restricted_model'
+    quotas: dict[str, int] = Field(default_factory=lambda: {'t3': 60, 't6': 60, 't4': 30, 't5': 30, 'explore': 20})
+    recall_weights: dict[str, float] = Field(default_factory=lambda: {'t3': .45, 't4': .15, 't5': .15, 't6': .25})
+    precision_weights: dict[str, float] = Field(default_factory=lambda: {
+        'j_topic': .40, 'j_need': .25, 'j_aud': .15, 'j_scene': .10, 'j_style': .10})
+    recall_limit: int = Field(default=100, strict=True, ge=1, le=100)
+    precision_limit: int = Field(default=30, strict=True, ge=1, le=100)
+    minimum_precision: float = Field(default=.65, ge=0, le=1, allow_inf_nan=False)
+    minimum_topic_fit: float = Field(default=.60, ge=0, le=1, allow_inf_nan=False)
+    minimum_adjacent_topic_fit: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    repeat_weight: float = Field(default=.10, ge=0, le=1, allow_inf_nan=False)
+    prompt_version: Literal['v19-quality-1','v19-quality-2'] = 'v19-quality-2'
+    evaluation_only: Literal[True] = True
+
+    @model_validator(mode='after')
+    def check_parameters(self):
+        import math
+        if set(self.quotas) != {'t3','t6','t4','t5','explore'} or any(
+                type(v) is not int or not 0 <= v <= 200 for v in self.quotas.values()) or not 1 <= sum(self.quotas.values()) <= 1000:
+            raise ValueError('五路召回配额必须明确且有效')
+        for values, keys in ((self.recall_weights, {'t3','t4','t5','t6'}),
+                             (self.precision_weights, {'j_topic','j_need','j_aud','j_scene','j_style'})):
+            if set(values) != keys or any(not math.isfinite(v) or v < 0 for v in values.values()) or abs(sum(values.values())-1) > 1e-9:
+                raise ValueError('召回和精判权重必须完整且合计为1')
+        if self.precision_limit > self.recall_limit:
+            raise ValueError('精判保留数量不能大于召回数量')
+        return self
+
+
 class MatchingPolicyDocument(StrictModel):
     schema_version: Literal[1, 2] = 1
     implementation_key: str = Field(min_length=1, max_length=100)
@@ -64,6 +96,7 @@ class MatchingPolicyDocument(StrictModel):
     decisions: dict[AlgorithmCode, RuleDecision] = Field(default_factory=dict)
     input_options: MatchingInputOptions | None = None
     portfolio: MatchingPortfolioOptions | None = None
+    quality: 'MatchingQualityOptions | None' = None
 
     @model_validator(mode="after")
     def finite_document(self):
@@ -75,6 +108,10 @@ class MatchingPolicyDocument(StrictModel):
 
     def approval_errors(self) -> list[str]:
         problems = [f"缺少{code}规则" for code in sorted(ALGORITHM_CODES - self.decisions.keys())]
+        if self.implementation_key == 'builtin-v19-quality-v1' and self.quality is None:
+            problems.append('V19须声明映射、五路召回和模型精判参数')
+        if self.implementation_key != 'builtin-v19-quality-v1' and self.quality is not None:
+            problems.append('旧执行器不能包含未执行的V19参数')
         for code, rule in sorted(self.decisions.items()):
             if not rule.definition.strip() or not rule.acceptance_examples \
                     or any(not example.strip() or len(example) > 4000 for example in rule.acceptance_examples):
