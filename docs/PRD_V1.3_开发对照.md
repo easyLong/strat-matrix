@@ -9,12 +9,12 @@
 | 范围 | 当前实现 | 位置 |
 | --- | --- | --- |
 | 四个一级页面 | 策划配置、AI 自动策划、手动策划、策划结果 | `frontend/src/views/` |
-| 营销与经营策略 | 按模块保存、生成独立快照、按模块恢复；预期版本冲突返回 409 | `backend/app/main.py` 的 `/api/config/modules/*` |
-| 热点配置 | 前端不再提供固定热点比例；旧演示热点预留数据转普通演示内容 | `frontend/src/views/ConfigView.vue`、`backend/app/seed_demo.py` |
-| 手动策划 | 页面按五步操作，随机抽取、可用选题筛选、多选题分配预览、提交前账号与选题复核 | `frontend/src/views/ManualView.vue`、`backend/app/main.py` |
-| 周度结果 | AI 参与账号只计算自动策划；“选题使用次数”计算当前有效分配，和内容生成后的正式使用计数区分；周期详情可看账号选题匹配 | `backend/app/main.py`、`frontend/src/views/ResultsView.vue` |
-| 本地系统对接 | 账号/选题/内容历史同步、本地待投递事件、内容状态回传、T1–T5 标签字典与选题标签事件 | `backend/app/integration.py` |
-| 数据库规范 | 当前建表脚本每张表、每个字段均有中文说明；新建表继续遵循 `godp_`、自增 ID 和审计字段 | `backend/schema.sql` |
+| 营销与经营策略 | 按模块保存、生成独立快照、按模块恢复；预期版本冲突返回 409 | `python-backend/app/main.py` 的 `/api/config/modules/*` |
+| 热点配置 | 前端不再提供固定热点比例；旧演示热点预留数据转普通演示内容 | `frontend/src/views/ConfigView.vue`、`python-backend/app/seed_demo.py` |
+| 手动策划 | 页面按五步操作，随机抽取、可用选题筛选、多选题分配预览、提交前账号与选题复核 | `frontend/src/views/ManualView.vue`、`python-backend/app/main.py` |
+| 周度结果 | AI 参与账号只计算自动策划；“选题使用次数”计算当前有效分配，和内容生成后的正式使用计数区分；周期详情可看账号选题匹配 | `python-backend/app/main.py`、`frontend/src/views/ResultsView.vue` |
+| 本地系统对接 | 账号/选题/内容历史同步、本地待投递事件、内容状态回传、T1–T5 标签字典与选题标签事件 | `python-backend/app/integration.py` |
+| 数据库规范 | 当前建表脚本每张表、每个字段均有中文说明；新建表继续遵循 `godp_`、自增 ID 和审计字段 | `python-backend/schema.sql` |
 
 ## 后续开发顺序
 

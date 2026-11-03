@@ -88,7 +88,7 @@ Pipeline 总状态从阶段状态派生，正式批次成功写入后才会全�
 
 ## 数据表
 
-Pipeline 自身使用 `backend/pipeline_schema.sql`：
+Pipeline 自身使用 `python-backend/pipeline_schema.sql`：
 
 - `godp_planning_pipeline_run`：周期、账号选择指纹、策略版本、乐观锁版本、AI Preparation / Matching Task / 正式批次引用和当前错误；
 - `godp_planning_stage_run`：七个稳定阶段的状态、尝试次数、后端引用、审计摘要、等待/失败原因和起止时间。
@@ -145,7 +145,7 @@ Matching Worker 仍是异步的，因此调用方通常需要在 `queued/process
 先应用现有主 schema和 Pipeline schema，再安装正式提交元数据：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.init_db
 python3 -m app.init_pipeline_db
 python3 -m app.init_result_commit_db

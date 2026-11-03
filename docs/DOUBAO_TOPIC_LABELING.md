@@ -74,7 +74,7 @@ T6 标签向量用于需求标签归并；选题画像和账号画像由各自 W
 
 ## 启用与验证
 
-先重启后端，使新增接口生效。以下命令在 `backend` 目录执行：
+先重启后端，使新增接口生效。以下命令在 `python-backend` 目录执行：
 
 ```bash
 # 不领取任务、不调用豆包
@@ -92,7 +92,7 @@ python -m app.topic_label_worker
 当前固定使用豆包服务；其它模型供应方接入后，再按实际运营需求补充配置项。
 
 ```bash
-cd backend
+cd python-backend
 python -m unittest discover -s tests -p test_doubao_labeling.py -v
 python -m unittest discover -s tests -v
 ```

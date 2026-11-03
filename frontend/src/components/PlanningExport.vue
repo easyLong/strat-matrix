@@ -22,13 +22,15 @@ async function download() {
   busy.value = true
   try {
     const scope = props.scope || { mode: 'all' as const, page: 1, page_size: 200, filters: {}, account_ids: props.accounts, batch_ids: props.accounts ? undefined : (props.batches || []).map(b=>b.id) }
-    const response = await fetch('/api/query/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...scope, filters: { ...scope.filters, ...((props.accounts || props.accountDates) ? {start:start.value,end:end.value}: {}) } }) })
+    const response = await fetch('/api/query/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...scope, format: 'xlsx', filters: { ...scope.filters, ...((props.accounts || props.accountDates) ? {start:start.value,end:end.value}: {}) } }) })
     if (!response.ok) { const body=await response.json(); throw new Error(body.detail || '导出失败，请重试') }
     const data = await response.blob()
     const url = URL.createObjectURL(data)
     const link = document.createElement('a')
     link.href = url
-    link.download = props.filename || `${props.accounts || props.accountDates ? '账号' : '时间'}策划明细.csv`
+    const extension = response.headers.get('Content-Type')?.includes('spreadsheetml.sheet') ? 'xlsx' : 'csv'
+    const filename = props.filename || `${props.accounts || props.accountDates ? '账号' : '时间'}策划明细.xlsx`
+    link.download = /\.(csv|xlsx)$/i.test(filename) ? filename.replace(/\.(csv|xlsx)$/i, `.${extension}`) : `${filename}.${extension}`
     link.click()
     URL.revokeObjectURL(url)
     opened.value = false

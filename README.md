@@ -2,41 +2,41 @@
 
 本项目作为整体业务页面嵌入客户系统，包含 **AI策划配置、人工策划、策划结果** 三个入口。宿主系统负责登录和操作人身份；本项目负责策划、结果查询及与内容生产的衔接。
 
-[文档索引](docs/README.md) · [当前实现与交接状态](docs/CURRENT_STATE.md) · [架构改造备忘V0.2](docs/行内整合架构改造备忘_V0.2.md) · [持久化执行与统一查询](docs/README.md#execution-query-release) · [前端业务组件](docs/README.md#frontend-business-components)
+[文档索引](docs/README.md) · [三工程迁入执行清单](docs/行内三工程迁入执行清单_V0.1.md) · [当前实现与交接状态](docs/CURRENT_STATE.md) · [三工程契约与迁移](docs/contracts/README.md)
 
-行内目标为Vue → 行内已有Java工程 → Python FastAPI。Java的转发、身份权限、调度和资料SQL直接写入行内工程；本仓库不建设Java模块，只提供[方法、字段及接入参考](docs/integration/java-host/README.md)。Vue与Python独立开发运行，保留策划业务和算法；Python只维护策划库，内容侧经授权只读策划结果并生产。工程归属见[V0.2备忘](docs/行内整合架构改造备忘_V0.2.md)，统一唤醒及后台执行仍待改造。
+本仓库现分为三个可独立构建的子项目，未来分别整合进客户现有三个工程：
+
+| 子项目 | 当前职责与独立说明 |
+| --- | --- |
+| [frontend](frontend/README.md) | Vue三个页面、组件及请求封装，默认只访问Java |
+| [java-backend](java-backend/README.md) | Java 8业务模块；配置发布、人工/自动任务、正式结果、热点/营销衔接与SQL分页报表 |
+| [python-backend](python-backend/README.md) | FastAPI算法服务；算法配置、画像、向量、匹配、冻结输入与计算提案 |
+
+最新状态见[双库业务迁移与验收](docs/双库业务迁移与验收_2026-11-03.md)。当前已切换 Vue → Java业务服务 → Python算法能力，历史结果已迁入业务库，普通自动策划通过真实双库验收。内容方事实来源、行内身份与宿主调度仍需现场适配，行外空实现不代表这些系统已接通。
 
 ## 整体流程
 
 ```mermaid
 flowchart LR
-    Vue[Vue页面] --> Java[行内Java接入层：预留]
-    Java --> Python[Python FastAPI后端]
-    Python --> Prepare
-    Bank[行内业务库] --> DataAPI[Java内部资料查询接口：预留]
-    DataAPI --> Source[Python数据源适配器]
-    Source --> Prepare[标签、画像、向量准备]
-    Prepare --> Match[V2匹配与组合]
-    Manual[人工策划] --> Result[正式策划明细]
-    Match --> Result
-    Result --> Store[(策划自有库)]
-    Store --> Content[内容侧只读扫描、自行生产]
-    Content --> Status[行内生产状态]
-    Status --> StatusAPI[Java状态查询接口]
-    StatusAPI --> Feedback[Python读取状态、更新本库与成功计数]
-    Feedback --> Query[列表、日历、统计、导出]
+    Vue[Vue三个业务页面] --> Java[Java业务服务]
+    Java --> Bus[(Java业务库)]
+    Java --> Source[行内资料与内容状态接口：待接]
+    Java --> Algo[Python算法能力]
+    Algo --> AI[(Python算法库)]
+    HostJob[行内调度平台：待接] --> Java
 ```
 
-行内业务库保存账号、选题、营销内容和互动事实，由Java查询。策划侧通过稳定ID关联自有数据，在独立策划库保存配置、派生数据、任务、正式结果和必要快照，不直接访问业务库。内容侧的只读账号、扫描、领取、生产及重试由行内实现；Python不提供内容领取与回传入口，只通过Java读取状态并在本库更新投影、使用事实和计数。
+人工任务、账号占用、正式结果、业务配置和内容状态投影写入Java业务库；Python保存算法资产及计算任务，两库物理隔离。旧Python业务数据保留追溯，当前页面已改为业务库查询。行内账号、选题、营销内容和互动事实由Java资料端口接入；本地适配器仅用于行外开发。内容生产归客户内容系统。
 
-当前普通选题主链已在开发数据源、真实模型和 MySQL 下验收；Python侧Java读取适配通过本地模拟查询验证，Java只作为交接参考材料。真实Java转发、宿主身份权限、实际SQL及内容Agent尚未接通。历史同库验收仅用于验证策划业务。
+综合配置页面已通过持久化发布命令衔接两侧配置，Java业务版本进入Python冻结输入；普通自动策划已通过真实双库正式落库与确认恢复验收。热点T-1、营销引用及日期编排已迁入Java并完成业务测试；真实内容方、身份权限、资料接口和宿主调度仍待行内适配。具体证据与限制见[最新验收记录](docs/双库业务迁移与验收_2026-11-03.md)。
 
 ## 技术与运行结构
 
 - 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia。
+- Java业务子项目：Java 8、公开Spring Boot 2.7.18兼容开发壳，MyBatis持久化普通人工业务，XLSX导出使用Apache POI；未引入内部依赖。
 - 后端：Python、FastAPI、PyMySQL。
-- 数据库：目标为行内业务库与策划库隔离；Python的MySQL连接仅指向策划库，基础资料通过Java接口读取。
-- 后台当前实现：统一 Worker 轮询周策划、热点 T-1、自动流程和人工任务。行内目标为宿主统一唤醒、FastAPI内受控执行及持久化恢复，尚未完成，不能把当前Worker直接作为行内调度接入。
+- 数据库：Java业务库与Python算法库隔离；本地可见历史已迁入Java，原Python历史保留；迁入行内时分别发布两库脚本。
+- 后台执行：已整合进FastAPI生命周期，收到人工提交或Java唤醒后执行，Python不启动定时轮询。Java本地开发壳模拟调度；行内由客户调度平台调用同一唤醒客户端。业务队列、租约和断点继续持久化，见[后台执行说明](docs/BACKGROUND_EXECUTION.md)。
 - 模型：共用一个文本模型入口和一个向量模型入口。当前适配火山方舟豆包，业务配置使用 `MODEL_NAME`、`EMBEDDING_MODEL_NAME` 和 `ARK_API_KEY`。
 
 项目采用模块化单体，业务归为配置管理、数据准备、策划执行、内容生产衔接、结果查询五部分。已提取 `api/`、`services/`、`core/`、`adapters/`、`jobs/`，HTTP 与准备流程复用已迁移的应用服务，V1/V2 共用候选规则。人工非营销任务已改为持久化领取，结果列表、详情及导出已统一查询范围；其余 SQL、模型适配和页面组件继续按用例收拢。
@@ -46,16 +46,18 @@ flowchart LR
 | 职责 | 当前入口 |
 | --- | --- |
 | 前端路由与三个页面 | `frontend/src/router.ts`、`frontend/src/views/` |
-| ASGI 入口、HTTP 装配与页面接口 | `backend/app/main.py`、`bootstrap.py`、`api/` |
-| 标签、向量、准备、配置、人工策划和结果用例 | `backend/app/services/` |
-| 公共算法与序列化规则 | `backend/app/core/` |
-| 结果 SQL 投影与行内资料批量读取 | `backend/app/adapters/` |
-| 行内查询契约、Java HTTP资料与状态适配 | `backend/app/bank_bridge/` |
-| 行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
+| ASGI 入口、HTTP 装配与页面接口 | `python-backend/app/main.py`、`bootstrap.py`、`api/` |
+| 标签、向量、输入准备与保留的旧业务用例 | `python-backend/app/services/` |
+| 公共算法与序列化规则 | `python-backend/app/core/` |
+| 结果 SQL 投影与行内资料批量读取 | `python-backend/app/adapters/` |
+| 行内查询契约、Java HTTP资料与状态适配 | `python-backend/app/bank_bridge/` |
+| Java普通人工业务、MyBatis持久化 | `java-backend/src/main/java/com/stratmatrix/planning/manual/`、`java-backend/src/main/resources/mapper/` |
+| 本地装配及旧业务兼容适配 | `java-backend/src/main/java/com/stratmatrix/standalone/`、`planning/adapter/local/`、`planning/adapter/legacy/`；驻场不迁入 |
+| 旧行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
 | 行内Java驻场实现步骤与边界说明 | `docs/integration/java-host/README.md` |
-| 行内生产状态读取与策划库状态投影 | `backend/app/services/content_status.py` |
+| 行内生产状态读取与策划库状态投影 | `python-backend/app/services/content_status.py` |
 | 普通选题变化发现与模型准备 | `source_discovery.py`、`planning_input_runner.py` |
-| 后台统一入口、周触发与流程推进 | `jobs/worker.py`、`ordinary_scheduler.py`、`planning_workflow_worker.py` |
+| 后台执行器、内部唤醒与单次业务处理 | `jobs/runtime.py`、`jobs/handlers.py`、`api/background_execution.py` |
 | 人工任务提交、领取、恢复与重试 | `services/manual_planning.py`、`services/manual_tasks.py` |
 | 统一结果范围、列表、详情与CSV | `services/result_scope.py`、`result_lists.py`、`plan_queries.py`、`result_export.py` |
 | 输入冻结、匹配任务与正式提交 | `ai_preparation.py`、`matching_tasks.py`、`planning_result_commit.py` |
@@ -63,13 +65,13 @@ flowchart LR
 | 生产状态投影与成功计数 | `services/content_status.py`；内容侧自行扫描并生产 |
 | 配置读取与目录 | `system_config.py`、`system_config_catalog.py` |
 
-表中的 Python 文件均位于 `backend/app/`。`main.py` 与 `integration.py` 已缩为兼容入口，不再承载业务 SQL。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
+表中的 Python 文件均位于 `python-backend/app/`。`main.py` 与 `integration.py` 已缩为兼容入口，不再承载业务 SQL。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
 
 ## 初始化与配置
 
 数据库连接从根目录 `.env` 读取，仅包含 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE`；兼容历史 `docs/.env`。端口、模型、鉴权及自动策划绑定配置保存在 MySQL `godp_system_config`。
 
-在 `backend/` 下使用已安装依赖的 Python 环境：
+在 `python-backend/` 下使用已安装依赖的 Python 环境：
 
 ```bash
 python -m pip install -r requirements.txt
@@ -90,22 +92,25 @@ python -m app.init_shared_workflow_db
 
 ## 启动与检查
 
-本地开发启动后端和前端（各在独立终端）：
+本地开发分别启动三个子项目（各在独立终端）：
 
 ```bash
-# backend/
+# python-backend/
 uvicorn app.main:app --host 0.0.0.0 --port 6930
+
+# java-backend/，需安装JDK8及Maven
+mvn spring-boot:run
 
 # frontend/
 npm install
 npm run dev
 ```
 
-访问 `http://localhost:930`。本地独立开发由Vite代理Python；行内模式只代理 `JAVA_GATEWAY_URL`，未配置时明确失败。还需在 `backend/` 下运行 `python -m app.jobs.worker`。Java不启动，也不属于本地运行依赖；待驻场补接入转发、资料查询及认证权限。
+访问`http://localhost:930`。只需要三个服务，不再单独启动Worker。本地和行内模式都经Java；本地默认Java端口6931，行内必须配置`JAVA_GATEWAY_URL`。完整本地联调须按Java子项目README生成库内内部令牌配置；Java未配置该令牌时本地脉冲会明确报告未就绪。
 
 服务器启动、停止和状态检查使用根目录的 `start.sh`、`stop.sh`、`status.sh`；监听地址和端口使用 MySQL 中的配置，完整部署说明从文档索引查阅。
 
-在 `backend/` 下运行单元测试：
+在 `python-backend/` 下运行单元测试：
 
 ```bash
 python -m unittest discover -s tests

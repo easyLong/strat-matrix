@@ -41,7 +41,7 @@
 - 本周期槽位数 N = 选中的每周策划日数量，默认周一/三/五，N=3；X 与 N 无关。
 - 更新代码默认值不覆盖数据库里的已保存配置。已有实例须经配置保存或明确迁移生效，新批次读取新版本，旧画像和历史结果保留旧快照。
 
-参照实现：[models.py](../backend/app/models.py)、[account_metrics.py](../backend/app/account_metrics.py)、[生命周期阈值说明](LIFECYCLE_DEFAULTS.md)。
+参照实现：[models.py](../python-backend/app/models.py)、[account_metrics.py](../python-backend/app/account_metrics.py)、[生命周期阈值说明](LIFECYCLE_DEFAULTS.md)。
 
 ## 3. 周期状态与完成口径
 

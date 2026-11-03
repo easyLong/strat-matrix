@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stratmatrix.planning.manual.ManualMapper">
+  <select id="plannedAccountIds" resultType="string">SELECT DISTINCT i.account_id FROM godp_planning_item i INNER JOIN godp_manual_task t ON t.id=i.batch_id WHERE i.publish_date=#{date} UNION SELECT account_id FROM godp_manual_reservation WHERE publish_date=#{date} AND task_id&lt;1000000000000</select>
+  <select id="reservedAccountIds" resultType="string">SELECT account_id FROM godp_manual_reservation WHERE publish_date=#{date}</select>
+  <insert id="insertPreview">INSERT INTO godp_manual_preview(preview_code,payload,expires_at,created_by,created_at) VALUES(#{code},#{payload},#{expiresAt},#{createdBy},#{createdAt})</insert>
+  <select id="previewByCode" resultType="map">SELECT payload FROM godp_manual_preview WHERE preview_code=#{code}</select>
+  <select id="lockedPreview" resultType="map">SELECT * FROM godp_manual_preview WHERE preview_code=#{code} FOR UPDATE</select>
+  <insert id="insertTask" useGeneratedKeys="true" keyProperty="id">INSERT INTO godp_manual_task(preview_code,task_code,status,payload,created_at,updated_at) VALUES(#{previewCode},#{taskCode},'pending',#{payload},#{time},#{time})</insert>
+  <select id="taskByPreview" resultType="map">SELECT * FROM godp_manual_task WHERE preview_code=#{code}</select>
+  <select id="taskById" resultType="map">SELECT * FROM godp_manual_task WHERE id=#{id}</select>
+  <select id="lockedTask" resultType="map">SELECT * FROM godp_manual_task WHERE id=#{id} FOR UPDATE</select>
+  <select id="allTasks" resultType="map">SELECT * FROM godp_manual_task ORDER BY created_at DESC,id DESC</select>
+  <select id="pendingTasks" resultType="map">SELECT * FROM godp_manual_task WHERE status IN ('pending','computing') ORDER BY updated_at,id LIMIT 10</select>
+  <insert id="insertMarketingTask" useGeneratedKeys="true" keyProperty="id">INSERT INTO godp_manual_marketing_task(task_code,request_id,request_hash,task_name,topic_id,allocation_count,topic_snapshot_json,created_by,created_at,updated_at) VALUES(#{taskCode},#{requestId},#{requestHash},#{taskName},#{topicId},#{allocationCount},#{topicSnapshot},#{createdBy},#{createdAt},#{createdAt})</insert>
+  <select id="marketingByRequest" resultType="map">SELECT * FROM godp_manual_marketing_task WHERE request_id=#{requestId}</select>
+  <select id="marketingByCode" resultType="map">SELECT * FROM godp_manual_marketing_task WHERE task_code=#{taskCode}</select>
+  <select id="lockedMarketingTask" resultType="map">SELECT * FROM godp_manual_marketing_task WHERE task_code=#{taskCode} FOR UPDATE</select>
+  <select id="allMarketingTasks" resultType="map">SELECT * FROM godp_manual_marketing_task ORDER BY created_at DESC,id DESC</select>
+  <select id="unlinkedMarketingTasks" resultType="map">SELECT * FROM godp_manual_marketing_task WHERE linked_count&lt;allocation_count ORDER BY id LIMIT #{limit}</select>
+  <update id="attachMarketingBatch">UPDATE godp_manual_marketing_task SET batch_id=#{batch},linked_count=#{count} WHERE id=#{id}</update>
+  <select id="pendingMarketingTasks" resultType="map">SELECT * FROM godp_manual_marketing_task WHERE status&lt;&gt;'已完成' AND id&gt;#{afterId} ORDER BY id LIMIT #{limit}</select>
+  <update id="updateMarketingProgress">UPDATE godp_manual_marketing_task SET status=#{status},account_count=#{accountCount},content_completed_count=#{completed},content_failed_count=#{failed},production_reported_at=#{reportedAt},updated_at=#{updatedAt} WHERE id=#{id}</update>
+  <insert id="insertReservation">INSERT INTO godp_manual_reservation(publish_date,account_id,task_id) VALUES(#{date},#{accountId},#{taskId})</insert>
+  <update id="markComputing">UPDATE godp_manual_task SET status='computing',error_message='',updated_at=#{time} WHERE id=#{id} AND status IN ('pending','computing')</update>
+  <update id="noteRetry">UPDATE godp_manual_task SET error_message=#{message},updated_at=#{time} WHERE id=#{id} AND status IN ('pending','computing')</update>
+  <update id="markFailed">UPDATE godp_manual_task SET status='failed',error_message=#{reason},updated_at=#{time} WHERE id=#{id} AND status IN ('pending','computing')</update>
+  <delete id="deleteReservations">DELETE FROM godp_manual_reservation WHERE task_id=#{id}</delete>
+  <update id="markCompleted">UPDATE godp_manual_task SET status='completed',error_message='',updated_at=#{time} WHERE id=#{id}</update>
+  <insert id="insertBatch">INSERT INTO godp_planning_batch(id,payload,created_at,week_start) VALUES(#{id},#{payload},#{time},#{week})</insert>
+  <select id="batchById" resultType="map">SELECT payload FROM godp_planning_batch WHERE id=#{id}</select>
+  <select id="lockedBatch" resultType="map">SELECT payload FROM godp_planning_batch WHERE id=#{id} FOR UPDATE</select>
+  <select id="allBatchPayloads" resultType="map">SELECT payload FROM godp_planning_batch ORDER BY created_at DESC,id DESC</select>
+  <update id="updateBatchPayload">UPDATE godp_planning_batch SET payload=#{payload},week_start=#{week} WHERE id=#{id}</update>
+  <insert id="insertItem" useGeneratedKeys="true" keyProperty="id">INSERT INTO godp_planning_item(batch_id,slot_id,account_id,publish_date,publish_week,payload,content_status) VALUES(#{batchId},#{slotId},#{accountId},#{publishDate},#{publishWeek},#{payload},#{contentStatus})</insert>
+  <select id="lockedItem" resultType="map">SELECT * FROM godp_planning_item WHERE id=#{id} FOR UPDATE</select>
+  <select id="allItems" resultType="map">SELECT id,payload,content_status,version FROM godp_planning_item ORDER BY id DESC</select>
+  <select id="itemsByBatch" resultType="map">SELECT id,payload,content_status,version FROM godp_planning_item WHERE batch_id=#{batchId} ORDER BY id DESC</select>
+  <select id="itemById" resultType="map">SELECT id,payload,content_status,version FROM godp_planning_item WHERE id=#{id}</select>
+  <select id="pendingItems" resultType="map">SELECT id,payload,version FROM godp_planning_item WHERE content_status IN ('planned','ready','failed') AND id&gt;#{afterId} ORDER BY id LIMIT #{limit}</select>
+  <select id="batchItemStatuses" resultType="map">SELECT account_id,content_status,payload FROM godp_planning_item WHERE batch_id=#{batchId}</select>
+  <update id="updateItemVersion">UPDATE godp_planning_item SET payload=#{payload},version=#{version} WHERE id=#{id}</update>
+  <update id="updateItemContent">UPDATE godp_planning_item SET content_status=#{status},payload=#{payload} WHERE id=#{id}</update>
+  <select id="adjustments" resultType="map">SELECT id,payload FROM godp_planning_adjustment WHERE item_id=#{itemId} ORDER BY id DESC</select>
+  <insert id="insertAdjustment" useGeneratedKeys="true" keyProperty="id">INSERT INTO godp_planning_adjustment(item_id,payload) VALUES(#{itemId},#{payload})</insert>
+</mapper>

@@ -28,7 +28,7 @@
 
 ## 执行方式
 
-在仓库 `backend/` 目录，使用已安装项目依赖的 Python：
+在仓库 `python-backend/` 目录，使用已安装项目依赖的 Python：
 
 ```bash
 python -m app.refresh_auto_demo

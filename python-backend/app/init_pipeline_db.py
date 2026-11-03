@@ -1,0 +1,36 @@
+"""Install the Planning Pipeline V1 orchestration tables."""
+
+from pathlib import Path
+
+from .db import connection
+from .init_db import sync_column_comments, sync_table_comments
+
+
+def main() -> None:
+    schema_path = Path(__file__).resolve().parents[1] / "pipeline_schema.sql"
+    source = schema_path.read_text(encoding="utf-8")
+    source = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("--"))
+    statements = [statement.strip() for statement in source.split(";") if statement.strip()]
+    with connection() as db, db.cursor() as cursor:
+        for statement in statements:
+            cursor.execute(statement)
+        cursor.execute("SHOW COLUMNS FROM godp_planning_pipeline_run")
+        columns = {row['Field'] for row in cursor.fetchall()}
+        for name, definition in (
+            ('planning_scope', "VARCHAR(20) NOT NULL DEFAULT 'full' COMMENT '策划范围：full普通营销热点组合，ordinary_only仅普通选题'"),
+            ('production_provider', "VARCHAR(20) NOT NULL DEFAULT 'disabled' COMMENT '正式结果下游生产方式：disabled不自动生产，local_mock本地模拟内容方'"),
+            ('commit_owner', "VARCHAR(12) NOT NULL DEFAULT 'python' COMMENT '正式结果提交归属，python旧流程或java业务库，创建后固定'"),
+        ):
+            if name not in columns:
+                cursor.execute(f"ALTER TABLE godp_planning_pipeline_run ADD COLUMN {name} {definition}")
+        from .business_snapshot import ensure_business_snapshot_columns
+        ensure_business_snapshot_columns(cursor)
+        updated_tables = sync_table_comments(cursor, source)
+        updated_columns = sync_column_comments(cursor, source)
+        db.commit()
+    print(f"Pipeline schema ready; table comments updated: {updated_tables}; "
+          f"column comments updated: {updated_columns}")
+
+
+if __name__ == "__main__":
+    main()

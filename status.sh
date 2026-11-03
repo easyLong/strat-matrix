@@ -40,49 +40,11 @@ check_http() {
 check_process "Backend" "$RUN_DIR/backend.pid" || true
 check_process "Frontend" "$RUN_DIR/frontend.pid" || true
 expected=2
-if [[ "${APPLICATION_WORKER_ENABLED:-1}" == "1" ]]; then
-  check_process "Application worker" "$RUN_DIR/application-worker.pid" || true
+if [[ "$JAVA_ACCESS_MODE" == "local_development" ]]; then
+  check_process "Java backend" "$RUN_DIR/java-backend.pid" || true
   expected=$((expected + 1))
-  ORDINARY_SCHEDULER_ENABLED=0
-  HOTSPOT_SCHEDULER_ENABLED=0
-  PLANNING_WORKFLOW_WORKER_ENABLED=0
-  TOPIC_LABEL_WORKER_ENABLED=0
-  TOPIC_VECTOR_WORKER_ENABLED=0
-  ACCOUNT_VECTOR_WORKER_ENABLED=0
-  AI_PREPARATION_WORKER_ENABLED=0
-  MATCHING_EXECUTOR_WORKER_ENABLED=0
-fi
-if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
-  check_process "Ordinary scheduler" "$RUN_DIR/ordinary-scheduler.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$HOTSPOT_SCHEDULER_ENABLED" == "1" ]]; then
-  check_process "Hotspot scheduler" "$RUN_DIR/hotspot-scheduler.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
-  check_process "Topic label worker" "$RUN_DIR/topic-label-worker.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$TOPIC_VECTOR_WORKER_ENABLED" == "1" ]]; then
-  check_process "Topic vector worker" "$RUN_DIR/topic-vector-worker.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
-  check_process "Account vector worker" "$RUN_DIR/account-vector-worker.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
-  check_process "AI preparation worker" "$RUN_DIR/ai-preparation-worker.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
-  check_process "Matching executor worker" "$RUN_DIR/matching-executor-worker.pid" || true
-  expected=$((expected + 1))
-fi
-if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
-  check_process "Planning workflow worker" "$RUN_DIR/planning-workflow-worker.pid" || true
-  expected=$((expected + 1))
+  java_check_url="${JAVA_GATEWAY_URL:-http://127.0.0.1:6931}"
+  check_http "Java backend" "${java_check_url%/}/api/plan/service-health" || true
 fi
 check_http "Backend" "http://${CHECK_HOST}:${BACKEND_PORT}/api/health" || true
 check_http "Frontend" "http://${CHECK_HOST}:${FRONTEND_PORT}/" || true

@@ -98,7 +98,7 @@ Planning Pipeline 的 `result_commit` 现在负责下游组合和提交：
 基础结构继续由：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.init_db
 python3 -m app.init_pipeline_db
 python3 -m app.init_result_commit_db

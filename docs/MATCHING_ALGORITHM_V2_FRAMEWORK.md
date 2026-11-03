@@ -14,7 +14,7 @@
   → 审计提案
 ```
 
-算法原语位于 `backend/app/matching_algorithm_v2.py`；生产适配器位于 `backend/app/matching_executor_v2.py`。它消费 Matching Task 已冻结的输入并保存匹配提案，不直接创建任务、不提交正式策划批次，也不调用内容生产服务。
+算法原语位于 `python-backend/app/matching_algorithm_v2.py`；生产适配器位于 `python-backend/app/matching_executor_v2.py`。它消费 Matching Task 已冻结的输入并保存匹配提案，不直接创建任务、不提交正式策划批次，也不调用内容生产服务。
 
 ## V102 方法与代码组件
 

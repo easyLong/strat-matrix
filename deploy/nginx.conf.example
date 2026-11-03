@@ -3,10 +3,10 @@ server {
     server_name your-domain.example.com;
 
     location /api/ {
-        # TODO: implement the forwarder in the existing bank Java project.
-        # docs/integration/java-host contains handoff references only.
-        # Browser /api/query/plans -> Java /api/plan/query/plans -> Python /api/query/plans.
-        proxy_pass http://bank_java_gateway/api/plan/;
+        # Local three-project development deployment. Host integration replaces this upstream.
+        # Browser /api/query/plans -> Java /api/plan/query/plans.
+        # Python legacy forwarding is temporary and only enabled in the local profile.
+        proxy_pass http://127.0.0.1:6931/api/plan/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

@@ -139,6 +139,7 @@ export interface PlanItem {
   status: string
   slot_id?: string | null
   production_status?: string | null
+  content_id?: string | null
   publish_status: string
   allow_replace: boolean
   replace_block_reason: string

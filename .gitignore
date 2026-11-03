@@ -11,11 +11,11 @@ logs/
 run/
 .tmp-*
 .tmp_*
-backend/artifacts/
+python-backend/artifacts/
 review-export/*.html
-backend/app/bank_bridge/site_sql_private.py
-backend/app/bank_bridge/site_sql_private/
-backend/app/bank_bridge/site_java_private.py
-backend/app/bank_bridge/site_java_private/
-backend/app/bank_bridge/private-selfcheck*.json
+python-backend/app/bank_bridge/site_sql_private.py
+python-backend/app/bank_bridge/site_sql_private/
+python-backend/app/bank_bridge/site_java_private.py
+python-backend/app/bank_bridge/site_java_private/
+python-backend/app/bank_bridge/private-selfcheck*.json
 

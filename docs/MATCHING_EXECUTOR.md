@@ -136,7 +136,7 @@ Worker 对策略/冻结输入与实现契约不一致回写 `invalid_response`�
 单次手工验证：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.matching_executor_worker --check-config
 python3 -m app.matching_executor_worker --once
 ```

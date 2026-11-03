@@ -1,5 +1,7 @@
 # 行内Java工程接入交接说明
 
+> **历史资料，不能按下文模板实施当前普通人工策划。** 下文追溯旧“Java只做转发”的约定。当前已建立Vue、Java业务、Python算法三个子项目；普通人工策划的Java实现见`java-backend/`，现场最少修改方式见[驻场替换点清单](../../JAVA_HOST_REPLACEMENT_POINTS.md)。旧文“本仓库不包含Java”和“Python永久保留全部业务”不再适用。
+
 **本目录是文档与交接参考，不是本项目的Java模块。所有Java实现最终写入行内现有工程。**
 
 本仓库只开发和运行Vue与Python；不包含Java源码模块、Java构建、Java服务或JDK运行依赖。方法及字段模板以 `.java.example` 保存，供驻场时复制、改包名并按宿主规范实现。

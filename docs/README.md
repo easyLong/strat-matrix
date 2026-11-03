@@ -1,5 +1,28 @@
 # 项目文档目录
 
+- [双库业务迁移与验收（2026-11-03）](双库业务迁移与验收_2026-11-03.md)：当前配置冻结、真实双库验收、热点/营销迁移、历史结果SQL分页及剩余行内适配点；优先于下面各 V0.1 阶段记录。
+
+- [服务内后台执行](BACKGROUND_EXECUTION.md)：只启动三个服务；Java触发、Python受控执行、原持久化队列恢复，不再单独启动Worker。
+
+- [三工程契约与迁移说明](contracts/README.md)：Vue／Java／Python独立子项目、当前兼容链路、目标业务归属及逐项迁移检查；替代旧V0.2的工程归属约定。
+
+- [行内三工程迁入执行清单 V0.1](行内三工程迁入执行清单_V0.1.md)：按Vue、Java、Python列出可迁入代码、必须替换的接入点、迁移顺序和复杂度；以当前实现为准。
+
+- [Java宿主替换点](JAVA_HOST_REPLACEMENT_POINTS.md) · [普通人工业务迁移说明](JAVA_MANUAL_MIGRATION.md)：MyBatis Mapper、五类宿主端口、历史过渡接口和业务表发布方式。
+
+- [AI策划配置三工程改造 V0.1](AI策划配置三工程改造_V0.1.md)：四项业务配置的Java版本化落库、算法配置归属、综合页面切换顺序与两库一致性约束。
+
+- [策划结果三工程改造 V0.1](策划结果三工程改造_V0.1.md)：正式结果的Java业务归属、多槽位表结构、批次定向查询、旧历史过渡与后续分页迁移。
+
+- [人工营销策划业务迁移 V0.1](人工营销策划业务迁移_V0.1.md)：营销任务的Java创建、幂等、列表详情、内容侧状态端口、历史任务过渡及发布顺序。
+
+- [三工程业务服务改造清单 V0.1](业务服务改造清单_V0.1.md)：逐项标注普通人工、营销、自动周策划、热点、配置、内容状态和结果报表的归属与剩余改造。
+- [页面资料查询迁入 Java V0.1](页面资料查询Java迁移_V0.1.md)：账号列表、选题列表和选题详情的 Java 页面接口及驻场资料读取替换点。
+- [自动周策划触发迁入 Java V0.1](自动周策划触发迁入Java_V0.1.md)：业务配置判定、周期幂等任务、算法启动端口和剩余正式结果迁移边界。
+- [自动策划算法提案交接 V0.1](自动策划算法提案交接_V0.1.md)：Java 读取只读算法提案的契约、配置一致性校验及正式落库前的剩余步骤。
+- [自动策划 Java 正式提交与确认 V0.1](自动策划Java正式提交与确认_V0.1.md)：业务事务、不可变提案和确认重试设计；后续发布结果以2026-11-03双库验收记录为准。
+- [行内三工程业务迁入边界 V0.2](行内三工程业务迁入边界_V0.2.md)：按业务服务列出可复用代码、驻场替换点和仍需开发的部分。
+
 - [三工程公共依赖与版本对齐清单（2026-11-02）](三工程公共依赖与版本对齐清单_2026-11-02.md)：客户工程／前端／Python清单核对，Java8公共依赖建议及行内组件适配边界。
 
 - [V19适配质量链路](V19适配质量链路说明.md) · [五账号对照验收](V19五账号对照验收_2026-11-02.md)：账号映射、主关联标签、五路召回、模型精判与同输入V2对照；仅验证提案，含实际缺口。
@@ -8,18 +31,18 @@
 
 - [任务范围输入准备与V2匹配验收（2026-11-02）](任务范围输入准备与V2匹配验收_2026-11-02.md)：范围固定、分批断点、版本等待原因，以及5账号真实匹配结果与质量问题。
 
-- [当前实现与交接状态（2026-11-02）](CURRENT_STATE.md)：集中说明最新文档入口、Java工程归属、已实现与待改造边界、下一轮顺序及提交前验证。先读本页，再按用途查看历史资料。
-- [行内Java工程接入交接说明（2026-11-02）](integration/java-host/README.md)：Java实现直接写入行内已有工程，本仓库仅在文档目录提供方法和字段参考模板，不包含Java应用模块或构建依赖。
+- [当前实现与交接状态（2026-11-03）](CURRENT_STATE.md)：最新双库迁移状态、验收入口及仍待行内适配的内容；历史基线单独标注。
+- [行内Java工程接入交接说明（2026-11-02）](integration/java-host/README.md)：早期仅提供方法和字段模板的历史方案；当前已有独立Java业务子项目，迁入请优先使用上面的执行清单。
 - [行内整合架构改造备忘 V0.2（2026-11-02）](行内整合架构改造备忘_V0.2.md)：在V0.1基础上明确工程归属和交付组织，V0.1保留。
 - [行内整合架构改造备忘 V0.1（2026-11-02）](行内整合架构改造备忘_V0.1.md)：当前目标架构讨论基线。统一Java转发与宿主唤醒，FastAPI内受控后台执行，记录数据边界、改造顺序、现状差异及待确认项；后续版本在此基础上修订，不代表已经完成或通过行内验收。
-- [Java接入与双库隔离：契约预留与驻场步骤](#java-python-isolation)：本项目开发Vue/Python，Java属于行内工程；只在文档目录提供交接参考。下方历史同库方案仅用于追溯。
+- [Java接入与双库隔离：历史契约预留方案](#java-python-isolation)：仅提供Java方法模板时期的历史参考；当前已经建设Java业务子项目，使用三工程契约和驻场替换点清单。
 - [架构基线、模块职责与渐进重构路线](#architecture-baseline)：当前代码核查、目标分层、前后端复用边界与重构验收。
 
 ## 最新交接与前端变更
 
 - [最新页面功能PRD V2.1 Word（2026-10-30）](多账号智能策划_PRD_V2.1_页面同步评审稿_2026-10-30.docx) · [PDF](多账号智能策划_PRD_V2.1_页面同步评审稿_2026-10-30.pdf)：最新归档页面评审资料；行内工程归属和接入目标以架构备忘V0.2及交接说明为准，不混同业务PRD与行内实施规范。
 - [功能、数据与行内适配完整对应表（2026-10-31）](账号策划系统_功能数据与行内适配对应表_V1.0_2026-10-31.md) · [Excel](账号策划系统_功能数据与行内适配对应表_V1.0_2026-10-31.xlsx)：87项功能、12个模块，逐项列出数据归属、双方职责、触发方式、适配内容、验收条件及当前状态；拟新增能力与已实现能力分别标注。
-- [旧表清理 SQL](../backend/migrations/20261030_drop_retired_source_tables.sql)：14 张旧基础副本、同步及主动投递表已完成备份和代码依赖调整；当前数据库账号缺少 DROP 权限，物理删除尚未执行成功。
+- [旧表清理 SQL](../python-backend/migrations/20261030_drop_retired_source_tables.sql)：14 张旧基础副本、同步及主动投递表已完成备份和代码依赖调整；当前数据库账号缺少 DROP 权限，物理删除尚未执行成功。
 - [驻场对接方法、SQL 模板与交接包](#驻场对接开发第一版2026-10-30)：固定业务实体、统一方法、模拟数据及行内 SQL 实现；驻场填写与自检说明见文末。
 - [全局 PRD V1.3 营销衔接修订稿（2026-10-28）](多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.md) · [Word](多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.docx) · [PDF](多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.pdf)：同账号目标日已有有效营销投放时直接引用，不另填新内容；已同步流程图、同库衔接与验收。
 - [历史全局 PRD V1.2 全量整合评审稿（2026-10-28）](多账号智能策划_PRD_V1.2_全量整合评审稿_2026-10-28.md) · [PDF](多账号智能策划_PRD_V1.2_全量整合评审稿_2026-10-28.pdf)：保留业务追溯；本目录未归档对应Word，不提供失效下载链接。包含32张截图、18张流程／泳道图。
@@ -37,7 +60,7 @@
 - [会话交接与当前实现入口（2026-10-22）](会话交接_2026-10-22.md)
 - [前端调整恢复清单及最终确认口径（2026-10-22）](前端调整恢复清单_2026-10-22.md)
 - [单账号普通选题正式闭环](ORDINARY_WORKFLOW.md)
-- 当前一级页面为AI策划配置、人工策划、策划结果；策划结果分账号列表和时间列表。页面资料以最新归档PRD V2.1和当前实现核对，工程接入以V0.2备忘为准；旧恢复清单及PRD保留追溯。
+- 当前一级页面为AI策划配置、人工策划、策划结果；策划结果分账号列表和时间列表。页面资料以最新归档PRD V2.1和当前实现核对，工程归属以三工程契约为准；旧架构备忘、恢复清单及PRD保留追溯。
 
 ## 开发与产品
 
@@ -126,14 +149,14 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| [contracts.py](../backend/app/bank_bridge/contracts.py) | 账号、互动明细、选题、营销内容、分页、生产需求、生产结果及 OP 输入输出实体；中文别名供业务核对 |
-| [ports.py](../backend/app/bank_bridge/ports.py) | 数据查询与生产能力的方法边界 |
-| [factory.py](../backend/app/bank_bridge/factory.py) | 唯一装配入口；本地默认 `local_fixture`，也支持显式 `fixture` 自检及 `bank_sql` |
-| [site_sql_template.py](../backend/app/bank_bridge/site_sql_template.py) | 驻场填写 SQL 及字段、枚举映射的模板 |
-| [bank_sql.py](../backend/app/bank_bridge/bank_sql.py) | 参数绑定、分页校验、批量关联互动明细及返回实体校验 |
-| [memory.py](../backend/app/bank_bridge/memory.py) | 不依赖数据库或模型的模拟查询及生产受理实现 |
-| [operations.py](../backend/app/bank_bridge/operations.py) | 策划侧 OP 查询与打标效果测试方法 |
-| [api.py](../backend/app/bank_bridge/api.py) | 同一批方法的 HTTP 包装；内嵌同进程时直接调用方法 |
+| [contracts.py](../python-backend/app/bank_bridge/contracts.py) | 账号、互动明细、选题、营销内容、分页、生产需求、生产结果及 OP 输入输出实体；中文别名供业务核对 |
+| [ports.py](../python-backend/app/bank_bridge/ports.py) | 数据查询与生产能力的方法边界 |
+| [factory.py](../python-backend/app/bank_bridge/factory.py) | 唯一装配入口；本地默认 `local_fixture`，也支持显式 `fixture` 自检及 `bank_sql` |
+| [site_sql_template.py](../python-backend/app/bank_bridge/site_sql_template.py) | 驻场填写 SQL 及字段、枚举映射的模板 |
+| [bank_sql.py](../python-backend/app/bank_bridge/bank_sql.py) | 参数绑定、分页校验、批量关联互动明细及返回实体校验 |
+| [memory.py](../python-backend/app/bank_bridge/memory.py) | 不依赖数据库或模型的模拟查询及生产受理实现 |
+| [operations.py](../python-backend/app/bank_bridge/operations.py) | 策划侧 OP 查询与打标效果测试方法 |
+| [api.py](../python-backend/app/bank_bridge/api.py) | 同一批方法的 HTTP 包装；内嵌同进程时直接调用方法 |
 
 账号列表、选题列表、选题详情、人工选题校验、替换候选、普通策划输入、AI 匹配输入、向量读写校验及结果列表均通过统一数据入口读取原始资料。本地开发已将当前有效测试资料导出至 Git 忽略的 `run/bank-source-fixture.json`；正式行内部署使用 `bank_sql` 预留方法，不再依赖旧基础副本表。
 
@@ -181,7 +204,7 @@ SQL 参数通过绑定传入，ID 列表使用模板中的 `{{account_ids}}`、`
 
 ### 自检与交接包
 
-以下命令均在 `backend` 目录运行：
+以下命令均在 `python-backend` 目录运行：
 
 ```bash
 # 完全离线的模拟查询、分页、账号画像输入及生产受理自检：不写数据库，不调用模型
@@ -216,12 +239,12 @@ python -m app.bank_bridge.package --output ../run/strat-matrix-onsite-v1.zip --w
 
 ### 旧表清理状态
 
-删除清单集中于 [retired_tables.py](../backend/app/retired_tables.py)，可恢复备份位于本机 `run/backups/retired-tables-20261030-final/`，包含原建表语句、全部原始记录及校验摘要。备份与测试夹具不进入 Git 或驻场交接包。
+删除清单集中于 [retired_tables.py](../python-backend/app/retired_tables.py)，可恢复备份位于本机 `run/backups/retired-tables-20261030-final/`，包含原建表语句、全部原始记录及校验摘要。备份与测试夹具不进入 Git 或驻场交接包。
 
-当前 MySQL 账号返回 `DROP command denied`，14 张表仍存在；并非已完成物理删除。可由管理员执行 [限定数据库与表名的删除脚本](../backend/migrations/20261030_drop_retired_source_tables.sql)，或者授予相应 DROP 权限后继续运行：
+当前 MySQL 账号返回 `DROP command denied`，14 张表仍存在；并非已完成物理删除。可由管理员执行 [限定数据库与表名的删除脚本](../python-backend/migrations/20261030_drop_retired_source_tables.sql)，或者授予相应 DROP 权限后继续运行：
 
 ```bash
-cd backend
+cd python-backend
 python -m app.retire_legacy_tables --backup-dir ../run/backups/retired-tables-20261030-final --apply
 ```
 
@@ -233,7 +256,7 @@ python -m app.retire_legacy_tables --backup-dir ../run/backups/retired-tables-20
 
 主链为：行内查询方法 → 普通选题变化发现 → 标签/向量准备 → V2匹配与正式提交 → 内容侧扫描 → 结果回写 → 前端与使用次数。
 
-升级现有库先执行 `cd backend && python -m app.init_shared_workflow_db`。该命令只为 `godp_slot_state` 增加生产任务编码、领取到期时间、领取次数、失败原因、结果时间和索引，并补充当前配置目录；不会删除源数据、迁移旧密钥或新建投递队列。新字段均带中文说明，重复运行安全。
+升级现有库先执行 `cd python-backend && python -m app.init_shared_workflow_db`。该命令只为 `godp_slot_state` 增加生产任务编码、领取到期时间、领取次数、失败原因、结果时间和索引，并补充当前配置目录；不会删除源数据、迁移旧密钥或新建投递队列。新字段均带中文说明，重复运行安全。
 
 - `source_discovery.discover_topics()` 通过当前数据查询方法读取普通非营销选题，比较标题、大纲、分类、关联关系等计算输入指纹。新增或变化时重新准备标签并使旧向量失效；仅热度、更新时间变化不会重复打标。保留历史标签与冻结计算快照。
 - `planning_workflow_worker` 统一推进发现、模型准备、匹配、正式提交及生产结果归集。没有待执行Pipeline时仍处理选题准备任务。默认不再另外启动独立标签/向量Worker，避免重复模型调用。
@@ -259,7 +282,7 @@ for task in claimed['tasks']:
 显式验收命令（真实模型、真实MySQL，内容侧为本地模拟，不能代表真实内容Agent已接通）：
 
 ```bash
-cd backend
+cd python-backend
 python -m app.run_shared_workflow_acceptance --cycle-start 2026-11-23 --policy-id 5
 ```
 
@@ -340,7 +363,7 @@ flowchart TB
 现有`api/`、`services/`、`core/`、`adapters/`、`jobs/`继续使用。后续随用例迁移聚合根目录模块，文件保持业务职责完整，避免仅按行数拆分。
 
 ```text
-backend/app/
+python-backend/app/
   bootstrap.py                装配、HTTP策略和服务提供方绑定
   api/                        页面接口、行内结果接口、HTTP输入输出转换
   services/
@@ -451,7 +474,7 @@ frontend/src/
 复验命令：
 
 ```bash
-cd backend
+cd python-backend
 python -m unittest discover -s tests
 python -m app.run_shared_workflow_acceptance --cycle-start <未使用的周一日期> --policy-id <已批准策略ID> --output ../run/shared-workflow-report.json
 python -m app.jobs.worker --once

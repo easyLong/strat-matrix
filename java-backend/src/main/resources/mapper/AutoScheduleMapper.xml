@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stratmatrix.planning.auto.AutoScheduleMapper">
+  <select id="byCycle" resultType="map">SELECT * FROM godp_auto_planning_task WHERE cycle_start=#{cycleStart}</select>
+  <select id="lockedById" resultType="map">SELECT * FROM godp_auto_planning_task WHERE id=#{id} FOR UPDATE</select>
+  <select id="openTasks" resultType="map">SELECT * FROM godp_auto_planning_task WHERE status IN ('待发起','计算中','待确认') ORDER BY updated_at,id LIMIT 50</select>
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO godp_auto_planning_task(cycle_start,cycle_end,business_config_version,business_config_json,status,created_at,updated_at) VALUES(#{cycleStart},#{cycleEnd},#{configVersion},#{configJson},'待发起',#{time},#{time})</insert>
+  <update id="accepted">UPDATE godp_auto_planning_task SET status=#{status},pipeline_id=#{pipelineId},legacy_batch_id=#{legacyBatchId},attempts=attempts+1,last_error='',updated_at=#{time} WHERE id=#{id} AND status='待发起'</update>
+  <update id="failedAttempt">UPDATE godp_auto_planning_task SET attempts=attempts+1,last_error=#{error},updated_at=#{time} WHERE id=#{id} AND status='待发起'</update>
+  <update id="finish">UPDATE godp_auto_planning_task SET status=#{status},legacy_batch_id=#{legacyBatchId},last_error=#{error},updated_at=#{time} WHERE id=#{id} AND status='计算中'</update>
+  <update id="committed">UPDATE godp_auto_planning_task SET status='待确认',business_batch_id=#{batchId},proposal_hash=#{hash},last_error='',updated_at=#{time} WHERE id=#{id} AND status='计算中' AND business_batch_id IS NULL</update>
+  <update id="acknowledged">UPDATE godp_auto_planning_task SET status='已完成',confirmation_attempts=confirmation_attempts+1,last_error='',updated_at=#{time} WHERE id=#{id} AND status='待确认' AND business_batch_id=#{batchId} AND proposal_hash=#{hash}</update>
+  <update id="resultError">UPDATE godp_auto_planning_task SET last_error=#{error},confirmation_attempts=confirmation_attempts+CASE WHEN status='待确认' THEN 1 ELSE 0 END,updated_at=#{time} WHERE id=#{id} AND status IN ('计算中','待确认')</update>
+</mapper>

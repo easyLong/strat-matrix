@@ -1,0 +1,36 @@
+package com.stratmatrix.standalone;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.core.env.Environment;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/** Development shell health endpoint; the host keeps its own health checks. */
+@RestController
+public class ServiceHealthController {
+  private final Environment environment;
+
+  public ServiceHealthController(Environment environment) {
+    this.environment = environment;
+  }
+
+  @GetMapping("/api/plan/service-health")
+  public Map<String, Object> health() {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("service", "strat-matrix-java");
+    result.put("status", "UP");
+    boolean manual = environment.getProperty("planning.manual.enabled", Boolean.class, false);
+    result.put("migration_stage", manual ? "ordinary-manual-business" : "legacy-business-adapter");
+    result.put("manual_business_enabled", manual);
+    result.put("result_query_mode", environment.getProperty("planning.history.mode", "legacy"));
+    result.put(
+        "combined_config_enabled",
+        environment.getProperty("planning.config-release.enabled", Boolean.class, false));
+    result.put(
+        "legacy_enabled",
+        environment.acceptsProfiles(org.springframework.core.env.Profiles.of("local"))
+            && environment.getProperty("planning.legacy.enabled", Boolean.class, false));
+    return result;
+  }
+}

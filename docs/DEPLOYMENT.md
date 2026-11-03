@@ -1,18 +1,23 @@
 # strat-matrix 服务器部署说明
 
-**2026-11-02架构更新：** Java代码直接写入行内已有工程；本仓库只有[接入参考文档及模板](integration/java-host/README.md)，不提供Java源码模块、构建或服务，本地Vue/Python无需JDK。未来行内补齐后设置 `JAVA_ACCESS_MODE=bank`，Vite或Nginx将 `/api/` 映射至Java `/api/plan/`，再映射为Python `/api/`；目前只是预留约定。工程归属见[V0.2备忘](行内整合架构改造备忘_V0.2.md)，统一唤醒与后台执行器尚未完成。
+**2026-11-03三工程更新：** 仓库包含[Vue](../frontend/README.md)、[Java](../java-backend/README.md)、[Python](../python-backend/README.md)三个独立子项目，未来分别嵌入客户已有工程。本地页面经Java6931访问业务库，Java委派Python执行算法。配置发布、正式结果、热点/营销业务、历史查询与报表已完成本轮迁移，真实内容方、身份和宿主调度待接。发布顺序与实测证据以[双库迁移记录](双库业务迁移与验收_2026-11-03.md)为准。本地一键启动需要JDK及Maven；bank模式不启动本地Java，改用客户已有Java服务。
 
-当前启动脚本默认运行自主轮询Worker，适用于现有开发版本；不能把它直接视为已符合宿主统一调度的行内部署方案。先按[当前实现状态](CURRENT_STATE.md)核对待改造项，再由行内接入验收决定生产运行方式。
+存量部署必须先停止旧版本业务写入并备份两库，再按上述记录发布业务库 V3/V4/V5、算法库 Pipeline 迁移、配置及历史导入。只执行下方历史的 `app.init_db` 不足以升级Java业务库。确认迁移后再启用 `planning.history.mode=business_only`、`planning.config-release.enabled=true`、`planning.auto-schedule.enabled=true` 及 `AUTO_SCHEDULE_OWNER=java`；新生成的本地配置已使用这些开关。新环境仍需自行初始化数据源与已批准的算法策略，不能直接使用本地验收账号和策略编号。
 
-2026-10-28 升级新增营销任务总分配数量字段。已有部署应先在 `backend` 目录执行 `python -m app.init_manual_marketing_db`，再构建前端并重启后端；具体命令与兼容边界见[近期修改汇总](近期修改汇总_2026-10-28.md)。营销创建请求已改为单个选题和总分配数量，前后端须同时更新。
+当前启动脚本只运行Vue、Java和Python三个服务。后台执行已并入Python，Java本地开发壳模拟宿主触发；驻场不复制该本地调度配置，由客户调度平台调用内部唤醒客户端。详见[服务内后台执行](BACKGROUND_EXECUTION.md)。
 
-单账号普通选题闭环新增流程Worker及持久化任务表，迁移命令为 `cd backend && python -m app.init_workflow_db`。现有启动脚本已接入迁移和Worker管理，运行及验收说明见 [ORDINARY_WORKFLOW.md](ORDINARY_WORKFLOW.md)。内容生产默认关闭；本地模拟模式须显式配置。
+2026-10-28 升级新增营销任务总分配数量字段。已有部署应先在 `python-backend` 目录执行 `python -m app.init_manual_marketing_db`，再构建前端并重启后端；具体命令与兼容边界见[近期修改汇总](近期修改汇总_2026-10-28.md)。营销创建请求已改为单个选题和总分配数量，前后端须同时更新。
+
+单账号普通选题闭环使用已有持久化任务表，迁移命令为`cd python-backend && python -m app.init_workflow_db`。流程处理函数已由服务内执行器调用；内容生产默认关闭，本地模拟须显式配置。
 
 本文档适用于一台 Linux 服务器，采用以下进程结构：
 
+目录迁移说明：Python子项目现为`python-backend/`。更新旧部署前先停止旧服务；如果原来使用`backend`目录下的虚拟环境，需在新目录重新创建环境并安装依赖，不能直接搬用包含旧绝对路径的虚拟环境。使用系统pip的部署无需重建虚拟环境。现有`logs/backend.log`及`run/backend.pid`名称保留兼容，不代表源码仍位于旧目录。
+
 - FastAPI 后端：`127.0.0.1:6930`
+- Java本地开发壳：`127.0.0.1:6931`
 - Vite Preview 前端：`127.0.0.1:930`
-- Nginx：对外提供 80/443 端口，并将 `/api/` 转发到后端
+- Nginx：对外提供80/443，将`/api/`映射到Java的`/api/plan/`
 - MySQL：使用项目根目录 `.env` 中的数据库配置
 
 生产环境建议使用域名和 HTTPS。项目脚本负责启动、停止和查看前后端进程，Nginx 建议交给系统服务管理。
@@ -27,6 +32,8 @@ sudo apt install -y git curl nginx python3 python3-venv python3-pip nodejs npm
 ```
 
 建议 Node.js 使用 20 LTS 或更高版本，Python 使用 3.11 或更高版本。
+
+Java开发壳按Java8兼容开发；安装客户兼容的JDK及Maven，确认`java -version`和`mvn -version`可执行。`start.sh`默认构建Java；已离线准备好jar时可用`BUILD_JAVA=0`，工具路径可通过`JAVA_BIN`、`MVN_BIN`指定。不要复制内部框架依赖作为行外启动前提。
 
 ## 2. 上传项目
 
@@ -61,27 +68,27 @@ MYSQL_PASSWORD=数据库密码
 MYSQL_DATABASE=strat_matrix
 ```
 
-MySQL `godp_system_config` 保存前后端监听地址/端口、模型标识和鉴权密钥，见[系统配置说明](SYSTEM_CONFIG.md)。安装后端依赖后，在 `backend` 执行 `python -m app.init_system_config --migrate-env --clean-env` 初始化当前配置并物理删除其余旧参数。需要跨系统接口时，再设置 `INTEGRATION_TOKEN`。
+MySQL `godp_system_config` 保存前后端监听地址/端口、模型标识和鉴权密钥，见[系统配置说明](SYSTEM_CONFIG.md)。安装后端依赖后，在 `python-backend` 执行 `python -m app.init_system_config --migrate-env --clean-env` 初始化当前配置并物理删除其余旧参数。需要跨系统接口时，再设置 `INTEGRATION_TOKEN`。
 
 页面作为整体业务模块嵌入客户系统，一级页面为 AI策划配置、人工策划和策划结果。登录、用户账号和角色由宿主系统负责。当前人工操作审计统一标记为“运营人员”，自动任务标记为 `system`。
 
 `/api/integrations/` 和 `/api/internal/` 下的系统接口使用 `X-Integration-Token` 机器令牌。
 
-服务默认监听 `0.0.0.0:6930` 和 `0.0.0.0:930`。阿里云安全组需开放对应端口；经 Nginx 访问时只需对外开放 80/443。
+已有Python和前端默认监听`0.0.0.0:6930`、`0.0.0.0:930`；Java本地壳只监听回环地址6931，经前端或Nginx访问。生产外部入口应收口网关，不将Python内部管理接口作为浏览器入口。
 
 确认数据库账号已经拥有 `strat_matrix` 数据库及项目表的读写权限。初始化或补齐表结构：
 
 ```bash
 cd /opt/strat-matrix
-python3 -m venv backend/.venv
-backend/.venv/bin/pip install -r backend/requirements.txt
-(cd backend && .venv/bin/python -m app.init_db)
+python3 -m venv python-backend/.venv
+python-backend/.venv/bin/pip install -r python-backend/requirements.txt
+(cd python-backend && .venv/bin/python -m app.init_db)
 ```
 
 如果需要初始化演示数据，再执行：
 
 ```bash
-(cd backend && .venv/bin/python -m app.seed_prototype)
+(cd python-backend && .venv/bin/python -m app.seed_prototype)
 ```
 
 生产环境不要执行演示数据脚本。
@@ -102,14 +109,14 @@ chmod +x start.sh stop.sh status.sh
 
 `start.sh` 会完成以下工作：
 
-1. 选择Python：显式`PYTHON_BIN`优先，其次项目`backend/.venv/bin/python`，再尝试系统`python3`/`python`；检查已启用模型进程的必要配置。
-2. 启动尚未运行的FastAPI后端。
-3. 启动周度规则策划与热点调度进程（默认开启，按服务端配置的北京时间执行）。
-4. 标签、选题向量、账号向量及 AI 准备 Worker 默认不随服务启动；需要时手动启动对应 Worker。
+1. 选择Python：显式`PYTHON_BIN`优先，其次项目`python-backend/.venv/bin/python`，再尝试系统`python3`/`python`；检查已启用模型进程的必要配置。
+2. local模式构建并启动Java开发壳，从库内配置生成本地启动文件；bank模式使用客户已有Java。
+3. 启动尚未运行的FastAPI后端。
+4. FastAPI初始化服务内执行器，Java local profile发出带令牌的执行信号；不启动独立Worker。若旧Worker仍运行则要求先stop，避免升级时重复执行。
 5. 默认执行前端生产构建；前端依赖缺失或 `node_modules/@types/node` 不存在时执行 `npm ci --include=dev`，确保 TypeScript、Vite 和 Node 类型依赖完整。前端构建在前端启动前、后端启动后进行。
 6. 启动尚未运行的Vite Preview前端，将PID写入`run/`、日志写入`logs/`。
 
-Matching Executor Worker 默认关闭。完成匹配策略审批后，如需处理 V1/V2 匹配任务，可通过进程环境变量启动：`MATCHING_EXECUTOR_WORKER_ENABLED=1 ./start.sh`；查看状态时使用 `MATCHING_EXECUTOR_WORKER_ENABLED=1 ./status.sh`。默认启动不会消费匹配队列。
+不再使用Worker开关或额外终端启动后台进程。Java内部令牌需由库内配置生成；bank模式由客户Job负责周期触发和恢复扫描。
 
 `start.sh` 检测到 PID 对应进程已运行时会跳过该服务。更新代码后，按第 8 节停止旧进程再启动。前端构建和进程目录采用项目默认值，监听地址与端口从配置表读取。
 
@@ -117,6 +124,7 @@ Matching Executor Worker 默认关闭。完成匹配策略审批后，如需处�
 
 ```text
 后端：6930
+Java：6931（本地开发壳，JAVA_GATEWAY_URL可指定回环地址及端口）
 前端：930
 ```
 
@@ -139,9 +147,7 @@ Matching Executor Worker 默认关闭。完成匹配策略审批后，如需处�
 ```bash
 tail -f logs/backend.log
 tail -f logs/frontend.log
-tail -f logs/ordinary-scheduler.log
-tail -f logs/hotspot-scheduler.log
-tail -f logs/account-vector-worker.log
+tail -f logs/java-backend.log
 ```
 
 后端健康检查：
@@ -164,7 +170,7 @@ sudo systemctl reload nginx
 
 配置文件将：
 
-- `/api/` 转发到行内Java接入层；示例中的占位上游必须替换成实际地址
+- `/api/`转发到Java；示例使用本地6931，行内改为客户Java服务实际地址
 - 页面请求转发到 `127.0.0.1:930`
 
 如果使用 HTTPS，可通过 Certbot 配置证书：
@@ -176,11 +182,11 @@ sudo certbot --nginx -d your-domain.example.com
 
 ## 7. 常用系统配置
 
-MySQL `godp_system_config` 保存服务监听地址/端口、模型标识和鉴权密钥；Worker 开关及其它运行参数使用项目默认值。定位项目及解释器的启动选项可在命令行指定：
+MySQL `godp_system_config`保存服务监听地址／端口、模型标识和鉴权密钥；后台并发采用代码默认值，不再通过Worker开关启动独立进程。定位项目及解释器的启动选项可在命令行指定：
 
 ```bash
 APP_ROOT=/opt/strat-matrix \
-PYTHON_BIN=/opt/strat-matrix/backend/.venv/bin/python \
+PYTHON_BIN=/opt/strat-matrix/python-backend/.venv/bin/python \
 ./start.sh
 ```
 
@@ -200,9 +206,9 @@ PYTHON_BIN=/opt/strat-matrix/backend/.venv/bin/python \
 cd /opt/strat-matrix
 ./stop.sh
 git pull --ff-only origin main
-backend/.venv/bin/pip install -r backend/requirements.txt
-(cd backend && .venv/bin/python -m app.init_system_config --migrate-env --clean-env)
-(cd backend && .venv/bin/python -m app.init_db)
+python-backend/.venv/bin/pip install -r python-backend/requirements.txt
+(cd python-backend && .venv/bin/python -m app.init_system_config --migrate-env --clean-env)
+(cd python-backend && .venv/bin/python -m app.init_db)
 ./start.sh
 ./status.sh
 sudo nginx -t && sudo systemctl reload nginx
@@ -226,7 +232,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ```bash
 cat logs/backend.log
-(cd backend && .venv/bin/python -m app.init_db)
+(cd python-backend && .venv/bin/python -m app.init_db)
 ```
 
 重点检查 `.env`、数据库网络访问、数据库授权和 Python 依赖。

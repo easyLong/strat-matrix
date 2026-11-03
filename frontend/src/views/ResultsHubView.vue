@@ -241,7 +241,7 @@ onBeforeUnmount(()=>{++loadVersion;controller?.abort()})
                   <td><div class="period-actions">
                     <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
                     <button class="text-btn" type="button" @click="openPeriod(period)">查看策划</button>
-                    <PlanningExport inline :batches="period.batches" :filename="`策划明细_${period.cycleStart}_${period.cycleEnd}.csv`" />
+                    <PlanningExport inline :batches="period.batches" :filename="`策划明细_${period.cycleStart}_${period.cycleEnd}.xlsx`" />
                     <button v-if="period.failedCount > 0" class="text-btn failure-action" type="button" @click="showFailureDetails(period)">查看失败详情</button>
                   </div></td>
                 </tr>
@@ -260,7 +260,7 @@ onBeforeUnmount(()=>{++loadVersion;controller?.abort()})
                         <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
                         <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
                         <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
-                        <td><div class="period-actions"><button class="text-btn" type="button" @click="openBatch(batch, period.cycleStart)">查看策划</button><PlanningExport inline :batches="[batch]" :filename="`策划明细_${batch.batch_code}.csv`" /></div></td>
+                        <td><div class="period-actions"><button class="text-btn" type="button" @click="openBatch(batch, period.cycleStart)">查看策划</button><PlanningExport inline :batches="[batch]" :filename="`策划明细_${batch.batch_code}.xlsx`" /></div></td>
                       </tr></tbody>
                     </table></div></div>
                   </td>

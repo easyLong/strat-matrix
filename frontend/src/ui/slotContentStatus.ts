@@ -25,9 +25,9 @@ const statusLabels: Record<string, SlotContentStatus> = {
 }
 
 export function productionStatusLabel(
-  item: Pick<PlanItem, 'topic_id' | 'topic_type' | 'slot_type' | 'production_status' | 'status'>,
+  item: Pick<PlanItem, 'topic_id' | 'topic_type' | 'slot_type' | 'production_status' | 'status' | 'content_id'>,
 ): SlotContentStatus {
-  if (!item.topic_id?.trim()) {
+  if (!item.topic_id?.trim() && !item.content_id?.trim()) {
     const hotspot = item.slot_type === 'hotspot' || item.topic_type === '热点' || item.topic_type === 'hotspot'
     return hotspot ? '待定题' : '待生产'
   }

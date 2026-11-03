@@ -1,6 +1,6 @@
 # V2 策划组合目标与 MMR 方案
 
-状态：**组合目标与搜索已接入独立 V2 执行器；权重仍为待评估起点，必须在专属策略中显式填写并批准后才运行**。实现位于 `backend/app/matching_portfolio_v2.py` 与 `backend/app/matching_executor_v2.py`。
+状态：**组合目标与搜索已接入独立 V2 执行器；权重仍为待评估起点，必须在专属策略中显式填写并批准后才运行**。实现位于 `python-backend/app/matching_portfolio_v2.py` 与 `python-backend/app/matching_executor_v2.py`。
 
 ## 1. 目标函数
 

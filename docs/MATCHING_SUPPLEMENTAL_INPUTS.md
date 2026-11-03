@@ -62,6 +62,6 @@
 
 ## 迁移与验证
 
-在 `backend` 运行 `python3 -m app.init_db`，新增 `godp_matching_input_snapshot`，并给任务表增加 `contract_version`、`supplemental_hash`。新表、11个字段及两个新增字段均有中文说明。旧任务按第一版保留，不使用当前事实补造历史快照。更新后重启后端，本轮没有新增常驻进程或环境变量。
+在 `python-backend` 运行 `python3 -m app.init_db`，新增 `godp_matching_input_snapshot`，并给任务表增加 `contract_version`、`supplemental_hash`。新表、11个字段及两个新增字段均有中文说明。旧任务按第一版保留，不使用当前事实补造历史快照。更新后重启后端，本轮没有新增常驻进程或环境变量。
 
 `python3 -m unittest discover -s tests -v` 验证第一版兼容、未知语义、源类型隔离、历史窗口、兜底池引用、来源变化、快照篡改、原子创建和鉴权，使用内存快照及模拟数据库，不写共享业务数据或调用模型。

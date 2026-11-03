@@ -11,7 +11,11 @@ new Function('module', 'exports', code)(moduleUnderTest, moduleUnderTest.exports
 const { serverOptions } = moduleUnderTest.exports
 
 test('standalone frontend uses local development defaults without a backend config reader', () => {
-  assert.deepEqual(serverOptions(), { host: '0.0.0.0', port: 930, proxy: { '/api': 'http://127.0.0.1:6930' } })
+  const options = serverOptions()
+  assert.equal(options.host, '0.0.0.0')
+  assert.equal(options.port, 930)
+  assert.equal(options.proxy['/api'].target, 'http://127.0.0.1:6931')
+  assert.equal(options.proxy['/api'].rewrite('/api/config'), '/api/plan/config')
 })
 
 test('bank frontend requires Java and cannot silently fall back to Python', () => {
@@ -28,7 +32,13 @@ test('bank frontend requires Java and cannot silently fall back to Python', () =
 test('launcher-provided ports and gateway settings apply without exposing other environment values', () => {
   const options = serverOptions({ FRONTEND_PORT: '1930', BACKEND_PORT: '16930', BACKEND_HOST: '::', MYSQL_PASSWORD: 'not-public' })
   assert.equal(options.port, 1930)
-  assert.equal(options.proxy['/api'], 'http://127.0.0.1:16930')
+  assert.equal(options.proxy['/api'].target, 'http://127.0.0.1:6931')
   assert.equal(JSON.stringify(options).includes('not-public'), false)
   assert.throws(() => serverOptions({ FRONTEND_PORT: '70000' }))
+})
+
+test('local frontend uses configured Java without forwarding to Python on failure', () => {
+  assert.equal(serverOptions({ JAVA_GATEWAY_URL: 'http://localhost:16931', BACKEND_PORT: '16930' }).proxy['/api'].target,
+    'http://localhost:16931')
+  assert.throws(() => serverOptions({ JAVA_GATEWAY_URL: 'http://localhost:6931/api' }))
 })

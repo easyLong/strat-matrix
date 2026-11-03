@@ -7,7 +7,7 @@
 在项目根目录执行结构更新；新表和新增字段均带中文注释：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.init_db
 ```
 
@@ -18,14 +18,14 @@ python3 -m app.init_db
 仅需要普通内容演示数据时，保留原命令：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.ordinary_planning --scope demo
 ```
 
 正式周策划使用：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.weekly_planning
 ```
 
@@ -38,14 +38,14 @@ Linux 部署时 `./start.sh` 默认启动 `ordinary-scheduler` 周策划进程�
 缺少正式同步账号或普通选题、数据库暂不可用等情况会写入 `logs/ordinary-scheduler.log`，一小时后重试。演示数据不会进入自动调度。可以设置 `.env` 中的 `ORDINARY_SCHEDULER_ENABLED=0` 并重启脚本，停用该进程。单次按当前配置检查可执行：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.ordinary_scheduler --once
 ```
 
 热点进程每分钟检查已到 T-1 22:00 的正式热点空槽。它只在有待定空槽时读取最新成功的 IF-04 快照；从未成功同步会记录异常并于五分钟后重试，成功空快照则使用普通最热选题兜底。执行结果写入 `logs/hotspot-scheduler.log`。已确定的槽位不会重复改动；若错过触发时间，启动后会补处理仍未发布的待定槽位。可在 `.env` 设置 `HOTSPOT_SCHEDULER_ENABLED=0` 后重启服务停用，或手动执行一次：
 
 ```bash
-cd backend
+cd python-backend
 python3 -m app.hotspot_scheduler --once
 ```
 

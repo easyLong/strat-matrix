@@ -1,6 +1,6 @@
 # 模型与密钥配置
 
-`godp_system_config` 只保留当前需要的 8 项：服务监听地址与端口、模型标识、鉴权密钥。Worker 开关、轮询间隔、超时等采用代码默认值；后续确实需要运营调整时再加入配置表。
+`godp_system_config`保存当前已登记的端口、模型、鉴权和接入配置，以`python-backend/app/system_config_catalog.py`为准。Worker开关、轮询间隔、超时等采用代码默认值。
 
 ## 当前配置项
 
@@ -8,16 +8,20 @@
 | --- | --- | --- |
 | `BACKEND_HOST` / `BACKEND_PORT` | 后端监听地址和端口 | 默认 `0.0.0.0:6930` |
 | `FRONTEND_HOST` / `FRONTEND_PORT` | 前端监听地址和端口 | 默认 `0.0.0.0:930` |
+| `JAVA_ACCESS_MODE` | Java页面入口模式 | 默认`local_development`；`bank`使用客户已有Java，不启动本地壳 |
+| `JAVA_GATEWAY_URL` | Java服务根地址 | 本地留空使用`http://127.0.0.1:6931`，可填写回环地址及端口；bank必填实际宿主地址 |
 | `ARK_API_KEY` | 火山方舟 API 鉴权密钥 | 使用豆包时必填 |
 | `MODEL_NAME` | 全项目共用的文本生成模型或方舟接入点 ID | 已有默认值，通常不用改 |
 | `EMBEDDING_MODEL_NAME` | 全项目共用的语义向量模型或方舟接入点 ID；T6、选题画像、账号画像统一使用 | 已有默认值，通常不用改 |
 | `INTEGRATION_TOKEN` | 项目内部及平台对接接口的鉴权密钥 | 对接接口时配置 |
 
+本地一键启动将Python地址、Java监听地址和内部令牌写入忽略的`run/java-backend.properties`，Java读取该文件；密钥不经前端或命令参数输出。直接修改库内接入配置后须重新生成文件并重启Java，具体见`java-backend/README.md`。
+
 项目只有两类模型配置：文本生成使用 `MODEL_NAME`，向量生成统一使用 `EMBEDDING_MODEL_NAME`。选题标签中的 T6、选题画像向量和账号画像向量共用同一个向量模型。两类调用共用 `ARK_API_KEY`。向量请求使用方舟 `/embeddings/multimodal` 接口并只发送文本；模型或接入点须已开通并支持该接口。
 
 ## 更新密钥或模型
 
-在 `backend` 目录执行。密钥通过隐藏输入读取，不会显示在终端命令历史中：
+在 `python-backend` 目录执行。密钥通过隐藏输入读取，不会显示在终端命令历史中：
 
 ```powershell
 python -c "import getpass,subprocess,sys; v=getpass.getpass('ARK_API_KEY: '); r=subprocess.run([sys.executable,'-m','app.system_config','set','ARK_API_KEY','--stdin'],input=v,text=True); raise SystemExit(r.returncode)"

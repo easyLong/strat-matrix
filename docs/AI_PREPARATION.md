@@ -51,7 +51,7 @@
 
 ## 命令与进程
 
-先更新代码，在 `backend` 目录执行 `python3 -m app.init_db`。新增三张表及所有字段均有中文注释：`godp_ai_preparation`、`godp_ai_preparation_account`、`godp_ai_preparation_topic`。
+先更新代码，在 `python-backend` 目录执行 `python3 -m app.init_db`。新增三张表及所有字段均有中文注释：`godp_ai_preparation`、`godp_ai_preparation_account`、`godp_ai_preparation_topic`。
 
 ```bash
 # 创建小批量准备；省略 --account-id 则选择全部可用正式账号

@@ -11,15 +11,7 @@ mkdir -p "$RUN_DIR" "$LOG_DIR"
 
 backend_pid="$RUN_DIR/backend.pid"
 frontend_pid="$RUN_DIR/frontend.pid"
-scheduler_pid="$RUN_DIR/ordinary-scheduler.pid"
-hotspot_scheduler_pid="$RUN_DIR/hotspot-scheduler.pid"
-topic_label_worker_pid="$RUN_DIR/topic-label-worker.pid"
-topic_vector_worker_pid="$RUN_DIR/topic-vector-worker.pid"
-account_vector_worker_pid="$RUN_DIR/account-vector-worker.pid"
-ai_preparation_worker_pid="$RUN_DIR/ai-preparation-worker.pid"
-matching_executor_worker_pid="$RUN_DIR/matching-executor-worker.pid"
-planning_workflow_worker_pid="$RUN_DIR/planning-workflow-worker.pid"
-application_worker_pid="$RUN_DIR/application-worker.pid"
+java_pid="$RUN_DIR/java-backend.pid"
 
 is_running() {
   local pid_file="$1"
@@ -32,79 +24,47 @@ is_running() {
 
 if [[ -z "$PYTHON_BIN" || ! -x "$PYTHON_BIN" ]]; then
   echo "Python executable not found: ${PYTHON_BIN:-python3}" >&2
-  echo "Install Python 3 and dependencies: python3 -m pip install -r backend/requirements.txt" >&2
+  echo "Install Python 3 and dependencies: python3 -m pip install -r python-backend/requirements.txt" >&2
   exit 1
 fi
 
-if [[ "${APPLICATION_WORKER_ENABLED:-1}" == "1" ]]; then
-  for old_pid in "$scheduler_pid" "$hotspot_scheduler_pid" "$planning_workflow_worker_pid" "$topic_label_worker_pid" "$topic_vector_worker_pid" "$account_vector_worker_pid" "$ai_preparation_worker_pid" "$matching_executor_worker_pid"; do
-    if is_running "$old_pid"; then
-      echo "Stop legacy workers with ./stop.sh before starting the unified worker." >&2
-      exit 1
+# Old pollers must stop before the API begins owning background execution.
+for legacy in application-worker ordinary-scheduler hotspot-scheduler planning-workflow-worker topic-label-worker topic-vector-worker account-vector-worker ai-preparation-worker matching-executor-worker; do
+  if is_running "$RUN_DIR/$legacy.pid"; then
+    echo "Legacy worker is still running: $legacy. Run ./stop.sh before upgrading." >&2
+    exit 1
+  fi
+done
+
+# The local Java shell owns the page entry. Host mode uses the bank's existing Java service.
+if [[ "$JAVA_ACCESS_MODE" == "local_development" ]]; then
+  JAVA_BIN="${JAVA_BIN:-java}"
+  MVN_BIN="${MVN_BIN:-mvn}"
+  if ! command -v "$JAVA_BIN" >/dev/null 2>&1; then
+    echo "Java 8+ is required for the local Java subproject; install a JDK or set JAVA_BIN." >&2
+    exit 1
+  fi
+  if ! is_running "$java_pid"; then
+    if [[ "${BUILD_JAVA:-1}" == "1" || ! -f "$APP_ROOT/java-backend/target/planning-business.jar" ]]; then
+      if ! command -v "$MVN_BIN" >/dev/null 2>&1; then
+        echo "Maven is required to build java-backend; install it or set MVN_BIN." >&2
+        exit 1
+      fi
+      "$MVN_BIN" -B -f "$APP_ROOT/java-backend/pom.xml" package -DskipTests
     fi
-  done
-  ORDINARY_SCHEDULER_ENABLED=0
-  HOTSPOT_SCHEDULER_ENABLED=0
-  PLANNING_WORKFLOW_WORKER_ENABLED=0
-  TOPIC_LABEL_WORKER_ENABLED=0
-  TOPIC_VECTOR_WORKER_ENABLED=0
-  ACCOUNT_VECTOR_WORKER_ENABLED=0
-  AI_PREPARATION_WORKER_ENABLED=0
-  MATCHING_EXECUTOR_WORKER_ENABLED=0
-fi
-
-if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
-  (
-    cd "$APP_ROOT/backend"
-    "$PYTHON_BIN" -m app.topic_label_worker --check-config
-  )
-fi
-
-if [[ "$TOPIC_VECTOR_WORKER_ENABLED" == "1" ]]; then
-  (
-    cd "$APP_ROOT/backend"
-    "$PYTHON_BIN" -m app.topic_vector_worker --check-config
-  )
-fi
-
-if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
-  (
-    cd "$APP_ROOT/backend"
-    "$PYTHON_BIN" -m app.account_vector_worker --check-config
-  )
-fi
-
-if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
-  (
-    cd "$APP_ROOT/backend"
-    "$PYTHON_BIN" -m app.ai_preparation_worker --check-config
-  )
-fi
-
-if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
-  (
-    cd "$APP_ROOT/backend"
-    "$PYTHON_BIN" -m app.matching_executor_worker --check-config
-  )
-fi
-
-if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
-  (
-    cd "$APP_ROOT/backend"
-    "$PYTHON_BIN" -m app.init_workflow_db
-  )
-fi
-
-if [[ "${APPLICATION_WORKER_ENABLED:-1}" == "1" ]]; then
-  if is_running "$application_worker_pid"; then
-    echo "Application worker is already running (PID $(cat "$application_worker_pid"))."
-  else
     (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.jobs.worker
-    ) >"$LOG_DIR/application-worker.log" 2>&1 &
-    echo $! >"$application_worker_pid"
-    echo "Application worker started (PID $(cat "$application_worker_pid"))."
+      cd "$APP_ROOT/python-backend"
+      "$PYTHON_BIN" -m app.java_development --output "$RUN_DIR/java-backend.properties"
+    )
+    (
+      cd "$APP_ROOT/java-backend"
+      exec "$JAVA_BIN" -jar target/planning-business.jar \
+        "--spring.config.additional-location=file:$RUN_DIR/java-backend.properties"
+    ) >"$LOG_DIR/java-backend.log" 2>&1 &
+    echo $! >"$java_pid"
+    echo "Java backend started (PID $(cat "$java_pid"))."
+  else
+    echo "Java backend is already running (PID $(cat "$java_pid"))."
   fi
 fi
 
@@ -113,120 +73,11 @@ if is_running "$backend_pid"; then
 else
   rm -f "$backend_pid"
   (
-    cd "$APP_ROOT/backend"
+    cd "$APP_ROOT/python-backend"
     exec "$PYTHON_BIN" -m uvicorn app.main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT"
   ) >"$LOG_DIR/backend.log" 2>&1 &
   echo $! >"$backend_pid"
   echo "Backend started (PID $(cat "$backend_pid"), http://${BACKEND_HOST}:${BACKEND_PORT})."
-fi
-
-if [[ "$ORDINARY_SCHEDULER_ENABLED" == "1" ]]; then
-  if is_running "$scheduler_pid"; then
-    echo "Ordinary scheduler is already running (PID $(cat "$scheduler_pid"))."
-  else
-    rm -f "$scheduler_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.ordinary_scheduler
-    ) >"$LOG_DIR/ordinary-scheduler.log" 2>&1 &
-    echo $! >"$scheduler_pid"
-    echo "Ordinary scheduler started (PID $(cat "$scheduler_pid"), Asia/Shanghai)."
-  fi
-fi
-
-if [[ "$HOTSPOT_SCHEDULER_ENABLED" == "1" ]]; then
-  if is_running "$hotspot_scheduler_pid"; then
-    echo "Hotspot scheduler is already running (PID $(cat "$hotspot_scheduler_pid"))."
-  else
-    rm -f "$hotspot_scheduler_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.hotspot_scheduler
-    ) >"$LOG_DIR/hotspot-scheduler.log" 2>&1 &
-    echo $! >"$hotspot_scheduler_pid"
-    echo "Hotspot scheduler started (PID $(cat "$hotspot_scheduler_pid"), Asia/Shanghai)."
-  fi
-fi
-
-if [[ "$TOPIC_LABEL_WORKER_ENABLED" == "1" ]]; then
-  if is_running "$topic_label_worker_pid"; then
-    echo "Topic label worker is already running (PID $(cat "$topic_label_worker_pid"))."
-  else
-    rm -f "$topic_label_worker_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.topic_label_worker
-    ) >"$LOG_DIR/topic-label-worker.log" 2>&1 &
-    echo $! >"$topic_label_worker_pid"
-    echo "Topic label worker started (PID $(cat "$topic_label_worker_pid"))."
-  fi
-fi
-
-if [[ "$TOPIC_VECTOR_WORKER_ENABLED" == "1" ]]; then
-  if is_running "$topic_vector_worker_pid"; then
-    echo "Topic vector worker is already running (PID $(cat "$topic_vector_worker_pid"))."
-  else
-    rm -f "$topic_vector_worker_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.topic_vector_worker
-    ) >"$LOG_DIR/topic-vector-worker.log" 2>&1 &
-    echo $! >"$topic_vector_worker_pid"
-    echo "Topic vector worker started (PID $(cat "$topic_vector_worker_pid"))."
-  fi
-fi
-
-if [[ "$ACCOUNT_VECTOR_WORKER_ENABLED" == "1" ]]; then
-  if is_running "$account_vector_worker_pid"; then
-    echo "Account vector worker is already running (PID $(cat "$account_vector_worker_pid"))."
-  else
-    rm -f "$account_vector_worker_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.account_vector_worker
-    ) >"$LOG_DIR/account-vector-worker.log" 2>&1 &
-    echo $! >"$account_vector_worker_pid"
-    echo "Account vector worker started (PID $(cat "$account_vector_worker_pid"))."
-  fi
-fi
-
-if [[ "$AI_PREPARATION_WORKER_ENABLED" == "1" ]]; then
-  if is_running "$ai_preparation_worker_pid"; then
-    echo "AI preparation worker is already running (PID $(cat "$ai_preparation_worker_pid"))."
-  else
-    rm -f "$ai_preparation_worker_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.ai_preparation_worker
-    ) >"$LOG_DIR/ai-preparation-worker.log" 2>&1 &
-    echo $! >"$ai_preparation_worker_pid"
-    echo "AI preparation worker started (PID $(cat "$ai_preparation_worker_pid"))."
-  fi
-fi
-
-if [[ "$MATCHING_EXECUTOR_WORKER_ENABLED" == "1" ]]; then
-  if is_running "$matching_executor_worker_pid"; then
-    echo "Matching executor worker is already running (PID $(cat "$matching_executor_worker_pid"))."
-  else
-    rm -f "$matching_executor_worker_pid"
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.matching_executor_worker
-    ) >"$LOG_DIR/matching-executor-worker.log" 2>&1 &
-    echo $! >"$matching_executor_worker_pid"
-    echo "Matching executor worker started (PID $(cat "$matching_executor_worker_pid"))."
-  fi
-fi
-
-if [[ "$PLANNING_WORKFLOW_WORKER_ENABLED" == "1" ]]; then
-  if ! is_running "$planning_workflow_worker_pid"; then
-    (
-      cd "$APP_ROOT/backend"
-      exec "$PYTHON_BIN" -m app.planning_workflow_worker
-    ) >"$LOG_DIR/planning-workflow-worker.log" 2>&1 &
-    echo $! >"$planning_workflow_worker_pid"
-    echo "Planning workflow worker started (PID $(cat "$planning_workflow_worker_pid"))."
-  fi
 fi
 
 if [[ "$BUILD_FRONTEND" == "1" || ! -f "$APP_ROOT/frontend/dist/index.html" ]]; then
@@ -260,4 +111,4 @@ else
   echo "Frontend started (PID $(cat "$frontend_pid"), http://${FRONTEND_HOST}:${FRONTEND_PORT})."
 fi
 
-echo "Logs: $LOG_DIR/backend.log, $LOG_DIR/ordinary-scheduler.log, $LOG_DIR/hotspot-scheduler.log, $LOG_DIR/topic-label-worker.log, $LOG_DIR/topic-vector-worker.log, $LOG_DIR/account-vector-worker.log, $LOG_DIR/ai-preparation-worker.log, $LOG_DIR/matching-executor-worker.log and $LOG_DIR/frontend.log"
+echo "Logs: $LOG_DIR/java-backend.log, $LOG_DIR/backend.log, $LOG_DIR/frontend.log"

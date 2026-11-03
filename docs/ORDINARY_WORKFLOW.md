@@ -52,7 +52,7 @@
 ## 安装及运行
 
 ```bash
-cd backend
+cd python-backend
 python -m app.init_workflow_db
 python -m app.planning_workflow_worker
 ```
@@ -122,7 +122,7 @@ Content-Type: application/json
 ## 可重复验收
 
 ```bash
-cd backend
+cd python-backend
 python -m app.run_ordinary_workflow_demo --cycle-start 2026-11-09
 ```
 
@@ -130,6 +130,6 @@ python -m app.run_ordinary_workflow_demo --cycle-start 2026-11-09
 
 首次验收会注入一次使用事实写入失败，确认回传事务回滚；模拟一次租约过期，确认后台接续；再验证重复提交、重复成功回传和晚到失败。重复执行相同周期会复用已完成批次，回滚及租约注入仅在任务尚未完成时执行。
 
-报告：`backend/artifacts/ordinary-workflow-report.json`。新一轮从零验收请指定另一个未被占用的未来自然周，不删除历史结果。
+报告：`python-backend/artifacts/ordinary-workflow-report.json`。新一轮从零验收请指定另一个未被占用的未来自然周，不删除历史结果。
 
 本地验收记录：Pipeline 1，策略5，准备记录5，匹配任务4，正式批次109，周期2026-11-09至2026-11-15。3条策划全部生产完成，形成3条使用事实；重复通知未增加计数。
