@@ -6,6 +6,8 @@
 
 日常outside与完整闭环已使用同一个Java资料入口，不再启动临时资料服务器。`source_fixtures`只负责准备Java读取的模拟文件，`live_server`只限制本轮账号/选题范围，不更换取数协议。可运行`python -m testing.source_verify`只读核查分页、鉴权、页面资料及历史查询，不调用模型、不新建任务。详见[统一资料链路](../docs/统一资料链路_2026-11-03.md)。
 
+营销/热点增量入口：`python -m testing.content_live --execute`从测试正式明细开始验证真实Java/MySQL与模拟内容事实，不调用模型；`python -m testing.live --execute --scenario mixed`运行真实模型V19→Java→营销引用/热点T-1→模拟生产闭环。两者均需先暂停日常Java脉冲；已完成目录可用`content_live --verify`或`live_verify`只读复核。见[验收证据与边界](../docs/营销热点与模拟内容衔接验收_2026-11-03.md)。
+
 ## 常用命令
 
 在仓库根目录执行，先安装开发依赖：

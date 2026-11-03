@@ -37,7 +37,10 @@ public final class MarketingPlacementService {
       List<Map<String, Object>> contents = source.approvedDemandContents(text(task, "task_code"));
       if (contents == null) throw new BusinessException(502, "营销任务内容查询未返回列表");
       contents = new ArrayList<>(contents);
-      contents.sort(Comparator.comparing(c -> text(c, "approved_at")));
+      contents.sort(
+          Comparator.<Map<String, Object>, Instant>comparing(
+                  c -> OffsetDateTime.parse(text(c, "approved_at")).toInstant())
+              .thenComparing(c -> text(c, "content_id")));
       for (Map<String, Object> content : contents) {
         if (slots.claimed("marketing", text(content, "content_id")) > 0) continue;
         Map<String, Object> latest = repo.marketingByCode(text(task, "task_code"));

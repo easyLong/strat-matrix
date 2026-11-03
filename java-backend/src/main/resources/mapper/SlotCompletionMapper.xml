@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.stratmatrix.planning.content.SlotCompletionMapper">
- <select id="dueHotspots" resultType="map">SELECT id,payload,version FROM godp_planning_item_read WHERE slot_type='hotspot' AND runtime_active='true' AND content_status='unassigned' AND topic_id='' AND publish_date&lt;=#{cutoff} AND id&gt;#{after} ORDER BY id LIMIT #{limit}</select>
+ <select id="hotspotsOnDate" resultType="map">SELECT id,payload,version FROM godp_planning_item_read WHERE slot_type='hotspot' AND runtime_active='true' AND content_status='unassigned' AND topic_id='' AND publish_date=#{publishDate} AND id&gt;#{after} ORDER BY id LIMIT #{limit}</select>
  <select id="marketingSlots" resultType="map">SELECT id,payload,version FROM godp_planning_item_read WHERE content_status='awaiting_market' AND id&gt;#{after} ORDER BY id LIMIT #{limit}</select>
  <insert id="claim">INSERT INTO godp_planning_resource_claim(resource_kind,resource_key,item_id) VALUES(#{kind},#{key},#{item})</insert>
  <select id="claimed" resultType="long">SELECT COUNT(*) FROM godp_planning_resource_claim WHERE resource_kind=#{kind} AND resource_key=#{key}</select>

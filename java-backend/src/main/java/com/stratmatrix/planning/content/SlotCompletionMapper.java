@@ -4,8 +4,8 @@ import java.util.*;
 import org.apache.ibatis.annotations.Param;
 
 public interface SlotCompletionMapper {
-  List<Map<String, Object>> dueHotspots(
-      @Param("cutoff") String cutoff, @Param("after") long after, @Param("limit") int limit);
+  List<Map<String, Object>> hotspotsOnDate(
+      @Param("publishDate") String publishDate, @Param("after") long after, @Param("limit") int limit);
 
   List<Map<String, Object>> marketingSlots(@Param("after") long after, @Param("limit") int limit);
 

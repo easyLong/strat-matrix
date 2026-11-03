@@ -86,6 +86,7 @@ def main(argv=None):
     parser.add_argument('--output', type=Path)
     parser.add_argument('--resume', type=Path, help='恢复本工具未提交的测试周期，保留冻结输入和模型缓存')
     parser.add_argument('--timeout', type=int, default=900)
+    parser.add_argument('--scenario', choices=('ordinary','mixed'), help='默认ordinary；mixed验收真实V19提案后的营销引用和热点T-1')
     args = parser.parse_args(argv)
     if not args.execute:
         parser.error('实际调用模型和写入测试数据须显式使用 --execute')
@@ -96,6 +97,10 @@ def main(argv=None):
     from app.system_config import get_setting
     if current()['PLANNING_ENV'] != 'outside':
         raise ValueError('Full chain acceptance is outside-only')
+    gateway=(get_setting('JAVA_GATEWAY_URL','') or 'http://127.0.0.1:6931').rstrip('/')
+    health=request(gateway+'/api/plan/service-health')
+    if health.get('local_scheduler_enabled') is not False:
+        raise ValueError('Pause daily Java local pulse before full-chain acceptance')
     with connection() as db, db.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) n FROM godp_planning_pipeline_run WHERE status IN ('pending','waiting','running')")
         if cursor.fetchone()['n'] and not args.resume:
@@ -112,6 +117,10 @@ def main(argv=None):
     if args.resume and (output/'business.json').exists():
         raise ValueError('Business acceptance already closed; rerun python -m testing.live_verify on this directory')
     output.mkdir(parents=True,exist_ok=True)
+    previous_scenario = json.loads((output/'server.json').read_text(encoding='utf-8')).get('scenario','ordinary') if args.resume else 'ordinary'
+    if args.resume and args.scenario and args.scenario != previous_scenario:
+        raise ValueError('Resume cannot change the original content scenario')
+    args.scenario = previous_scenario if args.resume else (args.scenario or 'ordinary')
     fixture = json.loads((output/'fixture.json').read_text(encoding='utf-8')) if args.resume else fixture_for(run_id)
     (output/'fixture.json').write_text(json.dumps(fixture,ensure_ascii=False,indent=2),encoding='utf-8')
     from app.bank_bridge.java_http import JavaHTTPClient
@@ -123,12 +132,19 @@ def main(argv=None):
         raise ValueError('Outside acceptance requires the daily loopback Java source facade')
     # Fail before publishing new test data if daily Java is not ready or still uses the old jar.
     source_client.read('accounts', AccountQuery(page_size=1), Page[Account])
-    install(fixture)
     python_port = free_port()
     today=datetime.now(ZoneInfo('Asia/Shanghai')).date()
     cycle = today+timedelta(days=(7-today.weekday()) % 7 or 7)
     while cycle in occupied:
         cycle += timedelta(days=7)
+    if args.scenario == 'mixed' and not args.resume:
+        # Select test dates that exercise all branches; never change the policy, frozen roles or thresholds.
+        import random
+        from app.planning_result_commit import _hotspot_seed
+        from app.services.configuration import get_config
+        config=get_config()
+        while random.Random(_hotspot_seed(cycle.isoformat(),config.version)).sample(range(3),1)[0] == 0 or cycle in occupied:
+            cycle += timedelta(days=7)
     if args.resume:
         progress=json.loads((output/'progress.json').read_text(encoding='utf-8'))
         with connection() as db,db.cursor() as cursor:
@@ -141,6 +157,7 @@ def main(argv=None):
         for filename in ('java.log','python.log','failure.json'):
             path=output/filename
             if path.exists():path.rename(output/(filename+'.'+run_id))
+    install(fixture)
     trigger = datetime.combine(cycle-timedelta(days=6), datetime.min.time(), tzinfo=timezone.utc).replace(hour=14)
     # UTC Tuesday 14:00 = Beijing Tuesday 22:00, due cycle is the following Monday.
     java_db = java_database_settings()
@@ -153,11 +170,13 @@ def main(argv=None):
         'acceptance.trigger':trigger.isoformat().replace('+00:00','Z'),'acceptance.timeout-seconds':str(args.timeout),
         'acceptance.account-id':fixture['accounts'][0]['account_id'],
         'acceptance.resume':str(bool(args.resume)).lower(),
+        'acceptance.scenario':args.scenario,'acceptance.java-token':source_client.token,
+        'acceptance.fixture-path':str(ROOT/'run/bank-source-fixture.json'),
     }
     private = output/'private.properties'
     private.write_text(properties_text(settings),encoding='ascii');private.chmod(0o600)
     server_config = output/'server.json'
-    server_config.write_text(json.dumps(dict(java_source=source_client.base_url, python_port=python_port,
+    server_config.write_text(json.dumps(dict(java_source=source_client.base_url, python_port=python_port,scenario=args.scenario,
         account_id=fixture['accounts'][0]['account_id'], topic_ids=[row['topic_id'] for row in fixture['topics']])),encoding='utf-8')
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT),str(ROOT/'python-backend')]), PYTHONIOENCODING='utf-8')
     if not env.get('JAVA_HOME'):

@@ -2,6 +2,8 @@
 
 2026-11-03 增量：以[双库业务迁移与验收](双库业务迁移与验收_2026-11-03.md)为当前状态。宿主还需绑定 `ConfigReleaseMapper`、`PlanningQueryMapper`、`SlotCompletionMapper`、`AlgorithmConfigPort` 和 `PlanningContentPort`，均使用宿主对应的业务数据源与事务管理器；综合页面、正式自动结果、热点/营销业务及历史分页已继续迁移。下面各 V0.1 说明保留原迁移阶段背景。
 
+营销/热点后续更新：宿主需实现`SourceFacts.approvedDemandContents`或相应`PlanningContentPort`过审分配查询，未接入时明确失败；内容状态只读投影。热点Job每天只检查明日空槽，不要求22:00，不扫描过去日期；分页处理至完成。`standalone/LocalDailyHotspotCheck`仅行外模拟，不迁入宿主。完整结果与范围见[增量验收](营销热点与模拟内容衔接验收_2026-11-03.md)。
+
 依据：`D:\向量引擎\平安合作\数字营销技术栈和ui\数字营销技术栈和ui\工程侧技术.md`（文件日期 2026-09-24）与当前 `java-backend/` 代码。本清单区分已经隔离的接入点和仍需现场确认的宿主约束；不能把技术栈清单中的版本推断当成客户工程最终依赖树。
 
 按三个工程迁入的执行顺序和复杂度见[行内三工程迁入执行清单](行内三工程迁入执行清单_V0.1.md)。

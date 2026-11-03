@@ -3,6 +3,7 @@ package com.stratmatrix.planning.adapter.local;
 import static com.stratmatrix.planning.manual.Json.*;
 
 import com.stratmatrix.planning.content.PlanningContentPort;
+import com.stratmatrix.planning.manual.AccountSnapshotView;
 import com.stratmatrix.planning.manual.BusinessException;
 import com.stratmatrix.planning.source.SourceFacts;
 import java.time.*;
@@ -43,7 +44,8 @@ public final class LocalPlanningContentAdapter implements PlanningContentPort {
   public List<Map<String, Object>> hotspots(Instant at) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> t :
-        pages("topics", map("source", "热点", "available_only", true, "valid_at", at.toString())))
+        // Validity is checked against each slot's publish date, not the T-1 scanning instant.
+        pages("topics", map("source", "热点", "available_only", true)))
       out.add(
           map(
               "topic_id",
@@ -99,6 +101,24 @@ public final class LocalPlanningContentAdapter implements PlanningContentPort {
   }
 
   public List<Map<String, Object>> approvedDemandContents(String taskCode) {
-    return Collections.emptyList();
+    Object response = facts.approvedDemandContents(map("task_code", taskCode));
+    if (!(response instanceof List)) throw new BusinessException(502, "营销分配查询未返回列表");
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (Map<String, Object> content : rows(response)) {
+      if (!taskCode.equals(text(content, "task_code")))
+        throw new BusinessException(502, "营销分配结果不属于当前需求");
+      String accountId = text(content, "account_id");
+      List<Map<String, Object>> accounts =
+          rows(
+              facts
+                  .accounts(map("account_ids", Collections.singletonList(accountId)))
+                  .get("items"));
+      if (accounts.size() != 1 || !accountId.equals(text(accounts.get(0), "account_id")))
+        throw new BusinessException(502, "营销分配账号不可参与策划或不存在");
+      Map<String, Object> row = new LinkedHashMap<>(content);
+      row.put("account_snapshot", AccountSnapshotView.from(map("source_payload", accounts.get(0))));
+      result.add(row);
+    }
+    return result;
   }
 }

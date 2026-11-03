@@ -24,6 +24,9 @@ public class ServiceHealthController {
     boolean manual = environment.getProperty("planning.manual.enabled", Boolean.class, false);
     result.put("migration_stage", manual ? "ordinary-manual-business" : "legacy-business-adapter");
     result.put("manual_business_enabled", manual);
+    result.put(
+        "local_scheduler_enabled",
+        environment.getProperty("planning.local-pulse.enabled", Boolean.class, false));
     result.put("result_query_mode", environment.getProperty("planning.history.mode", "legacy"));
     result.put(
         "combined_config_enabled",

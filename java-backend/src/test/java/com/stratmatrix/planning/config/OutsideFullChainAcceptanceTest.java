@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.stratmatrix.planning.adapter.python.*;
 import com.stratmatrix.planning.auto.*;
+import com.stratmatrix.planning.content.*;
 import com.stratmatrix.planning.manual.*;
 import java.io.*;
 import java.net.*;
@@ -47,6 +48,7 @@ class OutsideFullChainAcceptanceTest {
     f.setMapperLocations(
         new ClassPathResource("mapper/ManualMapper.xml"),
         new ClassPathResource("mapper/AutoScheduleMapper.xml"),
+        new ClassPathResource("mapper/SlotCompletionMapper.xml"),
         new ClassPathResource("mapper/BusinessPlanningConfigMapper.xml"));
     SqlSessionTemplate sql = new SqlSessionTemplate(f.getObject());
     ManualRepository repo = new ManualRepository(sql.getMapper(ManualMapper.class), tx);
@@ -58,6 +60,11 @@ class OutsideFullChainAcceptanceTest {
     testConfig.schedule_time = "22:00";
     testConfig.marketing_max = 0;
     testConfig.hotspot_ratio = 0;
+    boolean mixed = "mixed".equals(p.getProperty("acceptance.scenario"));
+    if (mixed) {
+      testConfig.marketing_max = 1;
+      testConfig.hotspot_ratio = 34;
+    }
     // A test-owned immutable configuration; never save over the page configuration.
     BusinessPlanningConfigService config =
         new BusinessPlanningConfigService(sql.getMapper(BusinessPlanningConfigMapper.class), tx) {
@@ -186,10 +193,27 @@ class OutsideFullChainAcceptanceTest {
     List<Map<String, Object>> items = repo.itemsByBatch(batch);
     assertEquals(3, items.size());
     Set<Long> ids = new HashSet<>();
+    Set<Long> generatedBeforeProduction = new HashSet<>();
     for (Map<String, Object> item : items) ids.add(number(item, "id"));
     assertEquals("succeeded", client.status(pipeline).get("status"));
+    Map<String, Object> branches = map();
+    if (mixed) {
+      branches =
+          MixedContentAcceptance.finish(
+              repo,
+              sql.getMapper(SlotCompletionMapper.class),
+              OutsideContentBranchesAcceptanceTest.source(p, http),
+              Paths.get(p.getProperty("acceptance.fixture-path")),
+              batch,
+              p.getProperty("acceptance.account-id"));
+      items = repo.itemsByBatch(batch);
+    }
+    for (Map<String, Object> item : items)
+      if ("generated".equals(item.get("production_status")))
+        generatedBeforeProduction.add(number(item, "id"));
     List<String> topicIds = new ArrayList<>();
-    for (Map<String, Object> item : items) topicIds.add(text(item, "topic_id"));
+    for (Map<String, Object> item : items)
+      if (!text(item, "topic_id").isEmpty()) topicIds.add(text(item, "topic_id"));
     assertTrue(
         rows(usage.query(map("topic_ids", topicIds)).get("topic_results")).stream()
             .allMatch(r -> number(r, "official_use_count") == 0));
@@ -208,6 +232,7 @@ class OutsideFullChainAcceptanceTest {
     long stamp = System.currentTimeMillis();
     for (String state : Arrays.asList("生产中", "已完成")) {
       for (Map<String, Object> item : items) {
+        if ("generated".equals(item.get("production_status"))) continue;
         long id = number(item, "id");
         observations.put(
             id,
@@ -228,8 +253,10 @@ class OutsideFullChainAcceptanceTest {
       }
       states.add(state);
       for (long id : ids)
-        assertEquals(
-            "已完成".equals(state) ? "generated" : "ready", repo.lockedItem(id).get("content_status"));
+        if (!generatedBeforeProduction.contains(id))
+          assertEquals(
+              "已完成".equals(state) ? "generated" : "ready",
+              repo.lockedItem(id).get("content_status"));
     }
     Map<String, Object> completedBatch = read(text(repo.batchById(batch), "payload"));
     assertEquals(1, number(completedBatch, "content_completed_account_count"));
@@ -282,6 +309,8 @@ class OutsideFullChainAcceptanceTest {
             usageAfter,
             "items",
             repo.itemsByBatch(batch));
+    report.put("content_scenario", mixed ? "mixed" : "ordinary");
+    report.put("content_branches", branches);
     Files.write(out.resolve("business.json"), write(report).getBytes(StandardCharsets.UTF_8));
   }
 }

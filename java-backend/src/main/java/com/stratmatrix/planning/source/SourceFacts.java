@@ -17,4 +17,12 @@ public interface SourceFacts {
   Object productionStatus(Map<String, Object> query);
 
   Object marketingStatus(Map<String, Object> query);
+
+  /**
+   * Approved content and account allocation for a manual marketing demand; supplied by content
+   * side.
+   */
+  default Object approvedDemandContents(Map<String, Object> query) {
+    throw new com.stratmatrix.planning.manual.BusinessException(503, "营销需求过审分配查询尚未接入");
+  }
 }

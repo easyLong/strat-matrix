@@ -116,7 +116,8 @@ def main(argv=None):
         try:
             maven = executable("mvn", args.maven)
             jobs.append(("java", [maven, *([] if args.allow_dependency_network else ["-o"]), "-q",
-                                 "-Dplanning.real-acceptance-properties=", "-Dmanual.live=false", "test"], ROOT / "java-backend"))
+                                 "-Dplanning.real-acceptance-properties=", "-Dplanning.full-chain-properties=",
+                                 "-Dplanning.content-acceptance-properties=", "-Dmanual.live=false", "test"], ROOT / "java-backend"))
         except ValueError as exc:
             steps.append(dict(name="java", status="unavailable", reason=str(exc)))
     if "frontend" in suites:

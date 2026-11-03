@@ -48,9 +48,9 @@ class SlotCompletionServiceTest {
             facts,
             new ManualContentStatusService(f.repo, c -> Collections.emptyList()));
     assertEquals(
-        0, number(service.hotspots(Instant.parse("2026-11-03T13:59:59Z"), 100, 0), "applied"));
+        0, number(service.hotspots(Instant.parse("2026-11-02T15:59:59Z"), 100, 0), "applied"));
     assertEquals(
-        2, number(service.hotspots(Instant.parse("2026-11-03T14:00:00Z"), 100, 0), "applied"));
+        2, number(service.hotspots(Instant.parse("2026-11-02T16:00:00Z"), 100, 0), "applied"));
     List<Map<String, Object>> items = f.repo.itemsByBatch(1);
     assertEquals(1, items.stream().filter(i -> "HOT".equals(i.get("topic_id"))).count());
     assertEquals(1, items.stream().filter(i -> "FALLBACK".equals(i.get("topic_id"))).count());

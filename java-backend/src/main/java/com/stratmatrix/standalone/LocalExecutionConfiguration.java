@@ -38,6 +38,14 @@ public class LocalExecutionConfiguration {
       ObjectProvider<MarketingTaskService> marketing,
       org.springframework.core.env.Environment environment) {
     java.util.Map<String, Long> cursors = new java.util.HashMap<>();
+    LocalDailyHotspotCheck dailyHotspots =
+        new LocalDailyHotspotCheck(
+            (now, after) -> {
+              SlotCompletionService service = completion.getIfAvailable();
+              return service == null
+                  ? com.stratmatrix.planning.manual.Json.map("applied", 0, "has_more", false)
+                  : service.hotspots(now, 100, after);
+            });
     SimpleClientHttpRequestFactory factory =
         new SimpleClientHttpRequestFactory() {
           @Override
@@ -66,12 +74,7 @@ public class LocalExecutionConfiguration {
                   });
               runPhase(
                   () -> {
-                    SlotCompletionService s = completion.getIfAvailable();
-                    if (s != null)
-                      advanceCursor(
-                          cursors,
-                          "hotspot",
-                          s.hotspots(Instant.now(), 100, cursors.getOrDefault("hotspot", 0L)));
+                    dailyHotspots.run(Instant.now());
                   });
               runPhase(
                   () -> {

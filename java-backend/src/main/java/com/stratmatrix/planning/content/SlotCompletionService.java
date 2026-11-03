@@ -27,15 +27,14 @@ public final class SlotCompletionService {
     this.progress = progress;
   }
 
-  public static LocalDate hotspotCutoff(Instant now) {
-    ZonedDateTime local = now.atZone(ZoneId.of("Asia/Shanghai"));
-    return local.toLocalDate().plusDays(local.toLocalTime().isBefore(LocalTime.of(22, 0)) ? 0 : 1);
+  public static LocalDate hotspotPublishDate(Instant now) {
+    return now.atZone(ZoneId.of("Asia/Shanghai")).toLocalDate().plusDays(1);
   }
 
   public Map<String, Object> hotspots(Instant now, int limit, long after) {
     checkScan(limit, after);
     List<Map<String, Object>> pending =
-        slots.dueHotspots(hotspotCutoff(now).toString(), after, limit);
+        slots.hotspotsOnDate(hotspotPublishDate(now).toString(), after, limit);
     if (pending.isEmpty()) return map("applied", 0, "next_after_id", after, "has_more", false);
     List<Map<String, Object>> candidates = source.hotspots(now);
     if (candidates == null) throw new BusinessException(502, "热点查询未返回有效列表");
@@ -60,11 +59,7 @@ public final class SlotCompletionService {
                   if (text(topic, "topic_id").isEmpty()
                       || text(topic, "title").isEmpty()
                       || Boolean.FALSE.equals(topic.get("available"))) continue;
-                  String date = text(item, "publish_date"),
-                      from = text(topic, "valid_from"),
-                      to = text(topic, "valid_to");
-                  if (from.length() >= 10 && date.compareTo(from.substring(0, 10)) < 0
-                      || to.length() >= 10 && date.compareTo(to.substring(0, 10)) > 0) continue;
+                  if (!validOnDate(topic, LocalDate.parse(text(item, "publish_date")))) continue;
                   if (claim(
                       "hotspot",
                       text(item, "publish_date") + "|" + text(topic, "topic_id"),
@@ -105,6 +100,37 @@ public final class SlotCompletionService {
         number(pending.get(pending.size() - 1), "id"),
         "has_more",
         pending.size() == limit);
+  }
+
+  private static boolean validOnDate(Map<String, Object> topic, LocalDate date) {
+    String from = text(topic, "valid_from"), to = text(topic, "valid_to");
+    try {
+      ZoneId zone = ZoneId.of("Asia/Shanghai");
+      Instant start = date.atStartOfDay(zone).toInstant(),
+          end = date.plusDays(1).atStartOfDay(zone).toInstant();
+      // There is no publish-time field: a topic may be valid during any part of the publish day.
+      return (from.isEmpty() || !boundary(from, false).isAfter(boundary(to, true)))
+          && (from.isEmpty() || boundary(from, false).isBefore(end))
+          && (to.isEmpty() || !boundary(to, true).isBefore(start));
+    } catch (RuntimeException invalid) {
+      throw new BusinessException(502, "热点选题有效期格式无效");
+    }
+  }
+
+  private static Instant boundary(String value, boolean end) {
+    if (value.isEmpty()) return end ? Instant.MAX : Instant.MIN;
+    ZoneId zone = ZoneId.of("Asia/Shanghai");
+    if (value.length() == 10) {
+      LocalDate day = LocalDate.parse(value);
+      return end
+          ? day.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(1)
+          : day.atStartOfDay(zone).toInstant();
+    }
+    try {
+      return OffsetDateTime.parse(value).toInstant();
+    } catch (java.time.format.DateTimeParseException local) {
+      return LocalDateTime.parse(value).atZone(zone).toInstant();
+    }
   }
 
   public Map<String, Object> marketing(Instant now, int limit, long after) {

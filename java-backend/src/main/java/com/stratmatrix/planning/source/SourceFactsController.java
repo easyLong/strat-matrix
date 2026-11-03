@@ -53,6 +53,8 @@ public class SourceFactsController {
         return facts.productionStatus(q);
       case "marketing-status":
         return facts.marketingStatus(q);
+      case "marketing-allocations":
+        return facts.approvedDemandContents(q);
       case "topic-usage":
         return usage.query(q);
       default:

@@ -172,4 +172,13 @@ public final class FixtureSourceFacts implements SourceFacts {
   public Object marketingStatus(Map<String, Object> q) {
     return statuses("marketing_results", q, "task_codes", "task_code");
   }
+
+  public Object approvedDemandContents(Map<String, Object> q) {
+    String task = text(q, "task_code");
+    if (task.isEmpty()) throw new BusinessException(422, "营销需求编号必填");
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (Map<String, Object> row : records("marketing_allocations", "content_id"))
+      if (task.equals(row.get("task_code"))) result.add(row);
+    return result;
+  }
 }

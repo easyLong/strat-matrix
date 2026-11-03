@@ -161,7 +161,7 @@ public class MarketingTaskService {
               || observed.accountCount > total
               || (long) observed.completedCount + observed.failedCount > total
               || observed.completedCount < number(current, "content_completed_count")
-              || observed.failedCount < number(current, "content_failed_count")
+              // Failed is the current unresolved count; it can fall after content-side retry.
               || ("已完成".equals(observed.status)
                   && (observed.completedCount != total || observed.failedCount != 0)))
             throw new BusinessException(502, "内容方营销生产数量或状态不一致");
