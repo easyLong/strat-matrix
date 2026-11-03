@@ -3,7 +3,7 @@ import { computed, toRef } from 'vue';
 import PageBreadcrumbs from '../PageBreadcrumbs.vue';
 import { formatDateTime } from '../../planningTime';
 import { lifecycleRuleSummary } from '../../ui/lifecycleRules';
-import { configDetailRows, configVersionNumber } from '../../ui/configHistory';
+import { canRestoreConfig, configDetailRows, configHistorySummary, configVersionNumber } from '../../ui/configHistory';
 import type { ConfigVersionSummary } from '../../types';
 const props = defineProps<{
     versions: ConfigVersionSummary[];
@@ -41,7 +41,7 @@ const versionChanges = computed(() => {
 <template>
   <section class="card">
     <div class="table-wrap"><table><thead><tr><th>版本</th><th>生成时间</th><th>配置摘要</th><th>操作人</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>每周 {{ version.config.planning_days.length }} 天 · 营销上限 {{ version.config.marketing_max }} · 滚动 {{ version.config.rolling_posts }} 篇 · 五阶段目标与定义</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version" class="text-btn" type="button" :disabled="disabled" @click="emit('restore',version)">恢复此版本</button></div></td></tr>
+      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>{{ configHistorySummary(version.config) }}</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version" class="text-btn" type="button" :disabled="disabled || !canRestoreConfig(version.config)" :title="canRestoreConfig(version.config) ? undefined : '该版本未记录完整配置，仅支持查看'" @click="emit('restore',version)">恢复此版本</button></div></td></tr>
       <tr v-if="versions.length === 0"><td colspan="5"><div class="empty-state">暂无配置记录</div></td></tr>
     </tbody></table></div>
   </section>
@@ -63,12 +63,14 @@ const versionChanges = computed(() => {
         <div class="config-version-group">
           <b>策划规则配置</b>
           <div class="table-wrap"><table><thead><tr><th>生命周期阶段判定</th><th>进入条件</th></tr></thead><tbody>
-            <tr v-for="rule in versionDetail.config.lifecycle_rules" :key="rule.name"><td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, versionDetail.config.lifecycle_rules) }}</td></tr>
+            <tr v-for="rule in versionDetail.config.lifecycle_rules ?? []" :key="rule.name"><td><b>{{ rule.name }}</b></td><td>{{ lifecycleRuleSummary(rule, versionDetail.config.lifecycle_rules ?? []) }}</td></tr>
+            <tr v-if="!versionDetail.config.lifecycle_rules?.length"><td colspan="2">未记录</td></tr>
           </tbody></table></div>
           <div class="table-wrap"><table><thead><tr><th>阶段经营目标</th><th>流量目标</th><th>转化目标</th></tr></thead><tbody>
-            <tr v-for="stage in versionDetail.config.stage_targets" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td></tr>
+            <tr v-for="stage in versionDetail.config.stage_targets ?? []" :key="stage.name"><td><b>{{ stage.name }}</b></td><td>{{ stage.traffic }}%</td><td>{{ stage.conversion }}%</td></tr>
+            <tr v-if="!versionDetail.config.stage_targets?.length"><td colspan="3">未记录</td></tr>
           </tbody></table></div>
-          <div class="detail-note">滚动统计窗口：{{ versionDetail.config.rolling_posts }} 篇</div>
+          <div class="detail-note">滚动统计窗口：{{ versionDetail.config.rolling_posts == null ? '未记录' : `${versionDetail.config.rolling_posts} 篇` }}</div>
         </div>
       </div>
       <div class="drawer-foot"><button class="btn" type="button" @click="versionDetail = null">关闭</button></div>

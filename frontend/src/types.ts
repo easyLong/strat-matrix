@@ -42,7 +42,8 @@ export interface ConfigVersionSummary {
   source_version: number | null
   created_at: string
   created_by: string
-  config: StrategyConfig
+  // Early snapshots predate schedule/lifecycle fields; never substitute today's defaults.
+  config: Partial<StrategyConfig>
 }
 
 export interface AccountOption {
