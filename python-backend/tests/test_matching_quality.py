@@ -21,7 +21,7 @@ from app.matching_policy import implementation_approval_errors
 from app import matching_executor_worker as worker
 from app.system_config import override_config
 import test_account_mapping as mapping_fixture
-import test_matching_executor as executor_fixture
+import matching_fixtures as executor_fixture
 import test_planning_result_commit as commit_fixture
 
 

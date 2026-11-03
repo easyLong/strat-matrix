@@ -22,7 +22,7 @@ def test_java_supplies_cycle_but_python_selects_policy(monkeypatch):
         seen.append((cycle, kwargs))
         return {"status": "created", "pipeline_id": 42}
 
-    monkeypatch.setattr(api, "start_v2_pipeline", start)
+    monkeypatch.setattr(api, "start_v19_pipeline", start)
     result = api.start_auto_algorithm(auto_request())
     assert seen == [(date(2026, 11, 9), dict(commit_owner='java',
                     business_config_version=7, business_config=BUSINESS))]
@@ -33,7 +33,7 @@ def test_invalid_algorithm_configuration_is_explicit(monkeypatch):
     def reject(_cycle, **_kwargs):
         raise PlanningError("策略尚未批准")
 
-    monkeypatch.setattr(api, "start_v2_pipeline", reject)
+    monkeypatch.setattr(api, "start_v19_pipeline", reject)
     with pytest.raises(HTTPException) as error:
         api.start_auto_algorithm(auto_request())
     assert error.value.status_code == 422

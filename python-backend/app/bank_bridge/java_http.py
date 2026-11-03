@@ -27,6 +27,7 @@ class JavaHTTPClient:
         'effective_marketing': 'effective-marketing/query',
         'production_results': 'production-status/query',
         'marketing_results': 'marketing-status/query',
+        'official_usage': 'topic-usage/query',
     }
 
     def __init__(self, base_url, token, *, opener=None, routes=None, timeout=15, max_bytes=16 * 1024 * 1024,
@@ -49,6 +50,7 @@ class JavaHTTPClient:
     @classmethod
     def from_settings(cls):
         from ..system_config import get_setting
+        from ..deployment_environment import current
         from importlib import import_module
         name = __package__ + '.site_java_private'
         try:
@@ -57,7 +59,12 @@ class JavaHTTPClient:
             if error.name != name:
                 raise
             adapter = None
-        return cls(get_setting('JAVA_API_BASE_URL', ''), get_setting('JAVA_API_TOKEN', ''),
+        base, token = get_setting('JAVA_API_BASE_URL', ''), get_setting('JAVA_API_TOKEN', '')
+        if current()['PLANNING_ENV'] == 'outside':
+            base = base or ((get_setting('JAVA_GATEWAY_URL', '') or 'http://127.0.0.1:6931').rstrip('/')
+                            + '/api/plan/internal/source')
+            token = token or get_setting('INTEGRATION_TOKEN', '')
+        return cls(base, token,
                    routes=getattr(adapter, 'ROUTES', None),
                    encode_query=getattr(adapter, 'encode_query', None),
                    decode_response=getattr(adapter, 'decode_response', None))

@@ -22,7 +22,7 @@ from .ai_preparation import (advance_preparation, cancel_preparation,
                              create_preparation, read_preparation)
 from .db import connection
 from .matching_contracts import MatchingTaskCreate
-from .matching_policy import intact_document, select_policy
+from .matching_policy import intact_document, select_policy, require_v19
 from .matching_tasks import (cancel_task, create_task, read_evaluation,
                              retry_task, select_task, task_summary)
 from .ordinary_planning import current_next_monday
@@ -89,6 +89,7 @@ def _validate_policy(policy_id: int) -> None:
     with connection() as db, db.cursor() as cursor:
         row = select_policy(cursor, policy_id)
         document = intact_document(row)
+    require_v19(document)
     if row["status"] != "approved" or document.approval_errors():
         raise HTTPException(409, "Pipeline只能绑定已批准且规则完整的算法策略版本")
 
@@ -377,14 +378,19 @@ def _matching_projection(task: dict) -> dict[str, dict]:
         "recall": by_stage.get("recall"),
         "fit": by_stage.get("fit"),
     }
+    failed_positions = [row for row in evaluation.get('positions', []) if row.get('outcome') == 'failed']
+    composition_failed = evaluation.get('implementation_key') == 'builtin-v19-quality-v1' and bool(failed_positions)
     return {
         "single_account_matching": _desired(STAGE_SUCCEEDED, **common, detail=single_detail),
         "matrix_allocation": _desired(
             STAGE_SUCCEEDED, **common,
             detail={"task": summary, "global_allocation": by_stage.get("global_allocation")}),
         "composition": _desired(
-            STAGE_SUCCEEDED, **common,
-            detail={"task": summary, "composition": by_stage.get("composition")}),
+            STAGE_FAILED if composition_failed else STAGE_SUCCEEDED, **common,
+            detail={"task": summary, "composition": by_stage.get("composition"),
+                    **({'unassigned_positions': failed_positions[:20], 'unassigned_count': len(failed_positions)} if composition_failed else {})},
+            error_code='matching_slot_failed' if composition_failed else '',
+            error_message='存在未匹配的策划位置，不能提交正式结果；请补充合适选题或核查账号映射后新建任务' if composition_failed else ''),
     }
 
 

@@ -31,7 +31,7 @@ class DependencyTests(unittest.TestCase):
                                          or module.endswith('_api'), (path.name, module))
 
     def test_v2_and_input_runner_do_not_depend_on_old_entrypoints(self):
-        for name, forbidden in [('matching_executor_v2.py', 'matching_executor'),
+        for name, forbidden in [('matching_quality_executor.py', 'matching_executor'),
                                 ('planning_input_runner.py', '_api')]:
             tree = ast.parse((APP / name).read_text(encoding='utf-8'))
             for node in ast.walk(tree):

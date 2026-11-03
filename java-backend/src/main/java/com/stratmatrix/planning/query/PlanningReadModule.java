@@ -9,7 +9,10 @@ import org.springframework.context.annotation.*;
 public class PlanningReadModule {
   @Bean
   public PlanningReadQueries planningReadQueries(
-      PlanningQueryMapper mapper, ManualRepository repo, ManualPlanningService manual) {
-    return new SqlPlanningReadQueries(mapper, repo, manual);
+      PlanningQueryMapper mapper,
+      ManualRepository repo,
+      ManualPlanningService manual,
+      ManualPorts.Source accountFacts) {
+    return new SqlPlanningReadQueries(mapper, repo, manual, accountFacts);
   }
 }

@@ -17,6 +17,8 @@ def validate_quality_evaluation(cursor,task,result,inputs,document):
     if not row or row['status']!='ready' or row['lease_id']!=task['lease_id']:
         raise HTTPException(409,'V19精判过程尚未完成或租约不一致')
     report=json.loads(row['report_json'])
+    if report.get('evaluation_only', True) != document.quality.evaluation_only:
+        raise HTTPException(409,'V19精判依据的评估用途与策略不一致')
     if (content_hash(report)!=row['report_hash'] or report.get('policy_hash')!=task['policy_hash']
             or report.get('input_hash',task['input_hash'])!=task['input_hash']
             or result.stages[2].summary.get('quality_report_hash')!=row['report_hash']):

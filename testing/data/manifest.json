@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "version": "planning-synthetic-v19-1",
+  "datasets": {
+    "small": {
+      "sha256": "ded9645d0306a10cda48c22fc444442b6189f1a10f21dc71d09fb1667d1f27d6",
+      "accounts": 5,
+      "topics": 60,
+      "positions": 15
+    },
+    "scale": {
+      "sha256": "09112a3bae01402757202bd4dff116757200b51075badc95402dffd7415d7874",
+      "accounts": 100,
+      "topics": 600,
+      "positions": 300
+    }
+  }
+}

@@ -1,5 +1,9 @@
 # strat-matrix 服务器部署说明
 
+环境名称现统一为`outside`和`inside`，由MySQL中的`PLANNING_ENV`选择。先阅读[双环境切换](双环境切换_V0.1.md)；下文旧`local_development`／`bank`名称作为兼容说明，不能在显式设置统一模式后继续作为独立开关。
+
+日常outside与完整验收已[统一到Java资料入口](统一资料链路_2026-11-03.md)。升级需同时构建Java、更新Python并重新生成本地Java配置，不能只替换其中一个服务。`run/bank-source-fixture.json`及私有配置不随Git交付，新环境须准备自己的模拟资料文件；缺失时明确返回503，不创建假成功数据。升级后在仓库根目录运行`python -m testing.source_verify`只读核查，真实模型验收使用`python -m testing.live --execute`并遵守暂停调度要求。
+
 **2026-11-03三工程更新：** 仓库包含[Vue](../frontend/README.md)、[Java](../java-backend/README.md)、[Python](../python-backend/README.md)三个独立子项目，未来分别嵌入客户已有工程。本地页面经Java6931访问业务库，Java委派Python执行算法。配置发布、正式结果、热点/营销业务、历史查询与报表已完成本轮迁移，真实内容方、身份和宿主调度待接。发布顺序与实测证据以[双库迁移记录](双库业务迁移与验收_2026-11-03.md)为准。本地一键启动需要JDK及Maven；bank模式不启动本地Java，改用客户已有Java服务。
 
 存量部署必须先停止旧版本业务写入并备份两库，再按上述记录发布业务库 V3/V4/V5、算法库 Pipeline 迁移、配置及历史导入。只执行下方历史的 `app.init_db` 不足以升级Java业务库。确认迁移后再启用 `planning.history.mode=business_only`、`planning.config-release.enabled=true`、`planning.auto-schedule.enabled=true` 及 `AUTO_SCHEDULE_OWNER=java`；新生成的本地配置已使用这些开关。新环境仍需自行初始化数据源与已批准的算法策略，不能直接使用本地验收账号和策略编号。

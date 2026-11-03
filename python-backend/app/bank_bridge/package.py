@@ -85,7 +85,7 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
         '7. 运行 python -m app.init_shared_workflow_db；内容侧自行凭只读授权扫描策划表、领取并执行生产，状态通过Java提供给Python读取。\n'
         '8. 本包是合并宿主系统的代码与静态前端；不会自动初始化数据库或启动调度器。\n'
         '9. install-offline 脚本只使用包内 wheels。manifest 标注 not_prepared 时需按行内 Python/OS 补齐依赖。\n'
-        '10. 周调度使用已批准V2策略；在 MySQL 配置 AUTO_PLANNING_POLICY_ID 和试运行账号范围 AUTO_PLANNING_ACCOUNT_IDS。\n'
+        '10. 周调度使用已批准V19策略；在 MySQL 配置 AUTO_PLANNING_POLICY_ID 和试运行账号范围 AUTO_PLANNING_ACCOUNT_IDS。\n'
         '11. java-backend为公开依赖开发壳，逐步接管业务；迁入客户Java工程时不复制本地启动壳及legacy适配器。身份权限、调度和资料SQL由宿主适配。\n'
         '12. frontend包含独立源码和dist；可并入宿主Vue工程，或部署静态产物。前端构建不依赖Python及MySQL。\n'
         '13. 查询地址及鉴权是联调草案；生产需对接行内网关、SSO和实际返回对象。本地模拟不代表真实生产接通。\n'

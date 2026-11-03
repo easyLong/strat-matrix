@@ -11,26 +11,15 @@ import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
-/**
- * Local bridge for source facts, algorithm calls and old-business transition methods. Onsite
- * replaces these ports with bank Java queries and approved internal algorithm calls.
- */
-public class LocalPythonAdapter
-    implements ManualPorts.Source, ManualPorts.Computer, ManualPorts.Transition {
+/** Local algorithm client and old-business transition only. Raw source facts are Java-owned. */
+public class LocalPythonAdapter implements ManualPorts.Computer, ManualPorts.Transition {
   private final RestTemplate http;
   private final LegacyPythonProperties config;
   private final RestTemplate computeHttp;
-  private final boolean historyEnabled;
 
   public LocalPythonAdapter(RestTemplate http, LegacyPythonProperties config) {
-    this(http, config, true);
-  }
-
-  public LocalPythonAdapter(
-      RestTemplate http, LegacyPythonProperties config, boolean historyEnabled) {
     this.http = http;
     this.config = config;
-    this.historyEnabled = historyEnabled;
     SimpleClientHttpRequestFactory factory =
         new SimpleClientHttpRequestFactory() {
           @Override
@@ -55,14 +44,6 @@ public class LocalPythonAdapter
     if (!Arrays.asList("manual-tasks", "plans", "accounts", "periods").contains(view))
       throw new IllegalArgumentException("未知过渡查询视图");
     return object(call("POST", "/api/query/" + view, query));
-  }
-
-  public Map<String, Object> sourceAccounts(List<String> accountIds) {
-    return object(
-        call(
-            "POST",
-            "/api/internal/manual-source",
-            map("account_ids", accountIds, "topic_ids", Collections.emptyList())));
   }
 
   public long resultWatermark() {
@@ -113,28 +94,6 @@ public class LocalPythonAdapter
     return call("GET", "/api/manual-plans/marketing-tasks/" + taskCode, null);
   }
 
-  public List<Map<String, Object>> topicCandidates(int limit) {
-    return rows(call("GET", "/api/topics?limit=" + limit, null));
-  }
-
-  public List<Map<String, Object>> accountOptions(int limit, boolean includeDisabled) {
-    return rows(
-        call("GET", "/api/accounts?limit=" + limit + "&include_disabled=" + includeDisabled, null));
-  }
-
-  public Map<String, Object> topicDetail(String topicId, String topicType) {
-    try {
-      String id = java.net.URLEncoder.encode(topicId, "UTF-8").replace("+", "%20");
-      String suffix =
-          topicType == null || topicType.isEmpty()
-              ? ""
-              : "?topic_type=" + java.net.URLEncoder.encode(topicType, "UTF-8").replace("+", "%20");
-      return object(call("GET", "/api/topics/" + id + "/detail" + suffix, null));
-    } catch (java.io.UnsupportedEncodingException impossible) {
-      throw new IllegalStateException(impossible);
-    }
-  }
-
   private Object exchange(RestTemplate client, String method, String path, Object body) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
@@ -154,31 +113,7 @@ public class LocalPythonAdapter
     return response.getBody();
   }
 
-  public Map<String, Object> snapshot(List<String> accounts, List<String> topics) {
-    return object(
-        call(
-            "POST",
-            "/api/internal/manual-source",
-            map("account_ids", accounts, "topic_ids", topics)));
-  }
-
-  @SuppressWarnings("unchecked")
-  public Set<String> historicalPlanned(String date) {
-    if (!historyEnabled) return Collections.emptySet();
-    Map<String, Object> response =
-        object(call("GET", "/api/manual-plans/account-availability?publish_date=" + date, null));
-    return new HashSet<>((List<String>) response.get("planned_account_ids"));
-  }
-
   public Map<String, Object> submit(Map<String, Object> input) {
     return object(exchange(computeHttp, "POST", "/api/internal/manual-computations", input));
-  }
-
-  @SuppressWarnings("unchecked")
-  public Set<String> historicalReserved(String date) {
-    if (!historyEnabled) return Collections.emptySet();
-    Map<String, Object> response =
-        object(call("GET", "/api/internal/manual-source/availability?publish_date=" + date, null));
-    return new HashSet<>((List<String>) response.get("blocked_account_ids"));
   }
 }

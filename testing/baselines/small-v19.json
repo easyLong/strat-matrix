@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "dataset_id": "planning-synthetic-v19-1-small",
+  "dataset_hash": "ded9645d0306a10cda48c22fc444442b6189f1a10f21dc71d09fb1667d1f27d6",
+  "vector_space": "synthetic-test-8d-v1",
+  "mode": "synthetic_replay",
+  "git_commit": "5cc80ad88b7023a904ed1d1f1e1afe2a4526231c",
+  "engines": {
+    "v19": {
+      "implementation_key": "builtin-v19-quality-v1",
+      "policy_hash": "1784b165e94deca87246257efc11e2e2a9a9002a856cb48789dbaeec8dbcfc9b",
+      "metrics": {
+        "total_positions": 15,
+        "matched_positions": 15,
+        "fallback_positions": 0,
+        "failed_positions": 0,
+        "history_violations": 0,
+        "city_violations": 0,
+        "role_violations": 0,
+        "duplicate_account_topics": 0,
+        "source_scope_violations": 0,
+        "persona_violations": 0,
+        "rejected_precision_used": 0,
+        "position_shape_violations": 0,
+        "coverage_rate": 1.0,
+        "distinct_topics": 15,
+        "mean_fit_score": 84.62397666666666
+      },
+      "positions": [
+        {
+          "account_id": "SYN-ACC-001",
+          "publish_date": "2026-11-02",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0036",
+          "content_role": "转化",
+          "fit_score": 86.1,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-001",
+          "publish_date": "2026-11-04",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0001",
+          "content_role": "流量",
+          "fit_score": 85.942105,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-001",
+          "publish_date": "2026-11-06",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0031",
+          "content_role": "流量",
+          "fit_score": 84.8,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-002",
+          "publish_date": "2026-11-02",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0037",
+          "content_role": "转化",
+          "fit_score": 85.45,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-002",
+          "publish_date": "2026-11-04",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0022",
+          "content_role": "流量",
+          "fit_score": 86.1,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-002",
+          "publish_date": "2026-11-06",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0002",
+          "content_role": "流量",
+          "fit_score": 85.292105,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-003",
+          "publish_date": "2026-11-02",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0058",
+          "content_role": "转化",
+          "fit_score": 84.005556,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-003",
+          "publish_date": "2026-11-04",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0043",
+          "content_role": "流量",
+          "fit_score": 84.655556,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-003",
+          "publish_date": "2026-11-06",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0023",
+          "content_role": "流量",
+          "fit_score": 84.005556,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-004",
+          "publish_date": "2026-11-02",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0029",
+          "content_role": "转化",
+          "fit_score": 86.1,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-004",
+          "publish_date": "2026-11-04",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0009",
+          "content_role": "转化",
+          "fit_score": 85.292105,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-004",
+          "publish_date": "2026-11-06",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0044",
+          "content_role": "流量",
+          "fit_score": 85.45,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-005",
+          "publish_date": "2026-11-02",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0050",
+          "content_role": "转化",
+          "fit_score": 81.766667,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-005",
+          "publish_date": "2026-11-04",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0015",
+          "content_role": "流量",
+          "fit_score": 82.85,
+          "reason": "固定合成响应：方向相符"
+        },
+        {
+          "account_id": "SYN-ACC-005",
+          "publish_date": "2026-11-06",
+          "outcome": "matched",
+          "topic_id": "SYN-TOPIC-0045",
+          "content_role": "流量",
+          "fit_score": 81.55,
+          "reason": "固定合成响应：方向相符"
+        }
+      ]
+    }
+  }
+}

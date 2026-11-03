@@ -18,13 +18,14 @@ class Setting:
 # Keep current model/authentication values, listeners and the active content-provider mode.
 # Worker switches and implementation details remain code defaults.
 CATALOG = {
+    "PLANNING_ENV": Setting("integration", "部署环境：outside行外模拟接入，inside行内宿主接入", "outside", choices=('outside', 'inside')),
     "BACKEND_HOST": Setting("ports", "后端监听地址", "0.0.0.0"),
     "BACKEND_PORT": Setting("ports", "后端监听端口", "6930", "int", minimum=1, maximum=65535),
     "FRONTEND_HOST": Setting("ports", "前端监听地址", "0.0.0.0"),
     "FRONTEND_PORT": Setting("ports", "前端监听端口", "930", "int", minimum=1, maximum=65535),
     "JAVA_GATEWAY_URL": Setting("integration", "Java业务服务根地址，本地留空使用回环6931，行内填写宿主地址", ""),
-    "JAVA_ACCESS_MODE": Setting("integration", "页面接口接入方式", "local_development", choices=('local_development', 'bank')),
-    "BANK_SOURCE_MODE": Setting("integration", "基础资料来源模式", "local_fixture", choices=('local_fixture', 'java_http')),
+    "JAVA_ACCESS_MODE": Setting("integration", "旧页面接入方式兼容项；新部署由PLANNING_ENV统一选择", "local_development", choices=('local_development', 'bank')),
+    "BANK_SOURCE_MODE": Setting("integration", "旧资料来源兼容项；新部署由PLANNING_ENV统一选择", "local_fixture", choices=('local_fixture', 'java_http')),
     "JAVA_API_BASE_URL": Setting("integration", "Java资料与生产状态查询服务前缀", ""),
     "JAVA_API_TOKEN": Setting("keys", "Python访问Java资料服务的鉴权密钥", secret=True),
     "INTEGRATION_TOKEN": Setting("keys", "系统内部接口鉴权密钥", secret=True),
@@ -32,7 +33,7 @@ CATALOG = {
     "MODEL_NAME": Setting("models", "全项目文本生成模型名称或接入点", "doubao-seed-2-1-lite-260915"),
     "EMBEDDING_MODEL_NAME": Setting("models", "全项目向量模型名称或接入点", "doubao-embedding-vision-251215"),
     "CONTENT_PRODUCTION_MODE": Setting('production', '内容生产模式', 'disabled', choices=('disabled', 'local_mock')),
-    "AUTO_PLANNING_POLICY_ID": Setting('planning', '周自动策划绑定的已批准V2策略ID，0表示尚未绑定', '0', 'int', minimum=0),
+    "AUTO_PLANNING_POLICY_ID": Setting('planning', '周自动策划绑定的已批准V19策略ID，0表示尚未绑定', '0', 'int', minimum=0),
     "AUTO_PLANNING_ACCOUNT_IDS": Setting('planning', '周自动策划试运行账号ID的JSON数组；空数组表示全部可参与账号', '[]'),
     "AUTO_SCHEDULE_OWNER": Setting('planning', '周自动策划触发方；切换到Java后Python不再自行判定调度时间', 'python', choices=('python', 'java')),
 }
@@ -52,8 +53,8 @@ RUNTIME_DEFAULTS = {
     "CHECK_HOST": "127.0.0.1",
 }
 
-FRONTEND_KEYS = ("BACKEND_HOST", "BACKEND_PORT", "FRONTEND_HOST", "FRONTEND_PORT", "JAVA_GATEWAY_URL", "JAVA_ACCESS_MODE")
-LAUNCH_KEYS = (*RUNTIME_DEFAULTS, 'JAVA_ACCESS_MODE', 'JAVA_GATEWAY_URL')
+FRONTEND_KEYS = ("BACKEND_HOST", "BACKEND_PORT", "FRONTEND_HOST", "FRONTEND_PORT", "JAVA_GATEWAY_URL", "JAVA_ACCESS_MODE", "PLANNING_ENV")
+LAUNCH_KEYS = (*RUNTIME_DEFAULTS, 'JAVA_ACCESS_MODE', 'JAVA_GATEWAY_URL', 'PLANNING_ENV')
 
 
 def validate_value(key: str, value: str, spec: Setting | None = None) -> str:

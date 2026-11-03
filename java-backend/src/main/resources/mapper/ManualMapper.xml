@@ -43,4 +43,13 @@
   <update id="updateItemContent">UPDATE godp_planning_item SET content_status=#{status},payload=#{payload} WHERE id=#{id}</update>
   <select id="adjustments" resultType="map">SELECT id,payload FROM godp_planning_adjustment WHERE item_id=#{itemId} ORDER BY id DESC</select>
   <insert id="insertAdjustment" useGeneratedKeys="true" keyProperty="id">INSERT INTO godp_planning_adjustment(item_id,payload) VALUES(#{itemId},#{payload})</insert>
+  <select id="completedTopicUsage" resultType="map">
+    SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.topic_id')) AS topic_id,COUNT(*) AS official_use_count
+    FROM godp_planning_item
+    WHERE content_status='generated'
+      AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.content_id')),'') NOT IN ('','null')
+      AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.topic_id')) IN
+      <foreach collection="topicIds" item="topicId" open="(" separator="," close=")">#{topicId}</foreach>
+    GROUP BY JSON_UNQUOTE(JSON_EXTRACT(payload,'$.topic_id'))
+  </select>
 </mapper>

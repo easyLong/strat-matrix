@@ -11,6 +11,8 @@ from ..jobs.runtime import BackgroundExecutor
 
 @asynccontextmanager
 async def execution_lifespan(app):
+    from ..deployment_environment import require_ready
+    require_ready()
     executor = BackgroundExecutor()
     app.state.background_executor = executor
     try:

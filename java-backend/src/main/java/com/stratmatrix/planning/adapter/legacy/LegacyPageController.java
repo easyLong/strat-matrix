@@ -20,7 +20,7 @@ import org.springframework.web.client.RestTemplate;
 
 /** 仅用于行外迁移期。已迁入Java的接口应从此白名单移除并新增真实业务入口。 */
 @RestController
-@Profile("local")
+@Profile("local & !inside")
 @ConditionalOnProperty(name = "planning.legacy.enabled", havingValue = "true")
 public class LegacyPageController {
   private static final List<String> REQUEST_HEADERS =

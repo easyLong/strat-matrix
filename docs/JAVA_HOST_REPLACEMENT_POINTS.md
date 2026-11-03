@@ -28,7 +28,7 @@ AI策划配置由`planning/config`管理综合页面发布，Python维护算法�
 | 业务库连接、MyBatis与事务 | `standalone/LocalManualBusinessConfiguration` 用 Hikari和本地MyBatis工厂；业务包使用`ManualMapper`与XML | 在客户既有MyBatis工厂中注册Mapper接口和XML，确保其绑定Venus业务数据源；用该Mapper及同库事务管理器创建`ManualDatabase` Bean。Repository已单独迁移，业务Service无需重写 | 是，需验证Mapper扫描与事务绑定 |
 | 业务表发布 | `standalone/LocalManualBusinessSchema` 仅本地启动时运行 SQL | 由客户数据库发布流程执行 `db/manual-business.sql` 和后续迁移脚本；不迁入本地建表类 | 是 |
 | 登录人和权限 | 本地从配置取固定操作人 | 用客户可信登录上下文实现 `ManualPorts.Actor`；在 Controller 外接入 UC／EA 权限、数据范围和审计，不信任浏览器传来的 UM 请求头 | 是，具体鉴权待接入 |
-| 账号、选题和已策划资格 | `adapter/local/LocalPythonAdapter` 向旧 Python 只读查询 | 分别实现 `AccountFacts`、`TopicFacts`、`SnapshotFacts`、`HistoricalEligibility`，由 `HostSourceAdapter` 组合成 `ManualPorts.Source`；按已确认对象填充账号、选题及资格，不复制基础资料到策划业务库 | 是，实际 SQL 待行内表结构 |
+| 账号、选题和已策划资格 | `FixtureSourceFacts`在Java读取模拟资料；`OutsideSourceAdapter`只将已取实体交Python派生算法字段 | 实现`SourceFacts`的行内查询，以及`AccountFacts`、`TopicFacts`、`SnapshotFacts`、`HistoricalEligibility`装配；`HostSourceAdapter`组合为`ManualPorts.Source`。可复用资料Controller并适配宿主鉴权，不复制基础资料到策划业务库 | 是，实际SQL待行内表结构 |
 | Python 人工计算 | 本地代理调用 `/api/internal/manual-computations` | 用客户认可的内网 HTTP 客户端实现 `ManualPorts.Computer`；保留现有请求编号、冻结输入、受理及结果契约 | 是 |
 | 内容状态读取 | `ManualContentStatusService` 依赖 `ManualPorts.ContentStatusSource` | 客户 Java 查询内容侧状态；模块配置自动装配服务，宿主 Job 按游标调用 `reconcile(limit, afterId)`；不让 Python 直接读业务库，也不由策划系统启动内容生产 | 是，来源实现待接入 |
 | 旧业务过渡 | 当前已导入历史并启用`business_only`，`ManualNewInstallTransition`关闭旧桥 | 绑定`PlanningReadQueries`查询业务库；宿主有历史时先迁移再关闭旧桥，不使用本地Python转接 | 已退出当前页面历史联合查询 |
@@ -40,7 +40,7 @@ AI策划配置由`planning/config`管理综合页面发布，Python维护算法�
 ## 3. 不应复制到客户业务模块的文件
 
 - `com.stratmatrix.standalone/**`：独立启动类、本地 Hikari 装配、本地调度和开发健康检查。
-- `com.stratmatrix.planning.adapter.local/**`：通过旧 Python 读取资料的行外代理。
+- `com.stratmatrix.planning.adapter.local/**`：模拟文件读取、行外装配及旧业务代理；不迁入宿主。
 - `com.stratmatrix.planning.adapter.legacy/**`：旧页面的本地通配转发及配置。
 - `src/main/resources/application*.properties`、本地 `pom.xml` 的 Parent／打包配置、`run/`、`logs/`、`.tmp-tools/`。
 

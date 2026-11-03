@@ -1,5 +1,5 @@
 {
-  "policy_key": "ordinary-v19-quality",
+  "policy_key": "ordinary-v19",
   "expected_latest_version": 0,
   "document": {
     "decisions": {
@@ -7,7 +7,7 @@
         "acceptance_examples": [
           "人工OFF不能被模型覆盖，条件不成立不得使用；模型DROP不能因排期缺题而恢复。"
         ],
-        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；仅验证提案。",
+        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；通过完整校验后可提交正式结果。",
         "parameters": {
           "mapping": "leaf_id_known_mask",
           "similarity": "need_cosine_shifted_0_1"
@@ -17,7 +17,7 @@
         "acceptance_examples": [
           "人工OFF不能被模型覆盖，条件不成立不得使用；模型DROP不能因排期缺题而恢复。"
         ],
-        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；仅验证提案。",
+        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；通过完整校验后可提交正式结果。",
         "parameters": {
           "city_gate": "allow_empty_or_exact",
           "history_gate": "exclude_observed_account_history",
@@ -29,7 +29,7 @@
         "acceptance_examples": [
           "人工OFF不能被模型覆盖，条件不成立不得使用；模型DROP不能因排期缺题而恢复。"
         ],
-        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；仅验证提案。",
+        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；通过完整校验后可提交正式结果。",
         "parameters": {
           "recall": "five_route_union_rerank"
         }
@@ -38,7 +38,7 @@
         "acceptance_examples": [
           "人工OFF不能被模型覆盖，条件不成立不得使用；模型DROP不能因排期缺题而恢复。"
         ],
-        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；仅验证提案。",
+        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；通过完整校验后可提交正式结果。",
         "parameters": {
           "precision": "pair_joint_judgment",
           "score_scale": "model_precision_0_100"
@@ -89,7 +89,7 @@
         "acceptance_examples": [
           "人工OFF不能被模型覆盖，条件不成立不得使用；模型DROP不能因排期缺题而恢复。"
         ],
-        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；仅验证提案。",
+        "definition": "V19适配质量阶段：账号受限映射、现有末级主关联标签、五路召回和模型配对精判；通过完整校验后可提交正式结果。",
         "parameters": {
           "no_candidate": "qualified_only_then_unassigned",
           "system_error": "task_failure"
@@ -114,7 +114,7 @@
       "shortlist_per_slot": 20
     },
     "quality": {
-      "evaluation_only": true,
+      "evaluation_only": false,
       "mapping_mode": "reviewed",
       "mapping_version": 1,
       "minimum_adjacent_topic_fit": 0.8,

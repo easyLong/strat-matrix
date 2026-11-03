@@ -40,7 +40,7 @@ check_http() {
 check_process "Backend" "$RUN_DIR/backend.pid" || true
 check_process "Frontend" "$RUN_DIR/frontend.pid" || true
 expected=2
-if [[ "$JAVA_ACCESS_MODE" == "local_development" ]]; then
+if [[ "${PLANNING_ENV:-outside}" == "outside" ]]; then
   check_process "Java backend" "$RUN_DIR/java-backend.pid" || true
   expected=$((expected + 1))
   java_check_url="${JAVA_GATEWAY_URL:-http://127.0.0.1:6931}"

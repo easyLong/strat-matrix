@@ -12,10 +12,10 @@ SELECT i.id,i.batch_id,i.slot_id,i.account_id,i.publish_date,i.publish_week,i.pa
  COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.slot_type')),'null'),'') AS slot_type,
  COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.content_role')),'null'),'') AS content_role,
  COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_name')),'null'),'') AS account_name,
- COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.um_no')),'null'),'') AS owner_um,
- COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.organization')),'null'),'') AS organization,
- COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.platform')),'null'),'') AS platform,
- COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.account_type')),'null'),'') AS account_type,
+ COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.um_no')),'null'),''),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.source_payload.um_no')),'null'),'') AS owner_um,
+ COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.organization')),'null'),''),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.source_payload.organization')),'null'),'') AS organization,
+ COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.platform')),'null'),''),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.source_payload.platform')),'null'),'') AS platform,
+ COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.account_type')),'null'),''),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.source_payload.account_type')),'null'),'') AS account_type,
  COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.lifecycle_stage')),'null'),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.lifecycle_stage')),'null'),'') AS lifecycle_stage,
  CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.followers')),'null'),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.followers_count')),'null'),'0') AS SIGNED) AS followers
 FROM godp_planning_item i JOIN godp_planning_batch b ON b.id=i.batch_id;

@@ -42,3 +42,11 @@ test('local frontend uses configured Java without forwarding to Python on failur
     'http://localhost:16931')
   assert.throws(() => serverOptions({ JAVA_GATEWAY_URL: 'http://localhost:6931/api' }))
 })
+
+test('outside and inside are the canonical selectors and take priority over legacy flags', () => {
+  assert.equal(serverOptions({ PLANNING_ENV: 'outside', JAVA_ACCESS_MODE: 'bank' }).proxy['/api'].target, 'http://127.0.0.1:6931')
+  assert.throws(() => serverOptions({ PLANNING_ENV: 'inside', JAVA_ACCESS_MODE: 'local_development' }), /Java/)
+  assert.equal(serverOptions({ PLANNING_ENV: 'inside', JAVA_GATEWAY_URL: 'https://host.example' }).proxy['/api'].target, 'https://host.example')
+  assert.throws(() => serverOptions({ PLANNING_ENV: 'invalid' }), /PLANNING_ENV/)
+  assert.throws(() => serverOptions({ PLANNING_ENV: '' }), /PLANNING_ENV/)
+})

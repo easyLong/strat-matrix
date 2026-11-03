@@ -67,6 +67,17 @@ def seed_config(cursor, imported: dict[str, str] | None = None, *, migrate_legac
         rename_legacy_config_keys(cursor)
     values = {key: spec.default for key, spec in CATALOG.items()}
     values.update({key: value for key, value in (imported or {}).items() if key in CATALOG})
+    # Preserve an existing bank deployment when adding the new selector; never seed outside over it.
+    if 'PLANNING_ENV' not in (imported or {}):
+        cursor.execute("SELECT config_value FROM godp_system_config WHERE config_key='JAVA_ACCESS_MODE' AND del_flag='N'")
+        legacy = cursor.fetchone()
+        old_mode = legacy.get('config_value') if isinstance(legacy, dict) else None
+        cursor.execute("SELECT config_value FROM godp_system_config WHERE config_key='BANK_SOURCE_MODE' AND del_flag='N'")
+        source = cursor.fetchone()
+        old_source = source.get('config_value') if isinstance(source, dict) else None
+        if (old_mode == 'bank' or old_source == 'java_http' or (imported or {}).get('JAVA_ACCESS_MODE') == 'bank'
+                or (imported or {}).get('BANK_SOURCE_MODE') == 'java_http'):
+            values['PLANNING_ENV'] = 'inside'
     for key, value in values.items():
         validate_value(key, value)
     inserted = 0

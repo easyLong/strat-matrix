@@ -163,7 +163,7 @@ class SchedulerTests(unittest.TestCase):
         start = date(2026, 11, 2)
         with patch.object(scheduler, 'due_cycle', return_value=start), \
                 patch.object(scheduler, 'schedule_owner', return_value='python'), \
-                patch.object(scheduler, 'start_v2_pipeline', return_value={'status': 'created'}) as create:
+                patch.object(scheduler, 'start_v19_pipeline', return_value={'status': 'created'}) as create:
             self.assertEqual(scheduler.run_due(datetime(2026, 10, 30))['status'], 'created')
             create.assert_called_once_with(start)
 
@@ -171,7 +171,7 @@ class SchedulerTests(unittest.TestCase):
         with patch.object(scheduler, 'get_setting', side_effect=lambda key, default: default), \
                 patch.object(scheduler, 'create_pipeline') as create:
             with self.assertRaises(scheduler.PlanningError):
-                scheduler.start_v2_pipeline(date(2026, 11, 2))
+                scheduler.start_v19_pipeline(date(2026, 11, 2))
             create.assert_not_called()
 
     def test_duplicate_account_scope_is_rejected(self):
@@ -179,7 +179,7 @@ class SchedulerTests(unittest.TestCase):
         with patch.object(scheduler, 'get_setting', side_effect=lambda key, default: values.get(key, default)), \
                 patch.object(scheduler, 'create_pipeline') as create:
             with self.assertRaises(scheduler.PlanningError):
-                scheduler.start_v2_pipeline(date(2026, 11, 2))
+                scheduler.start_v19_pipeline(date(2026, 11, 2))
             create.assert_not_called()
 
 

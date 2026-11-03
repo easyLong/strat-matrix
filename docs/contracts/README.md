@@ -13,10 +13,13 @@
 | Vue → Java | Vite把`/api/**`映射到Java的`/api/plan/**` | 客户网关／请求封装承担映射，页面只调用Java |
 | Java页面业务 | 配置发布、人工任务、自动任务、正式结果及内容业务由Java维护；当前页面SQL查询业务库 | 迁入宿主业务包和Mapper，替换身份、事实来源及装配 |
 | Java → Python | 普通人工异步计算、自动Pipeline启动/提案/确认、算法配置幂等命令 | 绑定宿主内网地址、鉴权及HTTP客户端，不重写算法 |
+| Python → Java | 日常与验收共用Java资料查询；outside由Java读模拟文件 | 替换Java `SourceFacts`为行内SQL/服务实现，保留实体及分页语义 |
 | 数据库 | Java保存业务与已导入历史；Python保存算法资产和计算任务，旧业务数据保留追溯 | 两库独立发布，运行服务不跨库连接 |
 | 调度 | Python服务内受控执行；Java local profile模拟宿主触发，无独立Worker | 客户调度触发Java；不迁移本地模拟调度 |
 
 旧架构备忘中的“本仓库不建设Java、Python永久保留全部业务”已被三工程决定替代。本地迁移与测试不代表已完成行内认证、内容联调或生产发布。
+
+最新取数及算法投影以[统一资料链路](../统一资料链路_2026-11-03.md)为准：原始资料由Java提供，生命周期和选题标签由Python对Java传入实体计算。旧Python资料POST已停用，不继续维护第二套日常取数方向。
 
 ## 页面契约先保持稳定
 
@@ -59,7 +62,7 @@ Java先事务写正式结果及确认凭据，再向Python确认；Python不直�
 | --- | --- | --- |
 | frontend | `npm test`、`npm run build` | 否 |
 | java-backend | `mvn verify` | 否，测试使用本地HTTP夹具，不访问MySQL或真实模型 |
-| python-backend | `pip install -r requirements-dev.txt` 后 `python -m pytest -q` | 否，不跑真实模型和业务数据写入 |
+| python-backend | 安装开发依赖后，在仓库根目录运行`python -m testing --suite python` | 否，提供独立系统配置，阻断真实MySQL和公网，配置专项使用替身 |
 
 默认联调端口：Vue930 → Java6931 → Python6930。独立命令见三个子项目README。无需第四个Worker进程。根目录start／stop／status脚本用于Linux联调部署；bank模式使用客户已有Java服务和调度，须接内部唤醒，详见[后台执行说明](../BACKGROUND_EXECUTION.md)。
 

@@ -2,9 +2,9 @@
 from .account_mapping import resolve_mapping, WEIGHTS
 from .core.matching_common import role_plan, stage_targets, ExecutorInputError
 from .doubao_labeling import embed_text, read_embedding_config
-from .matching_algorithm_v2 import Candidate, Slot, allocate_matrix
+from .matching_allocation import Candidate, Slot, allocate_matrix
 from .matching_contracts import MatchingEvaluation, MatchingPolicyDocument, LeaseHeartbeat
-from .matching_portfolio_v2 import PortfolioPolicy, optimize_portfolios
+from .matching_portfolio import PortfolioPolicy, optimize_portfolios
 from .matching_quality import IMPLEMENTATION_KEY, recall, precision_score, history_penalty, topic_labels, valid_on
 from .matching_quality_model import (dictionary, checked_annotation, checked_account_mapping,
                                      annotate_batch, map_account, judge_batch, PairJudgment)
@@ -103,7 +103,7 @@ def execute_quality_job(job):
     identity = {k:job[k] for k in ('lease_id','input_hash','policy_hash')}
     renew = lambda: heartbeat_task(job['task_id'], LeaseHeartbeat(**identity,lease_seconds=1800))
     runtime = QualityRuntime(context, renew)
-    report = {'schema_version':1,'evaluation_only':True,'input_hash':job['input_hash'],'accounts':{},'topic_annotations':{},
+    report = {'schema_version':1,'evaluation_only':document.quality.evaluation_only,'input_hash':job['input_hash'],'accounts':{},'topic_annotations':{},
               'models':{k:context[k] for k in ('chat_model','embedding_model')}, 'policy_hash':job['policy_hash']}
     phase = 'topic_annotations'
     def checkpoint(state='processing'):
@@ -209,7 +209,7 @@ def execute_quality_job(job):
 
 
 def allocate_quality(job, document, report):
-    """Temporary V2 allocator; no independent 7-8 pool, history T2 or two-stage solver."""
+    """V19 allocator; no independent 7-8 pool, history T2 or two-stage solver."""
     inputs = job['inputs']
     targets = stage_targets(inputs)
     roles = {}
@@ -256,9 +256,11 @@ def allocate_quality(job, document, report):
     stages = [
         {'stage':'hard_gate','summary':{'held_or_excluded_pairs':sum(len(a['recall']['rejected']) for a in report['accounts'].values() if a['recall'])}},
         {'stage':'recall','summary':{'method':'five_routes_200_to_100','accounts':{k:len(a['recall']['ranked']) if a['recall'] else 0 for k,a in report['accounts'].items()}}},
-        {'stage':'fit','summary':{'score_scale':'model_precision_0_100','qualified_by_account':counts,'evaluation_only':True}},
+        {'stage':'fit','summary':{'score_scale':'model_precision_0_100','qualified_by_account':counts,'evaluation_only':document.quality.evaluation_only}},
         {'stage':'global_allocation','summary':{'matched_positions':matched,'fallback_positions':0,'failed_positions':len(positions)-matched}},
-        {'stage':'composition','summary':{'allocator':'existing_v2_portfolio','history_t2_enabled':False,'two_stage_schedule_enabled':False}},
+        {'stage':'composition','summary':{'allocator':'v19_portfolio','history_t2_enabled':False,'two_stage_schedule_enabled':False,
+            'actual_traffic_positions':sum(p.get('content_role')=='流量' for p in positions),
+            'actual_conversion_positions':sum(p.get('content_role')=='转化' for p in positions)}},
     ]
     return MatchingEvaluation.model_validate({**{k:job[k] for k in ('lease_id','input_hash','policy_hash')},
         'implementation_key':IMPLEMENTATION_KEY,'positions':positions,'stages':stages})

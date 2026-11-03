@@ -46,6 +46,11 @@ export interface ConfigVersionSummary {
 }
 
 export interface AccountOption {
+  gender?: string | null
+  interests?: string[]
+  expression_style?: string
+  interaction_data?: Record<string, unknown>[]
+  updated_at?: string | null
   account_id: string
   account_name: string
   account_alias: string

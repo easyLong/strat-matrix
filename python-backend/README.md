@@ -1,14 +1,21 @@
 # Python 子项目
 
+普通选题匹配仅保留V19，执行入口为`matching_quality_executor.py`；旧算法策略仅供历史查询。已有环境通过`python -m app.consolidate_v19 --apply`迁移策略绑定，详见[V19统一说明](../docs/V19算法统一说明_2026-11-03.md)。
+
+部署环境使用库内`PLANNING_ENV=outside/inside`。`python -m app.deployment_environment show/check/select`提供查看、预检和选择；inside强制Java资料来源并在启动前校验配置。详见[双环境切换](../docs/双环境切换_V0.1.md)。
+
+outside同样使用Java HTTP资料入口，默认`http://127.0.0.1:6931/api/plan/internal/source`，令牌默认复用内部令牌；显式Java资料地址/令牌优先。Java读取模拟文件，Python运行时不再直接读夹具。页面需要的生命周期/标签通过`POST /api/internal/catalog-projection`对Java传入实体计算，无额外资料查询。旧`POST /api/internal/manual-source`已停用。
+
 原`backend`目录已统一改为`python-backend/`，Python包名仍为`app`。本工程负责算法配置、标签、画像、向量、输入准备和匹配计算；Java负责业务任务与正式结果。旧Python业务代码保留兼容和追溯，当前页面已退出历史联合查询。当前边界和验收见[双库迁移记录](../docs/双库业务迁移与验收_2026-11-03.md)。
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python -m pytest -q
 python -m uvicorn app.main:app --host 127.0.0.1 --port 6930
 ```
 
 测试不要求启动Java。访问真实业务接口需要根目录`.env`中的MySQL连接及已初始化的系统配置；真实打标／向量化还需要库内模型配置。
+
+开发回归推荐在**仓库根目录**运行`python -m testing --suite python`。该入口为旧单测补充独立系统配置并阻断真实MySQL和公网访问；直接运行原始pytest不等于完成这种隔离。固定算法回放和对比报告见[测试工具](../testing/README.md)。
 
 后台执行已整合进FastAPI，不再另开Worker终端。启动API只初始化受控执行器，不扫描业务、不启动Python定时器。Java持久化业务任务后委派计算，经内部唤醒接口推进算法及重试恢复。`AUTO_SCHEDULE_OWNER=java`时，旧Python周策划、热点和人工业务执行不再竞争写入，算法推进不处理旧内容业务状态。
 

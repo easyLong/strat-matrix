@@ -1,4 +1,4 @@
-"""Reconcile source changes and V2 pipelines; content production stays content-owned."""
+"""Reconcile source changes and V19 pipelines; content production stays content-owned."""
 
 import argparse
 import json
@@ -119,7 +119,7 @@ def run_once(pipeline_id=None, *, process_content=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='发现选题变化并推进持久化 V2 策划流程')
+    parser = argparse.ArgumentParser(description='发现选题变化并推进持久化 V19 策划流程')
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--pipeline-id', type=int)
     args = parser.parse_args()

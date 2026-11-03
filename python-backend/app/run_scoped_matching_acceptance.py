@@ -1,4 +1,4 @@
-"""Run a small explicit local-fixture V2 proposal; never commit production results."""
+"""Run a small explicit local-fixture V19 proposal; never commit production results."""
 import argparse
 from collections import Counter
 from datetime import date
@@ -60,7 +60,7 @@ def run(cycle, account_ids, policy_id, output):
     report['accounts'] = {a['account_id']: a for a in accounts}
     report['evaluation'] = evaluation
     report['positions'] = [{**p, 'title': topics.get(p.get('topic_id'), {}).get('source_payload', {}).get('title'),
-                            'explanation': (f"向量适配分 {p['fit_score']:.2f}，满足经营作用约束后由V2组合分配"
+                            'explanation': (f"向量适配分 {p['fit_score']:.2f}，满足经营作用约束后由V19组合分配"
                                             if p['outcome'] == 'matched' else p['reason'])}
                            for p in evaluation['positions']]
     report['status'] = 'passed'
@@ -70,7 +70,7 @@ def run(cycle, account_ids, policy_id, output):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='按任务范围分批准备3至5个测试账号并执行V2匹配提案')
+    parser = argparse.ArgumentParser(description='按任务范围分批准备3至5个测试账号并执行V19匹配提案')
     parser.add_argument('--cycle', required=True, type=date.fromisoformat)
     parser.add_argument('--accounts', required=True, nargs='+')
     parser.add_argument('--policy', type=int, required=True)

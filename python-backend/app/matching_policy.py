@@ -37,57 +37,54 @@ def intact_document(row: dict) -> MatchingPolicyDocument:
 
 
 def implementation_approval_errors(document: MatchingPolicyDocument) -> list[str]:
-    """Validate known executor contracts without inventing rules for unknown engines."""
-    if document.implementation_key == 'builtin-v19-quality-v1':
-        if document.quality is None or document.schema_version != 2 or document.portfolio is None:
-            return ['V19适配质量执行器须完整声明映射、召回、精判和现有组合参数']
-        from .matching_quality import QUALITY_PARAMETERS
-        if any(document.decisions[k].parameters != value for k,value in QUALITY_PARAMETERS.items()):
-            return ['V19映射、召回与精判参数契约不一致']
-        # Validate reused V2 scheduling/capacity rules with their original contract.
-        raw = document.model_dump(mode='json')
-        raw.update(implementation_key='builtin-cosine-portfolio-v2', quality=None)
-        legacy = {'ALG-01':{'similarity':'cosine_unit_vectors'},
-                  'ALG-02':{'city_gate':'allow_empty_or_exact','history_gate':'exclude_observed_account_history'},
-                  'ALG-03':{'top_k':100,'min_cosine':0.0}, 'ALG-04':{'score_scale':'positive_cosine_0_100'},
-                  'ALG-09':{'no_candidate':'fallback_then_failed','system_error':'task_failure'}}
-        for key,value in legacy.items(): raw['decisions'][key]['parameters'] = value
-        return implementation_approval_errors(MatchingPolicyDocument.model_validate(raw))
-    if document.implementation_key not in {
-        "builtin-cosine-balanced-v1", "builtin-cosine-portfolio-v2",
-    }:
-        return []
-    from .core.matching_common import ExecutorPolicyError, candidate_config as executor_config
+    """Only V19 can be approved or start new work; history remains readable."""
+    from .matching_quality import IMPLEMENTATION_KEY, QUALITY_PARAMETERS
+    from .core.matching_common import REQUIRED_INPUTS, _strict_parameters, _integer, ExecutorPolicyError
+    if document.implementation_key != IMPLEMENTATION_KEY:
+        return ['仅支持V19算法；旧策略保留历史查询，请创建V19策略版本']
+    if document.quality is None or document.schema_version != 2 or document.portfolio is None:
+        return ['V19须完整声明映射、召回、精判和组合参数']
+    if problems := document.approval_errors():
+        return problems
+    if set(document.required_inputs) != REQUIRED_INPUTS:
+        return ['V19须声明完整冻结输入集合']
+    if any(document.decisions[k].parameters != value for k, value in QUALITY_PARAMETERS.items()):
+        return ['V19映射、召回与精判参数契约不一致']
     try:
-        raw = document.model_dump(mode="json")
-        if document.implementation_key == "builtin-cosine-balanced-v1":
-            if document.portfolio is not None:
-                return ["V1策略不能包含V2组合目标参数"]
-            executor_config(raw)
-        else:
-            if document.portfolio is None:
-                return ["V2策略必须完整声明组合目标与MMR参数"]
-            if document.schema_version != 2:
-                return ["V2组合执行器要求策略schema_version=2"]
-            if set(document.required_inputs) != {
-                "accounts", "topics", "config", "positions",
-                "fallback_topics", "history", "official_usage",
-            }:
-                return ["V2当前要求与V1相同的冻结输入集合"]
-            # V2 portfolio optimization intentionally starts from the approved
-            # deterministic cosine candidate contract. Only the composition
-            # objective and allocation search differ in this implementation.
-            raw["implementation_key"] = "builtin-cosine-balanced-v1"
-            executor_config(raw)
-            allocation = document.decisions["ALG-05"].parameters
-            if allocation["global_reuse_penalty"] != 0 \
-                    or allocation["official_usage_penalty"] != 0:
-                return ["V2组合执行器要求旧版选题复用排序惩罚均为0"]
+        allocation = _strict_parameters(document, 'ALG-05', {
+            'same_account_topic_max', 'global_topic_max', 'global_reuse_penalty', 'official_usage_penalty'})
+        _integer(allocation['same_account_topic_max'], 'same_account_topic_max', 1, 1000)
+        if allocation['global_topic_max'] is not None:
+            _integer(allocation['global_topic_max'], 'global_topic_max', 1, 20000)
+        for key in ('global_reuse_penalty', 'official_usage_penalty'):
+            if type(allocation[key]) not in (int, float) or allocation[key] != 0:
+                raise ExecutorPolicyError('V19复用通过组合目标处理，旧排序惩罚必须为0')
+        expected = {
+            'ALG-06': {'rounding': 'half_up', 'role_order': 'even_spread'},
+            'ALG-07': {'official_usage_unknown_rank': 'after_known'},
+        }
+        for code, params in expected.items():
+            if _strict_parameters(document, code, set(params)) != params:
+                raise ExecutorPolicyError(f'{code}参数契约不一致')
+        fallback = _strict_parameters(document, 'ALG-08', {'fallback_sort', 'fallback_same_account_max'})
+        if fallback['fallback_sort'] != 'heat_desc_topic_id':
+            raise ExecutorPolicyError('ALG-08参数契约不一致')
+        _integer(fallback['fallback_same_account_max'], 'fallback_same_account_max', 1, 1000)
     except ExecutorPolicyError as exc:
-        return [f"内置执行器参数契约不兼容：{exc}"]
-    except (TypeError, ValueError) as exc:
-        return [f"内置执行器策略无法解析：{type(exc).__name__}"]
+        return [f'V19参数契约不兼容：{exc}']
     return []
+
+
+def require_v19(document: MatchingPolicyDocument) -> None:
+    require_supported_implementation(document)
+    if problems := implementation_approval_errors(document):
+        raise HTTPException(409, {'message': '当前仅支持V19算法', 'problems': problems})
+
+
+def require_supported_implementation(document: MatchingPolicyDocument) -> None:
+    from .matching_quality import IMPLEMENTATION_KEY
+    if document.implementation_key != IMPLEMENTATION_KEY:
+        raise HTTPException(409, '仅支持V19算法，旧版本仅用于历史查询')
 
 
 def approval_errors(document: MatchingPolicyDocument) -> list[str]:
@@ -109,6 +106,7 @@ def policy_summary(row: dict, *, include_document: bool = False) -> dict:
 
 
 def create_policy(payload: PolicyCreate) -> dict:
+    require_supported_implementation(payload.document)
     encoded = canonical_json(payload.document.model_dump())
     with connection() as db, db.cursor() as cursor:
         lock = f"godp:matching-policy:{payload.policy_key}"
@@ -145,6 +143,8 @@ def confirm_policy(policy_id: int, payload: PolicyConfirmation, *, disable: bool
         if payload.expected_hash != row["document_hash"]:
             raise HTTPException(409, "算法策略指纹不一致")
         target = "disabled" if disable else "approved"
+        if not disable:
+            require_v19(document)
         if row["status"] == target:
             db.rollback()
             return policy_summary(row)

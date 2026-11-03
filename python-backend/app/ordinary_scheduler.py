@@ -1,4 +1,4 @@
-"""Create a persisted ordinary-only V2 pipeline at the configured business time."""
+"""Create a persisted ordinary-only V19 pipeline at the configured business time."""
 
 from __future__ import annotations
 
@@ -22,6 +22,11 @@ POLL_SECONDS = 60
 
 
 def schedule_owner() -> str:
+    from .system_config import snapshot
+    if 'PLANNING_ENV' in snapshot():
+        from .deployment_environment import current
+        current()  # Invalid/disabled selectors must fail instead of falling back to the old scheduler.
+        return 'java'
     try:
         return get_setting('AUTO_SCHEDULE_OWNER', 'python')
     except SystemConfigError as error:
@@ -48,7 +53,7 @@ def due_cycle(now: datetime) -> date | None:
     return week_start + timedelta(days=7) if local_now >= trigger_at else None
 
 
-def start_v2_pipeline(cycle_start: date, *, commit_owner: str = 'python',
+def start_v19_pipeline(cycle_start: date, *, commit_owner: str = 'python',
                       business_config_version=None, business_config=None) -> dict:
     try:
         policy_id = int(get_setting('AUTO_PLANNING_POLICY_ID', '0'))
@@ -59,15 +64,17 @@ def start_v2_pipeline(cycle_start: date, *, commit_owner: str = 'python',
             not isinstance(x, str) or not x.strip() or x != x.strip() for x in selection) or len(set(selection)) != len(selection):
         raise PlanningError('自动策划账号范围必须是不重复的账号ID数组')
     if policy_id <= 0:
-        raise PlanningError('请先在系统配置中绑定已批准的V2自动策划策略')
+        raise PlanningError('请先在系统配置中绑定已批准的V19正式策划策略')
     with connection() as db, db.cursor() as cursor:
         cursor.execute("SELECT * FROM godp_matching_policy WHERE id=%s AND del_flag='N'", (policy_id,))
         policy = cursor.fetchone()
         if not policy or policy['status'] != 'approved':
             raise PlanningError('自动策划绑定的策略不存在或尚未批准')
         document = intact_document(policy)
-        if document.implementation_key != 'builtin-cosine-portfolio-v2' or document.approval_errors() or implementation_approval_errors(document):
-            raise PlanningError('自动策划仅支持完整且已批准的V2组合策略')
+        if document.implementation_key != 'builtin-v19-quality-v1' or document.approval_errors() or implementation_approval_errors(document):
+            raise PlanningError('自动策划仅支持完整且已批准的V19策略，请迁移旧策略绑定')
+        if document.quality.evaluation_only:
+            raise PlanningError('自动策划不能绑定仅评估用途的V19策略')
         if document.vector_space.vector_model != get_setting('EMBEDDING_MODEL_NAME', ''):
             raise PlanningError('自动策划策略的向量模型与当前公共向量模型不一致')
         cursor.execute("SELECT batch_id,plan_mode FROM godp_auto_plan_run "
@@ -90,7 +97,7 @@ def run_due(now: datetime) -> dict:
     cycle_start = due_cycle(now)
     if cycle_start is None:
         return {"status": "waiting"}
-    return start_v2_pipeline(cycle_start)
+    return start_v19_pipeline(cycle_start)
 
 
 def log(event: dict) -> None:
@@ -112,7 +119,7 @@ def serve() -> None:
                 continue
             cycle_start = due_cycle(now)
             if cycle_start and cycle_start != completed_cycle and (retry_after is None or now >= retry_after):
-                result = start_v2_pipeline(cycle_start)
+                result = start_v19_pipeline(cycle_start)
                 completed_cycle = cycle_start
                 retry_after = None
                 log(result)
@@ -127,7 +134,7 @@ def serve() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="按服务端配置创建普通选题V2周策划流程")
+    parser = argparse.ArgumentParser(description="按服务端配置创建普通选题V19周策划流程")
     parser.add_argument("--once", action="store_true", help="只检查一次配置并在到期时执行")
     args = parser.parse_args()
     if args.once:

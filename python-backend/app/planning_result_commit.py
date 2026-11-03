@@ -204,6 +204,13 @@ def build_final_plan(inputs: dict, evaluation: dict, marketing: list[dict]) -> d
     conversion = sum(row["content_role"] == "转化" for row in slots)
     composition = next((row.get("summary") or {} for row in evaluation.get("stages", [])
                         if row.get("stage") == "composition"), {})
+    if evaluation.get('implementation_key') == 'builtin-v19-quality-v1' and not {
+            'actual_traffic_positions', 'actual_conversion_positions'} & composition.keys():
+        # Early immutable V19 reports omitted these fields. Compare the overlay
+        # against original hash-checked positions; never rewrite saved reports.
+        composition = {**composition,
+            'actual_traffic_positions':sum(p.get('content_role')=='流量' for p in evaluation['positions']),
+            'actual_conversion_positions':sum(p.get('content_role')=='转化' for p in evaluation['positions'])}
     if composition.get("actual_traffic_positions") != traffic \
             or composition.get("actual_conversion_positions") != conversion:
         raise ResultCommitError("composition_role_changed", "正式组合覆盖改变了Matching经营作用数量")

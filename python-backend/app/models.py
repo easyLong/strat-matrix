@@ -129,6 +129,11 @@ class ConfigVersionSummary(BaseModel):
 
 
 class AccountOption(BaseModel):
+    updated_at: str | None = None
+    gender: str | None = None
+    interests: list[str] = Field(default_factory=list)
+    expression_style: str = ''
+    interaction_data: list[dict] = Field(default_factory=list)
     account_id: str
     account_name: str
     account_alias: str = ""

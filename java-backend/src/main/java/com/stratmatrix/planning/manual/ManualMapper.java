@@ -108,4 +108,6 @@ public interface ManualMapper {
   List<Map<String, Object>> adjustments(@Param("itemId") long itemId);
 
   int insertAdjustment(Map<String, Object> values);
+
+  List<Map<String, Object>> completedTopicUsage(@Param("topicIds") List<String> topicIds);
 }

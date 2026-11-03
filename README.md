@@ -4,6 +4,10 @@
 
 [文档索引](docs/README.md) · [三工程迁入执行清单](docs/行内三工程迁入执行清单_V0.1.md) · [当前实现与交接状态](docs/CURRENT_STATE.md) · [三工程契约与迁移](docs/contracts/README.md)
 
+行外回归统一运行`python -m testing`；固定合成数据、算法基线、离线对比报告和分工程命令见[测试工具说明](testing/README.md)。默认不连接现有业务库或调用真实模型。
+
+部署模式统一使用`PLANNING_ENV=outside/inside`，保存在MySQL系统配置。切换与宿主装配说明见[双环境切换](docs/双环境切换_V0.1.md)；inside缺少宿主配置时明确报错，不降级到行外模拟。
+
 本仓库现分为三个可独立构建的子项目，未来分别整合进客户现有三个工程：
 
 | 子项目 | 当前职责与独立说明 |
@@ -22,6 +26,7 @@ flowchart LR
     Java --> Bus[(Java业务库)]
     Java --> Source[行内资料与内容状态接口：待接]
     Java --> Algo[Python算法能力]
+    Algo -->|资料HTTP查询| Java
     Algo --> AI[(Python算法库)]
     HostJob[行内调度平台：待接] --> Java
 ```
@@ -39,7 +44,7 @@ flowchart LR
 - 后台执行：已整合进FastAPI生命周期，收到人工提交或Java唤醒后执行，Python不启动定时轮询。Java本地开发壳模拟调度；行内由客户调度平台调用同一唤醒客户端。业务队列、租约和断点继续持久化，见[后台执行说明](docs/BACKGROUND_EXECUTION.md)。
 - 模型：共用一个文本模型入口和一个向量模型入口。当前适配火山方舟豆包，业务配置使用 `MODEL_NAME`、`EMBEDDING_MODEL_NAME` 和 `ARK_API_KEY`。
 
-项目采用模块化单体，业务归为配置管理、数据准备、策划执行、内容生产衔接、结果查询五部分。已提取 `api/`、`services/`、`core/`、`adapters/`、`jobs/`，HTTP 与准备流程复用已迁移的应用服务，V1/V2 共用候选规则。人工非营销任务已改为持久化领取，结果列表、详情及导出已统一查询范围；其余 SQL、模型适配和页面组件继续按用例收拢。
+项目采用模块化单体，业务归为配置管理、数据准备、策划执行、内容生产衔接、结果查询五部分。已提取 `api/`、`services/`、`core/`、`adapters/`、`jobs/`，HTTP 与准备流程复用已迁移的应用服务，选题匹配统一为 V19：账号映射、五路召回、模型精判及组合分配。人工非营销任务已改为持久化领取，结果列表、详情及导出已统一查询范围；其余 SQL、模型适配和页面组件继续按用例收拢。
 
 ## 当前代码入口
 
@@ -55,17 +60,17 @@ flowchart LR
 | 本地装配及旧业务兼容适配 | `java-backend/src/main/java/com/stratmatrix/standalone/`、`planning/adapter/local/`、`planning/adapter/legacy/`；驻场不迁入 |
 | 旧行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
 | 行内Java驻场实现步骤与边界说明 | `docs/integration/java-host/README.md` |
-| 行内生产状态读取与策划库状态投影 | `python-backend/app/services/content_status.py` |
+| 内容状态读取与业务库状态投影 | Java `manual/ManualContentStatusService`、`MarketingTaskService`；宿主提供内容事实 |
 | 普通选题变化发现与模型准备 | `source_discovery.py`、`planning_input_runner.py` |
 | 后台执行器、内部唤醒与单次业务处理 | `jobs/runtime.py`、`jobs/handlers.py`、`api/background_execution.py` |
-| 人工任务提交、领取、恢复与重试 | `services/manual_planning.py`、`services/manual_tasks.py` |
-| 统一结果范围、列表、详情与CSV | `services/result_scope.py`、`result_lists.py`、`plan_queries.py`、`result_export.py` |
+| 人工业务任务提交、领取、恢复与重试 | Java `manual/ManualPlanningService`；Python `manual_compute.py`只负责已冻结输入的计算 |
+| 正式结果范围、列表、详情与报表 | Java `query/SqlPlanningReadQueries`、`manual/ManualExportService`；Python旧查询只供历史兼容 |
 | 输入冻结、匹配任务与正式提交 | `ai_preparation.py`、`matching_tasks.py`、`planning_result_commit.py` |
-| V2 算法 | `matching_executor_v2.py`、`matching_algorithm_v2.py`、`matching_portfolio_v2.py` |
-| 生产状态投影与成功计数 | `services/content_status.py`；内容侧自行扫描并生产 |
+| V19 算法 | `matching_quality_executor.py`、`matching_quality.py`、`matching_allocation.py`、`matching_portfolio.py` |
+| 选题生产使用次数 | Java `manual/TopicUsageService`；Python `bank_bridge/official_usage.py`经HTTP读取 |
 | 配置读取与目录 | `system_config.py`、`system_config_catalog.py` |
 
-表中的 Python 文件均位于 `python-backend/app/`。`main.py` 与 `integration.py` 已缩为兼容入口，不再承载业务 SQL。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
+表中未标注工程的Python文件位于`python-backend/app/`，Java业务包位于`java-backend/src/main/java/com/stratmatrix/planning/`。`main.py`与`integration.py`为兼容入口。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
 
 ## 初始化与配置
 
@@ -84,11 +89,11 @@ python -m app.init_db
 python -m app.init_shared_workflow_db
 ```
 
-所有策划自有表使用 `godp_` 前缀，表与字段均需中文说明及规定的审计字段，不使用外键、存储过程、数据库函数或视图。
+所有策划自有表使用`godp_`前缀，表与字段均需中文说明及规定的审计字段，不使用外键、存储过程或自定义数据库函数。Java业务库当前有查询视图，需随迁移脚本发布并在行内确认兼容性，不能按“完全没有视图”交接。
 
-`bank_bridge/factory.py` 按MySQL配置装配本地开发夹具或Java HTTP数据源，拒绝 `bank_sql` 与 `local_sql`。夹具不随Git或驻场包交付。行内源表SQL由Java执行，Python不持有业务库凭据；具体URL、鉴权与字段映射待驻场补齐。
+明确配置`PLANNING_ENV`后，`bank_bridge/factory.py`在outside和inside均使用Java HTTP，拒绝 `bank_sql` 与 `local_sql`。outside由Java读取模拟文件，inside由Java查询行内表/服务；日常开发和完整验收共享该链路。夹具不随Git或驻场包交付。Python不持有业务库凭据；行内URL、鉴权与字段映射待驻场补齐。见[统一资料链路](docs/统一资料链路_2026-11-03.md)。
 
-周自动策划由 `AUTO_PLANNING_POLICY_ID` 绑定已批准的 V2 策略，`AUTO_PLANNING_ACCOUNT_IDS` 指定试运行账号范围；当前周主链使用 `ordinary_only`。配置语义及当前Java读取边界见[当前实现状态](docs/CURRENT_STATE.md)；历史同库闭环只作业务验证参考。
+周自动策划由 `AUTO_PLANNING_POLICY_ID` 绑定已批准的 V19 正式策略，`AUTO_PLANNING_ACCOUNT_IDS` 指定试运行账号范围；当前周主链使用 `ordinary_only`。配置语义及当前Java读取边界见[当前实现状态](docs/CURRENT_STATE.md)；历史同库闭环只作业务验证参考。
 
 ## 启动与检查
 
@@ -96,10 +101,12 @@ python -m app.init_shared_workflow_db
 
 ```bash
 # python-backend/
+python -m app.java_development --output ../run/java-backend.properties
 uvicorn app.main:app --host 0.0.0.0 --port 6930
 
 # java-backend/，需安装JDK8及Maven
-mvn spring-boot:run
+mvn package -DskipTests
+java -jar target/planning-business.jar --spring.config.additional-location=file:../run/java-backend.properties
 
 # frontend/
 npm install
@@ -110,10 +117,10 @@ npm run dev
 
 服务器启动、停止和状态检查使用根目录的 `start.sh`、`stop.sh`、`status.sh`；监听地址和端口使用 MySQL 中的配置，完整部署说明从文档索引查阅。
 
-在 `python-backend/` 下运行单元测试：
+在仓库根目录运行隔离的Python单元测试：
 
 ```bash
-python -m unittest discover -s tests
+python -m testing --suite python
 ```
 
 在 `frontend/` 下验证业务规则、类型与构建：
@@ -125,7 +132,7 @@ npm run build
 
 前端业务组件按 `components/config/`、`components/manual/`、`components/planning/` 分组。人工账号、选题选择状态分别由 `useManualAccountSelection`、`useManualTopicSelection` 管理；页面负责步骤衔接、提交和路由，账号/周期/批次共用日历、统计和计划详情抽屉。具体职责见[前端业务组件](docs/README.md#frontend-business-components)。
 
-真实模型验收需要显式运行 `python -m app.run_shared_workflow_acceptance` 并传入未占用的周一周期及已批准策略 ID。该命令会写入测试数据并调用模型，参数和限制见同库闭环说明。
+日常资料链路可用`python -m testing.source_verify`只读核查。真实双库模型验收使用`python -m testing.live --execute`，执行前须暂停日常调度并排空无关任务，会写开发库并调用模型；详见[完整流程](docs/全流程测试与行内接入对照_V1.0_2026-11-03.md)。旧同库验收命令保留历史用途，不作为当前三工程正式闭环入口。
 
 ## 开发边界
 

@@ -17,12 +17,22 @@ public final class SqlPlanningReadQueries implements PlanningReadQueries {
   private final PlanningQueryMapper sql;
   private final ManualRepository repo;
   private final ManualPlanningService manual;
+  private final ManualPorts.AccountFacts accountFacts;
 
   public SqlPlanningReadQueries(
       PlanningQueryMapper sql, ManualRepository repo, ManualPlanningService manual) {
+    this(sql, repo, manual, null);
+  }
+
+  public SqlPlanningReadQueries(
+      PlanningQueryMapper sql,
+      ManualRepository repo,
+      ManualPlanningService manual,
+      ManualPorts.AccountFacts accountFacts) {
     this.sql = sql;
     this.repo = repo;
     this.manual = manual;
+    this.accountFacts = accountFacts;
   }
 
   private Map<String, Object> parameters(Map<String, Object> q) {
@@ -165,7 +175,7 @@ public final class SqlPlanningReadQueries implements PlanningReadQueries {
     if (ids.isEmpty()) return out;
     for (Map<String, Object> r : sql.accountSnapshots(map("ids", ids))) {
       Map<String, Object> item = read(text(r, "payload")),
-          profile = object(item.get("account_snapshot"));
+          profile = AccountSnapshotView.from(object(item.get("account_snapshot")));
       if (profile.isEmpty())
         profile =
             map(
@@ -187,6 +197,26 @@ public final class SqlPlanningReadQueries implements PlanningReadQueries {
     Map<String, Object> profiles =
         accountProfiles(
             groups.stream().map(r -> text(r, "account_id")).collect(Collectors.toList()));
+    // Basic account-list information is current. Detail pages continue using
+    // their frozen planning snapshots, without rewriting historical inputs.
+    if (accountFacts != null && !groups.isEmpty()) {
+      List<String> ids =
+          groups.stream().map(r -> text(r, "account_id")).collect(Collectors.toList());
+      for (Map<String, Object> current : rows(accountFacts.sourceAccounts(ids).get("accounts"))) {
+        String id = text(current, "account_id");
+        if (!profiles.containsKey(id)) continue;
+        Map<String, Object> merged = new LinkedHashMap<>(object(profiles.get(id)));
+        Map<String, Object> fresh = AccountSnapshotView.from(current);
+        // SQL lifecycle filters use the latest planning snapshot. Keep those
+        // derived fields aligned while refreshing the account's basic facts.
+        for (Map.Entry<String, Object> field : fresh.entrySet()) {
+          if (Arrays.asList("lifecycle_stage", "traffic_trend").contains(field.getKey())
+              && merged.get(field.getKey()) != null) continue;
+          merged.put(field.getKey(), field.getValue());
+        }
+        profiles.put(id, merged);
+      }
+    }
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> g : groups) {
       String id = text(g, "account_id");

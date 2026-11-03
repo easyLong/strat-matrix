@@ -1,8 +1,8 @@
-"""V2 account-portfolio objective and deterministic search heuristic.
+"""V19 account-portfolio objective and deterministic search heuristic.
 
 MMR is used to reduce the candidate search space. The final portfolio score
 contains one explicit redundancy term; the MMR score is never added again.
-The production V2 task executor imports this module for allocation refinement.
+The V19 executor uses these primitives for allocation refinement.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import math
 from typing import Callable, Mapping, Sequence
 
-from .matching_algorithm_v2 import (
+from .matching_allocation import (
     AlgorithmConfigurationError,
     AlgorithmInputError,
     Assignment,

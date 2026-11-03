@@ -73,6 +73,8 @@ def account_options(cursor, config, limit=1000, *, account_ids=None):
                          account_alias='', um_no=account.owner_um, organization=account.organization,
                          platform=account.platform, business_line='', account_type=account.account_type or '',
                          certified=payload['certification_status'], followers=account.followers,
+                         gender=account.gender, interests=account.interests, expression_style=account.expression_style,
+                         interaction_data=interaction_snapshot(payload['interaction_data'],now), updated_at=account.updated_at.isoformat(),
                          traffic_trend=metrics['traffic_trend'],
                          lifecycle_stage=lifecycle_stage(config, {**metrics, 'followers_count': account.followers or 0})))
         if len(rows) >= limit:

@@ -209,7 +209,7 @@ def load_topics(cursor, scope: str) -> list[dict]:
 def run_ordinary_planning(cycle_start: date | None = None, scope: str = "live") -> dict:
     from .bank_bridge.factory import source_mode
     if source_mode() == 'java_http':
-        raise PlanningError('Java资料模式使用已批准V2流程，旧规则脚本不支持行内HTTP资料')
+        raise PlanningError('Java资料模式使用已批准V19流程，旧规则脚本不支持行内HTTP资料')
     if scope not in ("demo", "live"):
         raise PlanningError("数据范围只能为 demo 或 live")
     start = cycle_start or current_next_monday()

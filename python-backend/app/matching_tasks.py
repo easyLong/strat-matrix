@@ -13,7 +13,7 @@ from .db import connection
 from .matching_contracts import (ClaimTask, LeaseIdentity, LeaseHeartbeat, MatchingEvaluation,
                                  MatchingFailure, MatchingTaskCreate)
 from .matching_inputs import load_matching_topics
-from .matching_policy import digest, intact_document, select_policy
+from .matching_policy import digest, intact_document, select_policy, require_v19, require_supported_implementation
 from .matching_readiness import topic_state
 from .planning_reservation import reservation_key
 from .preparation_scope import read_scope
@@ -173,6 +173,7 @@ def require_current_inputs(db, cursor, preparation, policy, task, checked_at) ->
 
 def create_task(payload: MatchingTaskCreate) -> dict:
     with connection() as db, db.cursor() as cursor:
+        require_v19(intact_document(select_policy(cursor, payload.policy_id)))
         start = select_preparation(cursor, payload.preparation_id)["cycle_start"]
     with cycle_transaction(start) as (db, cursor):
         preparation = select_preparation(cursor, payload.preparation_id, lock=True)
@@ -252,6 +253,10 @@ def claim_task(payload: ClaimTask, *, implementation_key: str | None = None, tas
             return {"job": None, "next_after_id": task["id"]}
         try:
             check_binding(task, preparation, policy)
+            try:
+                require_supported_implementation(intact_document(policy))
+            except HTTPException:
+                raise InvalidInputs('algorithm_retired')
             inputs = checked_inputs(cursor, preparation, policy, now, task=task)
         except InvalidInputs as exc:
             invalidate(db, cursor, task, exc.code)
@@ -365,6 +370,7 @@ def save_evaluation(task_id: int, payload: MatchingEvaluation) -> dict:
         now = now_utc()
         require_lease(task, payload, now)
         inputs = require_current_inputs(db, cursor, preparation, policy, task, now)
+        require_supported_implementation(intact_document(policy))
         validate_positions(payload, inputs, policy)
         document = intact_document(policy)
         if document.implementation_key == 'builtin-v19-quality-v1':
@@ -399,6 +405,7 @@ def fail_task(task_id: int, payload: MatchingFailure) -> dict:
 
 def retry_task(task_id: int, expected_version: int) -> dict:
     with locked_task(task_id) as (db, cursor, preparation, policy, task):
+        require_v19(intact_document(policy))
         if task["version"] != expected_version or task["status"] != "failed":
             raise HTTPException(409, "任务版本不一致或不属于可重试失败状态")
         require_current_inputs(db, cursor, preparation, policy, task, now_utc())

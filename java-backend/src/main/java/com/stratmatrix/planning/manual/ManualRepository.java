@@ -63,6 +63,12 @@ public class ManualRepository {
     return mapper.batchById(id);
   }
 
+  public List<Map<String, Object>> completedTopicUsage(List<String> topicIds) {
+    if (topicIds == null || topicIds.isEmpty() || topicIds.size() > 500)
+      throw new BusinessException(422, "选题ID数量须为1至500");
+    return mapper.completedTopicUsage(topicIds);
+  }
+
   public Map<String, Object> lockedBatch(long id) {
     return mapper.lockedBatch(id);
   }
@@ -253,6 +259,8 @@ public class ManualRepository {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> r : rows) {
       Map<String, Object> row = Json.read(String.valueOf(r.get("payload")));
+      if (row.get("account_snapshot") instanceof Map)
+        row.put("account_snapshot", AccountSnapshotView.from(Json.object(row.get("account_snapshot"))));
       row.put("id", r.get("id"));
       row.put("production_status", r.get("content_status"));
       row.put("result_version", r.get("version"));

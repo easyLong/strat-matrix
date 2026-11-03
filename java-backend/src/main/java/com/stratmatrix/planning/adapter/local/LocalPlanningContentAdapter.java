@@ -4,6 +4,7 @@ import static com.stratmatrix.planning.manual.Json.*;
 
 import com.stratmatrix.planning.content.PlanningContentPort;
 import com.stratmatrix.planning.manual.BusinessException;
+import com.stratmatrix.planning.source.SourceFacts;
 import java.time.*;
 import java.util.*;
 
@@ -12,10 +13,10 @@ import java.util.*;
  * directly.
  */
 public final class LocalPlanningContentAdapter implements PlanningContentPort {
-  private final LocalPythonAdapter local;
+  private final SourceFacts facts;
 
-  public LocalPlanningContentAdapter(LocalPythonAdapter local) {
-    this.local = local;
+  public LocalPlanningContentAdapter(SourceFacts facts) {
+    this.facts = facts;
   }
 
   private Object field(Map<String, Object> row, String english, String chinese) {
@@ -28,7 +29,8 @@ public final class LocalPlanningContentAdapter implements PlanningContentPort {
       Map<String, Object> body = new LinkedHashMap<>(request);
       body.put("page_no", page);
       body.put("page_size", 500);
-      Map<String, Object> response = object(local.call("POST", path, body));
+      Map<String, Object> response =
+          path.equals("topics") ? facts.topics(body) : facts.marketingContents(body);
       List<Map<String, Object>> items = rows(field(response, "items", "数据列表"));
       all.addAll(items);
       Object total = field(response, "total", "总数");
@@ -41,9 +43,7 @@ public final class LocalPlanningContentAdapter implements PlanningContentPort {
   public List<Map<String, Object>> hotspots(Instant at) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> t :
-        pages(
-            "/api/integrations/bank/if02/topics/query",
-            map("source", "热点", "available_only", true, "valid_at", at.toString())))
+        pages("topics", map("source", "热点", "available_only", true, "valid_at", at.toString())))
       out.add(
           map(
               "topic_id",
@@ -63,8 +63,7 @@ public final class LocalPlanningContentAdapter implements PlanningContentPort {
 
   public List<Map<String, Object>> approvedMarketing(String account) {
     List<Map<String, Object>> out = new ArrayList<>();
-    for (Map<String, Object> c :
-        pages("/api/integrations/bank/if03/marketing-contents/query", map("account_id", account)))
+    for (Map<String, Object> c : pages("marketing", map("account_id", account)))
       out.add(
           map(
               "content_id",
@@ -82,11 +81,7 @@ public final class LocalPlanningContentAdapter implements PlanningContentPort {
 
   public List<Map<String, Object>> effectiveMarketing(String account, LocalDate date) {
     List<Map<String, Object>> rows =
-        rows(
-            local.call(
-                "POST",
-                "/api/integrations/bank/if04/effective-marketing/query",
-                map("account_id", account, "publish_date", date.toString())));
+        rows(facts.effectiveMarketing(map("account_id", account, "publish_date", date.toString())));
     if (rows.isEmpty()) return Collections.emptyList();
     List<Map<String, Object>> approved = approvedMarketing(account), out = new ArrayList<>();
     for (Map<String, Object> row : rows) {

@@ -1,5 +1,7 @@
 # Java 业务后端子项目
 
+环境名称统一为`outside`／`inside`：前者复用本地开发装配，后者排除本地数据源、代理与调度，要求宿主提供必要Bean。库内`PLANNING_ENV`由本地启动器映射到profile；宿主按实际工程合并inside配置片段。见[双环境切换](../docs/双环境切换_V0.1.md)。
+
 行外使用公开Spring Boot 2.7.18父POM，Java8源码／运行兼容；无内部Parent、Halo、Venus、用户中心或调度SDK。该版本是兼容开发基线，生产补丁最终随客户维护线确定。Java业务持久化统一使用MyBatis，HikariCP仅用于本地数据源，H2只用于测试。当前配置、正式策划、内容衔接及SQL查询状态见[双库迁移与验收](../docs/双库业务迁移与验收_2026-11-03.md)。
 
 ## 独立开发
@@ -16,7 +18,7 @@ mvn spring-boot:run
 - Java默认：`127.0.0.1:6931`。
 - 自身存活：`GET /api/plan/service-health`，不检测Python或数据库。
 - 旧业务健康：`GET /api/plan/health`，由Python实际检查数据库。
-- 本地默认profile：`local`，转接Python `127.0.0.1:6930`。
+- 本地默认profile：`outside`，通过profile组启用`local`，算法地址默认Python `127.0.0.1:6930`。
 - 本地`LocalJobPulse`模拟宿主调度，向Python内部接口发送执行信号；缺少内部令牌时明确记录未就绪，不使用匿名降级。
 - 其他profile默认不装配旧业务适配器，返回404，不伪造业务成功。
 
@@ -44,7 +46,7 @@ com.stratmatrix.planning/auto/      周自动任务、正式落库与算法确�
 com.stratmatrix.planning/content/   热点定题、营销引用与投放日期
 com.stratmatrix.planning/query/     业务库SQL分页、统计与报表查询
 com.stratmatrix.planning/adapter/
-  local/                            行外Python资料代理，不复制到宿主
+  local/                            行外模拟资料读取与旧业务适配，不复制到宿主
   legacy/                           迁移期Python旧业务兼容入口
   python/                           Python执行客户端，可按宿主HTTP规范替换
 ```
@@ -67,7 +69,7 @@ com.stratmatrix.planning/adapter/
 
 `SlotCompletionService`处理热点T-1和自动营销引用，无营销内容时回到原普通选题。`adapter/legacy`只保留兼容用途；综合配置与业务库查询开启后，相关旧写入和历史列表入口停止转发。操作人仍为本地测试身份，真实登录、授权、资料、内容状态与宿主调度需现场接入。
 
-账号列表、选题列表和选题详情已由 Java 显式接口提供；行外 `LocalPythonAdapter` 只读转接现有资料。驻场在 `ManualPorts.Source` 实现这三个资料查询方法即可，不需要在宿主逐个重写页面 Controller。见[页面资料查询迁移](../docs/页面资料查询Java迁移_V0.1.md)。
+账号列表、选题列表和选题详情由Java显式接口提供。outside的`FixtureSourceFacts`直接读取模拟资料，`OutsideSourceAdapter`将已获取的实体交Python计算生命周期/标签；`LocalPythonAdapter`不再实现`Source`。统一资料入口为`/api/plan/internal/source/{capability}/query`，需内部令牌。宿主提供真实`SourceFacts`及`ManualPorts.Source`装配，保留业务服务。见[统一资料链路](../docs/统一资料链路_2026-11-03.md)。
 
 此适配器仅用于本地`local`环境，不应作为客户生产鉴权方案。迁移业务时新增Java应用服务／持久化实现，再移除对应旧路由；不让Java和Python同时写同一业务。
 

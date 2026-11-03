@@ -1,10 +1,14 @@
 package com.stratmatrix.standalone;
 
 import com.stratmatrix.planning.adapter.legacy.LegacyPythonProperties;
+import com.stratmatrix.planning.adapter.local.FixtureContentObservations;
+import com.stratmatrix.planning.adapter.local.FixtureSourceFacts;
 import com.stratmatrix.planning.adapter.local.LocalPlanningContentAdapter;
 import com.stratmatrix.planning.adapter.local.LocalPythonAdapter;
+import com.stratmatrix.planning.adapter.local.OutsideSourceAdapter;
 import com.stratmatrix.planning.adapter.python.AlgorithmConfigPythonClient;
 import com.stratmatrix.planning.adapter.python.AutoSchedulePythonClient;
+import com.stratmatrix.planning.adapter.python.CatalogProjectionPythonClient;
 import com.stratmatrix.planning.auto.AutoScheduleMapper;
 import com.stratmatrix.planning.auto.AutoSchedulePort;
 import com.stratmatrix.planning.config.AlgorithmConfigPort;
@@ -14,8 +18,8 @@ import com.stratmatrix.planning.config.ConfigReleaseMapper;
 import com.stratmatrix.planning.content.*;
 import com.stratmatrix.planning.manual.*;
 import com.stratmatrix.planning.query.PlanningQueryMapper;
+import com.stratmatrix.planning.source.SourceFacts;
 import com.zaxxer.hikari.*;
-import java.util.Collections;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
@@ -31,7 +35,7 @@ import org.springframework.web.client.RestTemplate;
 
 /** Local adapters only; ManualModuleConfiguration wires the reusable services. */
 @Configuration
-@Profile("local")
+@Profile("local & !inside")
 @ConditionalOnProperty(name = "planning.manual.enabled", havingValue = "true")
 public class LocalManualBusinessConfiguration {
   @Bean(destroyMethod = "close")
@@ -118,8 +122,23 @@ public class LocalManualBusinessConfiguration {
   }
 
   @Bean
-  public PlanningContentPort localPlanningContentPort(LocalPythonAdapter local) {
-    return new LocalPlanningContentAdapter(local);
+  public PlanningContentPort localPlanningContentPort(SourceFacts facts) {
+    return new LocalPlanningContentAdapter(facts);
+  }
+
+  @Bean
+  public SourceFacts outsideSourceFacts(Environment env) {
+    return new FixtureSourceFacts(
+        java.nio.file.Paths.get(env.getRequiredProperty("planning.source.fixture")));
+  }
+
+  @Bean
+  public ManualPorts.Source outsideManualSource(
+      SourceFacts facts,
+      @Qualifier("legacyPythonHttp") RestTemplate client,
+      LegacyPythonProperties p) {
+    return new OutsideSourceAdapter(
+        facts, new CatalogProjectionPythonClient(client, p.baseUri(), p.getIntegrationToken()));
   }
 
   @Bean
@@ -141,11 +160,8 @@ public class LocalManualBusinessConfiguration {
 
   @Bean
   public LocalPythonAdapter manualPythonAdapter(
-      @Qualifier("legacyPythonHttp") RestTemplate client,
-      LegacyPythonProperties p,
-      Environment env) {
-    return new LocalPythonAdapter(
-        client, p, !"business_only".equals(env.getProperty("planning.history.mode")));
+      @Qualifier("legacyPythonHttp") RestTemplate client, LegacyPythonProperties p) {
+    return new LocalPythonAdapter(client, p);
   }
 
   @Bean
@@ -171,14 +187,12 @@ public class LocalManualBusinessConfiguration {
   }
 
   @Bean
-  public ManualPorts.ContentStatusSource localContentStatusSource() {
-    // No content-side provider exists outside the bank. Missing observations never imply success.
-    return candidates -> Collections.emptyList();
+  public ManualPorts.ContentStatusSource localContentStatusSource(SourceFacts facts) {
+    return new FixtureContentObservations(facts)::content;
   }
 
   @Bean
-  public ManualPorts.MarketingStatusSource localMarketingStatusSource() {
-    // Content-side marketing allocation is unavailable in the external development environment.
-    return codes -> Collections.emptyList();
+  public ManualPorts.MarketingStatusSource localMarketingStatusSource(SourceFacts facts) {
+    return new FixtureContentObservations(facts)::marketing;
   }
 }

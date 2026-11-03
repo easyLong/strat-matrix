@@ -23,6 +23,7 @@ from .bank_bridge.ports import DataContractError, IntegrationUnavailable
 from .services.errors import ApplicationError
 from .api.background_execution import execution_lifespan, router as background_execution_router
 from .algorithm_config_commands import router as algorithm_config_router
+from .api.catalog_projection import router as catalog_projection_router
 
 
 class ConfiguredCORSMiddleware(CORSMiddleware):
@@ -37,6 +38,7 @@ class ConfiguredCORSMiddleware(CORSMiddleware):
 app = FastAPI(title="多账号智能策划 API", version="0.2.0", lifespan=execution_lifespan)
 app.include_router(background_execution_router)
 app.include_router(algorithm_config_router)
+app.include_router(catalog_projection_router)
 app.add_middleware(
     ConfiguredCORSMiddleware,
     allow_origins=[],

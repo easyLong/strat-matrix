@@ -89,7 +89,7 @@ def run(cycle, policy_id, account_id, output):
             if state['status'] == 'succeeded':
                 break
             clock.sleep(1)
-        assert state['status'] == 'succeeded', 'V2流程未在本轮完成'
+        assert state['status'] == 'succeeded', 'V19流程未在本轮完成'
         batch_id = state['production_batch_id']
         with connection() as db, db.cursor() as cursor:
             cursor.execute(BASE + 'AND i.batch_id=%s ORDER BY i.id', (batch_id,))

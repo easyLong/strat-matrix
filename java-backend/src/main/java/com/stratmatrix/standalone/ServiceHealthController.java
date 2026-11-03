@@ -20,6 +20,7 @@ public class ServiceHealthController {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("service", "strat-matrix-java");
     result.put("status", "UP");
+    result.put("environment", environment.getProperty("planning.environment", "host"));
     boolean manual = environment.getProperty("planning.manual.enabled", Boolean.class, false);
     result.put("migration_stage", manual ? "ordinary-manual-business" : "legacy-business-adapter");
     result.put("manual_business_enabled", manual);
@@ -30,6 +31,7 @@ public class ServiceHealthController {
     result.put(
         "legacy_enabled",
         environment.acceptsProfiles(org.springframework.core.env.Profiles.of("local"))
+            && !environment.acceptsProfiles(org.springframework.core.env.Profiles.of("inside"))
             && environment.getProperty("planning.legacy.enabled", Boolean.class, false));
     return result;
   }

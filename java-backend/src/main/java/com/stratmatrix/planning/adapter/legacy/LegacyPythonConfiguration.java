@@ -12,7 +12,7 @@ import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
 @Configuration
-@Profile("local")
+@Profile("local & !inside")
 @EnableConfigurationProperties(LegacyPythonProperties.class)
 public class LegacyPythonConfiguration {
     @Bean("legacyPythonHttp")

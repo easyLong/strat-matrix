@@ -22,7 +22,7 @@ import org.springframework.web.client.RestTemplate;
 
 /** 仅行外开发模拟宿主调度；驻场不复制本配置，改由客户调度器调用客户端。 */
 @Configuration
-@Profile("local")
+@Profile("local & !inside")
 @ConditionalOnProperty(name = "planning.local-pulse.enabled", havingValue = "true")
 @EnableScheduling
 public class LocalExecutionConfiguration {

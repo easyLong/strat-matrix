@@ -1,14 +1,8 @@
-"""Migration-only read bridge. Replace Java's source port with bank SQL onsite.
-
-No preview, business task or formal result is created here.
-"""
-from fastapi import APIRouter, Depends
+"""Retired source POST and historical-operation compatibility reads; no new business writes."""
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from .security import require_integration_token
 from ..db import connection
-from ..services.configuration import get_config
-from ..bank_bridge.bridge import account_options, topic_options
-from ..services.catalog import attach_topic_labels
 from datetime import date
 
 router = APIRouter(prefix='/api/internal/manual-source', dependencies=[Depends(require_integration_token)])
@@ -29,19 +23,7 @@ class SourceQuery(BaseModel):
 
 @router.post('')
 def snapshot(query: SourceQuery):
-    config = get_config()
-    with connection() as db, db.cursor() as cursor:
-        accounts = []
-        for offset in range(0,len(query.account_ids),500):
-            accounts += account_options(cursor,config.config,account_ids=query.account_ids[offset:offset+500])
-        topics = topic_options(cursor,topic_ids=list(dict.fromkeys(query.topic_ids))) if query.topic_ids else []
-        attach_topic_labels(cursor,topics)
-        for topic in topics:
-            topic.pop('topic_payload',None)
-            topic.pop('_catalog_topic',None)
-    import hashlib
-    version = hashlib.sha256(config.config.model_dump_json().encode()).hexdigest()
-    return {'accounts':accounts,'topics':topics,'algorithm_version':version}
+    raise HTTPException(410, '基础资料已统一由Java提供；算法字段使用catalog-projection计算')
 
 
 class OperationQuery(BaseModel):

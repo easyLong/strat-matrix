@@ -69,7 +69,8 @@ def properties_text(values: dict[str, str]) -> str:
 
 
 def write_local_configuration(destination: Path):
-    if get_setting("JAVA_ACCESS_MODE") != "local_development":
+    from .deployment_environment import current
+    if current()['PLANNING_ENV'] != "outside":
         raise ValueError("行内宿主模式不生成本地Java配置")
     host, port = local_java_address(get_setting("JAVA_GATEWAY_URL"))
     python_host = get_setting("BACKEND_HOST")
@@ -78,6 +79,7 @@ def write_local_configuration(destination: Path):
     if ":" in python_host:
         python_host = f"[{python_host}]"
     values = {
+        "spring.profiles.active": "outside",
         "server.address": host,
         "server.port": str(port),
         "planning.legacy.base-url": f"http://{python_host}:{get_setting('BACKEND_PORT')}",
@@ -86,10 +88,14 @@ def write_local_configuration(destination: Path):
     java_db = java_database_settings()
     values.update({
         'planning.manual.enabled': 'true',
+        'planning.business-config.enabled': 'true',
         'planning.manual.initialize-schema': 'true',
         'planning.config-release.enabled': 'true',
         'planning.history.mode': 'business_only',
         'planning.auto-schedule.enabled': 'true',
+        'planning.source.enabled': 'true',
+        'planning.source.fixture': str(Path(__file__).resolve().parents[2] / 'run/bank-source-fixture.json'),
+        'planning.source.token': get_setting('JAVA_API_TOKEN', '') or get_setting('INTEGRATION_TOKEN'),
         'planning.manual.jdbc-url': f"jdbc:mysql://{java_db['host']}:{java_db['port']}/{java_db['database']}?characterEncoding=UTF-8&serverTimezone=UTC",
         'planning.manual.username': java_db['user'],
         'planning.manual.password': java_db['password'],

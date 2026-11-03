@@ -121,6 +121,11 @@ class MatchingExecutionTests(unittest.TestCase):
         self.stack.enter_context(patch.object(preparation, "current_next_monday", return_value=START))
         self.stack.enter_context(patch.object(preparation, "datetime")).now.return_value = CHECKED_AT
         self.stack.enter_context(patch.object(tasks, "now_utc", return_value=CHECKED_AT))
+        # Storage/lease tests use an intentionally non-executable historical fixture.
+        # Production V19 admission is covered separately by test_v19_only.
+        self.stack.enter_context(patch.object(policies, 'require_supported_implementation'))
+        self.stack.enter_context(patch.object(tasks, 'require_supported_implementation'))
+        self.stack.enter_context(patch.object(policies, 'implementation_approval_errors', return_value=[]))
         self.stack.enter_context(patch.object(preparation, "load_accounts", return_value=deepcopy(self.store.snapshots)))
         self.stack.enter_context(patch.object(preparation, "load_matching_topics", side_effect=lambda *a: deepcopy(self.store.topics)))
         self.stack.enter_context(patch.object(tasks, "load_matching_topics", side_effect=lambda *a: deepcopy(self.store.topics)))

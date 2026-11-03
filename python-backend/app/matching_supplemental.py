@@ -157,6 +157,18 @@ def load_official_usage(cursor, topic_ids: list[str]) -> dict:
     identifiers = sorted(set(topic_ids))
     if len(identifiers) > MAX_ROWS:
         raise SupplementalInputError("supplemental_input_too_large")
+    from .bank_bridge.official_usage import current_counts
+    java_counts = {}
+    for group in chunks(identifiers):
+        counts = current_counts(group)
+        if counts is None:
+            break
+        java_counts.update(counts)
+    else:
+        return {"source": "java_business_completed_content", "unknown_count": 0,
+                "records": [{"topic_id": identity, "topic_type": "普通", "known": True,
+                             "official_use_count": java_counts[identity], "source_revision": 1,
+                             "source_name": "java_business_completed_content"} for identity in identifiers]}
     for group in chunks(identifiers):
         cursor.execute(
             "SELECT topic_id,official_use_count,source_revision,source_name FROM godp_topic_official_usage "

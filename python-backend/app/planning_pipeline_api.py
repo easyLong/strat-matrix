@@ -14,7 +14,7 @@ from .planning_pipeline import (cancel_pipeline, create_pipeline,
                                 pipeline_summary, read_pipeline, select_stages)
 from .planning_pipeline_runner import (advance_pipeline_to_commit,
                                        retry_pipeline_to_commit)
-from .ordinary_scheduler import start_v2_pipeline
+from .ordinary_scheduler import start_v19_pipeline
 from .ordinary_planning import PlanningError
 from .business_snapshot import BusinessConfigSnapshot
 from .planning_result_commit import (ResultCommitError, build_pipeline_proposal,
@@ -61,9 +61,9 @@ def guarded(handler, *args):
 
 @router.post("/api/internal/auto-planning/start")
 def start_auto_algorithm(payload: AutoStart) -> dict:
-    """Java supplies the due cycle; Python selects the approved V2 algorithm policy."""
+    """Java supplies the due cycle; Python selects the approved V19 algorithm policy."""
     try:
-        return start_v2_pipeline(payload.cycle_start, commit_owner='java',
+        return start_v19_pipeline(payload.cycle_start, commit_owner='java',
             business_config_version=payload.business_config_version,
             business_config=payload.business_config.model_dump())
     except PlanningError as exc:

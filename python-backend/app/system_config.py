@@ -85,11 +85,17 @@ def get_setting(key: str, default: str | None = None) -> str:
 
 
 def public_settings(frontend=False) -> dict[str, str]:
+    from .deployment_environment import resolve
+    deployment = resolve(snapshot())
     keys = FRONTEND_KEYS if frontend else LAUNCH_KEYS
-    result = {
-        key: get_setting(key, RUNTIME_DEFAULTS.get(key, CATALOG[key].default)) if key in CATALOG else RUNTIME_DEFAULTS[key]
-        for key in keys
-    }
+    result = {}
+    for key in keys:
+        if key in ('PLANNING_ENV', 'JAVA_ACCESS_MODE'):
+            result[key] = deployment[key]
+        elif key in CATALOG:
+            result[key] = get_setting(key, RUNTIME_DEFAULTS.get(key, CATALOG[key].default))
+        else:
+            result[key] = RUNTIME_DEFAULTS[key]
     return result
 
 

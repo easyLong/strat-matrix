@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="${APP_ROOT:-$SCRIPT_DIR}"
 source "$APP_ROOT/system-config.sh"
 load_system_config initialize
+(
+  cd "$APP_ROOT/python-backend"
+  "$PYTHON_BIN" -m app.deployment_environment check
+)
 NPM_BIN="${NPM_BIN:-npm}"
 
 mkdir -p "$RUN_DIR" "$LOG_DIR"
@@ -37,7 +41,7 @@ for legacy in application-worker ordinary-scheduler hotspot-scheduler planning-w
 done
 
 # The local Java shell owns the page entry. Host mode uses the bank's existing Java service.
-if [[ "$JAVA_ACCESS_MODE" == "local_development" ]]; then
+if [[ "$PLANNING_ENV" == "outside" ]]; then
   JAVA_BIN="${JAVA_BIN:-java}"
   MVN_BIN="${MVN_BIN:-mvn}"
   if ! command -v "$JAVA_BIN" >/dev/null 2>&1; then
@@ -104,7 +108,7 @@ else
   rm -f "$frontend_pid"
   (
     cd "$APP_ROOT/frontend"
-    export BACKEND_HOST BACKEND_PORT FRONTEND_HOST FRONTEND_PORT JAVA_ACCESS_MODE JAVA_GATEWAY_URL
+    export BACKEND_HOST BACKEND_PORT FRONTEND_HOST FRONTEND_PORT JAVA_ACCESS_MODE JAVA_GATEWAY_URL PLANNING_ENV
     exec "$NPM_BIN" run preview -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
   ) >"$LOG_DIR/frontend.log" 2>&1 &
   echo $! >"$frontend_pid"

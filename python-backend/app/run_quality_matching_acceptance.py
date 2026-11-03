@@ -1,6 +1,5 @@
-"""Compare the same five local test accounts under frozen V2 and V19 inputs."""
+"""Run the same five local test accounts through V19 only."""
 import argparse
-from copy import deepcopy
 from datetime import date
 import json
 from pathlib import Path
@@ -12,18 +11,18 @@ from .matching_contracts import MatchingQualityOptions,PolicyCreate,PolicyConfir
 from .matching_policy import create_policy,confirm_policy,select_policy,digest
 from .matching_tasks import create_task,select_task,read_evaluation,read_task_inputs,task_summary
 from .matching_executor_worker import run_once
-from .matching_executor_v2 import execute_job_v2
 from .matching_quality import IMPLEMENTATION_KEY,QUALITY_PARAMETERS
 from .matching_quality_store import read_quality_report
 from .planning_input_runner import prepare_inputs
 from .account_profile import canonical_json
+from .system_config import get_setting
 
 ACCOUNTS = ['E2E-ORD10-001','E2E-ORD10-003','E2E-ORD10-004','E2E-ORD10-005','E2E-ORD10-010']
 
 
 def quality_policy():
     with connection() as db,db.cursor() as cursor:
-        base = json.loads(select_policy(cursor,5)['document_json'])
+        base = json.loads(select_policy(cursor,int(get_setting('AUTO_PLANNING_POLICY_ID','0')))['document_json'])
         cursor.execute("SELECT * FROM godp_matching_policy WHERE policy_key='v19-quality-test' ORDER BY version DESC LIMIT 1")
         latest = cursor.fetchone()
     base['implementation_key'] = IMPLEMENTATION_KEY
@@ -92,20 +91,10 @@ def run(cycle,output,new_test_run=False):
     report['quality'] = quality['report']
     report['evaluation'] = read_evaluation(saved)
     frozen = read_task_inputs(task['task_id'])
-    policy = deepcopy(frozen['policy'])
-    policy['implementation_key'] = 'builtin-cosine-portfolio-v2'
-    policy['quality'] = None
-    legacy = {'ALG-01':{'similarity':'cosine_unit_vectors'},
-              'ALG-02':{'city_gate':'allow_empty_or_exact','history_gate':'exclude_observed_account_history'},
-              'ALG-03':{'top_k':100,'min_cosine':0.0},'ALG-04':{'score_scale':'positive_cosine_0_100'},
-              'ALG-09':{'no_candidate':'fallback_then_failed','system_error':'task_failure'}}
-    for key,value in legacy.items():policy['decisions'][key]['parameters']=value
-    job = {**task_summary(saved),'lease_id':saved['lease_id'],'inputs':frozen['inputs'],'policy':policy}
-    report['baseline_same_inputs'] = execute_job_v2(job).model_dump(mode='json')
     report['titles'] = {t['topic_id']:t['source_payload']['title'] for t in frozen['inputs']['topics']}
     report['account_names'] = {a['account_id']:a['snapshot']['account_name'] for a in frozen['inputs']['accounts']}
     report['status'] = 'passed'
-    step('comparison_ready',positions=len(report['evaluation']['positions']),summary=report['quality']['summary'])
+    step('v19_ready',positions=len(report['evaluation']['positions']),summary=report['quality']['summary'])
     return report
 
 

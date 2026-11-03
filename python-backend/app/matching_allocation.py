@@ -1,10 +1,4 @@
-"""Composable algorithm primitives for the V102 matching method.
-
-This module provides strict, deterministic primitives used by the separately
-versioned V2 portfolio executor. Generic multi-feature extraction remains an
-injected interface; the current production V2 executor uses the approved cosine
-candidate contract until account-side taxonomy features are frozen.
-"""
+"""Reusable deterministic gates, features and allocation primitives for V19."""
 
 from __future__ import annotations
 
@@ -15,7 +9,7 @@ from typing import Callable, Iterable, Mapping, Protocol, Sequence
 
 
 class AlgorithmConfigurationError(ValueError):
-    """A V2 policy is incomplete or internally inconsistent."""
+    """A V19 policy is incomplete or internally inconsistent."""
 
 
 class AlgorithmInputError(ValueError):

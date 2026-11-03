@@ -1,4 +1,4 @@
-"""Poll matching tasks assigned to the built-in deterministic engine."""
+"""Execute persisted matching tasks using the sole supported V19 engine."""
 
 import argparse
 import logging
@@ -8,10 +8,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from .matching_contracts import ClaimTask, MatchingFailure
-from .matching_executor import (IMPLEMENTATION_KEY as V1_IMPLEMENTATION_KEY,
-                                ExecutorInputError, ExecutorPolicyError, execute_job)
-from .matching_executor_v2 import (IMPLEMENTATION_KEY as V2_IMPLEMENTATION_KEY,
-                                  execute_job_v2)
+from .core.matching_common import ExecutorInputError, ExecutorPolicyError
 from .matching_tasks import claim_task, fail_task, save_evaluation, yield_task
 from .matching_contracts import LeaseIdentity
 from .matching_quality import IMPLEMENTATION_KEY as QUALITY_IMPLEMENTATION_KEY
@@ -22,8 +19,6 @@ from .system_config import get_setting
 
 LOG = logging.getLogger("matching-executor-worker")
 EXECUTORS = {
-    V1_IMPLEMENTATION_KEY: execute_job,
-    V2_IMPLEMENTATION_KEY: execute_job_v2,
     QUALITY_IMPLEMENTATION_KEY: execute_quality_job,
 }
 
@@ -44,8 +39,7 @@ def poll_seconds() -> int:
 
 
 def lease_seconds() -> int:
-    # The built-in engine makes no model/network call, but large matrices can
-    # still take time. Keep the default comfortably above the API's old 300s.
+    # Model calls renew the lease; each worker turn checkpoints bounded work.
     return _integer_env("MATCHING_EXECUTOR_LEASE_SECONDS", 1800, 30, 3600)
 
 
@@ -121,7 +115,7 @@ def run_once(task_id: int | None = None, max_jobs: int = 100) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="执行已批准V1/V2策略绑定的普通内容匹配任务")
+    parser = argparse.ArgumentParser(description="执行已批准V19策略绑定的普通内容匹配任务")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--check-config", action="store_true")
     args = parser.parse_args()

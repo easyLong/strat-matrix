@@ -243,6 +243,11 @@ public class ManualPlanningController {
         .body(data);
   }
 
+  @PostMapping({"/query/topic-usage", "/integrations/bank/op02/topic-usage/query"})
+  public Object topicUsage(@RequestBody Map<String, Object> input) {
+    return new TopicUsageService(queries.repo).query(input);
+  }
+
   @ExceptionHandler(BusinessException.class)
   public ResponseEntity<?> business(BusinessException e) {
     return ResponseEntity.status(e.status).body(map("detail", e.getMessage()));

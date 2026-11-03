@@ -76,7 +76,8 @@ class SystemConfigTests(unittest.TestCase):
         with patch.object(config, "connection", return_value=self.db):
             frontend = config.public_settings(frontend=True)
             shell = config.public_settings()
-        self.assertEqual(len(frontend), 6)
+        self.assertEqual(len(frontend), 7)
+        self.assertEqual(frontend['PLANNING_ENV'], 'outside')
         self.assertIn('JAVA_GATEWAY_URL', frontend)
         self.assertNotIn('JAVA_API_TOKEN', frontend)
         self.assertEqual(frontend["BACKEND_PORT"], "6931")
@@ -166,7 +167,10 @@ class SystemConfigMigrationTests(unittest.TestCase):
         saved = {"MODEL_NAME": "custom-model"}
         cursor = MagicMock()
 
-        def execute(sql, params):
+        def execute(sql, params=None):
+            if sql.startswith('SELECT'):
+                cursor.fetchone.return_value = None
+                return
             key, _, _, value, *_ = params
             self.assertIn("ON DUPLICATE KEY UPDATE config_group=VALUES(config_group)", sql)
             self.assertIn("config_name=VALUES(config_name)", sql)

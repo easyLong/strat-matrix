@@ -64,7 +64,7 @@ def round_hotspot_slots(slot_count: int, ratio: int) -> int:
 def run_weekly_planning(cycle_start: date | None = None) -> dict:
     from .bank_bridge.factory import source_mode
     if source_mode() == 'java_http':
-        raise PlanningError('Java资料模式使用已批准V2流程，旧规则脚本不支持行内HTTP资料')
+        raise PlanningError('Java资料模式使用已批准V19流程，旧规则脚本不支持行内HTTP资料')
     start = cycle_start or current_next_monday()
     if start.weekday() != 0:
         raise PlanningError("目标策划周期必须从周一开始")

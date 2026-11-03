@@ -71,7 +71,8 @@ class MatchingQualityOptions(StrictModel):
     minimum_adjacent_topic_fit: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     repeat_weight: float = Field(default=.10, ge=0, le=1, allow_inf_nan=False)
     prompt_version: Literal['v19-quality-1','v19-quality-2'] = 'v19-quality-2'
-    evaluation_only: Literal[True] = True
+    # Existing preview policies stay preview-only; production promotion is explicit.
+    evaluation_only: bool = Field(default=True, strict=True)
 
     @model_validator(mode='after')
     def check_parameters(self):
@@ -85,6 +86,8 @@ class MatchingQualityOptions(StrictModel):
                 raise ValueError('召回和精判权重必须完整且合计为1')
         if self.precision_limit > self.recall_limit:
             raise ValueError('精判保留数量不能大于召回数量')
+        if not self.evaluation_only and self.mapping_mode != 'reviewed':
+            raise ValueError('正式V19策略只能使用已审核映射')
         return self
 
 

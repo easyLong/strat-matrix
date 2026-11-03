@@ -6,6 +6,8 @@ from .ports import IntegrationUnavailable
 
 # Optional explicit binding for tests/acceptance. Runtime mode lives in MySQL.
 SOURCE_MODE = None
+# Explicit process-local acceptance binding; never selected by a request or persisted setting.
+SOURCE_PROVIDER = None
 _override = ContextVar('bank_source_override', default=None)
 _production_override = ContextVar('bank_production_override', default=None)
 
@@ -17,13 +19,19 @@ def external_source_enabled():
 def source_mode():
     if SOURCE_MODE is not None:
         return SOURCE_MODE
-    from ..system_config import get_setting
-    return get_setting('BANK_SOURCE_MODE', 'local_fixture')
+    from ..deployment_environment import current, EnvironmentConfigurationError
+    from ..system_config import SystemConfigError
+    try:
+        return current()['BANK_SOURCE_MODE']
+    except EnvironmentConfigurationError as error:
+        raise SystemConfigError(str(error)) from None
 
 
 def get_source(cursor):
     if _override.get() is not None:
         return _override.get()
+    if SOURCE_PROVIDER is not None:
+        return SOURCE_PROVIDER(cursor)
     mode = source_mode()
     if mode in ('local_sql', 'bank_sql'):
         raise IntegrationUnavailable('生产资料只能通过Java接口读取，不允许Python查询行内业务库')

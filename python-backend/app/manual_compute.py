@@ -1,7 +1,7 @@
 """Pure manual allocation over frozen inputs. Never writes formal business tables.
 
 Manual selection keeps the existing random eligible-topic allocation semantics;
-the seed makes retries deterministic. This is NOT the automatic V2 matcher.
+the seed makes retries deterministic. This is NOT the automatic V19 matcher.
 """
 import hashlib
 import json
