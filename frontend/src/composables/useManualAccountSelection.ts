@@ -1,4 +1,4 @@
-import { computed, nextTick, onScopeDispose, ref, watch, type Ref } from 'vue';
+import { computed, nextTick, onScopeDispose, ref, watch, type Ref } from '../compat/composition';
 import type { AccountOption, ManualAccountAvailability } from '../types';
 import { buildAccountImportIssueCsv, recognizeAccountImport, type AccountImportRow } from '../ui/accountImport';
 export function useManualAccountSelection({ accounts, publishDate, isMarketing, databaseReady, error, notice, fetchAvailability }: {

@@ -1,30 +1,12 @@
 const assert = require('node:assert/strict')
-const { test } = require('node:test')
+const { it: test } = require('mocha')
 const fs = require('node:fs')
 const path = require('node:path')
 const ts = require('typescript')
-const { parse, compileScript } = require('@vue/compiler-sfc')
-const { createSSRApp, h } = require('vue')
-const { renderToString } = require('@vue/server-renderer')
+const { load, Vue } = require('./helpers/vue2-loader.cjs')
+const renderer = require('vue-server-renderer').createRenderer()
 
 // Render the actual history component, including its table and detail drawer.
-function load(file) {
-  const source = fs.readFileSync(file, 'utf8')
-  const code = file.endsWith('.vue')
-    ? compileScript(parse(source, { filename: file }).descriptor, { id: 'history-test', inlineTemplate: true }).content
-    : source
-  const compiled = ts.transpileModule(code, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText
-  const module = { exports: {} }
-  const localRequire = name => {
-    if (name.endsWith('PageBreadcrumbs.vue')) return { default: { render: () => null } }
-    if (name.startsWith('.')) return load(path.resolve(path.dirname(file), `${name}.ts`))
-    return require(name)
-  }
-  new Function('require', 'module', 'exports', compiled)(localRequire, module, module.exports)
-  return module.exports
-}
 const History = load(path.resolve(__dirname, '../src/components/config/ConfigHistory.vue')).default
 const { canRestoreConfig, configDetailRows } = load(path.resolve(__dirname, '../src/ui/configHistory.ts'))
 const latest = {
@@ -37,7 +19,7 @@ const latest = {
   },
 }
 const oldest = { version: 1, created_at: '2026-09-28 14:31:49', created_by: 'demo-seed', config: { marketing_max: 1, rolling_posts: 10, stage_targets: [] } }
-const render = (versions, detail = null) => renderToString(createSSRApp({ render: () => h(History, { versions, detail, disabled: false }) }))
+const render = (versions, detail = null) => renderer.renderToString(new Vue({ render: h => h(History, { props: { versions, detail, disabled: false } }) }))
 
 test('incomplete old snapshots cannot break the latest configuration history table', async () => {
   const before = JSON.stringify(oldest)

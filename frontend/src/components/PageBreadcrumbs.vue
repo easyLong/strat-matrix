@@ -1,39 +1,55 @@
-<script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
-import { pageBreadcrumbsKey, type PageBreadcrumb } from '../composables/usePageBreadcrumbs'
-
-const props = defineProps<{ items?: PageBreadcrumb[]; compact?: boolean }>()
-const inherited = inject(pageBreadcrumbsKey, computed(() => []))
-const entries = computed(() => props.items ?? inherited.value)
-const navigation = ref<HTMLElement | null>(null)
-let resizeObserver: ResizeObserver | undefined
-function showCurrentLocation() {
-  if (navigation.value) navigation.value.scrollLeft = navigation.value.scrollWidth
-}
-watch(() => entries.value.map(item => item.label).join('>'), async () => {
-  await nextTick()
-  showCurrentLocation()
-}, { immediate: true, flush: 'post' })
-onMounted(() => {
-  resizeObserver = new ResizeObserver(showCurrentLocation)
-  if (navigation.value) resizeObserver.observe(navigation.value)
-})
-onBeforeUnmount(() => resizeObserver?.disconnect())
-function activate(item: PageBreadcrumb) {
-  item.beforeNavigate?.()
-  void item.action?.()
-}
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
+import { RouterLink } from '../compat/router';
+import { pageBreadcrumbsKey, type PageBreadcrumb } from '../composables/usePageBreadcrumbs';
+export default defineComponent({
+    props: { items: { required: false, type: Array as PropType<PageBreadcrumb[]> },
+        compact: { required: false, type: Boolean as PropType<boolean> } },
+    setup(props, context) {
+        const inherited = inject(pageBreadcrumbsKey, computed(() => []));
+        const entries = computed(() => props.items ?? inherited.value);
+        const navigation = ref<HTMLElement | null>(null);
+        let resizeObserver: ResizeObserver | undefined;
+        function showCurrentLocation() {
+            if (navigation.value)
+                navigation.value.scrollLeft = navigation.value.scrollWidth;
+        }
+        watch(() => entries.value.map(item => item.label).join('>'), async () => {
+            await nextTick();
+            showCurrentLocation();
+        }, {
+            immediate: true,
+            flush: 'post'
+        });
+        onMounted(() => {
+            resizeObserver = new ResizeObserver(showCurrentLocation);
+            if (navigation.value)
+                resizeObserver.observe(navigation.value);
+        });
+        onBeforeUnmount(() => resizeObserver?.disconnect());
+        function activate(item: PageBreadcrumb) {
+            item.beforeNavigate?.();
+            void item.action?.();
+        }
+        return {
+            entries,
+            navigation,
+            activate
+        };
+    },
+    components: {RouterLink}
+});
 </script>
 
 <template>
   <nav ref="navigation" class="breadcrumb page-breadcrumb" :class="{ compact }" :aria-label="compact ? '详情位置' : '当前位置'">
-    <template v-for="(item, index) in entries" :key="`${index}-${item.label}`">
-      <svg v-if="index" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
-      <span v-if="index === entries.length - 1" aria-current="page">{{ item.label }}</span>
-      <button v-else-if="item.action" type="button" @click="activate(item)">{{ item.label }}</button>
-      <RouterLink v-else-if="item.to" :to="item.to" aria-current-value="false" @click="activate(item)">{{ item.label }}</RouterLink>
-      <span v-else>{{ item.label }}</span>
+    <template v-for="(item, index) in entries" >
+      <svg :key="(`${index}-${item.label}`) + '-0'" v-if="index" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+      <span :key="(`${index}-${item.label}`) + '-1'" v-if="index === entries.length - 1" aria-current="page">{{ item.label }}</span>
+      <button :key="(`${index}-${item.label}`) + '-2'" v-else-if="item.action" type="button" @click="activate(item)">{{ item.label }}</button>
+      <RouterLink :key="(`${index}-${item.label}`) + '-3'" v-else-if="item.to" :to="item.to" aria-current-value="false" @click.native="activate(item)">{{ item.label }}</RouterLink>
+      <span :key="(`${index}-${item.label}`) + '-4'" v-else>{{ item.label }}</span>
     </template>
   </nav>
 </template>

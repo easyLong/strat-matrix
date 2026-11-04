@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict')
-const { test } = require('node:test')
+const { it: test } = require('mocha')
 const fs = require('node:fs')
 const path = require('node:path')
 const ts = require('typescript')

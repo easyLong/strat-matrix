@@ -1,11 +1,14 @@
 const assert = require('node:assert/strict')
-const { test } = require('node:test')
+const { it: test } = require('mocha')
 const fs = require('node:fs')
 const path = require('node:path')
 const { createRequire } = require('node:module')
 const requireFrontend = createRequire(path.resolve(__dirname, '../package.json'))
 const ts = requireFrontend('typescript')
-const { ref, effectScope, nextTick } = requireFrontend('vue')
+const Vue = requireFrontend('vue')
+const composition = requireFrontend('@vue/composition-api')
+Vue.use(composition.default)
+const { ref, effectScope, nextTick } = composition
 
 // Exercise the real TypeScript business modules without adding a test framework.
 const cache = new Map()
@@ -15,9 +18,11 @@ function loadTs(filename) {
   const module = { exports: {} }
   cache.set(file, module)
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText
-  const requireLocal = name => name.startsWith('.')
+  const requireLocal = name => name.startsWith('@/')
+    ? loadTs(path.relative(__dirname, path.resolve(__dirname, '../src', `${name.slice(2)}.ts`)))
+    : name.startsWith('.')
     ? loadTs(path.relative(__dirname, path.resolve(path.dirname(file), `${name}.ts`)))
     : requireFrontend(name)
   new Function('require', 'module', 'exports', code)(requireLocal, module, module.exports)
@@ -89,7 +94,7 @@ test('topic query is explicit, cumulative selection survives filter changes and 
     s.topicQuery.value = ''
     s.applyTopicFilters()
     await nextTick()
-    assert.deepEqual(s.selectedTopicIds.value, ['N1', 'N2'])
+    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['N1', 'N2'])
     assert.deepEqual(s.selectedTopics.value.map(t => t.topic_id), ['N1', 'N2'])
   } finally { fixture.scope.stop() }
 })
@@ -105,7 +110,7 @@ test('saved topic selection freezes both query application and checkbox changes'
     s.setTopicSelected('N2', true)
     s.removeTopic(0)
     assert.equal(s.filteredTopics.value.length, 2)
-    assert.deepEqual(s.selectedTopicIds.value, ['N1'])
+    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['N1'])
   } finally { fixture.scope.stop() }
 })
 
@@ -118,7 +123,7 @@ test('marketing starts with marketing topics, supports nonmarketing topics and k
     s.topicTypeFilter.value = 'non_marketing'
     s.applyTopicFilters()
     s.setTopicSelected('N2', true)
-    assert.deepEqual(s.selectedTopicIds.value, ['N2'])
+    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['N2'])
     assert.equal(s.selectedTopics.value[0].topic_id, 'N2')
   } finally { fixture.scope.stop() }
 })
@@ -175,12 +180,12 @@ test('account quantity only selects after query and excludes accounts planned fo
     await fixture.selection.loadAccountAvailability()
     const s = fixture.selection
     s.targetCount.value = 2
-    assert.deepEqual(s.sampledIds.value, [])
+    assert.deepEqual(Array.from(s.sampledIds.value), [])
     await s.applyAccountFilters()
-    assert.deepEqual(s.sampledIds.value, ['C', 'A'])
+    assert.deepEqual(Array.from(s.sampledIds.value), ['C', 'A'])
     s.accountReview.value = true
     s.setAccountSelected('A', false)
-    assert.deepEqual(s.sampledIds.value, ['C', 'A'])
+    assert.deepEqual(Array.from(s.sampledIds.value), ['C', 'A'])
   } finally { fixture.scope.stop() }
 })
 
@@ -195,7 +200,7 @@ test('late account availability responses cannot overwrite a newer publication d
     pending.get('2026-11-20')({ publish_date: '2026-11-20', planned_account_ids: ['A'] })
     await nextTick()
     assert.equal(fixture.selection.availabilityReady.value, true)
-    assert.deepEqual(fixture.selection.plannedAccountIds.value, ['C'])
+    assert.deepEqual(Array.from(fixture.selection.plannedAccountIds.value), ['C'])
   } finally { fixture.scope.stop() }
 })
 
@@ -208,7 +213,7 @@ test('UM/account-ID import counts data rows and keeps recognized accounts when s
     await fixture.selection.importAccountsByIdentifier(new Blob([csv]))
     const s = fixture.selection
     assert.equal(s.targetCount.value, 5)
-    assert.deepEqual(s.sampledIds.value, ['A', 'C'])
+    assert.deepEqual(Array.from(s.sampledIds.value), ['A', 'C'])
     assert.equal(s.importMatchedCount.value, 2)
     assert.equal(s.importDuplicateRows.value.length, 1)
     assert.equal(s.importUnmatchedRows.value.length, 1)

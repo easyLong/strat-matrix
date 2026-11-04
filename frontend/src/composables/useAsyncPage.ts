@@ -1,4 +1,4 @@
-import { onBeforeUnmount, type Ref } from 'vue'
+import { onBeforeUnmount, type Ref } from '../compat/composition'
 import type { PageResult } from '../api/queries'
 
 /** Shared request ownership: only the latest query can update a list. */

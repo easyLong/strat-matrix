@@ -1,5 +1,6 @@
-<script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../../compat/composition';
 import ManualTaskTable from '../ManualTaskTable.vue';
 import ListPagination from '../ListPagination.vue';
 import { api } from '../../api';
@@ -7,92 +8,155 @@ import { usePlanningStore } from '../../store';
 import { useAsyncPage } from '../../composables/useAsyncPage';
 import { manualContentLabel, type ManualTaskFilters } from '../../ui/manualTask';
 import type { ManualTaskSummary } from '../../types';
-const store = usePlanningStore();
-const emit = defineEmits<{
-    planDetails: [
-        task: ManualTaskSummary
-    ];
-}>();
-const error = ref('');
-const tasks = ref<ManualTaskSummary[]>([]);
-const taskTotal = ref(0);
-const taskListRef = ref<HTMLElement | null>(null);
-const savedTaskList = store.manualTaskListState;
-let restoreTaskListPending = Boolean(savedTaskList);
-let manualDisposed = false;
-const taskPage = ref(savedTaskList?.page ?? 1);
-const taskPageSize = ref(savedTaskList?.pageSize ?? 10);
-const taskFilters = ref<ManualTaskFilters>({ ...(savedTaskList?.filters ?? { batch: '', dateStart: '', dateEnd: '', creator: '', contentStatus: '' }) });
-const appliedTaskFilters = ref<ManualTaskFilters>({ ...(savedTaskList?.appliedFilters ?? taskFilters.value) });
-const taskDateError = ref('');
-const taskFiltersActive = computed(() => Object.values(appliedTaskFilters.value).some(Boolean));
-const taskContentStatuses = computed(() => [...new Set(['待分配', '待生成', '生成中', '已完成', '生成失败', '部分失败', ...tasks.value.map(manualContentLabel)])]);
-const filteredTasks = computed(() => tasks.value);
-function applyTaskFilters() {
-    taskDateError.value = '';
-    if (taskFilters.value.dateStart && taskFilters.value.dateEnd && taskFilters.value.dateStart > taskFilters.value.dateEnd) {
-        taskDateError.value = '投放开始日期不能晚于结束日期';
-        return;
-    }
-    appliedTaskFilters.value = { ...taskFilters.value, batch: taskFilters.value.batch.trim(), creator: taskFilters.value.creator.trim() };
-    taskPage.value = 1;
-}
-const tasksLoading = ref(false);
-let refreshTimer: number | undefined;
-const pagedTasks = computed(() => tasks.value);
-const taskQuery = useAsyncPage<ManualTaskSummary>(signal => api.manualTaskPage({ page: taskPage.value, page_size: taskPageSize.value, filters: appliedTaskFilters.value }, signal), { items: tasks, total: taskTotal, loading: tasksLoading }, message => { error.value = message; });
-async function loadTasks() {
-    const loaded = await taskQuery.load();
-    if (!loaded || manualDisposed)
-        return;
-    error.value = '';
-    const maximum = Math.max(1, Math.ceil(taskTotal.value / taskPageSize.value));
-    if (taskPage.value > maximum) {
-        taskPage.value = maximum;
-        return;
-    }
-    if (restoreTaskListPending) {
-        restoreTaskListPending = false;
-        await nextTick();
-        if (manualDisposed)
-            return;
-        const table = taskListRef.value?.querySelector('.manual-task-table-wrap');
-        if (table && savedTaskList) {
-            table.scrollTop = savedTaskList.tableScrollTop;
-            table.scrollLeft = savedTaskList.tableScrollLeft;
+export default defineComponent({
+    setup(props, context) {
+        const store = usePlanningStore();
+        const emit = context.emit;
+        const error = ref('');
+        const tasks = ref<ManualTaskSummary[]>([]);
+        const taskTotal = ref(0);
+        const taskListRef = ref<HTMLElement | null>(null);
+        const savedTaskList = store.manualTaskListState;
+        let restoreTaskListPending = Boolean(savedTaskList);
+        let manualDisposed = false;
+        const taskPage = ref(savedTaskList?.page ?? 1);
+        const taskPageSize = ref(savedTaskList?.pageSize ?? 10);
+        const taskFilters = ref<ManualTaskFilters>({
+            ...(savedTaskList?.filters ?? {
+                batch: '',
+                dateStart: '',
+                dateEnd: '',
+                creator: '',
+                contentStatus: ''
+            })
+        });
+        const appliedTaskFilters = ref<ManualTaskFilters>({
+            ...(savedTaskList?.appliedFilters ?? taskFilters.value)
+        });
+        const taskDateError = ref('');
+        const taskFiltersActive = computed(() => Object.values(appliedTaskFilters.value).some(Boolean));
+        const taskContentStatuses = computed(() => [...new Set(['待分配', '待生成', '生成中', '已完成', '生成失败', '部分失败', ...tasks.value.map(manualContentLabel)])]);
+        const filteredTasks = computed(() => tasks.value);
+        function applyTaskFilters() {
+            taskDateError.value = '';
+            if (taskFilters.value.dateStart && taskFilters.value.dateEnd && taskFilters.value.dateStart > taskFilters.value.dateEnd) {
+                taskDateError.value = '投放开始日期不能晚于结束日期';
+                return;
+            }
+            appliedTaskFilters.value = {
+                ...taskFilters.value,
+                batch: taskFilters.value.batch.trim(),
+                creator: taskFilters.value.creator.trim()
+            };
+            taskPage.value = 1;
         }
-        window.scrollTo({ top: savedTaskList?.scrollY ?? 0, behavior: 'instant' });
-    }
-}
-function rememberTaskList() {
-    const table = taskListRef.value?.querySelector('.manual-task-table-wrap');
-    store.manualTaskListState = {
-        page: taskPage.value,
-        pageSize: taskPageSize.value,
-        filters: { ...taskFilters.value },
-        appliedFilters: { ...appliedTaskFilters.value },
-        scrollY: window.scrollY,
-        tableScrollTop: table?.scrollTop ?? 0,
-        tableScrollLeft: table?.scrollLeft ?? 0
-    };
-}
-function selectTask(task: ManualTaskSummary) { rememberTaskList(); emit('planDetails', task); }
-watch(taskPageSize, () => { taskPage.value = 1; });
-watch([taskPage, taskPageSize, appliedTaskFilters], () => { if (store.databaseReady)
-    void loadTasks(); });
-watch(() => store.databaseReady, ready => { if (ready)
-    void loadTasks(); }, { immediate: true });
-onMounted(() => {
-    refreshTimer = window.setInterval(() => {
-        if (store.databaseReady && tasks.value.some(task => /执行中|进行中|策划中|生成中/.test(task.planning_status || task.status) ||
-            ((task.batch_id || task.content_mode === 'marketing') && /待分配|待生产|待生成|未生成|生成中|生产中|上传中/.test(task.content_status || ''))))
-            void loadTasks();
-    }, 3000);
+        const tasksLoading = ref(false);
+        let refreshTimer: number | undefined;
+        const pagedTasks = computed(() => tasks.value);
+        const taskQuery = useAsyncPage<ManualTaskSummary>(signal => api.manualTaskPage({
+            page: taskPage.value,
+            page_size: taskPageSize.value,
+            filters: appliedTaskFilters.value
+        }, signal), {
+            items: tasks,
+            total: taskTotal,
+            loading: tasksLoading
+        }, message => {
+            error.value = message;
+        });
+        async function loadTasks() {
+            const loaded = await taskQuery.load();
+            if (!loaded || manualDisposed)
+                return;
+            error.value = '';
+            const maximum = Math.max(1, Math.ceil(taskTotal.value / taskPageSize.value));
+            if (taskPage.value > maximum) {
+                taskPage.value = maximum;
+                return;
+            }
+            if (restoreTaskListPending) {
+                restoreTaskListPending = false;
+                await nextTick();
+                if (manualDisposed)
+                    return;
+                const table = taskListRef.value?.querySelector('.manual-task-table-wrap');
+                if (table && savedTaskList) {
+                    table.scrollTop = savedTaskList.tableScrollTop;
+                    table.scrollLeft = savedTaskList.tableScrollLeft;
+                }
+                window.scrollTo({
+                    top: savedTaskList?.scrollY ?? 0,
+                    behavior: 'instant'
+                });
+            }
+        }
+        function rememberTaskList() {
+            const table = taskListRef.value?.querySelector('.manual-task-table-wrap');
+            store.manualTaskListState = {
+                page: taskPage.value,
+                pageSize: taskPageSize.value,
+                filters: {
+                    ...taskFilters.value
+                },
+                appliedFilters: {
+                    ...appliedTaskFilters.value
+                },
+                scrollY: window.scrollY,
+                tableScrollTop: table?.scrollTop ?? 0,
+                tableScrollLeft: table?.scrollLeft ?? 0
+            };
+        }
+        function selectTask(task: ManualTaskSummary) {
+            rememberTaskList();
+            emit('plan-details', task);
+        }
+        watch(taskPageSize, () => {
+            taskPage.value = 1;
+        });
+        watch([taskPage, taskPageSize, appliedTaskFilters], () => {
+            if (store.databaseReady)
+                void loadTasks();
+        });
+        watch(() => store.databaseReady, ready => {
+            if (ready)
+                void loadTasks();
+        }, {
+            immediate: true
+        });
+        onMounted(() => {
+            refreshTimer = window.setInterval(() => {
+                if (store.databaseReady && tasks.value.some(task => /执行中|进行中|策划中|生成中/.test(task.planning_status || task.status) || (task.batch_id || task.content_mode === 'marketing') && /待分配|待生产|待生成|未生成|生成中|生产中|上传中/.test(task.content_status || '')))
+                    void loadTasks();
+            }, 3000);
+        });
+        onBeforeUnmount(() => {
+            rememberTaskList();
+            manualDisposed = true;
+            if (refreshTimer !== undefined)
+                window.clearInterval(refreshTimer);
+        });
+        return {
+            store,
+            error,
+            taskTotal,
+            taskListRef,
+            taskPage,
+            taskPageSize,
+            taskFilters,
+            taskDateError,
+            taskFiltersActive,
+            taskContentStatuses,
+            applyTaskFilters,
+            tasksLoading,
+            pagedTasks,
+            selectTask
+        };
+    },
+    components: {ManualTaskTable, ListPagination}
 });
-onBeforeUnmount(() => { rememberTaskList(); manualDisposed = true; if (refreshTimer !== undefined)
-    window.clearInterval(refreshTimer); });
 </script>
 <template>
+<div class="vue2-component-root">
 <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
   <section ref="taskListRef" class="card manual-task-card">
     <div class="card-head"><div><h2>策划任务列表</h2></div></div>
@@ -113,9 +177,10 @@ onBeforeUnmount(() => { rememberTaskList(); manualDisposed = true; if (refreshTi
       :filtered="taskFiltersActive"
       @plan-details="selectTask"
     />
-    <ListPagination v-if="taskTotal" v-model:page="taskPage" v-model:page-size="taskPageSize" :total="taskTotal" unit="个任务" :page-size-options="[10, 20, 50]" class="manual-task-pagination" />
+    <ListPagination v-if="taskTotal" :page.sync="taskPage" :page-size.sync="taskPageSize" :total="taskTotal" unit="个任务" :page-size-options="[10, 20, 50]" class="manual-task-pagination" />
   </section>
 
+</div>
 </template>
 <style scoped>
 

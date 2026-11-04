@@ -3,22 +3,37 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": { "node": "16.13.0", "npm": ">=8.1.0 <9" },
+  "packageManager": "npm@8.1.0",
   "scripts": {
+    "preinstall": "node tooling/checkNode.cjs",
+    "predev": "node tooling/checkNode.cjs",
+    "pretest": "node tooling/checkNode.cjs",
+    "prebuild": "node tooling/checkNode.cjs",
+    "prepreview": "node tooling/checkNode.cjs",
     "dev": "vite",
-    "test": "node --test tests/*.test.cjs",
+    "test": "mocha --parallel --jobs 2 --require ./tests/helpers/node16.cjs \"tests/*.test.cjs\"",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "pinia": "3.0.4",
-    "vue": "3.5.26",
-    "vue-router": "4.6.4"
+    "@vue/composition-api": "1.7.2",
+    "axios": "1.8.2",
+    "element-ui": "2.15.13",
+    "vue": "^2.6.14",
+    "vue-router": "3.6.5",
+    "vuex": "3.6.0"
   },
   "devDependencies": {
-    "@types/node": "20.19.43",
-    "@vitejs/plugin-vue": "5.2.4",
+    "@types/node": "16.11.7",
+    "browserslist": "4.24.5",
+    "mocha": "10.8.2",
+    "node-releases": "2.0.19",
     "typescript": "5.9.3",
-    "vite": "^6.4.3",
+    "vite": "4.5.14",
+    "vite-plugin-vue2": "2.0.3",
+    "vue-server-renderer": "2.6.14",
+    "vue-template-compiler": "2.6.14",
     "vue-tsc": "2.2.12"
   }
 }

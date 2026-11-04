@@ -1,366 +1,518 @@
-<script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import PageBreadcrumbs from '../components/PageBreadcrumbs.vue'
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs'
-import LoadingSkeleton from '../components/LoadingSkeleton.vue'
-import TaxonomyPanel from '../components/TaxonomyPanel.vue'
-import ConfigOverview from '../components/config/ConfigOverview.vue'
-import ConfigHistory from '../components/config/ConfigHistory.vue'
-import LifecycleRulesEditor from '../components/config/LifecycleRulesEditor.vue'
-import { recommendedTaxonomy, tagNames } from '../topicTaxonomy'
-import { formatDateTime } from '../planningTime'
-import { api, type TagTaxonomyItem } from '../api'
-import { usePlanningStore } from '../store'
-import type { ConfigVersionSummary, LifecycleCondition, LifecycleRule, StrategyConfig } from '../types'
-
-const store = usePlanningStore()
-const router = useRouter()
-
-function cloneConfig(value: StrategyConfig): StrategyConfig {
-  return {
-    marketing_max: value.marketing_max,
-    planning_days: [...value.planning_days],
-    schedule_day: value.schedule_day,
-    schedule_time: value.schedule_time,
-    hotspot_ratio: value.hotspot_ratio,
-    rolling_posts: value.rolling_posts,
-    stage_targets: value.stage_targets.map(stage => ({ ...stage })),
-    lifecycle_rules: value.lifecycle_rules.map(rule => ({ ...rule, conditions: rule.conditions.map(condition => ({ ...condition })) })),
-  }
-}
-
-const draft = ref<StrategyConfig>(cloneConfig(store.config))
-const busy = ref(false)
-const loading = ref(false)
-const notice = ref('')
-const error = ref('')
-const versions = ref<ConfigVersionSummary[]>([])
-const versionDetail = ref<ConfigVersionSummary | null>(null)
-const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(store.config))
-let removeRouteGuard: (() => void) | undefined
-const tagVersion = ref(0)
-const tagItems = ref<Record<string, TagTaxonomyItem[]>>({ T1: [], T2: [], T3: [], T4: [], T5: [] })
-const tagBaseline = ref('')
-const editing = ref(false)
-const historyView = ref(false)
-const confirmation = ref<{ title: string; message: string; confirmLabel: string; cancelLabel: string; danger?: boolean; safePrimary?: boolean } | null>(null)
-const confirmationPanel = ref<HTMLElement | null>(null)
-const confirmationSafeAction = ref<HTMLButtonElement | null>(null)
-let confirmationReturnFocus: HTMLElement | null = null
-let confirmationResolver: ((confirmed: boolean) => void) | undefined
-const planningDays = computed(() => draft.value.planning_days)
-const scheduleDay = computed({ get: () => draft.value.schedule_day, set: value => { draft.value.schedule_day = value } })
-const scheduleTime = computed({ get: () => draft.value.schedule_time, set: value => { draft.value.schedule_time = value } })
-const hotspotRatio = computed({ get: () => draft.value.hotspot_ratio, set: value => { draft.value.hotspot_ratio = value } })
-const remoteConfigPending = ref(false)
-let configSyncTimer: number | undefined
-let configSyncBusy = false
-const lifecycleRules = computed(() => draft.value.lifecycle_rules)
-const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value)
-const pageDirty = computed(() => dirty.value || tagDirty.value)
-const hasUnsavedChanges = computed(() => editing.value && pageDirty.value)
-usePageBreadcrumbs(() => {
-  const root = { label: 'AI策划配置', action: async () => {
-    if (busy.value) return
-    if (editing.value) await cancelEditing()
-    else closeHistory()
-  } }
-  if (historyView.value) return [
-    root,
-    { label: '历史配置', action: () => { versionDetail.value = null } },
-    ...(versionDetail.value ? [{ label: `V${displayVersionNumber(versionDetail.value)} 配置详情` }] : []),
-  ]
-  return editing.value ? [root, { label: '编辑配置' }] : [root]
-})
-
-function requestConfirmation(options: NonNullable<typeof confirmation.value>) {
-  if (confirmationResolver) confirmationResolver(false)
-  confirmationReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  confirmation.value = options
-  void nextTick(() => { confirmationSafeAction.value?.focus() })
-  return new Promise<boolean>(resolve => { confirmationResolver = resolve })
-}
-
-function closeConfirmation(confirmed: boolean) {
-  const resolve = confirmationResolver
-  confirmationResolver = undefined
-  confirmation.value = null
-  resolve?.(confirmed)
-  const previous = confirmationReturnFocus
-  void nextTick(() => { previous?.focus({ preventScroll: true }) })
-}
-
-function dismissConfirmation() {
-  closeConfirmation(false)
-}
-
-function handleConfirmationKeys(event: KeyboardEvent) {
-  if (event.key === 'Escape') { event.preventDefault(); dismissConfirmation(); return }
-  if (event.key !== 'Tab') return
-  const buttons = confirmationPanel.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
-  if (!buttons?.length) return
-  const first = buttons[0], last = buttons[buttons.length - 1]
-  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
-  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
-}
-
-function movePlanningDay(event: KeyboardEvent, index: number) {
-  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-  event.preventDefault()
-  const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('button')
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? 6 : (index + (event.key === 'ArrowRight' ? 1 : -1) + 7) % 7
-  buttons?.[next]?.focus()
-}
-
-function displayVersionNumber(version: ConfigVersionSummary) {
-  const index = versions.value.findIndex(item => item.version === version.version)
-  return index < 0 ? version.version : versions.value.length - index
-}
-
-function togglePlanningDay(day: number) {
-  const days = new Set(planningDays.value)
-  if (days.has(day)) {
-    if (days.size === 1) return
-    days.delete(day)
-  } else days.add(day)
-  draft.value.planning_days = [...days].sort((a, b) => a - b)
-}
-
-watch(() => store.config, value => { draft.value = cloneConfig(value) }, { deep: true })
-watch(() => store.databaseReady, ready => {
-  if (ready) { void loadConfigData() }
-}, { immediate: true })
-const beforeUnload = (event: BeforeUnloadEvent) => {
-  if (!hasUnsavedChanges.value) return
-  event.preventDefault()
-  event.returnValue = '当前存在未保存修改，离开后修改内容将丢失。'
-}
-const syncOnFocus = () => { void syncSavedConfig() }
-const syncOnVisible = () => { if (!document.hidden) void syncSavedConfig() }
-onMounted(() => {
-  window.addEventListener('beforeunload', beforeUnload)
-  window.addEventListener('focus', syncOnFocus)
-  document.addEventListener('visibilitychange', syncOnVisible)
-  configSyncTimer = window.setInterval(() => { void syncSavedConfig() }, 10000)
-  removeRouteGuard = router.beforeEach((to, from) => {
-    if (to.fullPath === from.fullPath || !hasUnsavedChanges.value) return true
-    return requestConfirmation({ title: '离开策划配置？', message: '当前有未保存的配置修改，离开后这些内容将被放弃。', confirmLabel: '放弃修改并离开', cancelLabel: '继续编辑', danger: true, safePrimary: true })
-  })
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('beforeunload', beforeUnload)
-  window.removeEventListener('focus', syncOnFocus)
-  document.removeEventListener('visibilitychange', syncOnVisible)
-  if (configSyncTimer !== undefined) window.clearInterval(configSyncTimer)
-  removeRouteGuard?.()
-})
-
-async function syncSavedConfig() {
-  if (!store.databaseReady || loading.value || busy.value || configSyncBusy || document.hidden) return
-  configSyncBusy = true
-  try {
-    const latest = await api.config()
-    if (loading.value || busy.value) return
-    const changed = latest.version !== store.configVersion || JSON.stringify(latest.config) !== JSON.stringify(store.config)
-    if (!changed) {
-      remoteConfigPending.value = false
-      return
-    }
-    if (pageDirty.value || editing.value) {
-      remoteConfigPending.value = true
-      return
-    }
-    store.applyConfig(latest)
-    remoteConfigPending.value = false
-    await loadVersions()
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : '同步策划配置失败'
-  } finally {
-    configSyncBusy = false
-  }
-}
-
-async function loadVersions() {
-  try {
-    versions.value = await api.configVersions()
-  }
-  catch (exc) { error.value = exc instanceof Error ? exc.message : '读取配置历史失败' }
-}
-
-async function loadConfigData() {
-  if (hasUnsavedChanges.value && !await requestConfirmation({ title: '加载最新配置？', message: '当前有未保存的配置修改，加载最新配置后这些修改将被放弃。', confirmLabel: '加载最新配置', cancelLabel: '继续编辑', danger: true })) return
-  editing.value = false
-  loading.value = true
-  error.value = ''
-  try {
-    await Promise.all([store.refreshConfig(), loadVersions(), loadTagTaxonomy()])
-    remoteConfigPending.value = false
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : '读取策划配置失败'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadTagTaxonomy() {
-  try {
-    const loaded = await api.tagTaxonomy()
-    tagVersion.value = loaded.version
-    const normalizedItems: Record<string, TagTaxonomyItem[]> = {}
-    for (const code of Object.keys(tagNames)) {
-      normalizedItems[code] = loaded.items[code]?.length
-        ? loaded.items[code].map(item => ({ ...item }))
-        : recommendedTaxonomy()[code]
-      tagItems.value[code] = normalizedItems[code]
-    }
-    // Compare against what the page actually displays. When the server has no
-    // taxonomy rows yet, prototype defaults are read-only display fallbacks,
-    // not unsaved user edits.
-    tagBaseline.value = JSON.stringify(normalizedItems)
-    // The previous page saved disabled names only in this browser. Offer them as
-    // an unsaved draft when the server has no disabled labels yet.
-    if (!Object.values(loaded.items).some(items => items.some(item => !item.enabled))) {
-      try {
-        const legacy = JSON.parse(localStorage.getItem('strat-matrix.config-ui') ?? '{}')
-        const oldDisabled = legacy.disabledTags as Record<string, string[]> | undefined
-        let restored = false
-        for (const code of Object.keys(tagNames)) {
-          const items = tagItems.value[code]
-          for (const item of items) {
-            if (oldDisabled?.[code]?.includes(item.name) && items.filter(tag => tag.enabled).length > 1) {
-              item.enabled = false
-              restored = true
-            }
-          }
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
+import { useRouter } from '../compat/router';
+import PageBreadcrumbs from '../components/PageBreadcrumbs.vue';
+import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
+import LoadingSkeleton from '../components/LoadingSkeleton.vue';
+import TaxonomyPanel from '../components/TaxonomyPanel.vue';
+import ConfigOverview from '../components/config/ConfigOverview.vue';
+import ConfigHistory from '../components/config/ConfigHistory.vue';
+import LifecycleRulesEditor from '../components/config/LifecycleRulesEditor.vue';
+import { recommendedTaxonomy, tagNames } from '../topicTaxonomy';
+import { formatDateTime } from '../planningTime';
+import { api, type TagTaxonomyItem } from '../api';
+import { usePlanningStore } from '../store';
+import type { ConfigVersionSummary, LifecycleCondition, LifecycleRule, StrategyConfig } from '../types';
+export default defineComponent({
+    setup(props, context) {
+        const store = usePlanningStore();
+        const router = useRouter();
+        function cloneConfig(value: StrategyConfig): StrategyConfig {
+            return {
+                marketing_max: value.marketing_max,
+                planning_days: [...value.planning_days],
+                schedule_day: value.schedule_day,
+                schedule_time: value.schedule_time,
+                hotspot_ratio: value.hotspot_ratio,
+                rolling_posts: value.rolling_posts,
+                stage_targets: value.stage_targets.map(stage => ({
+                    ...stage
+                })),
+                lifecycle_rules: value.lifecycle_rules.map(rule => ({
+                    ...rule,
+                    conditions: rule.conditions.map(condition => ({
+                        ...condition
+                    }))
+                }))
+            };
         }
-        if (restored) notice.value = '已读取此浏览器旧的停用标签，请核对并保存到服务端'
-      } catch { /* Invalid old browser settings do not affect server data. */ }
-    }
-  } catch (exc) { error.value = exc instanceof Error ? exc.message : '读取标签配置失败' }
-}
-
-const marketingValid = computed(() =>
-  Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 &&
-  planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size &&
-  planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) &&
-  Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 &&
-  /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) &&
-  Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100,
-)
-const strategyValid = computed(() =>
-  Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 &&
-  draft.value.stage_targets.length === 5 &&
-  draft.value.stage_targets.every(stage =>
-    Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) &&
-    stage.traffic >= 0 && stage.conversion >= 0 &&
-    stage.traffic + stage.conversion === 100,
-  ) &&
-  lifecycleRules.value.length === 5 &&
-  lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 &&
-    rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) &&
-  lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0,
-)
-
-function restore() {
-  if (!editing.value) return
-  draft.value = cloneConfig(store.config)
-  notice.value = '已恢复到当前保存的配置'
-  error.value = ''
-}
-
-async function saveAll() {
-  if (!editing.value || !store.databaseReady || busy.value || !marketingValid.value || !strategyValid.value || !pageDirty.value) return
-  const editedConfig = cloneConfig(draft.value)
-  let latestSavedConfig: Awaited<ReturnType<typeof api.saveConfig>> | undefined
-  busy.value = true
-  notice.value = ''
-  error.value = ''
-  try {
-    if (dirty.value) latestSavedConfig = await api.saveConfig(editedConfig, store.configVersion)
-    if (latestSavedConfig) store.applyConfig(latestSavedConfig)
-    if (tagDirty.value) {
-      const savedTags = await api.saveTagTaxonomy(tagItems.value, tagVersion.value)
-      tagVersion.value = savedTags.version
-      tagItems.value = savedTags.items
-      tagBaseline.value = JSON.stringify(tagItems.value)
-      localStorage.removeItem('strat-matrix.config-ui')
-    }
-    await loadVersions()
-    draft.value = cloneConfig(store.config)
-    editing.value = false
-        notice.value = '策划配置已保存'
-  } catch (exc) {
-    if (latestSavedConfig) {
-      store.applyConfig(latestSavedConfig)
-      draft.value = editedConfig
-      void loadVersions()
-    }
-    error.value = exc instanceof Error ? exc.message : '保存失败'
-  } finally {
-    busy.value = false
-  }
-}
-
-async function restoreVersion(version: ConfigVersionSummary) {
-  if (busy.value || version.version === versions.value[0]?.version) return
-  const visibleVersion = displayVersionNumber(version)
-  if (!await requestConfirmation({ title: `恢复总配置 V${visibleVersion}？`, message: '恢复后将以该快照创建新的总配置版本，并覆盖当前账号配置与经营策略。', confirmLabel: '确认恢复', cancelLabel: '返回查看', danger: true })) return
-  busy.value = true
-  error.value = ''
-  notice.value = ''
-  try {
-    await store.restoreConfig(version.version)
-    await loadVersions()
-    notice.value = `总配置已基于 V${visibleVersion} 创建新版本`
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : '恢复失败'
-  } finally { busy.value = false }
-}
-
-function startEditing() {
-  if (!store.databaseReady || busy.value || loading.value) return
-  editing.value = true
-  error.value = ''
-  notice.value = ''
-}
-
-async function openHistory() {
-  if (loading.value || busy.value || !store.databaseReady) return
-  historyView.value = true
-  versionDetail.value = null
-  error.value = ''
-  await loadVersions()
-}
-
-function closeHistory() {
-  historyView.value = false
-  versionDetail.value = null
-  error.value = ''
-}
-
-async function cancelEditing() {
-  if (!editing.value) return
-  if (!await requestConfirmation({ title: '取消编辑', message: '当前配置修改尚未保存。取消后，本次修改内容将被放弃。', confirmLabel: '确认取消', cancelLabel: '继续编辑', danger: true, safePrimary: true })) return
-  confirmCancelEditing()
-}
-
-function confirmCancelEditing() {
-  if (!editing.value) return
-  draft.value = cloneConfig(store.config)
-  try {
-    const baseline = JSON.parse(tagBaseline.value || '{}') as Record<string, TagTaxonomyItem[]>
-    for (const code of Object.keys(tagNames)) tagItems.value[code] = (baseline[code] ?? []).map(item => ({ ...item }))
-  } catch { /* Keep the current tag values if the baseline is unavailable. */ }
-  editing.value = false
-  remoteConfigPending.value = false
-  error.value = ''
-  notice.value = ''
-}
-
+        const draft = ref<StrategyConfig>(cloneConfig(store.config));
+        const busy = ref(false);
+        const loading = ref(false);
+        const notice = ref('');
+        const error = ref('');
+        const versions = ref<ConfigVersionSummary[]>([]);
+        const versionDetail = ref<ConfigVersionSummary | null>(null);
+        const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(store.config));
+        let removeRouteGuard: (() => void) | undefined;
+        const tagVersion = ref(0);
+        const tagItems = ref<Record<string, TagTaxonomyItem[]>>({
+            T1: [],
+            T2: [],
+            T3: [],
+            T4: [],
+            T5: []
+        });
+        const tagBaseline = ref('');
+        const editing = ref(false);
+        const historyView = ref(false);
+        const confirmation = ref<{
+            title: string;
+            message: string;
+            confirmLabel: string;
+            cancelLabel: string;
+            danger?: boolean;
+            safePrimary?: boolean;
+        } | null>(null);
+        const confirmationPanel = ref<HTMLElement | null>(null);
+        const confirmationSafeAction = ref<HTMLButtonElement | null>(null);
+        let confirmationReturnFocus: HTMLElement | null = null;
+        let confirmationResolver: ((confirmed: boolean) => void) | undefined;
+        const planningDays = computed(() => draft.value.planning_days);
+        const scheduleDay = computed({
+            get: () => draft.value.schedule_day,
+            set: value => {
+                draft.value.schedule_day = value;
+            }
+        });
+        const scheduleTime = computed({
+            get: () => draft.value.schedule_time,
+            set: value => {
+                draft.value.schedule_time = value;
+            }
+        });
+        const hotspotRatio = computed({
+            get: () => draft.value.hotspot_ratio,
+            set: value => {
+                draft.value.hotspot_ratio = value;
+            }
+        });
+        const remoteConfigPending = ref(false);
+        let configSyncTimer: number | undefined;
+        let configSyncBusy = false;
+        const lifecycleRules = computed(() => draft.value.lifecycle_rules);
+        const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value);
+        const pageDirty = computed(() => dirty.value || tagDirty.value);
+        const hasUnsavedChanges = computed(() => editing.value && pageDirty.value);
+        usePageBreadcrumbs(() => {
+            const root = {
+                label: 'AI策划配置',
+                action: async () => {
+                    if (busy.value)
+                        return;
+                    if (editing.value)
+                        await cancelEditing();
+                    else
+                        closeHistory();
+                }
+            };
+            if (historyView.value)
+                return [root, {
+                        label: '历史配置',
+                        action: () => {
+                            versionDetail.value = null;
+                        }
+                    }, ...(versionDetail.value ? [{
+                            label: `V${displayVersionNumber(versionDetail.value)} 配置详情`
+                        }] : [])];
+            return editing.value ? [root, {
+                    label: '编辑配置'
+                }] : [root];
+        });
+        function requestConfirmation(options: NonNullable<typeof confirmation.value>) {
+            if (confirmationResolver)
+                confirmationResolver(false);
+            confirmationReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            confirmation.value = options;
+            void nextTick(() => {
+                confirmationSafeAction.value?.focus();
+            });
+            return new Promise<boolean>(resolve => {
+                confirmationResolver = resolve;
+            });
+        }
+        function closeConfirmation(confirmed: boolean) {
+            const resolve = confirmationResolver;
+            confirmationResolver = undefined;
+            confirmation.value = null;
+            resolve?.(confirmed);
+            const previous = confirmationReturnFocus;
+            void nextTick(() => {
+                previous?.focus({
+                    preventScroll: true
+                });
+            });
+        }
+        function dismissConfirmation() {
+            closeConfirmation(false);
+        }
+        function handleConfirmationKeys(event: KeyboardEvent) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                dismissConfirmation();
+                return;
+            }
+            if (event.key !== 'Tab')
+                return;
+            const buttons = confirmationPanel.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+            if (!buttons?.length)
+                return;
+            const first = buttons[0], last = buttons[buttons.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            }
+            else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+        function movePlanningDay(event: KeyboardEvent, index: number) {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
+                return;
+            event.preventDefault();
+            const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('button');
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? 6 : (index + (event.key === 'ArrowRight' ? 1 : -1) + 7) % 7;
+            buttons?.[next]?.focus();
+        }
+        function displayVersionNumber(version: ConfigVersionSummary) {
+            const index = versions.value.findIndex(item => item.version === version.version);
+            return index < 0 ? version.version : versions.value.length - index;
+        }
+        function togglePlanningDay(day: number) {
+            const days = new Set(planningDays.value);
+            if (days.has(day)) {
+                if (days.size === 1)
+                    return;
+                days.delete(day);
+            }
+            else
+                days.add(day);
+            draft.value.planning_days = [...days].sort((a, b) => a - b);
+        }
+        watch(() => store.config, value => {
+            draft.value = cloneConfig(value);
+        }, {
+            deep: true
+        });
+        watch(() => store.databaseReady, ready => {
+            if (ready) {
+                void loadConfigData();
+            }
+        }, {
+            immediate: true
+        });
+        const beforeUnload = (event: BeforeUnloadEvent) => {
+            if (!hasUnsavedChanges.value)
+                return;
+            event.preventDefault();
+            event.returnValue = '当前存在未保存修改，离开后修改内容将丢失。';
+        };
+        const syncOnFocus = () => {
+            void syncSavedConfig();
+        };
+        const syncOnVisible = () => {
+            if (!document.hidden)
+                void syncSavedConfig();
+        };
+        onMounted(() => {
+            window.addEventListener('beforeunload', beforeUnload);
+            window.addEventListener('focus', syncOnFocus);
+            document.addEventListener('visibilitychange', syncOnVisible);
+            configSyncTimer = window.setInterval(() => {
+                void syncSavedConfig();
+            }, 10000);
+            removeRouteGuard = router.beforeEach((to, from, next) => {
+                if (to.fullPath === from.fullPath || !hasUnsavedChanges.value) {
+                    next();
+                    return;
+                }
+                void requestConfirmation({
+                    title: '离开策划配置？',
+                    message: '当前有未保存的配置修改，离开后这些内容将被放弃。',
+                    confirmLabel: '放弃修改并离开',
+                    cancelLabel: '继续编辑',
+                    danger: true,
+                    safePrimary: true
+                }).then(confirmed => confirmed ? next() : next(false), () => next(false));
+            });
+        });
+        onBeforeUnmount(() => {
+            window.removeEventListener('beforeunload', beforeUnload);
+            window.removeEventListener('focus', syncOnFocus);
+            document.removeEventListener('visibilitychange', syncOnVisible);
+            if (configSyncTimer !== undefined)
+                window.clearInterval(configSyncTimer);
+            removeRouteGuard?.();
+        });
+        async function syncSavedConfig() {
+            if (!store.databaseReady || loading.value || busy.value || configSyncBusy || document.hidden)
+                return;
+            configSyncBusy = true;
+            try {
+                const latest = await api.config();
+                if (loading.value || busy.value)
+                    return;
+                const changed = latest.version !== store.configVersion || JSON.stringify(latest.config) !== JSON.stringify(store.config);
+                if (!changed) {
+                    remoteConfigPending.value = false;
+                    return;
+                }
+                if (pageDirty.value || editing.value) {
+                    remoteConfigPending.value = true;
+                    return;
+                }
+                store.applyConfig(latest);
+                remoteConfigPending.value = false;
+                await loadVersions();
+            }
+            catch (exc) {
+                error.value = exc instanceof Error ? exc.message : '同步策划配置失败';
+            }
+            finally {
+                configSyncBusy = false;
+            }
+        }
+        async function loadVersions() {
+            try {
+                versions.value = await api.configVersions();
+            }
+            catch (exc) {
+                error.value = exc instanceof Error ? exc.message : '读取配置历史失败';
+            }
+        }
+        async function loadConfigData() {
+            if (hasUnsavedChanges.value && !(await requestConfirmation({
+                title: '加载最新配置？',
+                message: '当前有未保存的配置修改，加载最新配置后这些修改将被放弃。',
+                confirmLabel: '加载最新配置',
+                cancelLabel: '继续编辑',
+                danger: true
+            })))
+                return;
+            editing.value = false;
+            loading.value = true;
+            error.value = '';
+            try {
+                await Promise.all([store.refreshConfig(), loadVersions(), loadTagTaxonomy()]);
+                remoteConfigPending.value = false;
+            }
+            catch (exc) {
+                error.value = exc instanceof Error ? exc.message : '读取策划配置失败';
+            }
+            finally {
+                loading.value = false;
+            }
+        }
+        async function loadTagTaxonomy() {
+            try {
+                const loaded = await api.tagTaxonomy();
+                tagVersion.value = loaded.version;
+                const normalizedItems: Record<string, TagTaxonomyItem[]> = {};
+                for (const code of Object.keys(tagNames)) {
+                    normalizedItems[code] = loaded.items[code]?.length ? loaded.items[code].map(item => ({
+                        ...item
+                    })) : recommendedTaxonomy()[code];
+                    tagItems.value[code] = normalizedItems[code];
+                }
+                // Compare against what the page actually displays. When the server has no
+                // taxonomy rows yet, prototype defaults are read-only display fallbacks,
+                // not unsaved user edits.
+                tagBaseline.value = JSON.stringify(normalizedItems);
+                // The previous page saved disabled names only in this browser. Offer them as
+                // an unsaved draft when the server has no disabled labels yet.
+                if (!Object.values(loaded.items).some(items => items.some(item => !item.enabled))) {
+                    try {
+                        const legacy = JSON.parse(localStorage.getItem('strat-matrix.config-ui') ?? '{}');
+                        const oldDisabled = legacy.disabledTags as Record<string, string[]> | undefined;
+                        let restored = false;
+                        for (const code of Object.keys(tagNames)) {
+                            const items = tagItems.value[code];
+                            for (const item of items) {
+                                if (oldDisabled?.[code]?.includes(item.name) && items.filter(tag => tag.enabled).length > 1) {
+                                    item.enabled = false;
+                                    restored = true;
+                                }
+                            }
+                        }
+                        if (restored)
+                            notice.value = '已读取此浏览器旧的停用标签，请核对并保存到服务端';
+                    }
+                    catch { /* Invalid old browser settings do not affect server data. */ }
+                }
+            }
+            catch (exc) {
+                error.value = exc instanceof Error ? exc.message : '读取标签配置失败';
+            }
+        }
+        const marketingValid = computed(() => Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 && planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size && planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) && Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 && /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) && Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100);
+        const strategyValid = computed(() => Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 && draft.value.stage_targets.length === 5 && draft.value.stage_targets.every(stage => Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) && stage.traffic >= 0 && stage.conversion >= 0 && stage.traffic + stage.conversion === 100) && lifecycleRules.value.length === 5 && lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 && rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) && lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0);
+        function restore() {
+            if (!editing.value)
+                return;
+            draft.value = cloneConfig(store.config);
+            notice.value = '已恢复到当前保存的配置';
+            error.value = '';
+        }
+        async function saveAll() {
+            if (!editing.value || !store.databaseReady || busy.value || !marketingValid.value || !strategyValid.value || !pageDirty.value)
+                return;
+            const editedConfig = cloneConfig(draft.value);
+            let latestSavedConfig: Awaited<ReturnType<typeof api.saveConfig>> | undefined;
+            busy.value = true;
+            notice.value = '';
+            error.value = '';
+            try {
+                if (dirty.value)
+                    latestSavedConfig = await api.saveConfig(editedConfig, store.configVersion);
+                if (latestSavedConfig)
+                    store.applyConfig(latestSavedConfig);
+                if (tagDirty.value) {
+                    const savedTags = await api.saveTagTaxonomy(tagItems.value, tagVersion.value);
+                    tagVersion.value = savedTags.version;
+                    tagItems.value = savedTags.items;
+                    tagBaseline.value = JSON.stringify(tagItems.value);
+                    localStorage.removeItem('strat-matrix.config-ui');
+                }
+                await loadVersions();
+                draft.value = cloneConfig(store.config);
+                editing.value = false;
+                notice.value = '策划配置已保存';
+            }
+            catch (exc) {
+                if (latestSavedConfig) {
+                    store.applyConfig(latestSavedConfig);
+                    draft.value = editedConfig;
+                    void loadVersions();
+                }
+                error.value = exc instanceof Error ? exc.message : '保存失败';
+            }
+            finally {
+                busy.value = false;
+            }
+        }
+        async function restoreVersion(version: ConfigVersionSummary) {
+            if (busy.value || version.version === versions.value[0]?.version)
+                return;
+            const visibleVersion = displayVersionNumber(version);
+            if (!(await requestConfirmation({
+                title: `恢复总配置 V${visibleVersion}？`,
+                message: '恢复后将以该快照创建新的总配置版本，并覆盖当前账号配置与经营策略。',
+                confirmLabel: '确认恢复',
+                cancelLabel: '返回查看',
+                danger: true
+            })))
+                return;
+            busy.value = true;
+            error.value = '';
+            notice.value = '';
+            try {
+                await store.restoreConfig(version.version);
+                await loadVersions();
+                notice.value = `总配置已基于 V${visibleVersion} 创建新版本`;
+            }
+            catch (exc) {
+                error.value = exc instanceof Error ? exc.message : '恢复失败';
+            }
+            finally {
+                busy.value = false;
+            }
+        }
+        function startEditing() {
+            if (!store.databaseReady || busy.value || loading.value)
+                return;
+            editing.value = true;
+            error.value = '';
+            notice.value = '';
+        }
+        async function openHistory() {
+            if (loading.value || busy.value || !store.databaseReady)
+                return;
+            historyView.value = true;
+            versionDetail.value = null;
+            error.value = '';
+            await loadVersions();
+        }
+        function closeHistory() {
+            historyView.value = false;
+            versionDetail.value = null;
+            error.value = '';
+        }
+        async function cancelEditing() {
+            if (!editing.value)
+                return;
+            if (!(await requestConfirmation({
+                title: '取消编辑',
+                message: '当前配置修改尚未保存。取消后，本次修改内容将被放弃。',
+                confirmLabel: '确认取消',
+                cancelLabel: '继续编辑',
+                danger: true,
+                safePrimary: true
+            })))
+                return;
+            confirmCancelEditing();
+        }
+        function confirmCancelEditing() {
+            if (!editing.value)
+                return;
+            draft.value = cloneConfig(store.config);
+            try {
+                const baseline = JSON.parse(tagBaseline.value || '{}') as Record<string, TagTaxonomyItem[]>;
+                for (const code of Object.keys(tagNames))
+                    tagItems.value[code] = (baseline[code] ?? []).map(item => ({
+                        ...item
+                    }));
+            }
+            catch { /* Keep the current tag values if the baseline is unavailable. */ }
+            editing.value = false;
+            remoteConfigPending.value = false;
+            error.value = '';
+            notice.value = '';
+        }
+        return {
+            store,
+            draft,
+            busy,
+            loading,
+            notice,
+            error,
+            versions,
+            versionDetail,
+            tagItems,
+            editing,
+            historyView,
+            confirmation,
+            confirmationPanel,
+            confirmationSafeAction,
+            planningDays,
+            scheduleDay,
+            scheduleTime,
+            hotspotRatio,
+            remoteConfigPending,
+            pageDirty,
+            closeConfirmation,
+            dismissConfirmation,
+            handleConfirmationKeys,
+            movePlanningDay,
+            togglePlanningDay,
+            marketingValid,
+            strategyValid,
+            restore,
+            saveAll,
+            restoreVersion,
+            startEditing,
+            openHistory,
+            closeHistory,
+            cancelEditing
+        };
+    },
+    components: {LoadingSkeleton, LifecycleRulesEditor, TaxonomyPanel, ConfigOverview, ConfigHistory}
+});
 </script>
 
 <template>
+<div class="vue2-component-root">
   <div class="page-head config-page-head">
     <div class="page-actions">
       <template v-if="!editing && !historyView">
@@ -415,7 +567,7 @@ function confirmCancelEditing() {
         </div>
         <label class="field rolling-field"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" type="number" min="1" max="100" /><span>篇</span></div></label>
         <div class="lifecycle-definition-head"><div><b>选题标签配置</b></div></div>
-        <TaxonomyPanel v-model="tagItems" :editing="editing" :disabled="busy || !store.databaseReady" />
+        <TaxonomyPanel :model-value.sync="tagItems" :editing="editing" :disabled="busy || !store.databaseReady" />
         <p v-if="editing && !strategyValid" class="inline-error">请检查滚动窗口、生命周期进入条件；每个阶段的流量与转化目标之和必须为 100%。</p>
       </div>
     </section>
@@ -424,7 +576,7 @@ function confirmCancelEditing() {
   <template v-else-if="!historyView && !loading && store.initialized">
   <ConfigOverview :config="draft" :tag-items="tagItems" />
   </template>
-  <ConfigHistory v-if="historyView && !loading && store.initialized" v-model:detail="versionDetail" :versions="versions" :disabled="busy" @restore="restoreVersion" />
+  <ConfigHistory v-if="historyView && !loading && store.initialized" :detail.sync="versionDetail" :versions="versions" :disabled="busy" @restore="restoreVersion" />
   <div v-if="confirmation" class="app-confirm-mask" @click.self="dismissConfirmation">
     <section ref="confirmationPanel" class="app-confirm" role="alertdialog" aria-modal="true" aria-labelledby="app-confirm-title" aria-describedby="app-confirm-description" @keydown.stop="handleConfirmationKeys">
       <div class="app-confirm-icon" :class="{ danger: confirmation.danger }" aria-hidden="true">{{ confirmation.danger ? '!' : 'i' }}</div>
@@ -443,6 +595,7 @@ function confirmCancelEditing() {
       </div>
     </section>
   </div>
+</div>
 </template>
 
 <style scoped>

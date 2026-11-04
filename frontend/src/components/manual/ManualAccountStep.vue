@@ -1,27 +1,82 @@
-<script setup lang="ts">
-import { toRef } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { toRef } from '../../compat/composition';
 import AccountTypeBadge from '../AccountTypeBadge.vue';
 import ListPagination from '../ListPagination.vue';
 import LoadingSkeleton from '../LoadingSkeleton.vue';
 import type { ManualAccountSelection } from '../../composables/useManualAccountSelection';
-const props = defineProps<{
-    selection: ManualAccountSelection;
-    marketing: boolean;
-    publishDate: string;
-    busy: boolean;
-    loading: boolean;
-    initialized: boolean;
-}>();
-const isMarketing = toRef(props, 'marketing');
-const emit = defineEmits<{
-    save: [
-    ];
-    next: [
-    ];
-    back: [
-    ];
-}>();
-const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode, accountPage, availabilityReady, availabilityLoading, isAccountPlanned, targetCount, targetCountError, lifecycleFilter, lifecycleOptions, followersMin, followersMax, accountTypeFilter, organizationFilter, organizationOptions, platformFilter, platformOptions, keyword, umNoFilter, applyAccountFilters, accountSelectionPool, matchingAccounts, downloadAccountTemplate, importFileInput, importAccountsByIdentifier, importDataRowCount, importMatchedCount, importDuplicateRows, importUnmatchedRows, importPlannedRows, hasImportIssues, importErrorCount, showImportIssues, importIssueDialogOpen, importDialogClose, importTrigger, availableMatchingCount, plannedMatchingCount, accountListRef, plannedAccountTooltip, allAccountsSelected, someAccountsSelected, selectAllAccounts, pagedAccounts, visibleAccounts, accountPageSize, toggleAccountRow, showPlannedAccountTooltip, toggleAccount, closeImportIssueDialog, importRowLabel, downloadImportIssues } = props.selection;
+export default defineComponent({
+    props: { selection: { required: true, type: null as unknown as PropType<ManualAccountSelection> },
+        marketing: { required: true, type: Boolean as PropType<boolean> },
+        publishDate: { required: true, type: String as PropType<string> },
+        busy: { required: true, type: Boolean as PropType<boolean> },
+        loading: { required: true, type: Boolean as PropType<boolean> },
+        initialized: { required: true, type: Boolean as PropType<boolean> } },
+    setup(props, context) {
+        const isMarketing = toRef(props, 'marketing');
+        const emit = context.emit;
+        const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode, accountPage, availabilityReady, availabilityLoading, isAccountPlanned, targetCount, targetCountError, lifecycleFilter, lifecycleOptions, followersMin, followersMax, accountTypeFilter, organizationFilter, organizationOptions, platformFilter, platformOptions, keyword, umNoFilter, applyAccountFilters, accountSelectionPool, matchingAccounts, downloadAccountTemplate, importFileInput, importAccountsByIdentifier, importDataRowCount, importMatchedCount, importDuplicateRows, importUnmatchedRows, importPlannedRows, hasImportIssues, importErrorCount, showImportIssues, importIssueDialogOpen, importDialogClose, importTrigger, availableMatchingCount, plannedMatchingCount, accountListRef, plannedAccountTooltip, allAccountsSelected, someAccountsSelected, selectAllAccounts, pagedAccounts, visibleAccounts, accountPageSize, toggleAccountRow, showPlannedAccountTooltip, toggleAccount, closeImportIssueDialog, importRowLabel, downloadImportIssues } = props.selection;
+        return {
+            isMarketing,
+            emit,
+            sampledIds,
+            accountReview,
+            accountSelectionMode,
+            setAccountSelectionMode,
+            accountPage,
+            availabilityReady,
+            availabilityLoading,
+            isAccountPlanned,
+            targetCount,
+            targetCountError,
+            lifecycleFilter,
+            lifecycleOptions,
+            followersMin,
+            followersMax,
+            accountTypeFilter,
+            organizationFilter,
+            organizationOptions,
+            platformFilter,
+            platformOptions,
+            keyword,
+            umNoFilter,
+            applyAccountFilters,
+            accountSelectionPool,
+            matchingAccounts,
+            downloadAccountTemplate,
+            importFileInput,
+            importAccountsByIdentifier,
+            importDataRowCount,
+            importMatchedCount,
+            importDuplicateRows,
+            importUnmatchedRows,
+            importPlannedRows,
+            hasImportIssues,
+            importErrorCount,
+            showImportIssues,
+            importIssueDialogOpen,
+            importDialogClose,
+            importTrigger,
+            availableMatchingCount,
+            plannedMatchingCount,
+            accountListRef,
+            plannedAccountTooltip,
+            allAccountsSelected,
+            someAccountsSelected,
+            selectAllAccounts,
+            pagedAccounts,
+            visibleAccounts,
+            accountPageSize,
+            toggleAccountRow,
+            showPlannedAccountTooltip,
+            toggleAccount,
+            closeImportIssueDialog,
+            importRowLabel,
+            downloadImportIssues
+        };
+    },
+    components: {LoadingSkeleton, AccountTypeBadge, ListPagination}
+});
 </script>
 <template>
 <div class="manual-account-step">
@@ -51,18 +106,18 @@ const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode
         </div>
         <div v-else class="manual-upload-panel">
           <b>账号模板</b>
-          <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadAccountTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByIdentifier(($event.target as HTMLInputElement).files?.[0])" /><button ref="importTrigger" class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
+          <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadAccountTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByIdentifier($event.target.files?.[0])" /><button ref="importTrigger" class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
           <div v-if="importDataRowCount" class="manual-import-result">
             <span>导入 <b>{{ importDataRowCount }}</b></span><span>成功 <b>{{ importMatchedCount }}</b></span><span>重复 <b>{{ importDuplicateRows.length }}</b></span><span>异常 <b>{{ importErrorCount }}</b></span>
             <button v-if="hasImportIssues" class="text-btn" type="button" @click="showImportIssues">查看识别结果</button>
           </div>
         </div>
         <div class="manual-account-list-meta"><div class="manual-account-counts"><b>{{ accountSelectionMode === 'filter' ? '符合条件' : '导入识别' }} {{ matchingAccounts.length }} 个</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span v-if="!isMarketing" class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span><span>已选 <strong>{{ sampledIds.length }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
-        <LoadingSkeleton v-if="loading || !initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="&#x5168;&#x9009;&#x5F53;&#x524D;&#x7B5B;&#x9009;&#x4E0B;&#x7684;&#x53EF;&#x7B56;&#x5212;&#x8D26;&#x53F7;&#xFF08;&#x8DE8;&#x9875;&#xFF09;" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>&#x8D26;&#x53F7;&#x7C7B;&#x578B;</th><th>&#x5C5E;&#x4E3B; UM &#x53F7;</th><th>&#x8D26;&#x53F7;&#x6635;&#x79F0;</th><th>&#x8D26;&#x53F7; ID</th><th>&#x5C5E;&#x4E3B;&#x7EC4;&#x7EC7;</th><th>&#x5E73;&#x53F0;</th><th>&#x751F;&#x547D;&#x5468;&#x671F;</th><th>&#x7C89;&#x4E1D;&#x6570;</th></tr></thead><tbody>
+        <LoadingSkeleton v-if="loading || !initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="全选当前筛选下的可策划账号（跨页）" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>账号类型</th><th>属主 UM 号</th><th>账号昵称</th><th>账号 ID</th><th>属主组织</th><th>平台</th><th>生命周期</th><th>粉丝数</th></tr></thead><tbody>
           <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td>{{ account.account_id }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
           <tr v-if="visibleAccounts.length === 0"><td colspan="9"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
         </tbody></table></div>
-        <ListPagination v-model:page="accountPage" v-model:page-size="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
+        <ListPagination :page.sync="accountPage" :page-size.sync="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
         </fieldset>
         <div class="footer-actions manual-step-actions">
           <div v-if="accountReview" class="manual-step-review" role="status">
@@ -77,16 +132,16 @@ const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode
     </section>
 
 
-  <Teleport to="body">
+  <BodyPortal>
     <Transition name="manual-planned-tooltip">
       <div v-if="plannedAccountTooltip" id="manual-planned-account-tooltip" class="manual-planned-tooltip" role="tooltip" :style="{ left: `${plannedAccountTooltip.left}px`, top: `${plannedAccountTooltip.top}px` }">
         <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.3" stroke="currentColor" stroke-width="1.4" /><path d="M10 9v4m0-7v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
         <span>{{ publishDate }} 已手动策划，不可重复选择</span>
       </div>
     </Transition>
-  </Teleport>
+  </BodyPortal>
 
-  <Teleport to="body">
+  <BodyPortal>
     <div v-if="importIssueDialogOpen" class="manual-eligibility-mask" @click.self="closeImportIssueDialog" @keydown.esc.stop="closeImportIssueDialog">
       <section class="manual-eligibility-dialog manual-import-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-import-title">
         <header class="manual-import-dialog-head"><h2 id="manual-import-title">部分账号识别异常</h2><button class="icon-btn" type="button" aria-label="关闭识别结果" @click="closeImportIssueDialog">×</button></header>
@@ -104,7 +159,7 @@ const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode
         <div class="manual-eligibility-actions"><button class="btn" type="button" @click="downloadImportIssues">下载异常结果 CSV</button><button ref="importDialogClose" class="btn primary" type="button" @click="closeImportIssueDialog">知道了</button></div>
       </section>
     </div>
-  </Teleport>
+  </BodyPortal>
 
 </div>
 </template>
@@ -116,7 +171,7 @@ const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode
 .manual-eligibility-dialog{width:min(440px,100%);padding:24px;border:1px solid var(--neutral-200);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-4)}
 .manual-eligibility-dialog h2{margin:16px 0 8px;color:var(--neutral-900);font-size:18px;line-height:26px}
 .manual-eligibility-dialog p{margin:0;color:var(--neutral-600);font-size:14px;line-height:22px}
-.manual-eligibility-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px}.manual-account-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;margin-bottom:18px}.manual-account-filters .field{min-width:0}.manual-account-filters input,.manual-account-filters select{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:var(--neutral-900)}.manual-follower-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface)}.manual-follower-range input{width:50%;min-width:0;height:32px;padding:0;border:0;border-radius:0;outline:0}.manual-follower-range i{color:var(--neutral-400);font-size:12px;font-style:normal;white-space:nowrap}.manual-selection-modes{display:flex;gap:4px;width:max-content;margin:0 0 16px;padding:4px;border-radius:8px;background:var(--neutral-100)}.manual-mode-tab{min-width:104px;padding:8px 14px;border:0;border-radius:6px;background:transparent;color:var(--neutral-500);cursor:pointer}.manual-mode-tab.active{background:var(--surface);color:var(--primary-600);box-shadow:0 1px 3px #1018281a;font-weight:600}.manual-upload-panel{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:16px;border:1px dashed var(--neutral-300);border-radius:9px;background:var(--neutral-50)}.manual-upload-panel p{margin:6px 0 0;color:var(--neutral-400);font-size:12px}.manual-upload-actions{display:flex;gap:8px}.manual-file-input{display:none}.manual-import-result{grid-column:1/-1;padding-top:12px;border-top:1px solid var(--neutral-200);color:var(--success);font-size:13px}.manual-import-result span{color:var(--processing)}.manual-account-counts{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.manual-account-counts strong{color:var(--neutral-700);font-weight:600}.manual-account-counts .manual-planned-count,.manual-account-counts .manual-planned-count strong{color:var(--processing)}.manual-account-list-meta{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:13px}.manual-account-list-meta span{color:var(--neutral-400);font-size:12px}.manual-account-table{max-height:430px;overflow:auto;border:1px solid var(--neutral-200);border-radius:8px}.manual-account-table table{min-width:1120px}.manual-account-table thead th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}.manual-account-table tbody tr:hover,.manual-account-table tbody tr.selected{background:var(--primary-50)}.manual-account-table input{accent-color:var(--primary-600)}.manual-account-table tbody tr.already-planned,.manual-account-table tbody tr.already-planned:hover{background:var(--neutral-50);color:var(--neutral-400);cursor:not-allowed}.manual-account-table tbody tr.already-planned input{pointer-events:none}.manual-account-pagination{margin:14px 0 18px}.manual-step-review{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--primary-100);border-radius:8px;background:var(--primary-50)}.manual-step-review-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:14px;font-weight:700}.manual-step-review>strong{flex:1;min-width:0;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.5}.manual-step-review>strong em{display:inline-block;margin:0 2px;color:var(--primary-600);font-size:20px;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-1px}.manual-planned-tooltip{position:fixed;z-index:80;display:flex;align-items:center;gap:8px;width:min(304px,calc(100vw - 24px));padding:10px 12px;border:1px solid #ffffff12;border-radius:8px;background:var(--neutral-950);color:var(--surface);box-shadow:0 6px 20px #11223d26;font-size:12px;line-height:1.6;white-space:nowrap;pointer-events:none}.manual-planned-tooltip svg{flex:none;width:16px;height:16px;color:var(--neutral-300)}.manual-planned-tooltip-enter-active,.manual-planned-tooltip-leave-active{transition:opacity .12s ease}.manual-planned-tooltip-enter-from,.manual-planned-tooltip-leave-to{opacity:0}
+.manual-eligibility-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px}.manual-account-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;margin-bottom:18px}.manual-account-filters .field{min-width:0}.manual-account-filters input,.manual-account-filters select{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:var(--neutral-900)}.manual-follower-range{display:flex;align-items:center;gap:8px;height:36px;padding:0 9px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface)}.manual-follower-range input{width:50%;min-width:0;height:32px;padding:0;border:0;border-radius:0;outline:0}.manual-follower-range i{color:var(--neutral-400);font-size:12px;font-style:normal;white-space:nowrap}.manual-selection-modes{display:flex;gap:4px;width:max-content;margin:0 0 16px;padding:4px;border-radius:8px;background:var(--neutral-100)}.manual-mode-tab{min-width:104px;padding:8px 14px;border:0;border-radius:6px;background:transparent;color:var(--neutral-500);cursor:pointer}.manual-mode-tab.active{background:var(--surface);color:var(--primary-600);box-shadow:0 1px 3px #1018281a;font-weight:600}.manual-upload-panel{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:16px;border:1px dashed var(--neutral-300);border-radius:9px;background:var(--neutral-50)}.manual-upload-panel p{margin:6px 0 0;color:var(--neutral-400);font-size:12px}.manual-upload-actions{display:flex;gap:8px}.manual-file-input{display:none}.manual-import-result{grid-column:1/-1;padding-top:12px;border-top:1px solid var(--neutral-200);color:var(--success);font-size:13px}.manual-import-result span{color:var(--processing)}.manual-account-counts{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.manual-account-counts strong{color:var(--neutral-700);font-weight:600}.manual-account-counts .manual-planned-count,.manual-account-counts .manual-planned-count strong{color:var(--processing)}.manual-account-list-meta{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:13px}.manual-account-list-meta span{color:var(--neutral-400);font-size:12px}.manual-account-table{max-height:430px;overflow:auto;border:1px solid var(--neutral-200);border-radius:8px}.manual-account-table table{min-width:1120px}.manual-account-table thead th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}.manual-account-table tbody tr:hover,.manual-account-table tbody tr.selected{background:var(--primary-50)}.manual-account-table input{accent-color:var(--primary-600)}.manual-account-table tbody tr.already-planned,.manual-account-table tbody tr.already-planned:hover{background:var(--neutral-50);color:var(--neutral-400);cursor:not-allowed}.manual-account-table tbody tr.already-planned input{pointer-events:none}.manual-account-pagination{margin:14px 0 18px}.manual-step-review{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--primary-100);border-radius:8px;background:var(--primary-50)}.manual-step-review-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:14px;font-weight:700}.manual-step-review>strong{flex:1;min-width:0;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.5}.manual-step-review>strong em{display:inline-block;margin:0 2px;color:var(--primary-600);font-size:20px;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-1px}.manual-planned-tooltip{position:fixed;z-index:80;display:flex;align-items:center;gap:8px;width:min(304px,calc(100vw - 24px));padding:10px 12px;border:1px solid #ffffff12;border-radius:8px;background:var(--neutral-950);color:var(--surface);box-shadow:0 6px 20px #11223d26;font-size:12px;line-height:1.6;white-space:nowrap;pointer-events:none}.manual-planned-tooltip svg{flex:none;width:16px;height:16px;color:var(--neutral-300)}.manual-planned-tooltip-enter-active,.manual-planned-tooltip-leave-active{transition:opacity .12s ease}.manual-planned-tooltip-enter,.manual-planned-tooltip-leave-to{opacity:0}
 @media(max-width:900px){.manual-account-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:580px){.manual-account-filters,.manual-submit-summary{grid-template-columns:1fr}.manual-step-review{flex-wrap:wrap}.manual-step-review>strong{flex-basis:calc(100% - 36px)}.manual-step-review .btn{flex:1}.manual-upload-panel{grid-template-columns:1fr}.manual-upload-actions{flex-wrap:wrap}}
 .manual-account-mode-row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}.manual-account-mode-row>.field{min-width:180px;margin:0}.manual-account-mode-row .manual-selection-modes{align-self:flex-end;margin:0}

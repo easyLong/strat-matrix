@@ -1,5 +1,5 @@
-import { onScopeDispose, shallowReactive, type ComputedRef, type InjectionKey } from 'vue'
-import type { RouteLocationRaw } from 'vue-router'
+import { onScopeDispose, shallowRef, type ComputedRef, type InjectionKey } from '../compat/composition'
+import type { RouteLocationRaw } from '../compat/router'
 
 export interface PageBreadcrumb {
   label: string
@@ -14,18 +14,18 @@ type BreadcrumbLayer = {
   close?: () => void
 }
 
-const layers = shallowReactive(new Map<symbol, BreadcrumbLayer>())
+const layers = shallowRef<Array<BreadcrumbLayer & { key: symbol }>>([])
 export const pageBreadcrumbsKey: InjectionKey<ComputedRef<PageBreadcrumb[]>> = Symbol('page-breadcrumbs')
 
 /** Register local page or drawer navigation, removed with its component scope. */
 export function usePageBreadcrumbs(items: () => PageBreadcrumb[], options: { append?: boolean; close?: () => void } = {}) {
   const key = Symbol('breadcrumb-layer')
-  layers.set(key, { items, append: options.append ?? false, close: options.close })
-  onScopeDispose(() => layers.delete(key))
+  layers.value = [...layers.value, { key, items, append: options.append ?? false, close: options.close }]
+  onScopeDispose(() => { layers.value = layers.value.filter(layer => layer.key !== key) })
 }
 
 export function resolvePageBreadcrumbs(base: PageBreadcrumb[]): PageBreadcrumb[] {
-  const active = [...layers.values()].filter(layer => layer.items().length)
+  const active = layers.value.filter(layer => layer.items().length)
   const wrap = (items: PageBreadcrumb[], owner: number) => items.map(item => ({
     ...item,
     beforeNavigate: () => {

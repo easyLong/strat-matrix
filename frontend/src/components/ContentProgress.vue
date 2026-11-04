@@ -1,14 +1,27 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-
-const props = withDefaults(defineProps<{ completed: number; total: number; display?: 'progress' | 'status' }>(), { display: 'progress' })
-const description = computed(() => `完成内容生产 ${props.completed} 个账号 / 共 ${props.total} 个账号`)
-const statusLabel = computed(() => {
-  if (props.total > 0 && props.completed >= props.total) return '已完成'
-  if (props.completed > 0) return '生成中'
-  return '待生成'
-})
-const statusTone = computed(() => statusLabel.value === '已完成' ? 'status-completed' : statusLabel.value === '生成中' ? 'status-processing' : 'status-waiting')
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import { computed } from '../compat/composition';
+export default defineComponent({
+    props: { completed: { required: true, type: Number as PropType<number> },
+        total: { required: true, type: Number as PropType<number> },
+        display: { required: false, type: String as PropType<'progress' | 'status'>, default: 'progress' } },
+    setup(props, context) {
+        const description = computed(() => `完成内容生产 ${props.completed} 个账号 / 共 ${props.total} 个账号`);
+        const statusLabel = computed(() => {
+            if (props.total > 0 && props.completed >= props.total)
+                return '已完成';
+            if (props.completed > 0)
+                return '生成中';
+            return '待生成';
+        });
+        const statusTone = computed(() => statusLabel.value === '已完成' ? 'status-completed' : statusLabel.value === '生成中' ? 'status-processing' : 'status-waiting');
+        return {
+            description,
+            statusLabel,
+            statusTone
+        };
+    }
+});
 </script>
 
 <template>

@@ -4,6 +4,8 @@
 
 [文档索引](docs/README.md) · [三工程迁入执行清单](docs/行内三工程迁入执行清单_V0.1.md) · [当前实现与交接状态](docs/CURRENT_STATE.md) · [三工程契约与迁移](docs/contracts/README.md)
 
+前端已适配Node16.13.0及客户指定Vue2依赖；宿主迁入步骤见[前端接入说明](frontend/VUE2_INTEGRATION.md)，最新清理、修复与验收见[前端复核记录](docs/前端复核与修复_2026-11-04.md)。
+
 行外回归统一运行`python -m testing`；固定合成数据、算法基线、离线对比报告和分工程命令见[测试工具说明](testing/README.md)。默认不连接现有业务库或调用真实模型。
 
 部署模式统一使用`PLANNING_ENV=outside/inside`，保存在MySQL系统配置。切换与宿主装配说明见[双环境切换](docs/双环境切换_V0.1.md)；inside缺少宿主配置时明确报错，不降级到行外模拟。
@@ -37,7 +39,7 @@ flowchart LR
 
 ## 技术与运行结构
 
-- 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia。
+- 前端：Node 16.13.0/npm 8，Vue 2.6.14、Vuex 3.6.0、Axios 1.8.2、Element UI 2.15.13、Vue Router 3、TypeScript；行外使用Vite构建，驻场复用宿主构建。
 - Java业务子项目：Java 8、公开Spring Boot 2.7.18兼容开发壳，MyBatis持久化普通人工业务，XLSX导出使用Apache POI；未引入内部依赖。
 - 后端：Python、FastAPI、PyMySQL。
 - 数据库：Java业务库与Python算法库隔离；本地可见历史已迁入Java，原Python历史保留；迁入行内时分别发布两库脚本。

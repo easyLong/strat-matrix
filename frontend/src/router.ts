@@ -1,14 +1,13 @@
-import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
+import Vue from 'vue'
+import VueRouter from 'vue-router'
 import ConfigView from './views/ConfigView.vue'
 import ManualView from './views/ManualView.vue'
 import ResultsHubView from './views/ResultsHubView.vue'
 
-const history = typeof window !== 'undefined' && window.location.protocol === 'file:'
-  ? createWebHashHistory()
-  : createWebHistory()
+Vue.use(VueRouter)
 
-export const router = createRouter({
-  history,
+export const router = new VueRouter({
+  mode: typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'hash' : 'history',
   routes: [
     { path: '/', redirect: '/config' },
     { path: '/config', component: ConfigView, meta: { title: 'AI策划配置' } },

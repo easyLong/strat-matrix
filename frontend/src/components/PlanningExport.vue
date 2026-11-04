@@ -1,48 +1,101 @@
-<script setup lang="ts">
-import { ref } from 'vue'
-import type { PlanPageQuery } from '../api/queries'
-import type { BatchSummary } from '../types'
-import PageBreadcrumbs from './PageBreadcrumbs.vue'
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs'
-
-const props = defineProps<{ accounts?: string[]; batches?: BatchSummary[]; inline?: boolean; filename?: string; scope?: PlanPageQuery; accountDates?: boolean }>()
-const opened = ref(false)
-const start = ref('')
-const end = ref('')
-const busy = ref(false)
-const error = ref('')
-usePageBreadcrumbs(() => opened.value ? [{ label: '导出报表' }] : [], { append: true, close: () => { if (!busy.value) opened.value = false } })
-
-async function download() {
-  error.value = ''
-  if ((props.accounts || props.accountDates) && (!start.value || !end.value || start.value > end.value)) {
-    error.value = '请选择有效的开始日期和结束日期'
-    return
-  }
-  busy.value = true
-  try {
-    const scope = props.scope || { mode: 'all' as const, page: 1, page_size: 200, filters: {}, account_ids: props.accounts, batch_ids: props.accounts ? undefined : (props.batches || []).map(b=>b.id) }
-    const response = await fetch('/api/query/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...scope, format: 'xlsx', filters: { ...scope.filters, ...((props.accounts || props.accountDates) ? {start:start.value,end:end.value}: {}) } }) })
-    if (!response.ok) { const body=await response.json(); throw new Error(body.detail || '导出失败，请重试') }
-    const data = await response.blob()
-    const url = URL.createObjectURL(data)
-    const link = document.createElement('a')
-    link.href = url
-    const extension = response.headers.get('Content-Type')?.includes('spreadsheetml.sheet') ? 'xlsx' : 'csv'
-    const filename = props.filename || `${props.accounts || props.accountDates ? '账号' : '时间'}策划明细.xlsx`
-    link.download = /\.(csv|xlsx)$/i.test(filename) ? filename.replace(/\.(csv|xlsx)$/i, `.${extension}`) : `${filename}.${extension}`
-    link.click()
-    URL.revokeObjectURL(url)
-    opened.value = false
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : '导出失败，请重试'
-  } finally { busy.value = false }
-}
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import { ref } from '../compat/composition';
+import type { PlanPageQuery } from '../api/queries';
+import { requestBlob } from '../api/http';
+import type { BatchSummary } from '../types';
+import PageBreadcrumbs from './PageBreadcrumbs.vue';
+import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
+export default defineComponent({
+    props: { accounts: { required: false, type: Array as PropType<string[]> },
+        batches: { required: false, type: Array as PropType<BatchSummary[]> },
+        inline: { required: false, type: Boolean as PropType<boolean> },
+        filename: { required: false, type: String as PropType<string> },
+        scope: { required: false, type: null as unknown as PropType<PlanPageQuery> },
+        accountDates: { required: false, type: Boolean as PropType<boolean> } },
+    setup(props, context) {
+        const opened = ref(false);
+        const start = ref('');
+        const end = ref('');
+        const busy = ref(false);
+        const error = ref('');
+        usePageBreadcrumbs(() => opened.value ? [{
+                label: '导出报表'
+            }] : [], {
+            append: true,
+            close: () => {
+                if (!busy.value)
+                    opened.value = false;
+            }
+        });
+        async function download() {
+            error.value = '';
+            if ((props.accounts || props.accountDates) && (!start.value || !end.value || start.value > end.value)) {
+                error.value = '请选择有效的开始日期和结束日期';
+                return;
+            }
+            busy.value = true;
+            try {
+                const scope = props.scope || {
+                    mode: 'all' as const,
+                    page: 1,
+                    page_size: 200,
+                    filters: {},
+                    account_ids: props.accounts,
+                    batch_ids: props.accounts ? undefined : (props.batches || []).map(b => b.id)
+                };
+                const response = await requestBlob('/query/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ...scope,
+                        format: 'xlsx',
+                        filters: {
+                            ...scope.filters,
+                            ...(props.accounts || props.accountDates ? {
+                                start: start.value,
+                                end: end.value
+                            } : {})
+                        }
+                    })
+                });
+                const data = response.data;
+                const url = URL.createObjectURL(data);
+                const link = document.createElement('a');
+                link.href = url;
+                const extension = String(response.headers['content-type'] || data.type).includes('spreadsheetml.sheet') ? 'xlsx' : 'csv';
+                const filename = props.filename || `${props.accounts || props.accountDates ? '账号' : '时间'}策划明细.xlsx`;
+                link.download = /\.(csv|xlsx)$/i.test(filename) ? filename.replace(/\.(csv|xlsx)$/i, `.${extension}`) : `${filename}.${extension}`;
+                link.click();
+                URL.revokeObjectURL(url);
+                opened.value = false;
+            }
+            catch (exc) {
+                error.value = exc instanceof Error ? exc.message : '导出失败，请重试';
+            }
+            finally {
+                busy.value = false;
+            }
+        }
+        return {
+            opened,
+            start,
+            end,
+            busy,
+            error,
+            download
+        };
+    },
+    components: {PageBreadcrumbs}
+});
 </script>
 
 <template>
+<div class="vue2-component-root">
   <button type="button" :class="inline ? 'text-btn' : 'btn'" @click="opened = true">导出报表</button>
-  <Teleport to="body">
+  <BodyPortal>
     <div v-if="opened" class="export-mask" @click.self="!busy && (opened = false)">
       <section class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
         <PageBreadcrumbs compact />
@@ -52,7 +105,8 @@ async function download() {
         <div class="export-actions"><button class="btn" type="button" :disabled="busy" @click="opened = false">取消</button><button class="btn primary" type="button" :disabled="busy" @click="download">{{ busy ? '导出中…' : '确认导出' }}</button></div>
       </section>
     </div>
-  </Teleport>
+  </BodyPortal>
+</div>
 </template>
 
 <style scoped>

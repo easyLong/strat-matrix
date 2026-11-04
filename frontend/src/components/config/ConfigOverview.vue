@@ -1,19 +1,31 @@
-<script setup lang="ts">
-import { computed } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { computed } from '../../compat/composition';
 import TaxonomyPanel from '../TaxonomyPanel.vue';
 import type { StrategyConfig } from '../../types';
 import type { TagTaxonomyItem } from '../../api';
 import { lifecycleRuleSummary } from '../../ui/lifecycleRules';
-const props = defineProps<{
-    config: StrategyConfig;
-    tagItems: Record<string, TagTaxonomyItem[]>;
-}>();
-const planningDays = computed(() => props.config.planning_days);
-const scheduleDay = computed(() => props.config.schedule_day);
-const scheduleTime = computed(() => props.config.schedule_time);
-const lifecycleRules = computed(() => props.config.lifecycle_rules);
+export default defineComponent({
+    props: { config: { required: true, type: null as unknown as PropType<StrategyConfig> },
+        tagItems: { required: true, type: Object as PropType<Record<string, TagTaxonomyItem[]>> } },
+    setup(props, context) {
+        const planningDays = computed(() => props.config.planning_days);
+        const scheduleDay = computed(() => props.config.schedule_day);
+        const scheduleTime = computed(() => props.config.schedule_time);
+        const lifecycleRules = computed(() => props.config.lifecycle_rules);
+        return {
+            lifecycleRuleSummary,
+            planningDays,
+            scheduleDay,
+            scheduleTime,
+            lifecycleRules
+        };
+    },
+    components: {TaxonomyPanel}
+});
 </script>
 <template>
+<div class="vue2-component-root">
   <section class="card config-overview-card">
     <div class="card-head"><div><h2>策划内容配置</h2></div></div>
     <div class="card-body config-overview-body">
@@ -58,6 +70,7 @@ const lifecycleRules = computed(() => props.config.lifecycle_rules);
     </div>
   </section>
 
+</div>
 </template>
 <style scoped>
 

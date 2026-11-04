@@ -1,57 +1,66 @@
-<script setup lang="ts">
-import LoadingSkeleton from './LoadingSkeleton.vue'
-import HoverHint from './HoverHint.vue'
-import type { ManualTaskSummary } from '../types'
-import { formatDateTime } from '../planningTime'
-import { manualContentLabel as contentLabel } from '../ui/manualTask'
-
-defineProps<{
-  tasks: ManualTaskSummary[]
-  loading: boolean
-  initialized: boolean
-  filtered?: boolean
-}>()
-
-const emit = defineEmits<{
-  planDetails: [task: ManualTaskSummary]
-}>()
-
-function contentTone(task: ManualTaskSummary) {
-  const label = contentLabel(task)
-  if (label === '待生成' || label === '—') return 'gray'
-  if (label === '生成中') return 'blue'
-  if (label === '已完成') return 'green'
-  if (label === '部分失败') return 'orange'
-  if (label === '生成失败') return 'red'
-  return 'gray'
-}
-
-function contentProgress(task: ManualTaskSummary) {
-  const label = contentLabel(task)
-  if (label === '—') return ''
-  const marketing = task.content_mode === 'marketing'
-  const total = Math.max(marketing ? (task.content_total_count || task.allocation_count || 0) : (task.planned_account_count || 0), 0)
-  const completed = Math.max(marketing
-    ? (label === '已完成' ? total : task.content_completed_count || 0)
-    : task.content_completed_account_count || 0, 0)
-  if (label === '待生成') return total ? `0 / ${total}` : '尚未开始'
-  if (label === '部分失败') {
-    const failed = Math.max(task.content_failed_count || 0, 0)
-    const base = total ? `${completed} / ${total}` : `${task.content_completed_count || 0} 已完成`
-    return failed ? `${base} · ${failed} 失败` : base
-  }
-  if (total) return `${Math.min(completed, total)} / ${total}`
-  const totalContent = Math.max(task.content_total_count || 0, 0)
-  if (totalContent) return `${Math.min(task.content_completed_count || 0, totalContent)} / ${totalContent}`
-  return ''
-}
-
-function contentStatusText(task: ManualTaskSummary) {
-  const label = contentLabel(task)
-  const progress = contentProgress(task).replace(/\s*\/\s*/g, '/')
-  return progress ? `${label}(${progress})` : label
-}
-
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import LoadingSkeleton from './LoadingSkeleton.vue';
+import HoverHint from './HoverHint.vue';
+import type { ManualTaskSummary } from '../types';
+import { formatDateTime } from '../planningTime';
+import { manualContentLabel as contentLabel } from '../ui/manualTask';
+export default defineComponent({
+    props: { tasks: { required: true, type: Array as PropType<ManualTaskSummary[]> },
+        loading: { required: true, type: Boolean as PropType<boolean> },
+        initialized: { required: true, type: Boolean as PropType<boolean> },
+        filtered: { required: false, type: Boolean as PropType<boolean> } },
+    setup(props, context) {
+        const emit = context.emit;
+        function contentTone(task: ManualTaskSummary) {
+            const label = contentLabel(task);
+            if (label === '待生成' || label === '—')
+                return 'gray';
+            if (label === '生成中')
+                return 'blue';
+            if (label === '已完成')
+                return 'green';
+            if (label === '部分失败')
+                return 'orange';
+            if (label === '生成失败')
+                return 'red';
+            return 'gray';
+        }
+        function contentProgress(task: ManualTaskSummary) {
+            const label = contentLabel(task);
+            if (label === '—')
+                return '';
+            const marketing = task.content_mode === 'marketing';
+            const total = Math.max(marketing ? task.content_total_count || task.allocation_count || 0 : task.planned_account_count || 0, 0);
+            const completed = Math.max(marketing ? label === '已完成' ? total : task.content_completed_count || 0 : task.content_completed_account_count || 0, 0);
+            if (label === '待生成')
+                return total ? `0 / ${total}` : '尚未开始';
+            if (label === '部分失败') {
+                const failed = Math.max(task.content_failed_count || 0, 0);
+                const base = total ? `${completed} / ${total}` : `${task.content_completed_count || 0} 已完成`;
+                return failed ? `${base} · ${failed} 失败` : base;
+            }
+            if (total)
+                return `${Math.min(completed, total)} / ${total}`;
+            const totalContent = Math.max(task.content_total_count || 0, 0);
+            if (totalContent)
+                return `${Math.min(task.content_completed_count || 0, totalContent)} / ${totalContent}`;
+            return '';
+        }
+        function contentStatusText(task: ManualTaskSummary) {
+            const label = contentLabel(task);
+            const progress = contentProgress(task).replace(/\s*\/\s*/g, '/');
+            return progress ? `${label}(${progress})` : label;
+        }
+        return {
+            formatDateTime,
+            emit,
+            contentTone,
+            contentStatusText
+        };
+    },
+    components: {LoadingSkeleton, HoverHint}
+});
 </script>
 
 <template>
@@ -92,7 +101,7 @@ function contentStatusText(task: ManualTaskSummary) {
           <td class="date-cell">{{ formatDateTime(task.updated_at) }}</td>
           <td class="action-cell">
             <div class="manual-task-actions">
-              <button v-if="task.batch_id || task.content_mode === 'marketing'" class="text-btn" type="button" @click="emit('planDetails', task)">查看策划</button>
+              <button v-if="task.batch_id || task.content_mode === 'marketing'" class="text-btn" type="button" @click="emit('plan-details', task)">查看策划</button>
               <span v-if="!task.batch_id && task.content_mode !== 'marketing'" class="manual-action-empty">—</span>
               <HoverHint v-if="!task.batch_id && task.failure_count > 0 && task.failure_reason" :text="task.failure_reason" class="manual-task-failure">执行失败</HoverHint>
             </div>

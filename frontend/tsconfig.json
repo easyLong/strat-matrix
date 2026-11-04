@@ -5,7 +5,8 @@
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "moduleResolution": "Node",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -15,6 +16,7 @@
     "jsx": "preserve",
     "types": ["vite/client", "node"]
   },
+  "vueCompilerOptions": { "target": 2.6 },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
 }
 

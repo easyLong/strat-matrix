@@ -1,227 +1,306 @@
-<script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import AccountTypeBadge from '../components/AccountTypeBadge.vue'
-import LoadingSkeleton from '../components/LoadingSkeleton.vue'
-import ListPagination from '../components/ListPagination.vue'
-import HoverHint from '../components/HoverHint.vue'
-import PlanningResultStats from '../components/planning/PlanningResultStats.vue'
-import PlanningWeekCalendar from '../components/planning/PlanningWeekCalendar.vue'
-import { weekStart,weekEnd,cyclePeriodLabel,type PlanningWeek } from '../ui/planningCalendar'
-import PlanDetailDrawer from '../components/planning/PlanDetailDrawer.vue'
-import { api } from '../api'
-import type { AccountOption, AccountPlanRecord, BatchSummary } from '../types'
-import { statusTone } from '../ui/status'
-import { productionStatusLabel } from '../ui/slotContentStatus'
-import type { ContentTypeCount } from '../ui/contentTypeStats'
-import { formatDateTime } from '../planningTime'
-
-type DetailMode = 'batch' | 'cycle' | 'account'
-
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import { computed, onBeforeUnmount, ref, watch } from '../compat/composition';
+import AccountTypeBadge from '../components/AccountTypeBadge.vue';
+import LoadingSkeleton from '../components/LoadingSkeleton.vue';
+import ListPagination from '../components/ListPagination.vue';
+import HoverHint from '../components/HoverHint.vue';
+import PlanningResultStats from '../components/planning/PlanningResultStats.vue';
+import PlanningWeekCalendar from '../components/planning/PlanningWeekCalendar.vue';
+import { weekStart, weekEnd, cyclePeriodLabel, type PlanningWeek } from '../ui/planningCalendar';
+import PlanDetailDrawer from '../components/planning/PlanDetailDrawer.vue';
+import { api } from '../api';
+import type { AccountOption, AccountPlanRecord, BatchSummary } from '../types';
+import { statusTone } from '../ui/status';
+import { productionStatusLabel } from '../ui/slotContentStatus';
+import type { ContentTypeCount } from '../ui/contentTypeStats';
+import { formatDateTime } from '../planningTime';
+type DetailMode = 'batch' | 'cycle' | 'account';
 type AccountGroup = {
-  account_id: string
-  account_name: string
-  lifecycle_stage: string
-  profile?: AccountOption
-  items: AccountPlanRecord[]
-}
-
-const props = withDefaults(defineProps<{
-  mode?: DetailMode
-  cycleStart: string
-  cycleEnd: string
-  batches: BatchSummary[]
-  accountId?: string
-  returnLabel?: string
-  initialBatchesExpanded?: boolean
-  showCycleLink?: boolean
-}>(), { mode: 'cycle', accountId: '', returnLabel: '', initialBatchesExpanded: false, showCycleLink: false })
-
-const emit = defineEmits<{
-  back: []
-  openBatch: [batch: BatchSummary]
-  viewCycle: []
-}>()
-
-const loading = ref(false)
-const error = ref('')
-const pageItems = ref<AccountPlanRecord[]>([])
-const resultTotal = ref(0)
-const resultSummary = ref({ accounts: 0, batches: 0, topics: 0 })
-const resultDistribution = ref<ContentTypeCount[]>([])
-const resultContentTypes = ref<string[]>([])
-const accountCatalog = ref<AccountOption[]>([])
-const expandedAccounts = ref(new Set<string>())
-const filtersExpanded = ref(true)
-const batchesExpanded = ref(props.initialBatchesExpanded)
-const batchPage = ref(1)
-const batchPageSize = ref(10)
-const pagedCycleBatches = computed(() => props.batches.slice((batchPage.value - 1) * batchPageSize.value, batchPage.value * batchPageSize.value))
-const accountKeyword = ref('')
-const contentType = ref('all')
-const selectedPlan = ref<AccountPlanRecord | null>(null)
-const dateStart = ref('')
-const dateEnd = ref('')
-const dateFilterError = ref('')
-const appliedFilters = ref({ account: '', start: '', end: '', batch: 'all', planType: 'all', contentType: 'all' })
-const page = ref(1)
-const pageSize = ref(20)
-const historyPage = ref(1)
-const historyPageSize = ref(20)
-let loadRequest = 0
-
-const isBatchMode = computed(() => props.mode === 'batch')
-const isAccountMode = computed(() => props.mode === 'account')
-const detailTitle = computed(() => isAccountMode.value ? '账号策划详情' : isBatchMode.value ? '批次策划详情' : '周期策划详情')
-const currentBatch = computed(() => isBatchMode.value ? props.batches[0] ?? null : null)
-const batchById = computed(() => new Map(props.batches.map(batch => [batch.id, batch])))
-watch(() => [props.mode, props.accountId, props.cycleStart, props.batches.map(batch => batch.id).join(',')], () => {
-  selectedPlan.value = null
-})
-const productionItems = computed(() => pageItems.value)
-const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号列表' : '返回时间列表'))
-const fixedPlanType = computed<'auto' | 'manual' | null>(() => isBatchMode.value ? currentBatch.value?.plan_type ?? null : null)
-const scopeLabel = computed(() => {
-  if (isAccountMode.value) return `${accountProfile(props.accountId)?.account_name || pageItems.value[0]?.account_name || props.accountId} · ${props.accountId}`
-  if (currentBatch.value) return [currentBatch.value.task_name, currentBatch.value.batch_code].filter(Boolean).join(' · ')
-  return cyclePeriodLabel(props.cycleStart)
-})
-const scopePlanType = computed(() => {
-  return fixedPlanType.value === 'manual' ? '人工策划' : 'AI 自动策划'
-})
-
-function accountProfile(accountId: string) {
-  return accountCatalog.value.find(account => account.account_id === accountId)
-}
-
-function accountTypeLabel(profile?: AccountOption) {
-  return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—')
-}
-
-const contentTypes = computed(() => resultContentTypes.value)
-const filteredItems = computed(() => pageItems.value)
-
-const accountGroups = computed<AccountGroup[]>(() => {
-  const groups = new Map<string, AccountGroup>()
-  for (const item of filteredItems.value) {
-    const existing = groups.get(item.account_id)
-    if (existing) existing.items.push(item)
-    else groups.set(item.account_id, {
-      account_id: item.account_id,
-      account_name: item.account_name,
-      lifecycle_stage: item.lifecycle_stage || '—',
-      profile: accountProfile(item.account_id),
-      items: [item],
-    })
-  }
-  return [...groups.values()]
-    .map(group => ({ ...group, items: group.items.sort((a, b) => a.publish_date.localeCompare(b.publish_date) || a.id - b.id) }))
-})
-
-const pagedAccountGroups = computed(() => accountGroups.value)
-const accountWeeks = computed(() => accountGroups.value.length ? weeksFor(accountGroups.value[0]!) : [])
-const pagedAccountWeeks = computed(() => accountWeeks.value)
-
-function weeksFor(group: AccountGroup): PlanningWeek[] {
-  const weeks = new Map<string, AccountPlanRecord[]>()
-  for (const item of group.items) {
-    const key = weekStart(item.publish_date)
-    const items = weeks.get(key)
-    if (items) items.push(item)
-    else weeks.set(key, [item])
-  }
-  return [...weeks].map(([start, items]) => ({ start, end: weekEnd(start), items })).sort((a, b) => b.start.localeCompare(a.start))
-}
-
-function toggleAccount(accountId: string) {
-  const next = new Set(expandedAccounts.value)
-  if (next.has(accountId)) next.delete(accountId)
-  else next.add(accountId)
-  expandedAccounts.value = next
-}
-
-function updatePlan(item: AccountPlanRecord) {
-  pageItems.value = pageItems.value.map(record => record.id === item.id ? { ...record, ...item } : record)
-  void load(true)
-}
-
-let detailRequest: AbortController | undefined
-async function load(silent = false) {
-  const request = ++loadRequest
-  detailRequest?.abort()
-  detailRequest = new AbortController()
-  if (!silent) loading.value = true
-  error.value = ''
-  try {
-    const response = await api.planPage({
-      mode: props.mode,
-      batch_ids: props.mode === 'cycle' ? props.batches.map(batch=>batch.id) : undefined,
-      account_id: isAccountMode.value ? props.accountId : undefined,
-      batch_id: isBatchMode.value ? currentBatch.value?.id : undefined,
-      cycle_start: props.mode === 'cycle' ? props.cycleStart : undefined,
-      cycle_end: props.mode === 'cycle' ? props.cycleEnd : undefined,
-      page: isAccountMode.value ? historyPage.value : page.value,
-      page_size: isAccountMode.value ? historyPageSize.value : pageSize.value,
-      filters: appliedFilters.value,
-    }, detailRequest.signal)
-    if (request !== loadRequest) return
-    const currentPage = isAccountMode.value ? historyPage : page
-    const currentSize = isAccountMode.value ? historyPageSize.value : pageSize.value
-    const maximum = Math.max(1, Math.ceil(response.total / currentSize))
-    if (currentPage.value > maximum) { currentPage.value = maximum; return }
-    pageItems.value = response.items
-    resultTotal.value = response.total
-    resultSummary.value = response.summary
-    resultDistribution.value = response.distribution
-    resultContentTypes.value = response.content_types
-    accountCatalog.value = response.accounts
-    if (isAccountMode.value) expandedAccounts.value = new Set([props.accountId])
-  } catch (exc) {
-    if (request === loadRequest) error.value = exc instanceof Error ? exc.message : '读取策划明细失败'
-  } finally {
-    if (request === loadRequest) loading.value = false
-  }
-}
-
-function applyFilters() {
-  if (isAccountMode.value && dateStart.value && dateEnd.value && dateStart.value > dateEnd.value) {
-    dateFilterError.value = '开始日期不能晚于结束日期'
-    return
-  }
-  dateFilterError.value = ''
-  appliedFilters.value = {
-    account: isAccountMode.value ? '' : accountKeyword.value,
-    start: isAccountMode.value ? dateStart.value : '',
-    end: isAccountMode.value ? dateEnd.value : '',
-    batch: isBatchMode.value ? String(currentBatch.value?.id) : 'all',
-    planType: fixedPlanType.value ?? 'all',
-    contentType: contentType.value,
-  }
-  page.value = 1
-  historyPage.value = 1
-}
-
-watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => props.batches.map(batch => batch.id).join(',')], () => {
-  accountKeyword.value = ''
-  contentType.value = 'all'
-  dateStart.value = isAccountMode.value ? props.cycleStart : ''
-  dateEnd.value = isAccountMode.value && props.cycleStart ? weekEnd(props.cycleStart) : ''
-  dateFilterError.value = ''
-  filtersExpanded.value = true
-  applyFilters()
-  expandedAccounts.value = new Set()
-  selectedPlan.value = null
-  void load()
-}, { immediate: true })
-watch(pageSize, () => { page.value = 1 })
-watch([page, pageSize, historyPage, historyPageSize, appliedFilters], () => { void load() })
-watch(historyPageSize, () => { historyPage.value = 1 })
-const productionTimer = window.setInterval(() => {
-  if (!loading.value && productionItems.value.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item)))) void load(true)
-}, 3000)
-onBeforeUnmount(() => { loadRequest++; detailRequest?.abort(); window.clearInterval(productionTimer) })
+    account_id: string;
+    account_name: string;
+    lifecycle_stage: string;
+    profile?: AccountOption;
+    items: AccountPlanRecord[];
+};
+export default defineComponent({
+    props: { mode: { required: false, type: null as unknown as PropType<DetailMode>, default: 'cycle' },
+        cycleStart: { required: true, type: String as PropType<string> },
+        cycleEnd: { required: true, type: String as PropType<string> },
+        batches: { required: true, type: Array as PropType<BatchSummary[]> },
+        accountId: { required: false, type: String as PropType<string>, default: '' },
+        returnLabel: { required: false, type: String as PropType<string>, default: '' },
+        initialBatchesExpanded: { required: false, type: Boolean as PropType<boolean>, default: false },
+        showCycleLink: { required: false, type: Boolean as PropType<boolean>, default: false } },
+    setup(props, context) {
+        const emit = context.emit;
+        const loading = ref(false);
+        const error = ref('');
+        const pageItems = ref<AccountPlanRecord[]>([]);
+        const resultTotal = ref(0);
+        const resultSummary = ref({
+            accounts: 0,
+            batches: 0,
+            topics: 0
+        });
+        const resultDistribution = ref<ContentTypeCount[]>([]);
+        const resultContentTypes = ref<string[]>([]);
+        const accountCatalog = ref<AccountOption[]>([]);
+        const expandedAccounts = ref(new Set<string>());
+        const filtersExpanded = ref(true);
+        const batchesExpanded = ref(props.initialBatchesExpanded);
+        const batchPage = ref(1);
+        const batchPageSize = ref(10);
+        const pagedCycleBatches = computed(() => props.batches.slice((batchPage.value - 1) * batchPageSize.value, batchPage.value * batchPageSize.value));
+        const accountKeyword = ref('');
+        const contentType = ref('all');
+        const selectedPlan = ref<AccountPlanRecord | null>(null);
+        const dateStart = ref('');
+        const dateEnd = ref('');
+        const dateFilterError = ref('');
+        const appliedFilters = ref({
+            account: '',
+            start: '',
+            end: '',
+            batch: 'all',
+            planType: 'all',
+            contentType: 'all'
+        });
+        const page = ref(1);
+        const pageSize = ref(20);
+        const historyPage = ref(1);
+        const historyPageSize = ref(20);
+        let loadRequest = 0;
+        const isBatchMode = computed(() => props.mode === 'batch');
+        const isAccountMode = computed(() => props.mode === 'account');
+        const detailTitle = computed(() => isAccountMode.value ? '账号策划详情' : isBatchMode.value ? '批次策划详情' : '周期策划详情');
+        const currentBatch = computed(() => isBatchMode.value ? props.batches[0] ?? null : null);
+        const batchById = computed(() => new Map(props.batches.map(batch => [batch.id, batch])));
+        watch(() => [props.mode, props.accountId, props.cycleStart, props.batches.map(batch => batch.id).join(',')], () => {
+            selectedPlan.value = null;
+        });
+        const productionItems = computed(() => pageItems.value);
+        const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号列表' : '返回时间列表'));
+        const fixedPlanType = computed<'auto' | 'manual' | null>(() => isBatchMode.value ? currentBatch.value?.plan_type ?? null : null);
+        const scopeLabel = computed(() => {
+            if (isAccountMode.value)
+                return `${accountProfile(props.accountId)?.account_name || pageItems.value[0]?.account_name || props.accountId} · ${props.accountId}`;
+            if (currentBatch.value)
+                return [currentBatch.value.task_name, currentBatch.value.batch_code].filter(Boolean).join(' · ');
+            return cyclePeriodLabel(props.cycleStart);
+        });
+        const scopePlanType = computed(() => {
+            return fixedPlanType.value === 'manual' ? '人工策划' : 'AI 自动策划';
+        });
+        function accountProfile(accountId: string) {
+            return accountCatalog.value.find(account => account.account_id === accountId);
+        }
+        function accountTypeLabel(profile?: AccountOption) {
+            return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—');
+        }
+        const contentTypes = computed(() => resultContentTypes.value);
+        const filteredItems = computed(() => pageItems.value);
+        const accountGroups = computed<AccountGroup[]>(() => {
+            const groups = new Map<string, AccountGroup>();
+            for (const item of filteredItems.value) {
+                const existing = groups.get(item.account_id);
+                if (existing)
+                    existing.items.push(item);
+                else
+                    groups.set(item.account_id, {
+                        account_id: item.account_id,
+                        account_name: item.account_name,
+                        lifecycle_stage: item.lifecycle_stage || '—',
+                        profile: accountProfile(item.account_id),
+                        items: [item]
+                    });
+            }
+            return [...groups.values()].map(group => ({
+                ...group,
+                items: group.items.sort((a, b) => a.publish_date.localeCompare(b.publish_date) || a.id - b.id)
+            }));
+        });
+        const pagedAccountGroups = computed(() => accountGroups.value);
+        const accountWeeks = computed(() => accountGroups.value.length ? weeksFor(accountGroups.value[0]!) : []);
+        const pagedAccountWeeks = computed(() => accountWeeks.value);
+        function weeksFor(group: AccountGroup): PlanningWeek[] {
+            const weeks = new Map<string, AccountPlanRecord[]>();
+            for (const item of group.items) {
+                const key = weekStart(item.publish_date);
+                const items = weeks.get(key);
+                if (items)
+                    items.push(item);
+                else
+                    weeks.set(key, [item]);
+            }
+            return [...weeks].map(([start, items]) => ({
+                start,
+                end: weekEnd(start),
+                items
+            })).sort((a, b) => b.start.localeCompare(a.start));
+        }
+        function toggleAccount(accountId: string) {
+            const next = new Set(expandedAccounts.value);
+            if (next.has(accountId))
+                next.delete(accountId);
+            else
+                next.add(accountId);
+            expandedAccounts.value = next;
+        }
+        function updatePlan(item: AccountPlanRecord) {
+            pageItems.value = pageItems.value.map(record => record.id === item.id ? {
+                ...record,
+                ...item
+            } : record);
+            void load(true);
+        }
+        let detailRequest: AbortController | undefined;
+        async function load(silent = false) {
+            const request = ++loadRequest;
+            detailRequest?.abort();
+            detailRequest = new AbortController();
+            if (!silent)
+                loading.value = true;
+            error.value = '';
+            try {
+                const response = await api.planPage({
+                    mode: props.mode,
+                    batch_ids: props.mode === 'cycle' ? props.batches.map(batch => batch.id) : undefined,
+                    account_id: isAccountMode.value ? props.accountId : undefined,
+                    batch_id: isBatchMode.value ? currentBatch.value?.id : undefined,
+                    cycle_start: props.mode === 'cycle' ? props.cycleStart : undefined,
+                    cycle_end: props.mode === 'cycle' ? props.cycleEnd : undefined,
+                    page: isAccountMode.value ? historyPage.value : page.value,
+                    page_size: isAccountMode.value ? historyPageSize.value : pageSize.value,
+                    filters: appliedFilters.value
+                }, detailRequest.signal);
+                if (request !== loadRequest)
+                    return;
+                const currentPage = isAccountMode.value ? historyPage : page;
+                const currentSize = isAccountMode.value ? historyPageSize.value : pageSize.value;
+                const maximum = Math.max(1, Math.ceil(response.total / currentSize));
+                if (currentPage.value > maximum) {
+                    currentPage.value = maximum;
+                    return;
+                }
+                pageItems.value = response.items;
+                resultTotal.value = response.total;
+                resultSummary.value = response.summary;
+                resultDistribution.value = response.distribution;
+                resultContentTypes.value = response.content_types;
+                accountCatalog.value = response.accounts;
+                if (isAccountMode.value)
+                    expandedAccounts.value = new Set([props.accountId]);
+            }
+            catch (exc) {
+                if (request === loadRequest)
+                    error.value = exc instanceof Error ? exc.message : '读取策划明细失败';
+            }
+            finally {
+                if (request === loadRequest)
+                    loading.value = false;
+            }
+        }
+        function applyFilters() {
+            if (isAccountMode.value && dateStart.value && dateEnd.value && dateStart.value > dateEnd.value) {
+                dateFilterError.value = '开始日期不能晚于结束日期';
+                return;
+            }
+            dateFilterError.value = '';
+            appliedFilters.value = {
+                account: isAccountMode.value ? '' : accountKeyword.value,
+                start: isAccountMode.value ? dateStart.value : '',
+                end: isAccountMode.value ? dateEnd.value : '',
+                batch: isBatchMode.value ? String(currentBatch.value?.id) : 'all',
+                planType: fixedPlanType.value ?? 'all',
+                contentType: contentType.value
+            };
+            page.value = 1;
+            historyPage.value = 1;
+        }
+        watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => props.batches.map(batch => batch.id).join(',')], () => {
+            accountKeyword.value = '';
+            contentType.value = 'all';
+            dateStart.value = isAccountMode.value ? props.cycleStart : '';
+            dateEnd.value = isAccountMode.value && props.cycleStart ? weekEnd(props.cycleStart) : '';
+            dateFilterError.value = '';
+            filtersExpanded.value = true;
+            applyFilters();
+            expandedAccounts.value = new Set();
+            selectedPlan.value = null;
+            void load();
+        }, {
+            immediate: true
+        });
+        watch(pageSize, () => {
+            page.value = 1;
+        });
+        watch([page, pageSize, historyPage, historyPageSize, appliedFilters], () => {
+            void load();
+        });
+        watch(historyPageSize, () => {
+            historyPage.value = 1;
+        });
+        const productionTimer = window.setInterval(() => {
+            if (!loading.value && productionItems.value.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item))))
+                void load(true);
+        }, 3000);
+        onBeforeUnmount(() => {
+            loadRequest++;
+            detailRequest?.abort();
+            window.clearInterval(productionTimer);
+        });
+        return {
+            cyclePeriodLabel,
+            formatDateTime,
+            emit,
+            loading,
+            error,
+            resultTotal,
+            resultSummary,
+            resultDistribution,
+            expandedAccounts,
+            filtersExpanded,
+            batchesExpanded,
+            batchPage,
+            batchPageSize,
+            pagedCycleBatches,
+            accountKeyword,
+            contentType,
+            selectedPlan,
+            dateStart,
+            dateEnd,
+            dateFilterError,
+            appliedFilters,
+            page,
+            pageSize,
+            historyPage,
+            historyPageSize,
+            isBatchMode,
+            isAccountMode,
+            detailTitle,
+            currentBatch,
+            backLabel,
+            fixedPlanType,
+            scopeLabel,
+            scopePlanType,
+            accountTypeLabel,
+            contentTypes,
+            accountGroups,
+            pagedAccountGroups,
+            pagedAccountWeeks,
+            weeksFor,
+            toggleAccount,
+            updatePlan,
+            applyFilters
+        };
+    },
+    components: {HoverHint, LoadingSkeleton, PlanningResultStats, ListPagination, PlanningWeekCalendar, AccountTypeBadge, PlanDetailDrawer}
+});
 </script>
 
 <template>
+<div class="vue2-component-root">
   <section class="card planning-detail-card">
     <div class="card-head planning-detail-head">
       <div class="planning-detail-heading">
@@ -238,7 +317,7 @@ onBeforeUnmount(() => { loadRequest++; detailRequest?.abort(); window.clearInter
         <div v-else class="planning-detail-scope"><HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ scopeLabel }}</HoverHint></div>
       </div>
       <div class="planning-detail-actions">
-        <button v-if="isBatchMode && showCycleLink" class="btn" type="button" @click="emit('viewCycle')">查看所有批次</button>
+        <button v-if="isBatchMode && showCycleLink" class="btn" type="button" @click="emit('view-cycle')">查看所有批次</button>
         <button class="btn" type="button" @click="emit('back')">{{ backLabel }}</button>
       </div>
     </div>
@@ -271,9 +350,9 @@ onBeforeUnmount(() => { loadRequest++; detailRequest?.abort(); window.clearInter
       <section v-if="!isBatchMode && !isAccountMode && batchesExpanded" id="cycle-batch-list" class="cycle-batch-list">
         <div class="cycle-batch-title"><b>本周期批次</b><span>{{ batches.length }} 个批次</span></div>
         <div class="table-wrap"><table><thead><tr><th>批次</th><th>策划方式</th><th>账号数</th><th>策划状态</th><th>更新时间</th><th>操作</th></tr></thead>
-          <tbody><tr v-for="batch in pagedCycleBatches" :key="batch.id"><td><div class="cycle-batch-identity"><b>{{ batch.task_name || '—' }}</b><small>{{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td><td>{{ batch.account_count }}</td><td>{{ batch.planning_status || batch.status }}</td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="emit('openBatch', batch)">查看策划</button></td></tr><tr v-if="!batches.length"><td colspan="6" class="empty-state">暂无批次</td></tr></tbody>
+          <tbody><tr v-for="batch in pagedCycleBatches" :key="batch.id"><td><div class="cycle-batch-identity"><b>{{ batch.task_name || '—' }}</b><small>{{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td><td>{{ batch.account_count }}</td><td>{{ batch.planning_status || batch.status }}</td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="emit('open-batch', batch)">查看策划</button></td></tr><tr v-if="!batches.length"><td colspan="6" class="empty-state">暂无批次</td></tr></tbody>
         </table></div>
-        <ListPagination v-if="batches.length > 10" v-model:page="batchPage" v-model:page-size="batchPageSize" :total="batches.length" unit="个批次" />
+        <ListPagination v-if="batches.length > 10" :page.sync="batchPage" :page-size.sync="batchPageSize" :total="batches.length" unit="个批次" />
       </section>
 
       </PlanningResultStats>
@@ -286,7 +365,7 @@ onBeforeUnmount(() => { loadRequest++; detailRequest?.abort(); window.clearInter
           </div>
         </div>
         <div v-else class="empty-state">暂无策划记录</div>
-        <ListPagination v-if="resultTotal" v-model:page="historyPage" v-model:page-size="historyPageSize" :total="resultTotal" unit="周" class="list-pagination-inset" />
+        <ListPagination v-if="resultTotal" :page.sync="historyPage" :page-size.sync="historyPageSize" :total="resultTotal" unit="周" class="list-pagination-inset" />
       </template>
       <div v-else-if="accountGroups.length" class="planning-account-list">
         <article v-for="group in pagedAccountGroups" :key="group.account_id" :class="['planning-account-card', { expanded: expandedAccounts.has(group.account_id) }]">
@@ -325,10 +404,11 @@ onBeforeUnmount(() => { loadRequest++; detailRequest?.abort(); window.clearInter
         </article>
       </div>
       <div v-else class="empty-state"><b>当前筛选条件下暂无策划结果</b></div>
-      <ListPagination v-if="!isAccountMode && resultTotal" v-model:page="page" v-model:page-size="pageSize" :total="resultTotal" unit="个账号" class="list-pagination-inset" />
+      <ListPagination v-if="!isAccountMode && resultTotal" :page.sync="page" :page-size.sync="pageSize" :total="resultTotal" unit="个账号" class="list-pagination-inset" />
     </template>
   </section>
   <PlanDetailDrawer v-if="selectedPlan" :plan="selectedPlan" @close-plan="selectedPlan = null" @plan-updated="updatePlan" />
+</div>
 </template>
 
 <style scoped>

@@ -1,10 +1,20 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-import type { TopicOption } from '../types'
-import { topicLabels, type TaxonomyItems } from '../topicTaxonomy'
-const props = withDefaults(defineProps<{ topic: TopicOption; items?: TaxonomyItems }>(), { items: () => ({}) })
-const labels = computed(() => topicLabels(props.topic, props.items))
-const hasLabels = computed(() => props.topic.label_status === '已完成' || props.topic.label_status === 'completed')
+<script lang="ts">
+import { defineComponent, type PropType } from '../compat/composition';
+import { computed } from '../compat/composition';
+import type { TopicOption } from '../types';
+import { topicLabels, type TaxonomyItems } from '../topicTaxonomy';
+export default defineComponent({
+    props: { topic: { required: true, type: null as unknown as PropType<TopicOption> },
+        items: { required: false, type: null as unknown as PropType<TaxonomyItems>, default: () => ({}) } },
+    setup(props, context) {
+        const labels = computed(() => topicLabels(props.topic, props.items));
+        const hasLabels = computed(() => props.topic.label_status === '已完成' || props.topic.label_status === 'completed');
+        return {
+            labels,
+            hasLabels
+        };
+    }
+});
 </script>
 <template>
   <div class="topic-label-details">

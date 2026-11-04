@@ -1,11 +1,36 @@
-<script setup lang="ts">
-import { watch } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { computed, watch } from '../../compat/composition';
 import type { LifecycleRule } from '../../types';
 import { lifecycleRuleSummary, lifecycleGroups, lifecycleMetricOptions, lifecycleOperatorOptions, metricUnit, addLifecycleCondition, addLifecycleGroup, removeLifecycleCondition, normalizeLifecycleRule } from '../../ui/lifecycleRules';
-const lifecycleRules = defineModel<LifecycleRule[]>({ required: true });
-watch(lifecycleRules, rules => { for (const rule of rules)
-    if (!rule.catchAll)
-        normalizeLifecycleRule(rule); }, { immediate: true });
+export default defineComponent({
+    props: { value: { required: true, type: Array as PropType<LifecycleRule[]> } },
+    setup(props, context) {
+        const emit = context.emit;
+        const lifecycleRules = computed({
+            get: () => props.value,
+            set: value => emit('input', value)
+        });
+        watch(lifecycleRules, rules => {
+            for (const rule of rules)
+                if (!rule.catchAll)
+                    normalizeLifecycleRule(rule);
+        }, {
+            immediate: true
+        });
+        return {
+            lifecycleRuleSummary,
+            lifecycleGroups,
+            lifecycleMetricOptions,
+            lifecycleOperatorOptions,
+            metricUnit,
+            addLifecycleCondition,
+            addLifecycleGroup,
+            removeLifecycleCondition,
+            lifecycleRules
+        };
+    }
+});
 </script>
 <template>
 <div class="lifecycle-editor">
@@ -14,9 +39,9 @@ watch(lifecycleRules, rules => { for (const rule of rules)
           <div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition lifecycle-grouped-rule">
             <div class="lifecycle-rule-heading"><b>{{ rule.name }}</b><span class="lifecycle-rule-summary">{{ lifecycleRuleSummary(rule,lifecycleRules) }}</span></div>
             <template v-if="!rule.catchAll">
-              <template v-for="(group, groupIndex) in lifecycleGroups(rule)" :key="groupIndex">
-                <div v-if="groupIndex" class="lifecycle-or">或</div>
-                <div class="lifecycle-condition-group">
+              <template v-for="(group, groupIndex) in lifecycleGroups(rule)" >
+                <div :key="(groupIndex) + '-0'" v-if="groupIndex" class="lifecycle-or">或</div>
+                <div :key="(groupIndex) + '-1'" class="lifecycle-condition-group">
                   <div v-for="(condition, conditionIndex) in group" :key="conditionIndex" class="lifecycle-group-row">
                     <span v-if="conditionIndex" class="lifecycle-and">且</span><span v-else class="lifecycle-and-placeholder"></span>
                     <select v-model="condition.field" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>

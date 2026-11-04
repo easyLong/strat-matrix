@@ -1,4 +1,4 @@
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, ref, watch, type Ref } from '../compat/composition';
 import type { TopicOption } from '../types';
 export function useManualTopicSelection({ topics, isMarketing, topicReview, error }: {
     topics: Ref<TopicOption[]>;

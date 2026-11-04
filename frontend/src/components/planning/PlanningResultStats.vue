@@ -1,22 +1,33 @@
-<script setup lang="ts">
-import { computed } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { computed } from '../../compat/composition';
 import HoverHint from '../HoverHint.vue';
 import type { ContentTypeCount } from '../../ui/contentTypeStats';
-const props = defineProps<{
-    mode: 'account' | 'cycle' | 'batch';
-    summary: {
-        accounts: number;
-        batches: number;
-        topics: number;
-    };
-    distribution: ContentTypeCount[];
-}>();
-const isAccountMode = computed(() => props.mode === 'account');
-const isBatchMode = computed(() => props.mode === 'batch');
-const dashboard = computed(() => props.summary);
-const topicTypeCounts = computed(() => [...props.distribution].sort((a, b) => b.count - a.count));
+export default defineComponent({
+    props: { mode: { required: true, type: String as PropType<'account' | 'cycle' | 'batch'> },
+        summary: { required: true, type: Object as PropType<{
+                accounts: number;
+                batches: number;
+                topics: number;
+            }> },
+        distribution: { required: true, type: Array as PropType<ContentTypeCount[]> } },
+    setup(props, context) {
+        const isAccountMode = computed(() => props.mode === 'account');
+        const isBatchMode = computed(() => props.mode === 'batch');
+        const dashboard = computed(() => props.summary);
+        const topicTypeCounts = computed(() => [...props.distribution].sort((a, b) => b.count - a.count));
+        return {
+            isAccountMode,
+            isBatchMode,
+            dashboard,
+            topicTypeCounts
+        };
+    },
+    components: {HoverHint}
+});
 </script>
 <template>
+<div class="vue2-component-root">
       <section class="planning-dashboard" aria-label="策划概览">
         <div v-if="isAccountMode">
           <HoverHint class="dashboard-label" text="当前账号历史策划记录中去重后的批次数量" :show-icon="true">覆盖批次</HoverHint>
@@ -42,6 +53,7 @@ const topicTypeCounts = computed(() => [...props.distribution].sort((a, b) => b.
         </dl>
       </section>
 
+</div>
 </template>
 <style scoped>
 

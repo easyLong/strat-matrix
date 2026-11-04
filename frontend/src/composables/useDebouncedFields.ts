@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { onBeforeUnmount, ref, watch, type Ref } from '../compat/composition'
 
 export function useDebouncedFields<T extends string>(sources: Record<T, Ref<string>>, delay = 300) {
   const read = () => Object.fromEntries(Object.entries<Ref<string>>(sources).map(([key, source]) => [key, source.value])) as Record<T, string>

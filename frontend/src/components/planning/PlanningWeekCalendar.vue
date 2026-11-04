@@ -1,21 +1,29 @@
-<script setup lang="ts">
-import { computed } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { computed } from '../../compat/composition';
 import type { AccountPlanRecord } from '../../types';
 import { daysFor, topicTypeLabel, sourceLabel, sourceHint, type PlanningWeek } from '../../ui/planningCalendar';
 import { statusTone } from '../../ui/status';
 import { productionStatusLabel } from '../../ui/slotContentStatus';
-const props = withDefaults(defineProps<{
-    week: PlanningWeek;
-    compactSource?: boolean;
-    showBatch?: boolean;
-    showTopicType?: boolean;
-}>(), { compactSource: false, showBatch: true, showTopicType: false });
-const emit = defineEmits<{
-    select: [
-        item: AccountPlanRecord
-    ];
-}>();
-const days = computed(() => daysFor(props.week));
+export default defineComponent({
+    props: { week: { required: true, type: null as unknown as PropType<PlanningWeek> },
+        compactSource: { required: false, type: Boolean as PropType<boolean>, default: false },
+        showBatch: { required: false, type: Boolean as PropType<boolean>, default: true },
+        showTopicType: { required: false, type: Boolean as PropType<boolean>, default: false } },
+    setup(props, context) {
+        const emit = context.emit;
+        const days = computed(() => daysFor(props.week));
+        return {
+            topicTypeLabel,
+            sourceLabel,
+            sourceHint,
+            statusTone,
+            productionStatusLabel,
+            emit,
+            days
+        };
+    }
+});
 </script>
 <template>
   <div class="planning-week-wrap"><div class="planning-week-grid">

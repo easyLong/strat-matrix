@@ -1,44 +1,66 @@
-<script setup lang="ts">
-import { computed, toRef } from 'vue';
+<script lang="ts">
+import { defineComponent, type PropType } from '../../compat/composition';
+import { computed, toRef } from '../../compat/composition';
 import PageBreadcrumbs from '../PageBreadcrumbs.vue';
 import { formatDateTime } from '../../planningTime';
 import { lifecycleRuleSummary } from '../../ui/lifecycleRules';
 import { canRestoreConfig, configDetailRows, configHistorySummary, configVersionNumber } from '../../ui/configHistory';
 import type { ConfigVersionSummary } from '../../types';
-const props = defineProps<{
-    versions: ConfigVersionSummary[];
-    disabled: boolean;
-}>();
-const versions = toRef(props, 'versions');
-const versionDetail = defineModel<ConfigVersionSummary | null>('detail', { required: true });
-const emit = defineEmits<{
-    restore: [
-        version: ConfigVersionSummary
-    ];
-}>();
-const displayVersionNumber = (version: ConfigVersionSummary) => configVersionNumber(version, versions.value);
-function showVersionDetail(version: ConfigVersionSummary) { versionDetail.value = version; }
-const versionDetailRows = computed(() => versionDetail.value
-    ? configDetailRows(versionDetail.value.config)
-    : []);
-const versionPrevious = computed(() => {
-    if (!versionDetail.value)
-        return null;
-    const index = versions.value.findIndex(item => item.version === versionDetail.value?.version);
-    return index >= 0 ? versions.value[index + 1] ?? null : null;
-});
-const versionChanges = computed(() => {
-    if (!versionDetail.value || !versionPrevious.value)
-        return [];
-    const current = configDetailRows(versionDetail.value.config);
-    const previous = new Map(configDetailRows(versionPrevious.value.config).map(row => [row.key, row.value]));
-    return current.flatMap(row => {
-        const oldValue = previous.get(row.key);
-        return oldValue === row.value ? [] : [{ ...row, oldValue: oldValue ?? '无', newValue: row.value }];
-    });
+export default defineComponent({
+    props: { versions: { required: true, type: Array as PropType<ConfigVersionSummary[]> },
+        disabled: { required: true, type: Boolean as PropType<boolean> },
+        detail: { required: true, type: null as unknown as PropType<ConfigVersionSummary | null> } },
+    setup(props, context) {
+        const versions = toRef(props, 'versions');
+        const versionDetail = computed({
+            get: () => props.detail,
+            set: value => emit('update:detail', value)
+        });
+        const emit = context.emit;
+        const displayVersionNumber = (version: ConfigVersionSummary) => configVersionNumber(version, versions.value);
+        function showVersionDetail(version: ConfigVersionSummary) {
+            versionDetail.value = version;
+        }
+        const versionDetailRows = computed(() => versionDetail.value ? configDetailRows(versionDetail.value.config) : []);
+        const versionPrevious = computed(() => {
+            if (!versionDetail.value)
+                return null;
+            const index = versions.value.findIndex(item => item.version === versionDetail.value?.version);
+            return index >= 0 ? versions.value[index + 1] ?? null : null;
+        });
+        const versionChanges = computed(() => {
+            if (!versionDetail.value || !versionPrevious.value)
+                return [];
+            const current = configDetailRows(versionDetail.value.config);
+            const previous = new Map(configDetailRows(versionPrevious.value.config).map(row => [row.key, row.value]));
+            return current.flatMap(row => {
+                const oldValue = previous.get(row.key);
+                return oldValue === row.value ? [] : [{
+                        ...row,
+                        oldValue: oldValue ?? '无',
+                        newValue: row.value
+                    }];
+            });
+        });
+        return {
+            formatDateTime,
+            lifecycleRuleSummary,
+            canRestoreConfig,
+            configHistorySummary,
+            versionDetail,
+            emit,
+            displayVersionNumber,
+            showVersionDetail,
+            versionDetailRows,
+            versionPrevious,
+            versionChanges
+        };
+    },
+    components: {PageBreadcrumbs}
 });
 </script>
 <template>
+<div class="vue2-component-root">
   <section class="card">
     <div class="table-wrap"><table><thead><tr><th>版本</th><th>生成时间</th><th>配置摘要</th><th>操作人</th><th>操作</th></tr></thead><tbody>
       <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>{{ configHistorySummary(version.config) }}</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version" class="text-btn" type="button" :disabled="disabled || !canRestoreConfig(version.config)" :title="canRestoreConfig(version.config) ? undefined : '该版本未记录完整配置，仅支持查看'" @click="emit('restore',version)">恢复此版本</button></div></td></tr>
@@ -77,6 +99,7 @@ const versionChanges = computed(() => {
     </aside>
   </div>
 
+</div>
 </template>
 <style scoped>
 

@@ -1,14 +1,18 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { createVuePlugin } from 'vite-plugin-vue2'
 import { serverOptions } from './tooling/serverOptions'
 
 export default defineConfig(({ command }) => {
   // Building static browser assets needs no credentials or running database.
-  if (command === 'build') return { plugins: [vue()] }
+  const common = {
+    plugins: [createVuePlugin()],
+    resolve: { dedupe: ['vue'] },
+  }
+  if (command === 'build') return common
   // Project scripts inject MySQL's public settings; standalone npm uses local defaults.
   const options = serverOptions(process.env)
   return {
-    plugins: [vue()],
+    ...common,
     server: options,
     preview: options,
   }
