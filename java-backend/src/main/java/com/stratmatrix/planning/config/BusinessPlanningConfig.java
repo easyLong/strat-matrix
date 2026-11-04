@@ -1,5 +1,6 @@
 package com.stratmatrix.planning.config;
 
+import com.stratmatrix.planning.api.PlanningValidationException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -17,16 +18,23 @@ public class BusinessPlanningConfig {
 
   public void validate() {
     if (planning_days == null || planning_days.isEmpty() || planning_days.size() > 7)
-      throw new IllegalArgumentException("每周策划日至少选择一天");
+      throw new PlanningValidationException("每周策划日至少选择一天");
     Set<Integer> unique = new LinkedHashSet<>(planning_days);
-    if (unique.size() != planning_days.size() || unique.stream().anyMatch(d -> d == null || d < 1 || d > 7))
-      throw new IllegalArgumentException("每周策划日须为周一至周日且不可重复");
-    if (schedule_day == null || schedule_day < 1 || schedule_day > 7
-        || schedule_time == null || !TIME.matcher(schedule_time).matches())
-      throw new IllegalArgumentException("自动策划调度时间无效");
-    if (marketing_max == null || marketing_max < 0 || marketing_max > 10000
-        || hotspot_ratio == null || hotspot_ratio < 0 || hotspot_ratio > 100)
-      throw new IllegalArgumentException("营销上限或热点选题占比无效");
+    if (unique.size() != planning_days.size()
+        || unique.stream().anyMatch(d -> d == null || d < 1 || d > 7))
+      throw new PlanningValidationException("每周策划日须为周一至周日且不可重复");
+    if (schedule_day == null
+        || schedule_day < 1
+        || schedule_day > 7
+        || schedule_time == null
+        || !TIME.matcher(schedule_time).matches())
+      throw new PlanningValidationException("自动策划调度时间无效");
+    if (marketing_max == null
+        || marketing_max < 0
+        || marketing_max > 10000
+        || hotspot_ratio == null
+        || hotspot_ratio < 0
+        || hotspot_ratio > 100) throw new PlanningValidationException("营销上限或热点选题占比无效");
     planning_days = new ArrayList<>(unique);
     planning_days.sort(Integer::compareTo);
   }

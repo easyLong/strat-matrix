@@ -1,5 +1,11 @@
 # Python 子项目
 
+首轮[算法执行优化](../docs/算法执行优化记录_2026-11-03.md)已加入DBUtils连接池、冻结角色覆盖检查、不可变缓存批读及任务范围内2路打标；需更新`requirements.txt`依赖。配置/模型401或403会阻断准备任务，修复后显式重试，不会自动持续重放。
+
+驻场前已补齐[Python接入与预检](ONSITE.md)：可配置模型网关、25张算法自有表的[独立DDL](algorithm_schema.sql)、不依赖Java业务表的健康检查、显式只读预检及有限模型连通测试。新算法库使用`python -m app.init_algorithm_db --apply`；已有环境不要用旧业务初始化器补表。
+
+三工程驻场的实际流程、交互、数据归属及待补开发见[功能流程清单](../docs/三工程驻场功能流程适配清单_V1.0_2026-11-03.md)及[Excel跟踪表](../docs/三工程驻场功能流程适配清单_V1.0_2026-11-03.xlsx)，重点核对模型出口、原始资料HTTP、最小算法DDL及旧OP收口。
+
 普通选题匹配仅保留V19，执行入口为`matching_quality_executor.py`；旧算法策略仅供历史查询。已有环境通过`python -m app.consolidate_v19 --apply`迁移策略绑定，详见[V19统一说明](../docs/V19算法统一说明_2026-11-03.md)。
 
 部署环境使用库内`PLANNING_ENV=outside/inside`。`python -m app.deployment_environment show/check/select`提供查看、预检和选择；inside强制Java资料来源并在启动前校验配置。详见[双环境切换](../docs/双环境切换_V0.1.md)。

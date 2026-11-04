@@ -1,116 +1,61 @@
 package com.stratmatrix.planning.adapter.python;
 
+import static com.stratmatrix.planning.manual.Json.map;
+
 import com.stratmatrix.planning.auto.AutoSchedulePort;
 import java.net.URI;
 import java.time.LocalDate;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import org.springframework.http.*;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.client.RestTemplate;
 
-/** Local/host-replaceable adapter for the protected Python algorithm start capability. */
 public class AutoSchedulePythonClient implements AutoSchedulePort {
-  private final URI endpoint;
-  private final String token;
-  private final RestTemplate http;
+  private final PythonClient python;
 
-  public AutoSchedulePythonClient(URI baseUri, String token, RestTemplate http) {
-    this.endpoint = baseUri.resolve("/api/internal/auto-planning/start");
-    this.token = token;
-    this.http = http;
+  public AutoSchedulePythonClient(PythonClient python) {
+    this.python = python;
   }
 
-  @SuppressWarnings("unchecked")
-  public Map<String, Object> start(
-      LocalDate cycleStart, int businessConfigVersion, Map<String, Object> frozenBusinessConfig) {
-    if (token == null || token.trim().isEmpty()) throw new IllegalStateException("内部算法请求令牌尚未配置");
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Integration-Token", token);
-    ResponseEntity<Map> result =
-        http.exchange(
-            endpoint,
-            HttpMethod.POST,
-            new HttpEntity<>(
-                com.stratmatrix.planning.manual.Json.map(
-                    "cycle_start",
-                    cycleStart.toString(),
-                    "business_config_version",
-                    businessConfigVersion,
-                    "business_config",
-                    frozenBusinessConfig),
-                headers),
-            Map.class);
-    if (!result.getStatusCode().is2xxSuccessful() || result.getBody() == null)
-      throw new IllegalStateException("算法服务未受理自动策划任务");
-    return (Map<String, Object>) result.getBody();
+  public AutoSchedulePythonClient(URI base, String token, RestTemplate http) {
+    this(new PythonClient(base, token, http));
   }
 
-  @SuppressWarnings("unchecked")
-  public Map<String, Object> status(long pipelineId) {
-    if (pipelineId < 1 || token == null || token.trim().isEmpty())
-      throw new IllegalArgumentException("Pipeline编号或内部令牌无效");
-    HttpHeaders headers = new HttpHeaders();
-    headers.set("X-Integration-Token", token);
-    ResponseEntity<Map> result =
-        http.exchange(
-            endpoint.resolve("/api/internal/planning-pipelines/" + pipelineId),
-            HttpMethod.GET,
-            new HttpEntity<>(headers),
-            Map.class);
-    if (!result.getStatusCode().is2xxSuccessful() || result.getBody() == null)
-      throw new IllegalStateException("算法服务未返回Pipeline状态");
-    return (Map<String, Object>) result.getBody();
+  public Map<String, Object> start(LocalDate cycle, int version, Map<String, Object> config) {
+    return python.call(
+        HttpMethod.POST,
+        "/api/internal/auto-planning/start",
+        map(
+            "cycle_start",
+            cycle.toString(),
+            "business_config_version",
+            version,
+            "business_config",
+            config));
   }
 
-  @SuppressWarnings("unchecked")
-  public Map<String, Object> proposal(
-      long pipelineId, int businessConfigVersion, Map<String, Object> frozenBusinessConfig) {
-    if (pipelineId < 1
-        || businessConfigVersion < 1
-        || frozenBusinessConfig == null
-        || token == null
-        || token.trim().isEmpty()) throw new IllegalArgumentException("Pipeline编号、业务配置或内部令牌无效");
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Integration-Token", token);
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("business_config_version", businessConfigVersion);
-    body.put("business_config", frozenBusinessConfig);
-    ResponseEntity<Map> result =
-        http.exchange(
-            endpoint.resolve("/api/internal/planning-pipelines/" + pipelineId + "/proposal"),
-            HttpMethod.POST,
-            new HttpEntity<>(body, headers),
-            Map.class);
-    if (!result.getStatusCode().is2xxSuccessful() || result.getBody() == null)
-      throw new IllegalStateException("算法服务未返回自动策划提案");
-    return (Map<String, Object>) result.getBody();
+  private String pipeline(long id) {
+    if (id < 1) throw new IllegalArgumentException("Pipeline编号无效");
+    return "/api/internal/planning-pipelines/" + id;
   }
 
-  @SuppressWarnings("unchecked")
-  public Map<String, Object> acknowledge(
-      long pipelineId, String proposalHash, long businessBatchId) {
-    if (pipelineId < 1
-        || businessBatchId < 1
-        || proposalHash == null
-        || !proposalHash.matches("[a-f0-9]{64}")
-        || token == null
-        || token.trim().isEmpty()) throw new IllegalArgumentException("算法确认凭证或内部令牌无效");
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Integration-Token", token);
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("proposal_hash", proposalHash);
-    body.put("business_batch_id", businessBatchId);
-    ResponseEntity<Map> result =
-        http.exchange(
-            endpoint.resolve("/api/internal/planning-pipelines/" + pipelineId + "/acknowledgement"),
-            HttpMethod.POST,
-            new HttpEntity<>(body, headers),
-            Map.class);
-    if (!result.getStatusCode().is2xxSuccessful() || result.getBody() == null)
-      throw new IllegalStateException("算法服务未确认业务落库凭证");
-    return (Map<String, Object>) result.getBody();
+  public Map<String, Object> status(long id) {
+    return python.call(HttpMethod.GET, pipeline(id), null);
+  }
+
+  public Map<String, Object> proposal(long id, int version, Map<String, Object> config) {
+    if (version < 1 || config == null) throw new IllegalArgumentException("业务配置无效");
+    return python.call(
+        HttpMethod.POST,
+        pipeline(id) + "/proposal",
+        map("business_config_version", version, "business_config", config));
+  }
+
+  public Map<String, Object> acknowledge(long id, String hash, long batch) {
+    if (batch < 1 || hash == null || !hash.matches("[a-f0-9]{64}"))
+      throw new IllegalArgumentException("算法确认凭证无效");
+    return python.call(
+        HttpMethod.POST,
+        pipeline(id) + "/acknowledgement",
+        map("proposal_hash", hash, "business_batch_id", batch));
   }
 }

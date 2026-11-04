@@ -19,6 +19,8 @@ async def execution_lifespan(app):
         yield
     finally:
         await asyncio.to_thread(executor.close)
+        from ..db import close_pool
+        await asyncio.to_thread(close_pool)
         del app.state.background_executor
 
 

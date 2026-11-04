@@ -334,7 +334,7 @@ def _preparation_projection(preparation: dict) -> dict[str, dict]:
         return {"topic_profile": state, "account_profile": dict(state)}
     if preparation["status"] == "blocked":
         state = _desired(STAGE_FAILED, **common, error_code="preparation_blocked",
-                         error_message="AI准备输入存在结构性阻断，请修复后重试Pipeline")
+                         error_message="AI准备输入或模型服务存在阻断，请查看准备报告，修复后重试Pipeline")
         return {"topic_profile": state, "account_profile": dict(state)}
     code = f"preparation_{preparation['status']}"
     state = _desired(STAGE_FAILED, **common, error_code=code,
@@ -355,7 +355,8 @@ def _matching_projection(task: dict) -> dict[str, dict]:
         return {"single_account_matching": _desired(
             STAGE_FAILED, **common, detail=summary,
             error_code=task["error_code"] or "matching_execution_failed",
-            error_message="匹配执行失败，可通过Pipeline retry重试")}
+            error_message=("冻结候选缺少所需经营作用或日期的选题，请补齐候选后重新准备"
+                if task['error_code']=='role_coverage_insufficient' else "匹配执行失败，可通过Pipeline retry重试"))}
     if task["status"] == "cancelled":
         return {"single_account_matching": _desired(
             STAGE_FAILED, **common, detail=summary, error_code="matching_task_cancelled",

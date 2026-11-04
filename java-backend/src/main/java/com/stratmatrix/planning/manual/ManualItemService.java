@@ -2,6 +2,7 @@ package com.stratmatrix.planning.manual;
 
 import static com.stratmatrix.planning.manual.Json.*;
 
+import com.stratmatrix.planning.context.RequestContexts;
 import java.util.*;
 
 /** Existing replacement behavior, with Java-owned version/state guards. */
@@ -13,7 +14,7 @@ public class ManualItemService {
   public ManualItemService(ManualRepository r, ManualPorts.Source s, ManualPorts.Actor a) {
     repo = r;
     source = s;
-    actor = a;
+    actor = RequestContexts.actor(a);
   }
 
   public List<Map<String, Object>> adjustments(long id) {

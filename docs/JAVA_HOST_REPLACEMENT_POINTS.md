@@ -1,5 +1,13 @@
 # Java 子项目驻场替换点清单
 
+当前新增的[上下文、响应及分页扩展](../java-backend/host-integration/REQUEST_CONTEXT_RESPONSES_PAGING.md)将宿主差异进一步集中：可选`HostContextProvider`接可信会话及机构范围，可选`PlanningResponseAdapter`接统一页面返回格式。未提供则保持原Actor和响应，范围未指定不代表ALL。资料分页和营销账号批量关联直接复用；迁入时包含`planning/context`、`PlanningApiErrors`和`PlanningApiResponseAdvice`。内部资料及文件下载排除成功包装；真实机构权限SQL、宿主Advice优先级及Vue拆包约定仍需现场确认。
+
+资料接入已有[BankSourceFacts骨架与查询契约](../java-backend/host-integration/BANK_SOURCE_CONTRACT.md)，[字段映射CSV](../java-backend/host-integration/BANK_SOURCE_FIELD_MAPPING.csv)留空行内表/字段。驻场集中替换`BankSourceQueries`的7个读取方法，或填`bank-source/BankSourceMapper.xml`的10条只读SQL，再注册唯一`SourceFacts`。分页、字段转换、关联和错误校验可直接复用；原始资料会话/事务与策划业务会话/事务分别绑定。没有真实源表时不得启用占位SQL冒充已接入。
+
+现场字段名和编码差异可以只改[映射配置示例](../java-backend/host-integration/BankSourceSiteMapping.java.example)，不用散改业务Service。互动明细可注入`MapperBankSourceQueries`四参数构造器的批量函数，复用分组、归属检查和只读事务。接通后运行[资料只读验收](../testing/README.md#资料适配只读验收)快速发现缺字段、关联错误和分页问题；不新增生产诊断接口。
+
+最新接入准备见[Java宿主接入准备](Java宿主接入准备_2026-11-03.md)和[宿主装配模板](../java-backend/host-integration/README.md)。`PlanningHostConfiguration`已提供完整模块装配；宿主集中绑定六类输入，统一客户端和普通任务推进服务可复用。正式健康/标签入口已退出旧代理依赖；下文V0.1时期的“综合发布尚需实现”“等待历史查询退出”和local类名仅保留历史背景，以最新说明为准。
+
 2026-11-03 增量：以[双库业务迁移与验收](双库业务迁移与验收_2026-11-03.md)为当前状态。宿主还需绑定 `ConfigReleaseMapper`、`PlanningQueryMapper`、`SlotCompletionMapper`、`AlgorithmConfigPort` 和 `PlanningContentPort`，均使用宿主对应的业务数据源与事务管理器；综合页面、正式自动结果、热点/营销业务及历史分页已继续迁移。下面各 V0.1 说明保留原迁移阶段背景。
 
 营销/热点后续更新：宿主需实现`SourceFacts.approvedDemandContents`或相应`PlanningContentPort`过审分配查询，未接入时明确失败；内容状态只读投影。热点Job每天只检查明日空槽，不要求22:00，不扫描过去日期；分页处理至完成。`standalone/LocalDailyHotspotCheck`仅行外模拟，不迁入宿主。完整结果与范围见[增量验收](营销热点与模拟内容衔接验收_2026-11-03.md)。

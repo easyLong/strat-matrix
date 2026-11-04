@@ -3,4 +3,5 @@ uvicorn==0.46.0
 pydantic==2.13.3
 python-dotenv==1.2.2
 pymysql==1.1.1
+DBUtils==3.2.0
 

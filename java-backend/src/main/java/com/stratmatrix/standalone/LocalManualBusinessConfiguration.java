@@ -5,8 +5,7 @@ import com.stratmatrix.planning.adapter.local.FixtureContentObservations;
 import com.stratmatrix.planning.adapter.local.FixtureSourceFacts;
 import com.stratmatrix.planning.adapter.local.LocalPlanningContentAdapter;
 import com.stratmatrix.planning.adapter.local.LocalPythonAdapter;
-import com.stratmatrix.planning.adapter.local.OutsideSourceAdapter;
-import com.stratmatrix.planning.adapter.python.AlgorithmConfigPythonClient;
+import com.stratmatrix.planning.adapter.python.*;
 import com.stratmatrix.planning.adapter.python.AutoSchedulePythonClient;
 import com.stratmatrix.planning.adapter.python.CatalogProjectionPythonClient;
 import com.stratmatrix.planning.auto.AutoScheduleMapper;
@@ -106,9 +105,21 @@ public class LocalManualBusinessConfiguration {
   }
 
   @Bean
-  public AlgorithmConfigPort localAlgorithmConfigPort(
-      @Qualifier("legacyPythonHttp") RestTemplate client, LegacyPythonProperties p) {
-    return new AlgorithmConfigPythonClient(p.baseUri(), p.getIntegrationToken(), client);
+  public PythonClient localPythonClient(LegacyPythonProperties p) {
+    return new PythonClient(
+        p.baseUri(),
+        p.getIntegrationToken(),
+        PythonClient.boundedHttp(p.getConnectTimeoutMs(), p.getReadTimeoutMs()));
+  }
+
+  @Bean
+  public PythonExecutionClient pythonExecutionClient(PythonClient python) {
+    return new PythonExecutionClient(python);
+  }
+
+  @Bean
+  public AlgorithmConfigPort localAlgorithmConfigPort(PythonClient python) {
+    return new AlgorithmConfigPythonClient(python);
   }
 
   @Bean
@@ -133,12 +144,9 @@ public class LocalManualBusinessConfiguration {
   }
 
   @Bean
-  public ManualPorts.Source outsideManualSource(
-      SourceFacts facts,
-      @Qualifier("legacyPythonHttp") RestTemplate client,
-      LegacyPythonProperties p) {
-    return new OutsideSourceAdapter(
-        facts, new CatalogProjectionPythonClient(client, p.baseUri(), p.getIntegrationToken()));
+  public ManualPorts.Source outsideManualSource(SourceFacts facts, PythonClient python) {
+    return new com.stratmatrix.planning.source.SourceCatalogAdapter(
+        facts, new CatalogProjectionPythonClient(python));
   }
 
   @Bean
@@ -152,10 +160,13 @@ public class LocalManualBusinessConfiguration {
   }
 
   @Bean
-  public AutoSchedulePort localAutoSchedulePort(
-      @Qualifier("legacyPythonHttp") RestTemplate client, LegacyPythonProperties properties) {
-    return new AutoSchedulePythonClient(
-        properties.baseUri(), properties.getIntegrationToken(), client);
+  public AutoSchedulePort localAutoSchedulePort(PythonClient python) {
+    return new AutoSchedulePythonClient(python);
+  }
+
+  @Bean
+  public ManualPorts.Computer localManualComputer(PythonClient python) {
+    return new ManualComputePythonClient(python);
   }
 
   @Bean

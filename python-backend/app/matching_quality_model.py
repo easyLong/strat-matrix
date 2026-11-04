@@ -103,7 +103,7 @@ def annotate_batch(context, topics):
 def map_account(context, raw):
     allowed = dictionary(context['taxonomy'])
     allowed['T4'] = [n for n in allowed['T4'] if not any(s in n['path'] for s in ('年龄阶段','职业身份'))]
-    result = chat(context,
+    instruction = (
         '将账号明确提供的原始信息映射到现有末级ID，只返回'
         '{"mappings":[{"dimension":"T3/T4/T5","tag_id":"ID","relation":"CORE/ADJACENT/CONDITIONAL/OFF",'
         '"condition":"条件文本或空串","evidence_field":"原始字段名","evidence":"原文逐字片段"}],"need_capability":"需求服务能力描述"}。'
@@ -113,9 +113,22 @@ def map_account(context, raw):
         '不能把人设服务对象当成账号自身身份。没有年龄或职业字段，不输出对应身份。家庭年轻不能推断账号年龄。'
         '家庭阶段只能用family_identity明确值，有娃须明确提到孩子或子女；性别只能用gender明确值。'
         'T5仅根据明确原始字段。不得推断年龄、性别、职业或孩子年龄。'
-        'evidence必须是evidence_field原文连续片段。不配置父分类，不覆盖人工规则。',
-        {'account':raw, 'taxonomy':allowed})
-    return checked_account_mapping(result, context, raw)
+        'evidence必须是evidence_field原文连续片段。不配置父分类，不覆盖人工规则。')
+    data = {'account':raw, 'taxonomy':allowed}
+    # Keep strict validation and never cache invalid mappings. A model can still
+    # duplicate an ID despite the instruction; allow one bounded correction.
+    for attempt in range(2):
+        result = chat(context, instruction, data)
+        try:
+            return checked_account_mapping(result, context, raw)
+        except ValueError as error:
+            if attempt:
+                raise
+            instruction += ('上次输出未通过结构或证据校验，请重新生成完整JSON。'
+                            '逐项检查同维度同ID唯一、末级ID有效、证据来自指定原文；'
+                            '无依据的映射直接省略，不改变判断标准。')
+            data = {**data, 'previous_output':result,
+                    'validation_error':str(error).splitlines()[0][:240]}
 
 
 def checked_account_mapping(value, context, raw):

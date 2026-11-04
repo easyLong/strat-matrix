@@ -1,11 +1,9 @@
 package com.stratmatrix.planning.config;
 
+import com.stratmatrix.planning.context.RequestContexts;
 import com.stratmatrix.planning.manual.ManualPorts;
-import java.util.Collections;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /** Business settings reads; combined releases are the single write entry when enabled. */
@@ -22,7 +20,7 @@ public class BusinessPlanningConfigController {
   public BusinessPlanningConfigController(
       BusinessPlanningConfigService service, ManualPorts.Actor actor) {
     this.service = service;
-    this.actor = actor;
+    this.actor = RequestContexts.actor(actor);
   }
 
   @GetMapping
@@ -51,17 +49,5 @@ public class BusinessPlanningConfigController {
   private void requireStandaloneWrite() {
     if (combinedRelease)
       throw new BusinessPlanningConfigService.ConfigConflict(409, "请通过统一配置保存入口发布配置");
-  }
-
-  @ExceptionHandler(BusinessPlanningConfigService.ConfigConflict.class)
-  public ResponseEntity<?> conflict(BusinessPlanningConfigService.ConfigConflict exception) {
-    return ResponseEntity.status(exception.status)
-        .body(Collections.singletonMap("detail", exception.getMessage()));
-  }
-
-  @ExceptionHandler(IllegalArgumentException.class)
-  public ResponseEntity<?> invalid(IllegalArgumentException exception) {
-    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-        .body(Collections.singletonMap("detail", exception.getMessage()));
   }
 }

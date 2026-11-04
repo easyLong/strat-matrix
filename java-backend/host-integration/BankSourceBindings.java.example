@@ -1,0 +1,31 @@
+// 迁入宿主配置包后采用其中一种方式。此文件不自动编译、不创建数据源、不含行内SQL。
+import com.stratmatrix.planning.source.SourceFacts;
+import com.stratmatrix.planning.source.bank.*;
+import java.time.ZoneId;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.transaction.PlatformTransactionManager;
+
+class BankSourceBindings {
+  // SQL方式：两个Bean应来自原始资料所属数据源，不必等同于策划业务库数据源。
+  // 该会话须加载bank-source/BankSourceMapper.xml，现场填写真实SQL。
+  @Bean
+  SourceFacts bankSourceFacts(
+      @Qualifier("bankSourceSessions") SqlSessionTemplate sessions,
+      @Qualifier("bankSourceTransactions") PlatformTransactionManager transactions) {
+    return new BankSourceFacts(
+        new MapperBankSourceQueries(sessions.getMapper(BankSourceMapper.class), transactions),
+        new BankSourceMapping(ZoneId.of("Asia/Shanghai"))); // 以实际DATETIME存储时区为准。
+  }
+
+  // 已有Service方式：实现BankSourceQueries的7个方法，返回PageRows或记录列表，
+  // 然后new BankSourceFacts(该实现)。默认未实现方法会报503，不回落模拟数据。
+  // 两种方式只注册一个SourceFacts，后面的宿主业务装配及页面契约保持一致。
+
+  // 可选：字段名/状态码不同，集中配置BankSourceFieldRules，见BankSourceSiteMapping.java.example。
+  // 将同一个BankSourceMapping实例传给BankSourceFacts和下面的四参数构造器。
+  // 若互动明细来自单独的表，提供一次批量查询函数，避免账号逐行查库：
+  // new MapperBankSourceQueries(mapper, transactions, mapping, ids -> interactionService.findByAccountIds(ids))
+  // 此函数在账号count/分页的同一只读事务内执行；分页为空时不执行。
+}

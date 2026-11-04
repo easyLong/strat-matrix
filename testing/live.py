@@ -6,6 +6,7 @@ Never part of the default offline regression suite. Credentials stay under run/.
 import argparse
 from datetime import date, datetime, timedelta, timezone
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 import socket
@@ -73,6 +74,24 @@ def fixture_for(run_id):
     return dict(accounts=[account], topics=topics)
 
 
+def fresh_fixture_for(run_id):
+    """Fresh business examples, not cache deletion or prompt-version overrides."""
+    fixture=fixture_for(run_id)
+    income=12000+int(run_id[-4:])%6000
+    spending=4000+int(run_id[-3:])%2000
+    fixture['accounts'][0]['persona']='家庭财务与银行账户服务讲解者，擅长家庭预算、储蓄知识、账户支付、账单与工资提醒服务的选择及官方申请流程'
+    fixture['accounts'][0]['interests'].append(f'月收入{income}元家庭的预算管理')
+    for index,topic in enumerate(fixture['topics'],1):
+        topic['outline']+=f' 示例家庭月收入{income}元、必要支出{spending}元，结合此预算说明第{index}项核对步骤。'
+    services=('账单提醒服务','工资到账提醒服务','银行电子账单服务','银行卡交易通知服务','家庭目标储蓄账户','银行卡支付安全提醒服务')
+    for topic,service in zip(fixture['topics'][6:],services):
+        topic.update(title=f'{service}开通指南：选择方案、提交申请与确认启用',related_product=service,
+            outline=f'面向已经决定开通{service}的用户，展示银行官方页面选择服务、核对费用、填写申请、确认授权并提交开通的完整操作路径。'
+                    f'以月收入{income}元的家庭为使用案例，提供服务开通入口、申请前准备材料和开通成功后的设置核对清单。'
+                    '引导读者通过银行官方渠道立即完成申请与启用，不承诺收益，不使用非官方链接。')
+    return fixture
+
+
 def request(url, payload=None):
     body = None if payload is None else json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
@@ -80,14 +99,32 @@ def request(url, payload=None):
         return json.load(response)
 
 
+def label_snapshot(cursor, excluded=()):
+    cursor.execute('SELECT * FROM godp_topic_label_job ORDER BY id')
+    return {str(row['id']):sha256(json.dumps(row,sort_keys=True,default=str,ensure_ascii=False).encode()).hexdigest()
+            for row in cursor.fetchall() if row['topic_id'] not in excluded}
+
+
+def check_label_isolation(cursor, baseline):
+    current=label_snapshot(cursor)
+    changed=[identity for identity,digest in baseline.items() if current.get(identity)!=digest]
+    return dict(status='passed' if not changed else 'failed',preserved_job_count=len(baseline),changed_job_count=len(changed))
+
+
 def main(argv=None):
+    harness_started=time.perf_counter()
     parser = argparse.ArgumentParser(description='真实V19与双库全链路验收；会调用模型并创建明确标识的测试结果')
     parser.add_argument('--execute', action='store_true', help='显式执行，不属于离线回归')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--resume', type=Path, help='恢复本工具未提交的测试周期，保留冻结输入和模型缓存')
     parser.add_argument('--timeout', type=int, default=900)
     parser.add_argument('--scenario', choices=('ordinary','mixed'), help='默认ordinary；mixed验收真实V19提案后的营销引用和热点T-1')
+    parser.add_argument('--measure',action='store_true',help='独立验收进程记录不含输入/SQL/密钥的步骤计时')
+    parser.add_argument('--fresh-cases',action='store_true',help='使用新家庭预算案例；保留正常缓存，不清空已有缓存')
+    parser.add_argument('--benchmark-mode',choices=('baseline','optimized'),help='测量专用对照装配，不修改模型/规则')
+    parser.add_argument('--case-file',type=Path,help='复用原始业务案例，仅替换测试标识和更新时间')
     args = parser.parse_args(argv)
+    if args.benchmark_mode and not args.measure:parser.error('benchmark-mode requires --measure')
     if not args.execute:
         parser.error('实际调用模型和写入测试数据须显式使用 --execute')
     sys.path.insert(0, str(ROOT/'python-backend'))
@@ -101,13 +138,15 @@ def main(argv=None):
     health=request(gateway+'/api/plan/service-health')
     if health.get('local_scheduler_enabled') is not False:
         raise ValueError('Pause daily Java local pulse before full-chain acceptance')
+    own_topics=([row['topic_id'] for row in json.loads((args.resume/'fixture.json').read_text(encoding='utf-8'))['topics']] if args.resume else [])
     with connection() as db, db.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) n FROM godp_planning_pipeline_run WHERE status IN ('pending','waiting','running')")
         if cursor.fetchone()['n'] and not args.resume:
             raise ValueError('Another planning pipeline is active; finish it before acceptance')
-        cursor.execute("SELECT COUNT(*) n FROM godp_topic_label_job WHERE status IN ('pending','processing','failed')")
-        if cursor.fetchone()['n']:
-            raise ValueError('Unrelated label jobs exist; acceptance must not cancel them')
+        cursor.execute("SELECT topic_id FROM godp_topic_label_job WHERE status='processing' AND lease_expires_at>UTC_TIMESTAMP(6)")
+        if any(row['topic_id'] not in own_topics for row in cursor.fetchall()):
+            raise ValueError('Unrelated model workers are active; wait for them before acceptance')
+        baseline_labels=label_snapshot(cursor,own_topics)
         cursor.execute("SELECT cycle_start FROM godp_planning_pipeline_run UNION SELECT cycle_start FROM godp_ai_preparation")
         occupied = {r['cycle_start'] for r in cursor.fetchall()}
     run_id = datetime.now(ZoneInfo('Asia/Shanghai')).strftime('%Y%m%d%H%M%S')
@@ -117,11 +156,26 @@ def main(argv=None):
     if args.resume and (output/'business.json').exists():
         raise ValueError('Business acceptance already closed; rerun python -m testing.live_verify on this directory')
     output.mkdir(parents=True,exist_ok=True)
-    previous_scenario = json.loads((output/'server.json').read_text(encoding='utf-8')).get('scenario','ordinary') if args.resume else 'ordinary'
+    baseline_file=output/'unrelated-label-baseline.json'
+    if baseline_file.exists():baseline_labels=json.loads(baseline_file.read_text(encoding='utf-8'))
+    else:baseline_file.write_text(json.dumps(baseline_labels,indent=2),encoding='utf-8')
+    previous_server=json.loads((output/'server.json').read_text(encoding='utf-8')) if args.resume else {}
+    previous_scenario = previous_server.get('scenario','ordinary')
+    if args.resume:
+        if args.benchmark_mode and args.benchmark_mode!=previous_server.get('benchmark_mode'):
+            raise ValueError('Resume cannot change benchmark mode')
+        args.benchmark_mode=previous_server.get('benchmark_mode')
+    benchmark_namespace=previous_server.get('benchmark_namespace') if args.resume else run_id if args.benchmark_mode else None
     if args.resume and args.scenario and args.scenario != previous_scenario:
         raise ValueError('Resume cannot change the original content scenario')
     args.scenario = previous_scenario if args.resume else (args.scenario or 'ordinary')
-    fixture = json.loads((output/'fixture.json').read_text(encoding='utf-8')) if args.resume else fixture_for(run_id)
+    fixture = (json.loads((output/'fixture.json').read_text(encoding='utf-8')) if args.resume
+               else fresh_fixture_for(run_id) if args.fresh_cases else fixture_for(run_id))
+    if args.case_file and not args.resume:
+        from .benchmark import clone_fixture
+        fixture=clone_fixture(json.loads(args.case_file.read_text(encoding='utf-8')),run_id)
+    from .benchmark import case_fingerprint
+    fingerprint=case_fingerprint(fixture)
     (output/'fixture.json').write_text(json.dumps(fixture,ensure_ascii=False,indent=2),encoding='utf-8')
     from app.bank_bridge.java_http import JavaHTTPClient
     from app.bank_bridge.contracts import AccountQuery, Page, Account
@@ -171,21 +225,26 @@ def main(argv=None):
         'acceptance.account-id':fixture['accounts'][0]['account_id'],
         'acceptance.resume':str(bool(args.resume)).lower(),
         'acceptance.scenario':args.scenario,'acceptance.java-token':source_client.token,
+        'acceptance.measure':str(args.measure).lower(),
         'acceptance.fixture-path':str(ROOT/'run/bank-source-fixture.json'),
     }
     private = output/'private.properties'
     private.write_text(properties_text(settings),encoding='ascii');private.chmod(0o600)
     server_config = output/'server.json'
     server_config.write_text(json.dumps(dict(java_source=source_client.base_url, python_port=python_port,scenario=args.scenario,
-        account_id=fixture['accounts'][0]['account_id'], topic_ids=[row['topic_id'] for row in fixture['topics']])),encoding='utf-8')
+        account_id=fixture['accounts'][0]['account_id'], topic_ids=[row['topic_id'] for row in fixture['topics']],
+        measure=args.measure,benchmark_mode=args.benchmark_mode,benchmark_namespace=benchmark_namespace)),encoding='utf-8')
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT),str(ROOT/'python-backend')]), PYTHONIOENCODING='utf-8')
     if not env.get('JAVA_HOME'):
         candidates=list((ROOT/'.tmp-tools/jdk').glob('*/bin/java.exe'))
         if candidates: env['JAVA_HOME']=str(candidates[-1].parent.parent)
     maven = executable('mvn')
     java_process = python_process = None
+    timing=dict(started_at=datetime.now(timezone.utc).isoformat(),fresh_cases=args.fresh_cases,
+                benchmark_mode=args.benchmark_mode,case_fingerprint=fingerprint)
     try:
         with (output/'java.log').open('w',encoding='utf-8') as java_log, (output/'python.log').open('w',encoding='utf-8') as python_log:
+            java_started=time.perf_counter()
             java_process=subprocess.Popen([maven,'-o','-q','-Dtest=OutsideFullChainAcceptanceTest',
                 f'-Dplanning.full-chain-properties={private}','test'],cwd=ROOT/'java-backend',env=env,stdout=java_log,stderr=subprocess.STDOUT)
             deadline=time.monotonic()+90
@@ -193,6 +252,7 @@ def main(argv=None):
                 if java_process.poll() is not None: raise RuntimeError('Java acceptance driver startup failed; see java.log')
                 if time.monotonic()>deadline: raise TimeoutError('Java acceptance driver startup timed out')
                 time.sleep(.5)
+            timing['maven_until_test_ready_s']=round(time.perf_counter()-java_started,6)
             python_process=subprocess.Popen([sys.executable,'-m','testing.live_server','--config',str(server_config)],cwd=ROOT,env=env,stdout=python_log,stderr=subprocess.STDOUT)
             previous=None;deadline=time.monotonic()+args.timeout+60
             while java_process.poll() is None:
@@ -212,10 +272,24 @@ def main(argv=None):
                 if time.monotonic()>deadline:raise TimeoutError('Full chain acceptance timed out')
                 time.sleep(1)
             if java_process.returncode: raise RuntimeError('Java acceptance failed; see java.log and progress.json')
+            timing['java_driver_s']=round(time.perf_counter()-java_started,6)
         result=json.loads((output/'business.json').read_text(encoding='utf-8'))
         assert result['status']=='passed'
+        with connection() as db, db.cursor() as cursor:
+            isolation=check_label_isolation(cursor,baseline_labels)
+        (output/'isolation.json').write_text(json.dumps(isolation,indent=2),encoding='utf-8')
+        if isolation['status']!='passed':raise RuntimeError('Acceptance modified unrelated label jobs')
         from .live_verify import verify
-        verify(output)
+        if args.measure:
+            from .timing import Recorder
+            from . import live_verify
+            recorder=Recorder(output/'page-timings.jsonl')
+            original=live_verify.read
+            live_verify.read=recorder.wrap(lambda base,path,payload:'page.'+(
+                payload.get('mode','usage') if path=='/query/plans' else payload.get('format','usage')),original)
+            try:verify(output)
+            finally:live_verify.read=original
+        else:verify(output)
         print(json.dumps({'status':'passed','output':str(output),'batch_id':result['business_batch_id'],'account_id':result['account_id']},ensure_ascii=True),flush=True)
         return 0
     except Exception as error:
@@ -225,6 +299,9 @@ def main(argv=None):
     finally:
         for process in (python_process,java_process):
             stop_child(process)
+        if args.measure:
+            timing['harness_total_s']=round(time.perf_counter()-harness_started,6)
+            (output/'harness-timings.json').write_text(json.dumps(timing,indent=2),encoding='utf-8')
 
 
 if __name__=='__main__':

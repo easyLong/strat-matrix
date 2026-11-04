@@ -1,15 +1,81 @@
 """Prepare pending pipeline inputs through the existing leased/validated services."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from .db import connection
-from .doubao_labeling import LabelInput, label_topic, embed_profile
+from .doubao_labeling import LabelInput, label_topic, embed_profile, DoubaoConfigurationError
 from .services.labels import (TopicTagsInput, claim_topic_label_job, list_topic_label_jobs, put_topic_tags)
 from .services.topic_vectors import TopicVectorResult, topic_vector_jobs, save_topic_vector
 from .services.account_vectors import AccountVectorResult
 from .services.preparations import preparation_account_jobs, save_preparation_account_vector
-from .preparation_batches import InputBatch, BatchLimit, open_scope, inspect_scope
+from .preparation_batches import (InputBatch, BatchLimit, InputModelBlocked, block_model_preparation,
+                                 open_scope, inspect_scope)
 
 LOG = logging.getLogger('planning-input-runner')
+
+
+def _counts():
+    return dict(labels=0,topic_vectors=0,account_vectors=0,failed=0,conflicts=0,
+                deferred=0,failure_record_errors=0,errors=[])
+
+
+def _label_job(job,scope):
+    counts,claim,progress=_counts(),{},dict(writing=False)
+    def label():
+        claim.update(claim_topic_label_job(job['topic_id']))
+        result=label_topic(LabelInput(topic_id=job['topic_id'],topic=claim['topic'],
+            taxonomy=claim['taxonomy'],taxonomy_version=claim['taxonomy_version']))
+        if scope and (claim['taxonomy_version']!=scope['taxonomy_version']
+                      or result['t6_embedding_model']!=scope['embedding_model']):
+            raise ValueError('打标结果与任务绑定版本不一致')
+        progress['writing']=True
+        put_topic_tags(job['topic_id'],TopicTagsInput(
+            tags={d:[name] for d,name in result['labels'].items()},label_status='已完成',
+            lease_id=claim['lease_id'],taxonomy_version=claim['taxonomy_version'],
+            t6_embedding=result['t6_embedding'],t6_embedding_model=result['t6_embedding_model']))
+    def fail(error):
+        if claim:
+            put_topic_tags(job['topic_id'],TopicTagsInput(tags={},label_status='失败',
+                label_error=f'模型准备失败：{type(error).__name__}',lease_id=claim['lease_id']))
+    try:
+        _execute_input(counts,'labels',job['topic_id'],label,fail,progress)
+    except InputModelBlocked as exc:
+        exc.counts=counts
+        raise
+    return counts
+
+
+def _merge_counts(total,part):
+    for key,value in part.items():
+        if key=='errors':total[key].extend(value[:max(0,50-len(total[key]))])
+        else:total[key]+=value
+
+
+def _parallel_labels(jobs,counts,batch,workers):
+    with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='topic-label') as pool:
+        offset=0
+        while offset<len(jobs):
+            batch.before()
+            width=min(workers,batch.max_jobs-batch.visited,len(jobs)-offset)
+            group=jobs[offset:offset+width]
+            futures=[]
+            for job in group:
+                futures.append(pool.submit(copy_context().run,_label_job,job,batch.scope)
+                    if retry_due('godp_topic_label_job','topic_id',job['topic_id']) else None)
+            # Only this coordinator updates counters/checkpoints, in input order.
+            # Each thread claims and saves its own topic using its own DB lease.
+            blocked=None
+            for job,future in zip(group,futures):
+                if future is None:counts['deferred']+=1
+                else:
+                    try:_merge_counts(counts,future.result())
+                    except InputModelBlocked as exc:
+                        _merge_counts(counts,exc.counts)
+                        blocked=exc
+                batch.checkpoint('labels',job['id'],counts)
+            if blocked:raise InputModelBlocked(blocked.error_type)
+            offset+=width
 
 
 def _execute_input(counts, kind, identity, operation, record_failure, progress):
@@ -36,6 +102,8 @@ def _execute_input(counts, kind, identity, operation, record_failure, progress):
             else:
                 counts['failure_record_errors'] += 1
                 LOG.warning('Input failure record %s %s: %s', kind, identity, type(save_error).__name__)
+        if isinstance(exc,DoubaoConfigurationError):
+            raise InputModelBlocked(type(exc).__name__)
 
 
 def retry_due(table, key, identity):
@@ -47,11 +115,11 @@ def retry_due(table, key, identity):
     return row and (row['status'] != 'failed' or row['age'] >= 60)
 
 
-def prepare_inputs(preparation_id=None, *, max_jobs=24, max_seconds=30):
-    if not 1 <= max_jobs <= 200 or max_seconds <= 0:
+def prepare_inputs(preparation_id=None, *, max_jobs=24, max_seconds=30,label_workers=2):
+    if not 1 <= max_jobs <= 200 or max_seconds <= 0 or type(label_workers) is not int or not 1<=label_workers<=2:
         raise ValueError('输入准备批次预算无效')
     if preparation_id is None:
-        return _prepare_batch(None, None, max_jobs, max_seconds)
+        return _prepare_batch(None, None, max_jobs, max_seconds,label_workers)
     # Serializes direct callers as well as the workflow worker. A process restart
     # releases this lock; results and cursors survive in the planner database.
     with connection() as db, db.cursor() as cursor:
@@ -63,15 +131,13 @@ def prepare_inputs(preparation_id=None, *, max_jobs=24, max_seconds=30):
             state = open_scope(preparation_id)
             if state is None:
                 return {'failed': 0, 'skipped': True, 'has_more': False}
-            return _prepare_batch(preparation_id, state, max_jobs, max_seconds)
+            return _prepare_batch(preparation_id, state, max_jobs, max_seconds,label_workers)
         finally:
             cursor.execute('SELECT RELEASE_LOCK(%s)', (key,))
 
 
-def _prepare_batch(preparation_id, state, max_jobs, max_seconds):
-    counts = {'labels': 0, 'topic_vectors': 0, 'account_vectors': 0,
-              'failed': 0, 'conflicts': 0, 'deferred': 0,
-              'failure_record_errors': 0, 'errors': []}
+def _prepare_batch(preparation_id, state, max_jobs, max_seconds,label_workers=2):
+    counts = _counts()
     scope, progress, waiting = state if state else (None, {'phase': 'labels', 'cursors': {}}, [])
     batch = InputBatch(preparation_id, scope, progress, max_jobs, max_seconds)
     if waiting:
@@ -79,22 +145,27 @@ def _prepare_batch(preparation_id, state, max_jobs, max_seconds):
         batch.persist(counts)
         return counts
     try:
-        _run_jobs(preparation_id, counts, batch)
+        _run_jobs(preparation_id, counts, batch,label_workers)
         counts['has_more'] = bool(counts['failed'] or counts['deferred'] or counts['conflicts'])
     except BatchLimit:
         counts['has_more'] = True
         counts['budget_exhausted'] = True
+    except InputModelBlocked as exc:
+        counts.update(has_more=False,blocked=True,blocking_error_type=exc.error_type)
+        if preparation_id is not None:
+            block_model_preparation(preparation_id,exc.error_type)
     counts['checkpoint'] = {'phase': progress['phase'], 'cursors': dict(progress['cursors'])}
     if scope:
         counts['scope'] = {'preparation_id': preparation_id, 'accounts': len(scope['account_ids']),
                            'candidate_topics': len(scope['topic_sources'])}
         counts['readiness'] = inspect_scope(preparation_id, scope)
-        counts['has_more'] = bool(counts['has_more'] or counts['readiness']['waiting_reasons'])
+        counts['has_more'] = not counts.get('blocked',False) and bool(
+            counts['has_more'] or counts['readiness']['waiting_reasons'])
     batch.persist(counts)
     return counts
 
 
-def _run_jobs(preparation_id, counts, batch):
+def _run_jobs(preparation_id, counts, batch,label_workers=2):
     scoped = {'topic_ids': sorted(batch.scope['topic_sources'])} if batch.scope else {}
     after = batch.cursor('labels')
     while batch.enter('labels'):
@@ -103,38 +174,28 @@ def _run_jobs(preparation_id, counts, batch):
         if not jobs:
             batch.finish('labels', counts)
             break
+        eligible=[]
         for job in jobs:
             if job['id'] <= after:
                 raise ValueError('打标任务分页游标未推进')
             batch.before()
+            if batch.scope and label_workers>1:
+                # Complete/defer in order; no checkpoint may pass an admitted
+                # topic before its future has completed.
+                eligible.append(job)
+                continue
             if not retry_due('godp_topic_label_job', 'topic_id', job['topic_id']):
                 counts['deferred'] += 1
                 batch.checkpoint('labels', job['id'], counts)
                 continue
-            claim = {}
-            progress = {'writing': False}
-
-            def label():
-                claim.update(claim_topic_label_job(job['topic_id']))
-                result = label_topic(LabelInput(topic_id=job['topic_id'], topic=claim['topic'],
-                                               taxonomy=claim['taxonomy'], taxonomy_version=claim['taxonomy_version']))
-                if batch.scope and (claim['taxonomy_version'] != batch.scope['taxonomy_version']
-                                    or result['t6_embedding_model'] != batch.scope['embedding_model']):
-                    raise ValueError('打标结果与任务绑定版本不一致')
-                progress['writing'] = True
-                put_topic_tags(job['topic_id'], TopicTagsInput(
-                    tags={d: [name] for d, name in result['labels'].items()}, label_status='已完成',
-                    lease_id=claim['lease_id'], taxonomy_version=claim['taxonomy_version'],
-                    t6_embedding=result['t6_embedding'], t6_embedding_model=result['t6_embedding_model']))
-
-            def label_failure(exc):
-                if claim:
-                    put_topic_tags(job['topic_id'], TopicTagsInput(
-                        tags={}, label_status='失败', label_error=f'模型准备失败：{type(exc).__name__}',
-                        lease_id=claim['lease_id']))
-
-            _execute_input(counts, 'labels', job['topic_id'], label, label_failure, progress)
+            try:_merge_counts(counts,_label_job(job,batch.scope))
+            except InputModelBlocked as exc:
+                _merge_counts(counts,exc.counts)
+                batch.checkpoint('labels',job['id'],counts)
+                raise
             batch.checkpoint('labels', job['id'], counts)
+        if eligible:
+            _parallel_labels(eligible,counts,batch,label_workers)
         next_after = jobs[-1]['id']
         if next_after <= after:
             raise ValueError('打标任务分页游标未推进')

@@ -11,7 +11,7 @@ from app.account_mapping import resolve_mapping
 from app.matching_contracts import MatchingQualityOptions, MatchingPolicyDocument
 from app.matching_quality import (t3_score,masked_score,recall,history_penalty,precision_score,
                                   valid_on,IMPLEMENTATION_KEY,QUALITY_PARAMETERS)
-from app.matching_quality_model import checked_annotation,checked_account_mapping,PairJudgment,judge_batch
+from app.matching_quality_model import checked_annotation,checked_account_mapping,PairJudgment,judge_batch,map_account
 from app.matching_quality_store import QualityRuntime,QualityPending,save_quality_report
 from app.matching_quality_executor import merged_mapping,allocate_quality
 from app.matching_quality_executor import raw_account
@@ -128,6 +128,23 @@ class QualityScoringTests(unittest.TestCase):
 
 
 class QualityModelContractTests(unittest.TestCase):
+    def test_mapping_reasks_once_and_validates_correction(self):
+        raw={'persona':'家庭财务顾问','interests':['基金']}
+        valid={'mappings':[{'dimension':'T3','tag_id':'fund','relation':'CORE','condition':'',
+                           'evidence_field':'interests','evidence':'基金'}],'need_capability':'理解家庭投资'}
+        duplicate=deepcopy(valid);duplicate['mappings'] *= 2
+        with patch('app.matching_quality_model.chat',side_effect=[duplicate,valid]) as model:
+            self.assertEqual(map_account(context(),raw),valid)
+            self.assertEqual(model.call_count,2)
+            self.assertIn('上次输出未通过',model.call_args.args[1])
+            self.assertEqual(model.call_args.args[2]['previous_output'],duplicate)
+            self.assertIn('重复',model.call_args.args[2]['validation_error'])
+            self.assertEqual(model.call_args.args[2]['account'],raw)
+        with patch('app.matching_quality_model.chat',return_value=duplicate) as model:
+            with self.assertRaisesRegex(ValueError,'重复'):
+                map_account(context(),raw)
+            self.assertEqual(model.call_count,2)
+
     def test_account_full_profile_takes_priority_over_old_source_alias(self):
         account={'profile':{'account':{'persona':'完整专业描述'}},'snapshot':{'source_payload':{'persona':'旧简称','gender':'女性'}}}
         self.assertEqual(raw_account(account)['persona'],'完整专业描述')

@@ -14,6 +14,7 @@ from .matching_contracts import LeaseIdentity
 from .matching_quality import IMPLEMENTATION_KEY as QUALITY_IMPLEMENTATION_KEY
 from .matching_quality_executor import execute_quality_job
 from .matching_quality_store import QualityPending
+from .matching_precheck import InsufficientRoleCoverage
 from .system_config import get_setting
 
 
@@ -87,6 +88,10 @@ def run_once(task_id: int | None = None, max_jobs: int = 100) -> int:
             except QualityPending:
                 yield_task(job['task_id'], LeaseIdentity(**{k:job[k] for k in ('lease_id','input_hash','policy_hash')}))
                 LOG.info('匹配任务 %s 已保存模型缓存和进度，等待下一轮处理',job['task_id'])
+                continue
+            except InsufficientRoleCoverage:
+                failures += 1
+                _record_failure(job,'role_coverage_insufficient')
                 continue
             except (ExecutorPolicyError, ExecutorInputError, ValidationError, ValueError, TypeError, KeyError):
                 failures += 1

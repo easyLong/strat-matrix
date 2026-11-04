@@ -1,5 +1,6 @@
 package com.stratmatrix.planning.config;
 
+import com.stratmatrix.planning.api.PlanningValidationException;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
@@ -35,7 +36,7 @@ public class BusinessPlanningConfigService {
   }
 
   public List<Version> versions(int limit) {
-    if (limit < 1 || limit > 100) throw new IllegalArgumentException("历史版本数量无效");
+    if (limit < 1 || limit > 100) throw new PlanningValidationException("历史版本数量无效");
     List<Version> out = new ArrayList<>();
     for (BusinessPlanningConfigRow row : mapper.versions(limit)) out.add(new Version(row));
     return out;
@@ -46,7 +47,7 @@ public class BusinessPlanningConfigService {
   }
 
   public Result restore(int sourceVersion, int expectedVersion, String actor) {
-    if (sourceVersion < 1) throw new IllegalArgumentException("历史版本号无效");
+    if (sourceVersion < 1) throw new PlanningValidationException("历史版本号无效");
     return transactions.execute(
         status -> {
           BusinessPlanningConfigRow source = mapper.version(sourceVersion);
@@ -62,10 +63,10 @@ public class BusinessPlanningConfigService {
       String actor,
       String action,
       Integer sourceVersion) {
-    if (config == null) throw new IllegalArgumentException("配置内容不能为空");
+    if (config == null) throw new PlanningValidationException("配置内容不能为空");
     config.validate();
-    if (actor == null || actor.trim().isEmpty()) throw new IllegalArgumentException("操作人不能为空");
-    if (expectedVersion < 0) throw new IllegalArgumentException("配置版本号无效");
+    if (actor == null || actor.trim().isEmpty()) throw new PlanningValidationException("操作人不能为空");
+    if (expectedVersion < 0) throw new PlanningValidationException("配置版本号无效");
     try {
       return transactions.execute(
           status -> saveInTransaction(config, expectedVersion, actor, action, sourceVersion));
@@ -82,7 +83,7 @@ public class BusinessPlanningConfigService {
       Integer sourceVersion) {
     config.validate();
     if (actor == null || actor.trim().isEmpty() || expectedVersion < 0)
-      throw new IllegalArgumentException("操作人或配置版本号无效");
+      throw new PlanningValidationException("操作人或配置版本号无效");
     int changed =
         expectedVersion == 0
             ? mapper.insertCurrent(config, config.daysText(), actor)

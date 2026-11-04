@@ -88,6 +88,7 @@ def write_local_configuration(destination: Path):
     java_db = java_database_settings()
     values.update({
         'planning.manual.enabled': 'true',
+        "planning.tasks.enabled": "true",
         'planning.business-config.enabled': 'true',
         'planning.manual.initialize-schema': 'true',
         'planning.config-release.enabled': 'true',

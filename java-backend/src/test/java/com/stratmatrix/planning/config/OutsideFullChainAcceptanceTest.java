@@ -34,6 +34,8 @@ class OutsideFullChainAcceptanceTest {
       p.load(in);
     }
     Path out = Paths.get(p.getProperty("acceptance.output"));
+    AcceptanceTimings timings =
+        new AcceptanceTimings(out, Boolean.parseBoolean(p.getProperty("acceptance.measure", "false")));
     String token = p.getProperty("planning.legacy.integration-token");
     Files.write(
         out.resolve("java-ready.json"), write(map("ready", true)).getBytes(StandardCharsets.UTF_8));
@@ -51,7 +53,13 @@ class OutsideFullChainAcceptanceTest {
         new ClassPathResource("mapper/SlotCompletionMapper.xml"),
         new ClassPathResource("mapper/BusinessPlanningConfigMapper.xml"));
     SqlSessionTemplate sql = new SqlSessionTemplate(f.getObject());
-    ManualRepository repo = new ManualRepository(sql.getMapper(ManualMapper.class), tx);
+    ManualRepository repo =
+        new ManualRepository(sql.getMapper(ManualMapper.class), tx) {
+          @Override
+          public <T> T transaction(java.util.function.Supplier<T> action) {
+            return timings.call("java.business_transaction", () -> super.transaction(action));
+          }
+        };
     TopicUsageService usage = new TopicUsageService(repo);
     AutoScheduleMapper tasks = sql.getMapper(AutoScheduleMapper.class);
     BusinessPlanningConfig testConfig = new BusinessPlanningConfig();
@@ -106,19 +114,20 @@ class OutsideFullChainAcceptanceTest {
     AutoSchedulePort algorithm =
         new AutoSchedulePort() {
           public Map<String, Object> start(LocalDate c, int v, Map<String, Object> b) {
-            return client.start(c, v, b);
+            return timings.call("java.pipeline_start", () -> client.start(c, v, b));
           }
 
           public Map<String, Object> status(long id) {
-            return client.status(id);
+            return timings.call("java.pipeline_status", () -> client.status(id));
           }
 
           public Map<String, Object> proposal(long id, int v, Map<String, Object> b) {
-            return client.proposal(id, v, b);
+            return timings.call("java.proposal_fetch", () -> client.proposal(id, v, b));
           }
 
           public Map<String, Object> acknowledge(long id, String hash, long batch) {
-            Map<String, Object> result = client.acknowledge(id, hash, batch);
+            Map<String, Object> result =
+                timings.call("java.acknowledge", () -> client.acknowledge(id, hash, batch));
             if (acknowledgements[0]++ == 0) {
               try {
                 Files.write(
@@ -133,14 +142,16 @@ class OutsideFullChainAcceptanceTest {
             return result;
           }
         };
-    AutoScheduleService scheduler =
-        new AutoScheduleService(config, tasks, algorithm, new AutoResultCommitService(tasks, repo));
+    AutoResultCommitService commit = new AutoResultCommitService(tasks, repo);
+    AutoScheduleService scheduler = new AutoScheduleService(config, tasks, algorithm, commit);
     Instant trigger = Instant.parse(p.getProperty("acceptance.trigger"));
     LocalDate cycle = AutoScheduleService.dueCycle(trigger, testConfig);
     if (!Boolean.parseBoolean(p.getProperty("acceptance.resume", "false")))
       assertNull(tasks.byCycle(cycle.toString()), "Acceptance cycle already occupied");
+    long planningStarted = System.nanoTime();
+    Instant planningAt = Instant.now();
     try {
-      scheduler.tick(trigger);
+      timings.call("java.initial_trigger", () -> scheduler.tick(trigger));
     } catch (RuntimeException lostResponse) {
       if (!"待确认".equals(tasks.byCycle(cycle.toString()).get("status"))) throw lostResponse;
     }
@@ -188,6 +199,7 @@ class OutsideFullChainAcceptanceTest {
       Thread.sleep(2000);
     }
     assertEquals("已完成", task.get("status"));
+    timings.record("java.planning_closed_loop", planningStarted, planningAt, "ok");
     assertTrue(pendingAck);
     long batch = number(task, "business_batch_id"), pipeline = number(task, "pipeline_id");
     List<Map<String, Object>> items = repo.itemsByBatch(batch);
@@ -247,7 +259,9 @@ class OutsideFullChainAcceptanceTest {
       }
       long after = 0;
       while (true) {
-        Map<String, Object> result = content.reconcile(200, after);
+        long cursorAfter = after;
+        Map<String, Object> result =
+            timings.call("java.simulated_content_status", () -> content.reconcile(200, cursorAfter));
         after = number(result, "next_after_id");
         if (!Boolean.TRUE.equals(result.get("has_more"))) break;
       }
@@ -261,7 +275,8 @@ class OutsideFullChainAcceptanceTest {
     Map<String, Object> completedBatch = read(text(repo.batchById(batch), "payload"));
     assertEquals(1, number(completedBatch, "content_completed_account_count"));
     assertEquals(3, number(completedBatch, "content_completed_count"));
-    Map<String, Object> usageAfter = usage.query(map("topic_ids", topicIds));
+    Map<String, Object> usageAfter =
+        timings.call("java.usage_query", () -> usage.query(map("topic_ids", topicIds)));
     assertTrue(
         rows(usageAfter.get("topic_results")).stream()
             .allMatch(r -> number(r, "official_use_count") == 1));

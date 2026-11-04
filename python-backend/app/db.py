@@ -3,10 +3,16 @@
 from contextlib import contextmanager
 from pathlib import Path
 import os
+import atexit
+from threading import RLock
 
 from dotenv import dotenv_values
 import pymysql
 from pymysql.cursors import DictCursor
+
+_pool=None
+_pool_settings=None
+_pool_lock=RLock()
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,67 +46,35 @@ def settings() -> dict:
 
 @contextmanager
 def connection():
-    db = pymysql.connect(**settings())
-    try:
-        yield db
-    finally:
-        db.close()
+    global _pool,_pool_settings
+    values=settings()
+    with _pool_lock:
+        if _pool is None or values!=_pool_settings:
+            from .connection_pool import MySQLPool
+            if _pool is not None:_pool.close()
+            _pool=MySQLPool(values)
+            _pool_settings=values
+        pool=_pool
+    with pool.connection() as db:yield db
+
+
+def close_pool():
+    global _pool,_pool_settings
+    with _pool_lock:
+        if _pool is not None:_pool.close()
+        _pool,_pool_settings=None,None
+
+
+atexit.register(close_pool)
 
 
 def check_database() -> bool:
-    from .retired_tables import RETIRED_TABLES
+    from .algorithm_schema import REQUIRED_TABLES
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute("SHOW TABLES")
             tables = {next(iter(row.values())) for row in cursor.fetchall()}
-            return ({
-                "godp_system_config",
-                "godp_strategy_config",
-                "godp_account",
-                "godp_topic",
-                "godp_planning_batch",
-                "godp_planning_item",
-                "godp_account_source",
-                "godp_topic_source",
-                "godp_source_sync_run",
-                "godp_marketing_topic_source",
-                "godp_marketing_sync_run",
-                "godp_hotspot_topic_source",
-                "godp_hotspot_sync_run",
-                "godp_content_history",
-                "godp_slot_state",
-                "godp_integration_outbox",
-                "godp_content_receipt",
-                "godp_publication_receipt",
-                "godp_topic_tag",
-                "godp_topic_tag_history",
-                "godp_t6_tag",
-                "godp_topic_profile",
-                "godp_account_profile",
-                "godp_ai_preparation",
-                "godp_ai_preparation_account",
-                "godp_ai_preparation_topic",
-                "godp_ai_preparation_progress",
-                "godp_account_mapping_rule",
-                "godp_matching_ai_cache",
-                "godp_matching_quality_run",
-                "godp_matching_policy",
-                "godp_matching_task",
-                "godp_planning_pipeline_run",
-                "godp_planning_stage_run",
-                "godp_content_production_task",
-                "godp_topic_usage_fact",
-                "godp_matching_attempt",
-                "godp_matching_input_snapshot",
-                "godp_topic_label_job",
-                "godp_topic_official_usage",
-                "godp_topic_official_usage_history",
-                "godp_strategy_config_version",
-                "godp_manual_preview",
-                "godp_manual_task",
-                "godp_planning_adjustment",
-                "godp_auto_plan_run",
-            } - set(RETIRED_TABLES)).issubset(tables)
+            return REQUIRED_TABLES.issubset(tables)
     except (pymysql.MySQLError, RuntimeError, ValueError):
         return False
 

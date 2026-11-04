@@ -16,6 +16,12 @@ def main():
     from app.deployment_environment import current
     if current()['PLANNING_ENV'] != 'outside':
         raise ValueError('Live acceptance is outside-only')
+    if config.get('benchmark_mode'):
+        from .benchmark import install as install_benchmark
+        install_benchmark(config['benchmark_mode'],config['benchmark_namespace'])
+    if config.get('measure'):
+        from .timing import install
+        install(args.config.parent)
     from app.bank_bridge import factory
     from app.bank_bridge.java_http import JavaHTTPClient, JavaHTTPSource
     from app import ordinary_scheduler
@@ -31,6 +37,12 @@ def main():
     original = ordinary_scheduler.get_setting
     ordinary_scheduler.get_setting = lambda key, default=None: (
         json.dumps([config['account_id']]) if key == 'AUTO_PLANNING_ACCOUNT_IDS' else original(key, default))
+    # Limit discovery/cancellation and pipeline execution, not algorithm rules or model outputs.
+    from app import planning_workflow_worker as workflow
+    from app.source_discovery import discover_topics
+    from app.jobs.handlers import JOBS
+    workflow.discover_topics=lambda:discover_topics(topic_ids=config['topic_ids'])
+    JOBS['planning']=(10,lambda:acceptance_planning_pass(config['account_id']))
     from app.main import app
     from fastapi import Depends
     from app.api.security import require_integration_token
@@ -61,6 +73,17 @@ class AcceptanceSource:
 
     def marketing_contents(self, query): return self.source.marketing_contents(query)
     def effective_marketing(self, query): return self.source.effective_marketing(query)
+
+
+def acceptance_planning_pass(account_id):
+    from app.db import connection
+    from app.planning_workflow_worker import run_once
+    with connection() as db, db.cursor() as cursor:
+        cursor.execute("SELECT id,selection_json FROM godp_planning_pipeline_run WHERE del_flag='N' "
+                       "AND status IN ('pending','waiting','running') ORDER BY id")
+        owned=[row['id'] for row in cursor.fetchall() if json.loads(row['selection_json'])==[account_id]]
+    if len(owned)>1:raise ValueError('Acceptance account has multiple active pipelines')
+    return run_once(pipeline_id=owned[0] if owned else 0,process_content=False)
 
 
 if __name__ == '__main__':

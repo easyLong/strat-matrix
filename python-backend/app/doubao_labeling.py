@@ -8,7 +8,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .system_config import get_setting
+from .system_config import get_setting, snapshot
+from .model_endpoint import DEFAULT_BASE_URL, ModelEndpointError, resolve_base_url
 from .vector_utils import normalized_vector
 
 
@@ -17,7 +18,7 @@ DIMENSION_NAMES = {
     "T1": "业务属性", "T2": "经营作用", "T3": "主题域",
     "T4": "目标客群", "T5": "生活场景", "T6": "用户需求",
 }
-ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+ARK_BASE_URL = DEFAULT_BASE_URL  # Compatibility name; deployment selection is centralized.
 
 
 class LabelInput(BaseModel):
@@ -60,6 +61,10 @@ class DoubaoConfigurationError(DoubaoError):
 
 class DoubaoResponseError(DoubaoError):
     pass
+
+
+class DoubaoAccessError(DoubaoConfigurationError, DoubaoResponseError):
+    """Authorization/account failures require operator action, not timed retry."""
 
 
 class DoubaoUnavailable(DoubaoError):
@@ -108,7 +113,11 @@ def read_embedding_config() -> EmbeddingConfig:
     embedding = get_setting("EMBEDDING_MODEL_NAME", "doubao-embedding-vision-251215").strip()
     if not key or not embedding:
         raise DoubaoConfigurationError("需要配置 ARK_API_KEY 和 EMBEDDING_MODEL_NAME")
-    return EmbeddingConfig(ARK_BASE_URL, key, embedding, _timeout())
+    try:
+        base_url = resolve_base_url(snapshot())
+    except ModelEndpointError as error:
+        raise DoubaoConfigurationError(str(error)) from None
+    return EmbeddingConfig(base_url, key, embedding, _timeout())
 
 
 def read_config() -> DoubaoConfig:
@@ -137,6 +146,8 @@ def ark_post(config: DoubaoConfig | EmbeddingConfig, path: str, payload: dict) -
         exc.close()
         if exc.code in (408, 429) or exc.code >= 500:
             raise DoubaoUnavailable(f"豆包服务暂不可用，HTTP {exc.code}") from None
+        if exc.code in (401, 403):
+            raise DoubaoAccessError(f"模型访问被拒绝，HTTP {exc.code}；请检查凭据、授权与账户余额") from None
         raise DoubaoResponseError(f"豆包请求被拒绝，HTTP {exc.code}；请检查模型授权与请求配置") from None
     except (URLError, TimeoutError, OSError):
         raise DoubaoUnavailable("豆包连接失败或请求超时") from None
@@ -178,26 +189,38 @@ def label_topic(payload: LabelInput, config: DoubaoConfig | None = None) -> dict
         "不要复制选题标题，不加品牌、账号名、日期、营销口号或多个并列标签。"
         "没有明确细节时采取内容所支持的宽泛分类，不虚构产品、人群或场景事实。"
     )
-    result = ark_post(config, "/chat/completions", {
-        "model": config.chat_model,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content":
+    messages = [{"role": "system", "content": system}, {"role": "user", "content":
             json.dumps({"topic_id": payload.topic_id, "topic": payload.topic,
                         "taxonomy_version": payload.taxonomy_version,
                         "dimension_names": DIMENSION_NAMES, "taxonomy": payload.taxonomy},
-                       ensure_ascii=False, allow_nan=False)}],
-        "response_format": {"type": "json_object"},
-        "thinking": {"type": "disabled"}, "temperature": 0, "max_tokens": 1024,
-    })
-    try:
-        choice = result["choices"][0]
-        if choice["finish_reason"] != "stop" or choice["message"].get("refusal"):
-            raise DoubaoResponseError("豆包未正常完成标签生成")
-        content = json.loads(choice["message"]["content"])
-        if not isinstance(content, dict) or set(content) != {"labels"}:
-            raise DoubaoResponseError("豆包标签 JSON 结构错误")
-        labels = checked_labels(content["labels"], payload.taxonomy)
-    except (KeyError, IndexError, TypeError, ValueError):
-        raise DoubaoResponseError("豆包未返回有效标签 JSON") from None
+                       ensure_ascii=False, allow_nan=False)}]
+    for attempt in range(2):
+        result = ark_post(config, "/chat/completions", {
+            "model": config.chat_model, "messages": messages,
+            "response_format": {"type": "json_object"},
+            "thinking": {"type": "disabled"}, "temperature": 0, "max_tokens": 1024,
+        })
+        try:
+            choice = result["choices"][0]
+            if choice["finish_reason"] != "stop" or choice["message"].get("refusal"):
+                raise DoubaoResponseError("豆包未正常完成标签生成")
+            content = json.loads(choice["message"]["content"])
+            if not isinstance(content, dict) or set(content) != {"labels"}:
+                raise DoubaoResponseError("豆包标签 JSON 结构错误")
+        except (KeyError, IndexError, TypeError, ValueError):
+            raise DoubaoResponseError("豆包未返回有效标签 JSON") from None
+        try:
+            labels = checked_labels(content["labels"], payload.taxonomy)
+            break
+        except DoubaoResponseError as error:
+            if attempt:
+                raise
+            # One correction, still against the immutable supplied dictionary.
+            # Never substitute an arbitrary allowed label or embed an invalid T6.
+            messages = [*messages,
+                {"role":"assistant","content":json.dumps(content,ensure_ascii=False)},
+                {"role":"user","content":json.dumps({"validation_error":str(error),
+                    "correction":"重新返回完整labels：T1至T5从各自原taxonomy原样选择启用叶子名称，不得创建标签；T6为1至80字的单一需求短语，不从taxonomy选择。"},ensure_ascii=False)}]
 
     # T6 uses the same vector adapter as account and topic profiles.
     embedded = embed_text(labels["T6"], config)

@@ -1,0 +1,11 @@
+{
+  "queries": {
+    "accounts": {"account_ids": ["A1"], "page_size": 10},
+    "topics": {"topic_ids": ["T1"], "page_size": 10},
+    "marketing-contents": {"account_id": "A1", "page_size": 10},
+    "effective-marketing": {"account_id": "A1", "publish_date": "2026-11-04"},
+    "production-status": {"slot_ids": ["JSLOT-1-A1"]},
+    "marketing-status": {"task_codes": ["MKT1"]},
+    "marketing-allocations": {"task_code": "MKT1"}
+  }
+}

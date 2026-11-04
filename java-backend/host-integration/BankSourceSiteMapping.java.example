@@ -1,0 +1,20 @@
+// 示例值全部为虚构，迁入宿主私有包后按现场列名/编码填写；本文件不自动编译。
+import static com.stratmatrix.planning.source.bank.BankSourceMapping.Kind.*;
+import com.stratmatrix.planning.source.bank.*;
+import java.time.ZoneId;
+
+final class BankSourceSiteMapping {
+  static BankSourceMapping mapping() {
+    BankSourceFieldRules rules=BankSourceFieldRules.builder()
+        // SQL已使用标准AS别名时，无需再写alias。已有Service可直接返回原字段名。
+        .alias(ACCOUNT,"nickname","HOST_DISPLAY_NAME")
+        .alias(ACCOUNT,"eligible","HOST_ENABLED_FLAG")
+        .code(ACCOUNT,"eligible","Y",true)
+        .code(ACCOUNT,"eligible","N",false)
+        .code(PRODUCTION,"status","RUNNING","生产中")
+        .code(PRODUCTION,"status","DONE","已完成")
+        // 如现场还有其他状态，必须继续补齐；未知码明确报错，不猜正常状态。
+        .build();
+    return new BankSourceMapping(ZoneId.of("Asia/Shanghai"),rules);
+  }
+}

@@ -14,6 +14,30 @@ class BatchLimit(Exception):
     pass
 
 
+class InputModelBlocked(Exception):
+    def __init__(self, error_type, counts=None):
+        self.error_type, self.counts = error_type, counts
+        super().__init__('模型配置或访问异常，修复后显式重试')
+
+
+def block_model_preparation(preparation_id, error_type):
+    """Stop this preparation only; never overwrite a frozen/cancelled result."""
+    import json
+    with connection() as db, db.cursor() as cursor:
+        cursor.execute("SELECT status,last_report_json FROM godp_ai_preparation "
+                       "WHERE id=%s AND del_flag='N' FOR UPDATE", (preparation_id,))
+        row = cursor.fetchone()
+        if row and row['status'] in ('waiting_inputs', 'blocked'):
+            report = json.loads(row['last_report_json']) if row['last_report_json'] else {}
+            report.update(inputs_ready=False, status='blocked', blocking_reasons=[{
+                'code': 'model_access_blocked', 'error_type': error_type,
+                'message': '模型配置或访问异常，请检查配置、授权与账户余额，修复后显式重试'}])
+            cursor.execute("UPDATE godp_ai_preparation SET status='blocked',version=version+1, "
+                           "last_report_json=%s,update_by='planning-input-runner' WHERE id=%s "
+                           "AND reservation_key IS NOT NULL", (json.dumps(report,ensure_ascii=False),preparation_id))
+        db.commit()
+
+
 def open_scope(preparation_id):
     from .ai_preparation import select_preparation, today
     with connection() as db, db.cursor() as cursor:

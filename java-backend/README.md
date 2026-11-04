@@ -1,5 +1,13 @@
 # Java 业务后端子项目
 
+三侧共同进场适配以[功能流程清单](../docs/三工程驻场功能流程适配清单_V1.0_2026-11-03.md)及[Excel跟踪表](../docs/三工程驻场功能流程适配清单_V1.0_2026-11-03.xlsx)为当前核查入口，明确资料SQL、权限、内容方、正式OP及宿主调度的真实待接边界。
+
+当前行内合入入口见[宿主装配模板](host-integration/README.md)：六类宿主绑定、统一Python客户端、正式健康/标签接口、普通任务推进服务及关闭行外组件的三页面验收。完整变更见[接入准备](../docs/Java宿主接入准备_2026-11-03.md)。
+
+行内资料适配已提供[BankSourceFacts查询契约](host-integration/BANK_SOURCE_CONTRACT.md)和[字段映射表](host-integration/BANK_SOURCE_FIELD_MAPPING.csv)：7项能力、可选MyBatis读取实现、显式SQL占位及合成适配测试。真实SQL/Service与权限仍需宿主实现；当前outside资料链路保持原装配。
+
+请求身份、异常/响应和分页读取已进一步集中，见[宿主扩展说明](host-integration/REQUEST_CONTEXT_RESPONSES_PAGING.md)。可选绑定`HostContextProvider`与`PlanningResponseAdapter`，默认保持原Actor及前端协议。迁入时包含`planning/context`及两套API Advice；内部资料和下载不套页面响应壳。
+
 环境名称统一为`outside`／`inside`：前者复用本地开发装配，后者排除本地数据源、代理与调度，要求宿主提供必要Bean。库内`PLANNING_ENV`由本地启动器映射到profile；宿主按实际工程合并inside配置片段。见[双环境切换](../docs/双环境切换_V0.1.md)。
 
 行外使用公开Spring Boot 2.7.18父POM，Java8源码／运行兼容；无内部Parent、Halo、Venus、用户中心或调度SDK。该版本是兼容开发基线，生产补丁最终随客户维护线确定。Java业务持久化统一使用MyBatis，HikariCP仅用于本地数据源，H2只用于测试。当前配置、正式策划、内容衔接及SQL查询状态见[双库迁移与验收](../docs/双库业务迁移与验收_2026-11-03.md)。

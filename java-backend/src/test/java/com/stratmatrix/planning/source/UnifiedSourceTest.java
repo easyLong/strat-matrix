@@ -116,6 +116,7 @@ class UnifiedSourceTest {
     MockMvc mvc =
         MockMvcBuilders.standaloneSetup(
                 new SourceFactsController(facts(), mock(ManualRepository.class), "test-token"))
+            .setControllerAdvice(new com.stratmatrix.planning.api.PlanningApiErrors())
             .build();
     mvc.perform(
             post("/api/plan/internal/source/accounts/query")

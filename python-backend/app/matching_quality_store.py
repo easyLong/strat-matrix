@@ -18,6 +18,7 @@ class QualityRuntime:
         self.context, self.renew = context, renew
         self.max_calls, self.max_seconds, self.started = max_calls, max_seconds, monotonic()
         self.stats = {'model_calls': 0, 'cache_hits': 0, 'cache_writes': 0}
+        self._memory = {}
 
     def prompt_version(self,kind):
         return self.context.get('prompt_contracts',{}).get(kind,self.context['options']['prompt_version'])
@@ -29,15 +30,38 @@ class QualityRuntime:
                 'mapping_version': self.context['options']['mapping_version'], 'payload': payload}
         return content_hash(meta), model
 
-    def find(self, kind, payload, *, count_hit=True):
-        key, _ = self.key(kind, payload)
-        with connection() as db, db.cursor() as cursor:
-            cursor.execute('SELECT result_json,result_hash FROM godp_matching_ai_cache WHERE cache_key=%s', (key,))
-            row = cursor.fetchone()
-        if not row: return None
-        value = json.loads(row['result_json'])
-        if content_hash(value) != row['result_hash']:
+    @staticmethod
+    def _decode(row):
+        if row is None:return None
+        value=json.loads(row['result_json'])
+        if content_hash(value)!=row['result_hash']:
             raise ValueError('模型缓存完整性校验失败')
+        return value
+
+    def prefetch(self,kind,payloads):
+        keys=list(dict.fromkeys(self.key(kind,p)[0] for p in payloads))
+        keys=[k for k in keys if k not in self._memory]
+        for offset in range(0,len(keys),100):
+            group=keys[offset:offset+100]
+            with connection() as db,db.cursor() as cursor:
+                cursor.execute('SELECT cache_key,result_json,result_hash FROM godp_matching_ai_cache WHERE cache_key IN ('
+                               +','.join(['%s']*len(group))+')',group)
+                rows=cursor.fetchall()
+            pending={k:None for k in group}
+            for row in rows:
+                if row['cache_key'] not in pending:raise ValueError('缓存返回范围不一致')
+                self._decode(row)
+                pending[row['cache_key']]=row
+            self._memory.update(pending)
+
+    def find(self, kind, payload, *, count_hit=True,refresh=False):
+        key, _ = self.key(kind, payload)
+        if refresh or key not in self._memory:
+            with connection() as db, db.cursor() as cursor:
+                cursor.execute('SELECT result_json,result_hash FROM godp_matching_ai_cache WHERE cache_key=%s', (key,))
+                self._memory[key]=cursor.fetchone()
+        value=self._decode(self._memory[key])
+        if value is None:return None
         self.stats['cache_hits'] += int(count_hit)
         return value
 
@@ -52,7 +76,7 @@ class QualityRuntime:
             self.stats['cache_writes'] += int(cursor.rowcount == 1)
             db.commit()
         # If another task published the same key, consume the immutable winner.
-        return self.find(kind, payload, count_hit=False)
+        return self.find(kind, payload, count_hit=False,refresh=True)
 
     def call(self, compute):
         if self.stats['model_calls'] >= self.max_calls or monotonic() - self.started >= self.max_seconds:

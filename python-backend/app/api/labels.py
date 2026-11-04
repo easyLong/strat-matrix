@@ -1,5 +1,5 @@
 """Taxonomy and labeling HTTP routes."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from .common import invoke
 from .security import require_integration_token
 from ..services import labels as service
@@ -11,9 +11,11 @@ router = APIRouter()
 def get_tag_taxonomy() -> dict:
     return invoke(service.get_tag_taxonomy)
 
-@router.put("/api/tag-taxonomy")
-def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
-    return invoke(service.put_tag_taxonomy, payload=payload)
+@router.put("/api/tag-taxonomy", dependencies=[Depends(require_integration_token)])
+def put_tag_taxonomy(payload: TagTaxonomyInput, request: Request = None) -> dict:
+    # Only the authenticated Java service may supply the trusted operator header.
+    operator = request.headers.get('x-operator-id', '运营人员') if request else '运营人员'
+    return invoke(service.put_tag_taxonomy, payload=payload, operator=operator)
 
 @router.get("/api/internal/topic-label-jobs", dependencies=[Depends(require_integration_token)])
 def list_topic_label_jobs(limit: int = 100, after_id: int = 0) -> dict:

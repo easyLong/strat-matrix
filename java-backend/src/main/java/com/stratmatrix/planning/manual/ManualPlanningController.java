@@ -6,11 +6,8 @@ import java.time.LocalDate;
 import java.util.*;
 import javax.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.DataAccessException;
 import org.springframework.http.*;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.ResourceAccessException;
 
 /** Explicit migrated endpoints take precedence over the transitional wildcard. */
 @RestController
@@ -246,20 +243,5 @@ public class ManualPlanningController {
   @PostMapping({"/query/topic-usage", "/integrations/bank/op02/topic-usage/query"})
   public Object topicUsage(@RequestBody Map<String, Object> input) {
     return new TopicUsageService(queries.repo).query(input);
-  }
-
-  @ExceptionHandler(BusinessException.class)
-  public ResponseEntity<?> business(BusinessException e) {
-    return ResponseEntity.status(e.status).body(map("detail", e.getMessage()));
-  }
-
-  @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<?> validation(MethodArgumentNotValidException e) {
-    return ResponseEntity.unprocessableEntity().body(map("detail", "请检查必填项和字段格式"));
-  }
-
-  @ExceptionHandler({DataAccessException.class, ResourceAccessException.class})
-  public ResponseEntity<?> unavailable(Exception e) {
-    return ResponseEntity.status(503).body(map("detail", "业务数据库或计算服务暂不可用，请稍后重试"));
   }
 }

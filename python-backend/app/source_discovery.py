@@ -40,8 +40,15 @@ def discovery_action(topic, job, taxonomy_version):
     return 'enqueue'
 
 
-def discover_topics():
+def discover_topics(*, topic_ids=None):
     report = dict(scanned=0, enqueued=0, baselined=0, unchanged=0, cancelled=0)
+    if topic_ids is not None:
+        if not isinstance(topic_ids, list) or len(topic_ids)>500:
+            raise ValueError('限定发现范围须为最多500个选题ID')
+        if any(not isinstance(x,str) or not x.strip() or x!=x.strip() or len(x)>64 for x in topic_ids):
+            raise ValueError('限定发现选题ID无效')
+        topic_ids=list(dict.fromkeys(topic_ids))
+        if not topic_ids:return report
     with connection() as db, db.cursor() as cursor:
         cursor.execute("SELECT GET_LOCK('godp:topic-source-discovery',0) acquired")
         if cursor.fetchone()['acquired'] != 1:
@@ -53,7 +60,9 @@ def discover_topics():
             if not config:
                 raise ValueError('选题标签字典尚未配置')
             # Read the whole provider snapshot before cancelling unavailable jobs.
-            topics = current_topics(cursor)
+            topics = current_topics(cursor) if topic_ids is None else current_topics(cursor, topic_ids)
+            if topic_ids is not None and any(t['topic_id'] not in topic_ids for t in topics):
+                raise ValueError('资料发现结果超出指定范围')
             active = {t['topic_id'] for t in topics}
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             for topic in topics:
@@ -84,9 +93,11 @@ def discover_topics():
                     cursor.execute("UPDATE godp_topic_profile SET status='pending',vector_json=NULL,"
                                    "vector_model=NULL,completed_at=NULL,last_error='',update_by='source-discovery' "
                                    "WHERE topic_id=%s AND del_flag='N'", (topic['topic_id'],))
+            scope_sql=(' AND topic_id IN ('+','.join(['%s']*len(topic_ids))+')' if topic_ids is not None else '')
             cursor.execute("SELECT topic_id FROM godp_topic_label_job WHERE del_flag='N' "
-                           "AND status IN ('pending','failed','processing') FOR UPDATE")
+                           "AND status IN ('pending','failed','processing')"+scope_sql+" FOR UPDATE",topic_ids or ())
             for job in cursor.fetchall():
+                if topic_ids is not None and job['topic_id'] not in topic_ids:continue
                 if job['topic_id'] not in active:
                     cursor.execute("UPDATE godp_topic_label_job SET status='cancelled',lease_id=NULL,"
                                    "lease_expires_at=NULL,update_by='source-discovery' WHERE topic_id=%s",

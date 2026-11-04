@@ -6,6 +6,8 @@ import org.apache.ibatis.annotations.Param;
 
 /** MyBatis contract for planning business tables. Bound to the host business database. */
 public interface ManualMapper {
+  int ping();
+
   List<String> plannedAccountIds(@Param("date") String date);
 
   List<String> reservedAccountIds(@Param("date") String date);

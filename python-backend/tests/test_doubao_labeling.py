@@ -141,7 +141,17 @@ class DoubaoLabelingTests(unittest.TestCase):
         with patch.object(service, "ark_post", return_value=chat({**LABELS, "T3": "字典外名称"})) as post:
             with self.assertRaises(service.DoubaoResponseError):
                 service.label_topic(payload(), config())
-        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_count, 2)
+        self.assertTrue(all(call.args[1]=='/chat/completions' for call in post.call_args_list))
+
+    def test_dictionary_error_is_corrected_once_before_embedding(self):
+        with patch.object(service,'ark_post',side_effect=[chat({**LABELS,'T4':'字典外名称'}),chat(),embedding()]) as post:
+            result=service.label_topic(payload(),config())
+        self.assertEqual(result['labels'],LABELS)
+        self.assertEqual(post.call_count,3)
+        self.assertEqual(len(post.call_args_list[1].args[2]['messages']),4)
+        self.assertIn('不属于',post.call_args_list[1].args[2]['messages'][-1]['content'])
+        self.assertIn('T6为1至80字',post.call_args_list[1].args[2]['messages'][-1]['content'])
 
     def test_truncated_refused_or_malformed_chat_is_not_saved(self):
         for response in (chat(finish_reason="length"), {"choices": []},
@@ -150,7 +160,7 @@ class DoubaoLabelingTests(unittest.TestCase):
             with self.subTest(response=response), patch.object(service, "ark_post", return_value=response) as post:
                 with self.assertRaises(service.DoubaoResponseError):
                     service.label_topic(payload(), config())
-                self.assertEqual(post.call_count, 1)
+                self.assertEqual(post.call_count, 2 if response==chat({**LABELS, "T6": ["两个", "标签"]}) else 1)
 
     def test_invalid_embeddings_do_not_become_ready(self):
         for vector in ([0, 0], [True, 1], [float("nan"), 1], [], [float("inf"), 1]):
@@ -161,7 +171,7 @@ class DoubaoLabelingTests(unittest.TestCase):
 
     def test_upstream_errors_are_sanitized_and_classified(self):
         for status, expected in ((429, service.DoubaoUnavailable), (503, service.DoubaoUnavailable),
-                                 (401, service.DoubaoResponseError)):
+                                 (401, service.DoubaoAccessError), (403, service.DoubaoAccessError)):
             error = HTTPError("https://secret.invalid", status, "secret-upstream-body", {}, None)
             with self.subTest(status=status), patch.object(service, "open_request", side_effect=error):
                 with self.assertRaises(expected) as raised:

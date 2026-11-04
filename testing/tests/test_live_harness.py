@@ -5,6 +5,7 @@ import pytest
 from testing.live import fixture_for
 from testing import live_verify
 from testing.source_fixtures import install
+from testing.live import label_snapshot, check_label_isolation
 
 
 def test_live_facts_have_unique_test_ids_and_no_injected_algorithm_outputs():
@@ -15,6 +16,18 @@ def test_live_facts_have_unique_test_ids_and_no_injected_algorithm_outputs():
     assert all(not ({'tags','vector','fit_score'} & row.keys()) for row in fixture['topics'])
     assert len(fixture['accounts'][0]['interactions'])==4
     assert all(row['account_id']==fixture['accounts'][0]['account_id'] for row in fixture['accounts'][0]['interactions'])
+
+
+def test_live_isolation_detects_modified_or_deleted_unrelated_jobs():
+    from unittest.mock import Mock
+    cursor=Mock();cursor.fetchall.return_value=[dict(id=1,topic_id='OLD',status='pending'),dict(id=2,topic_id='OWN',status='pending')]
+    baseline=label_snapshot(cursor,['OWN'])
+    assert set(baseline)=={'1'}
+    assert check_label_isolation(cursor,baseline)['status']=='passed'
+    cursor.fetchall.return_value=[dict(id=1,topic_id='OLD',status='cancelled')]
+    assert check_label_isolation(cursor,baseline)['changed_job_count']==1
+    cursor.fetchall.return_value=[]
+    assert check_label_isolation(cursor,baseline)['status']=='failed'
 
 
 def test_source_install_preserves_unrelated_facts_and_rejects_conflicting_ids(tmp_path):

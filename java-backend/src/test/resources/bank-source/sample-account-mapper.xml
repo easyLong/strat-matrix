@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- Synthetic H2 schema only. No real bank tables or SQL. -->
+<mapper namespace="com.stratmatrix.planning.source.bank.BankSourceMapper">
+  <sql id="accountFilter">
+    WHERE eligible=TRUE
+    <if test="query.accountIds != null">
+      AND account_id IN
+      <foreach collection="query.accountIds" item="id" open="(" close=")" separator=",">#{id}</foreach>
+    </if>
+    <if test="query.updatedFrom != null">
+      <bind name="fromMillis" value="query.updatedFrom.toEpochMilli()"/>
+      AND updated_epoch &gt;= #{fromMillis}
+    </if>
+    <if test="query.updatedTo != null">
+      <bind name="toMillis" value="query.updatedTo.toEpochMilli()"/>
+      AND updated_epoch &lt; #{toMillis}
+    </if>
+  </sql>
+  <select id="countAccounts" resultType="long">
+    SELECT COUNT(*) FROM fixture_accounts <include refid="accountFilter"/>
+  </select>
+  <select id="accounts" resultType="map">
+    SELECT account_id, nickname, eligible, updated_at FROM fixture_accounts
+    <include refid="accountFilter"/>
+    ORDER BY account_id LIMIT #{query.pageSize} OFFSET #{query.offset}
+  </select>
+</mapper>

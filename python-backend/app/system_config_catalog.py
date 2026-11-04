@@ -30,6 +30,7 @@ CATALOG = {
     "JAVA_API_TOKEN": Setting("keys", "Python访问Java资料服务的鉴权密钥", secret=True),
     "INTEGRATION_TOKEN": Setting("keys", "系统内部接口鉴权密钥", secret=True),
     "ARK_API_KEY": Setting("keys", "火山方舟豆包 API Key", secret=True),
+    "MODEL_BASE_URL": Setting("models", "文本与向量共用模型网关前缀；行外空值使用方舟，行内必须明确填写", ""),
     "MODEL_NAME": Setting("models", "全项目文本生成模型名称或接入点", "doubao-seed-2-1-lite-260915"),
     "EMBEDDING_MODEL_NAME": Setting("models", "全项目向量模型名称或接入点", "doubao-embedding-vision-251215"),
     "CONTENT_PRODUCTION_MODE": Setting('production', '内容生产模式', 'disabled', choices=('disabled', 'local_mock')),
@@ -79,4 +80,7 @@ def validate_value(key: str, value: str, spec: Setting | None = None) -> str:
             raise ValueError(f'{key} 必须是无凭据的HTTP服务地址')
         if key == 'JAVA_GATEWAY_URL' and address.path not in ('', '/'):
             raise ValueError('JAVA_GATEWAY_URL 必须是服务根地址')
+    if key == 'MODEL_BASE_URL' and value:
+        from .model_endpoint import resolve_base_url
+        resolve_base_url({'PLANNING_ENV':'outside', key:value})
     return value

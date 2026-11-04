@@ -1,7 +1,5 @@
 package com.stratmatrix.planning.source;
 
-import static com.stratmatrix.planning.manual.Json.map;
-
 import com.stratmatrix.planning.manual.BusinessException;
 import com.stratmatrix.planning.manual.ManualRepository;
 import com.stratmatrix.planning.manual.TopicUsageService;
@@ -10,7 +8,6 @@ import java.security.MessageDigest;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /** Stable Java query facade used by Python. Host may reuse it with its own SourceFacts bean. */
@@ -60,10 +57,5 @@ public class SourceFactsController {
       default:
         throw new BusinessException(404, "未知资料查询能力");
     }
-  }
-
-  @ExceptionHandler(BusinessException.class)
-  public ResponseEntity<Object> invalid(BusinessException error) {
-    return ResponseEntity.status(error.status).body(map("detail", error.getMessage()));
   }
 }

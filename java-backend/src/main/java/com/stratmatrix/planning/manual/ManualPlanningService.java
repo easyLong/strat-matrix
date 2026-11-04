@@ -2,6 +2,7 @@ package com.stratmatrix.planning.manual;
 
 import static com.stratmatrix.planning.manual.Json.*;
 
+import com.stratmatrix.planning.context.RequestContexts;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -22,7 +23,7 @@ public class ManualPlanningService {
     this.repo = repo;
     this.source = source;
     this.computer = computer;
-    this.actor = actor;
+    this.actor = RequestContexts.actor(actor);
   }
 
   static String now() {
@@ -170,11 +171,34 @@ public class ManualPlanningService {
     repo.noteRetry(id, "计算服务暂不可用，等待调度重试", System.currentTimeMillis());
   }
 
+  /** Host-visible pass outcome; queued work and transient retry are not completion. */
+  public Map<String, Object> advancePass() {
+    advance();
+    List<Map<String, Object>> pending = repo.pending();
+    boolean retry = pending.stream().anyMatch(t -> !text(t, "error_message").isEmpty());
+    return map(
+        "status",
+        retry ? "retry_required" : "processed",
+        "pending_in_scan",
+        pending.size(),
+        "business_complete",
+        false,
+        "has_more",
+        false,
+        "needs_next_tick",
+        !pending.isEmpty(),
+        "next_after_id",
+        0L);
+  }
+
   private void fail(long id, String reason) {
     repo.transaction(
         () -> {
-          int changed = repo.markFailed(id, reason.substring(0, Math.min(reason.length(), 500)),
-              System.currentTimeMillis());
+          int changed =
+              repo.markFailed(
+                  id,
+                  reason.substring(0, Math.min(reason.length(), 500)),
+                  System.currentTimeMillis());
           if (changed > 0) repo.release(id);
           return null;
         });
@@ -299,8 +323,12 @@ public class ManualPlanningService {
                     1,
                     "replace_block_reason",
                     ""));
-            repo.saveItem(id, text(item, "slot_id"), text(account, "account_id"),
-                text(payload, "publish_date"), write(item));
+            repo.saveItem(
+                id,
+                text(item, "slot_id"),
+                text(account, "account_id"),
+                text(payload, "publish_date"),
+                write(item));
           }
           repo.markCompleted(id, System.currentTimeMillis());
           return null;

@@ -12,6 +12,7 @@ from .matching_quality_snapshot import content_hash, topic_need_vectors
 from .matching_quality_store import QualityRuntime, QualityPending, save_quality_report
 from .taxonomy import selectable_tags
 from .vector_utils import normalized_vector
+from .matching_precheck import role_coverage,InsufficientRoleCoverage
 
 
 def raw_account(account):
@@ -110,11 +111,18 @@ def execute_quality_job(job):
         report['worker_turn'] = dict(runtime.stats)
         save_quality_report(job,report,state,phase)
     try:
+        phase='role_coverage'
+        report['precheck']=role_coverage(job['inputs'])
+        if report['precheck']['status']=='blocked':
+            raise InsufficientRoleCoverage('冻结候选中缺少指定日期所需经营作用的选题')
+        phase='topic_annotations'
         topics = job['inputs']['topics']
         topic_by_id = {t['topic_id']:t for t in topics}
         missing = []
-        for topic in topics:
-            payload = {'topic':_topic_content(topic),'dictionary':dictionary(context['taxonomy'])}
+        topic_dictionary=dictionary(context['taxonomy'])
+        topic_payloads=[(topic,{'topic':_topic_content(topic),'dictionary':topic_dictionary}) for topic in topics]
+        runtime.prefetch('topic_annotation',[payload for _,payload in topic_payloads])
+        for topic,payload in topic_payloads:
             cached = runtime.find('topic_annotation',payload)
             if cached is None: missing.append((topic['topic_id'],payload))
             else: report['topic_annotations'][topic['topic_id']] = checked_annotation(cached,context)
@@ -159,10 +167,13 @@ def execute_quality_job(job):
             static = _static_account(raw,mapping,context)
             pending = []
             judgments = {}
+            pair_payloads={candidate['topic_id']:{'account':static,
+                'topic':_pair_topic(topic_by_id[candidate['topic_id']],report['topic_annotations'][candidate['topic_id']],mapping,context),
+                'mapping_hash':mapping['mapping_hash']} for candidate in entry['recall']['ranked']}
+            runtime.prefetch('pair_precision',list(pair_payloads.values()))
             for candidate in entry['recall']['ranked']:
                 topic_id = candidate['topic_id']
-                item = _pair_topic(topic_by_id[topic_id],report['topic_annotations'][topic_id],mapping,context)
-                payload = {'account':static,'topic':item,'mapping_hash':mapping['mapping_hash']}
+                payload = pair_payloads[topic_id]
                 cached = runtime.find('pair_precision',payload)
                 if cached is None: pending.append((topic_id,payload))
                 else: judgments[topic_id] = PairJudgment.model_validate(cached).model_dump()

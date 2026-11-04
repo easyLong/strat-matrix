@@ -1,10 +1,14 @@
 # 行外固定数据与统一回归
 
+真实模型逐步计时使用`python -m testing.live --execute --measure --fresh-cases`，分析使用`python -m testing.performance run/full-chain/本次目录`。计时仅在验收进程启用，保留缓存，输出不含Prompt、SQL、密钥的JSONL、步骤CSV和报告；分析命令不访问数据库或模型。[本次耗时与优化方案](../docs/真实模型主流程耗时分析与优化方案_2026-11-03.md)区分正例、失败诊断、模型请求、数据库往返及等待，样本不冒充大规模吞吐结论。
+
 另有显式真实环境入口`python -m testing.live --execute`，调用模型并写两个测试库，不属于本目录默认离线回归。准备、暂停本地调度及边界见[全链路验收](../docs/普通自动策划全链路验收_2026-11-03.md)；已完成任务可用`python -m testing.live_verify <目录>`只读核查页面和导出。
 
 本目录只用于开发和验收，不导入运行服务、不向业务库初始化数据。合成账号、选题、向量和模型响应均已固定；没有真实客户资料、模型密钥或数据库密码。
 
 日常outside与完整闭环已使用同一个Java资料入口，不再启动临时资料服务器。`source_fixtures`只负责准备Java读取的模拟文件，`live_server`只限制本轮账号/选题范围，不更换取数协议。可运行`python -m testing.source_verify`只读核查分页、鉴权、页面资料及历史查询，不调用模型、不新建任务。详见[统一资料链路](../docs/统一资料链路_2026-11-03.md)。
+
+真实验收允许开发库存在其它待打标任务，但会拒绝其它选题的有效处理租约；验收进程只发现、取消和推进本轮测试范围，并用前后哈希校验旧标签任务未变化。仍需先暂停日常Java脉冲，避免并发执行。`--resume`只接受未失败、未取消且尚未完成业务验收的本轮Pipeline；若算法已失败，应先排除错误并通过正式Pipeline重试，同时处理Java失败任务恢复，不能单靠重复运行验收命令修复两侧状态。
 
 营销/热点增量入口：`python -m testing.content_live --execute`从测试正式明细开始验证真实Java/MySQL与模拟内容事实，不调用模型；`python -m testing.live --execute --scenario mixed`运行真实模型V19→Java→营销引用/热点T-1→模拟生产闭环。两者均需先暂停日常Java脉冲；已完成目录可用`content_live --verify`或`live_verify`只读复核。见[验收证据与边界](../docs/营销热点与模拟内容衔接验收_2026-11-03.md)。
 
@@ -37,6 +41,33 @@ python -m testing --suite frontend
 Windows的`--maven`填写`mvn.cmd`路径。未显式指定时优先使用PATH和JAVA_HOME；本仓库行外已有的`.tmp-tools`也可被识别，不随Git或驻场部署。
 
 新环境先在允许联网的行外准备好Maven依赖。仅在需要解析依赖时添加`--allow-dependency-network`；这不会启用模型调用。前端依赖需提前`npm ci`。
+
+## 资料适配只读验收
+
+`python -m testing.bank_source`用于驻场资料适配检查，outside也能用。它不读取`.env`或开发库配置、不初始化数据库、不创建策划、不触发模型；只访问指定Java内部资料查询地址。使用现有Python环境的Pydantic依赖，驻场前准备依赖即可，不需联网安装。
+
+```bash
+# 仅创建合成样本配置，不发送请求；已有文件不覆盖
+python -m testing.bank_source --init run/bank-source-cases.json
+
+# 修改该文件的账号ID、选题ID、槽位ID、任务号及投放日期，填入现场测试样本。
+# BANK_SOURCE_TEST_TOKEN由宿主按环境注入，不放在命令参数或样本文件中。
+python -m testing.bank_source --cases run/bank-source-cases.json --base http://JAVA_HOST/api/plan/internal/source
+```
+
+Windows/Linux命令相同。自定义令牌环境变量名可用`--token-env`；入口地址采用宿主实际路径。`--pages`默认2、最大3；分页须从第1页开始，默认每页10、最大50。账号和选题必须填写明确非空ID列表，避免无意全量扫描。不会跟随重定向，也不会自动使用外网HTTP代理。
+
+默认输出到忽略的`run/bank-source-check/<时间>/summary.json`，`--output`可指定新的报告目录，已有报告不覆盖。不保存原始记录、正文、ID列表、令牌或远端错误正文；输出校验字段路径、类型和数量。报告不会自动上传。
+
+| 结果 | 含义 | 退出码 |
+| --- | --- | --- |
+| `passed` | 无令牌访问被拒绝，7项能力均有样本且契约/有限分页检查通过 | 0 |
+| `incomplete` | 某能力未配置或返回空，尚不能验证字段映射 | 2 |
+| `failed` | 鉴权、HTTP、字段、关联范围、更新时间或分页检查失败 | 1 |
+
+只读验收沿用运行时Pydantic结构，并校验过审分配字段；不把空数据算成字段验收通过。它不会证明所有权限、状态分支、全量扫描、调度或真实模型质量已经验收。行内诊断应留在现场，真实表名/字段及样本配置不提交公共仓库。
+
+对应[Java资料契约](../java-backend/host-integration/BANK_SOURCE_CONTRACT.md)及[字段映射表](../java-backend/host-integration/BANK_SOURCE_FIELD_MAPPING.csv)。工具自测已加入`python -m testing`的harness阶段。
 
 ## 数据集覆盖
 
@@ -99,6 +130,8 @@ python -m testing --suite algorithm --dataset scale --record-baseline
 这会更新`baselines/`，应单独审查并随代码提交。硬性约束失败时禁止记录。更新数据时先修改生成定义、显式执行`python -m testing.datasets --write`，再评审新数据指纹和基线；常规回归不会自动生成数据或接受新结果。
 
 ## 驻场怎么使用
+
+真实耗时对照新增`testing.live --execute --measure --benchmark-mode baseline/optimized --case-file 路径`，必须分别使用合法的`baseline`或`optimized`值；不用于普通离线回归。案例只复用原始账号与12个选题，独立测试ID和V19缓存namespace；不改全局模型/策略、不清生产缓存。规则和模型输出仍需逐项核对，业务数据指纹相同不代表模型响应相同。详见[本轮优化与复跑](../docs/算法执行优化记录_2026-11-03.md)。
 
 在行外完成回归、算法对比并保存报告；交付固定Git版本、变更模块、数据库脚本和测试证据。行内重点验证实际资料/内容字段、身份权限、宿主MyBatis与事务绑定、真实模型和调度，不重复在现场调算法权重。
 

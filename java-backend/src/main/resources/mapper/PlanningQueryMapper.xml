@@ -8,7 +8,7 @@
   <if test="mode=='cycle'">AND cycle_start BETWEEN #{cycleStart} AND #{cycleEnd}</if>
   <if test="start!=null and start!=''">AND publish_date&gt;=#{start}</if>
   <if test="end!=null and end!=''">AND publish_date&lt;=#{end}</if>
-  <if test="planType!=null and planType!=''">AND plan_type=#{planType}</if>
+  <if test="planType!=null and planType!='' and planType!='all'">AND plan_type=#{planType}</if>
   <if test="contentType!=null and contentType!='' and contentType!='all'">AND content_type=#{contentType}</if>
   <if test="account!=null and account!=''">AND (LOCATE(LOWER(#{account}),LOWER(account_id))&gt;0 OR LOCATE(LOWER(#{account}),LOWER(account_name))&gt;0)</if>
   <if test="um!=null and um!=''">AND LOCATE(LOWER(#{um}),LOWER(owner_um))&gt;0</if>
@@ -59,7 +59,7 @@
   <if test="mode=='batch'">AND b.id=#{batchId}</if>
   <if test="mode=='account'">AND f.account_key=#{accountId}</if>
   <if test="mode=='cycle'">AND b.week_start BETWEEN #{cycleStart} AND #{cycleEnd}</if>
-  <if test="planType!=null and planType!=''">AND b.plan_type=#{planType}</if>
+  <if test="planType!=null and planType!='' and planType!='all'">AND b.plan_type=#{planType}</if>
   ORDER BY b.created_at DESC,f.account_key
  </select>
  <select id="archivedTask" resultType="map">SELECT payload FROM godp_planning_task_archive WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.task_code'))=#{code} ORDER BY created_at DESC LIMIT 1</select>

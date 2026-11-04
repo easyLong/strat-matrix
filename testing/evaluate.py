@@ -23,6 +23,10 @@ def offline_boundary():
 
 
 class ReplayRuntime:
+    def prefetch(self,kind,payloads):
+        # Fixed replay already keeps all model outputs in memory.
+        return None
+
     """In-memory replacement of the model cache/progress I/O, not the algorithm."""
     def __init__(self, context, renew):
         self.context, self.renew, self.cache = context, renew, {}

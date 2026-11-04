@@ -1,0 +1,44 @@
+{
+  "accounts": {
+    "total": 1, "page_no": 1, "page_size": 100,
+    "items": [{
+      "account_id": "A1", "nickname": "契约测试账号", "owner_um": "UM001",
+      "organization": "测试二级分行", "platform": "小红书", "account_type": "认证",
+      "eligible": true, "followers": 123, "updated_at": "2026-11-03T16:00:00+08:00",
+      "persona": "车圈达人", "gender": "男", "interests": ["汽车", "理财"], "expression_style": "简明",
+      "interactions": [{
+        "content_id": "C1", "account_id": "A1", "published_at": "2026-11-03T15:00:00+08:00",
+        "title": "互动内容", "likes": null, "favorites": 3, "comments": 7, "updated_at": null
+      }]
+    }]
+  },
+  "topics": {
+    "total": 1, "page_no": 1, "page_size": 100,
+    "items": [{
+      "topic_id": "T1", "source": "普通", "topic_type": "非营销", "title": "选题标题",
+      "outline": "选题大纲", "content_type": "金融科普", "heat": 2.5, "available": true,
+      "valid_from": "2026-11-01T00:00:00+08:00", "valid_to": "2026-12-31T23:59:59+08:00",
+      "updated_at": "2026-11-03T16:00:00+08:00", "related_product": "", "related_activity": "", "related_hotspot": ""
+    }]
+  },
+  "marketing-contents": {
+    "total": 1, "page_no": 1, "page_size": 100,
+    "items": [{
+      "content_id": "M1", "account_id": "A1", "title": "营销标题", "body": "营销正文",
+      "related_product": "", "related_activity": "", "approved_at": "2026-11-03T09:00:00+08:00"
+    }]
+  },
+  "effective-marketing": [{"placement_id": "P1", "account_id": "A1", "content_id": "M1", "publish_date": "2026-11-04"}],
+  "production-status": [{
+    "slot_id": "JSLOT-1-A1", "version": 2, "content_id": "C1", "status": "已完成",
+    "updated_at": "2026-11-03T16:00:00+08:00", "production_task_id": "PROD1", "error": ""
+  }],
+  "marketing-status": [{
+    "task_code": "MKT1", "status": "已完成", "completed_count": 1, "failed_count": 0,
+    "account_count": 1, "updated_at": "2026-11-03T16:00:00+08:00"
+  }],
+  "marketing-allocations": [{
+    "task_code": "MKT1", "content_id": "M1", "account_id": "A1", "title": "营销标题",
+    "body": "营销正文", "content_type": "产品营销", "approved_at": "2026-11-03T09:00:00+08:00"
+  }]
+}

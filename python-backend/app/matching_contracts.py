@@ -230,4 +230,4 @@ class MatchingEvaluation(LeaseIdentity):
 
 
 class MatchingFailure(LeaseIdentity):
-    error_code: Literal["engine_unavailable", "execution_failed", "invalid_response"]
+    error_code: Literal["engine_unavailable", "execution_failed", "invalid_response", "role_coverage_insufficient"]

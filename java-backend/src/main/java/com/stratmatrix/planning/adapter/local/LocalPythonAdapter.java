@@ -8,32 +8,16 @@ import com.stratmatrix.planning.manual.ManualPorts;
 import java.net.URI;
 import java.util.*;
 import org.springframework.http.*;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 /** Local algorithm client and old-business transition only. Raw source facts are Java-owned. */
-public class LocalPythonAdapter implements ManualPorts.Computer, ManualPorts.Transition {
+public class LocalPythonAdapter implements ManualPorts.Transition {
   private final RestTemplate http;
   private final LegacyPythonProperties config;
-  private final RestTemplate computeHttp;
 
   public LocalPythonAdapter(RestTemplate http, LegacyPythonProperties config) {
     this.http = http;
     this.config = config;
-    SimpleClientHttpRequestFactory factory =
-        new SimpleClientHttpRequestFactory() {
-          @Override
-          protected void prepareConnection(java.net.HttpURLConnection c, String method)
-              throws java.io.IOException {
-            super.prepareConnection(c, method);
-            c.setInstanceFollowRedirects(false);
-          }
-        };
-    factory.setConnectTimeout(1000);
-    factory.setReadTimeout(3000);
-    RestTemplate bounded = new RestTemplate(factory);
-    bounded.setErrorHandler(http.getErrorHandler());
-    this.computeHttp = bounded;
   }
 
   public Object call(String method, String path, Object body) {
@@ -111,9 +95,5 @@ public class LocalPythonAdapter implements ManualPorts.Computer, ManualPorts.Tra
           response.getStatusCodeValue(), detail instanceof String ? (String) detail : "上游返回数据校验错误");
     }
     return response.getBody();
-  }
-
-  public Map<String, Object> submit(Map<String, Object> input) {
-    return object(exchange(computeHttp, "POST", "/api/internal/manual-computations", input));
   }
 }

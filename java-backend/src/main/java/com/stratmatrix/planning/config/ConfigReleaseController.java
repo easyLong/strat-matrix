@@ -1,9 +1,9 @@
 package com.stratmatrix.planning.config;
 
+import com.stratmatrix.planning.context.RequestContexts;
 import com.stratmatrix.planning.manual.*;
 import java.util.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,7 +15,7 @@ public class ConfigReleaseController {
 
   public ConfigReleaseController(ConfigReleaseService service, ManualPorts.Actor actor) {
     this.service = service;
-    this.actor = actor;
+    this.actor = RequestContexts.actor(actor);
   }
 
   @GetMapping
@@ -36,16 +36,5 @@ public class ConfigReleaseController {
   @PostMapping("/versions/{version}/restore")
   public Object restore(@PathVariable int version, @RequestParam int expected_version) {
     return service.restore(version, expected_version, actor.current());
-  }
-
-  @ExceptionHandler(BusinessException.class)
-  public ResponseEntity<?> error(BusinessException e) {
-    return ResponseEntity.status(e.status).body(Collections.singletonMap("detail", e.getMessage()));
-  }
-
-  @ExceptionHandler(IllegalArgumentException.class)
-  public ResponseEntity<?> invalid(IllegalArgumentException e) {
-    return ResponseEntity.unprocessableEntity()
-        .body(Collections.singletonMap("detail", e.getMessage()));
   }
 }

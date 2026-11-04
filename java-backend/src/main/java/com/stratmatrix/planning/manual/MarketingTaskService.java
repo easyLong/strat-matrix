@@ -2,6 +2,7 @@ package com.stratmatrix.planning.manual;
 
 import static com.stratmatrix.planning.manual.Json.*;
 
+import com.stratmatrix.planning.context.RequestContexts;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -22,7 +23,7 @@ public class MarketingTaskService {
       ManualPorts.MarketingStatusSource statusSource) {
     this.repo = repo;
     this.source = source;
-    this.actor = actor;
+    this.actor = RequestContexts.actor(actor);
     this.statusSource = statusSource;
   }
 

@@ -1,0 +1,45 @@
+package com.stratmatrix.planning.tasks;
+
+import static com.stratmatrix.planning.manual.Json.map;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import com.stratmatrix.planning.adapter.python.PythonExecutionClient;
+import com.stratmatrix.planning.auto.AutoScheduleService;
+import com.stratmatrix.planning.content.*;
+import com.stratmatrix.planning.manual.*;
+import java.time.Instant;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+
+class PlanningTaskServiceTest {
+  @Test
+  void paginationFailuresAndAcceptanceRemainVisibleToHost() {
+    ManualContentStatusService content = mock(ManualContentStatusService.class);
+    AutoScheduleService auto = mock(AutoScheduleService.class);
+    PythonExecutionClient python = mock(PythonExecutionClient.class);
+    PlanningTaskService tasks =
+        new PlanningTaskService(null, null, auto, null, null, content, null, python);
+    Instant now = Instant.parse("2026-11-03T08:00:00Z");
+    when(content.reconcile(20, 42)).thenReturn(map("has_more", true, "next_after_id", 65L));
+    assertEquals(
+        65L, tasks.run(PlanningTaskService.Kind.CONTENT_STATUS, now, 20, 42).get("next_after_id"));
+    verify(content, times(1)).reconcile(20, 42);
+    when(content.reconcile(20, 65)).thenThrow(new BusinessException(503, "内容来源不可用"));
+    assertThrows(
+        BusinessException.class,
+        () -> tasks.run(PlanningTaskService.Kind.CONTENT_STATUS, now, 20, 65));
+    Map<String, Object> signal = tasks.run(PlanningTaskService.Kind.ALGORITHM, now, 20, 0);
+    assertEquals("accepted", signal.get("status"));
+    assertEquals(false, signal.get("business_complete"));
+    verify(python).wakeup(Arrays.asList("planning", "manual_compute"));
+    when(auto.advanceOpen(now))
+        .thenReturn(Collections.singletonList(map("status", "retry_pending")));
+    when(auto.tick(now)).thenReturn(map("status", "not_due"));
+    assertEquals(
+        "retry_required", tasks.run(PlanningTaskService.Kind.AUTOMATIC, now, 20, 0).get("status"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> tasks.run(PlanningTaskService.Kind.HOTSPOT, now, 0, 0));
+  }
+}

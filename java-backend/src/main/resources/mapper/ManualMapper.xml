@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.stratmatrix.planning.manual.ManualMapper">
+  <select id="ping" resultType="int">SELECT 1</select>
   <select id="plannedAccountIds" resultType="string">SELECT DISTINCT i.account_id FROM godp_planning_item i INNER JOIN godp_manual_task t ON t.id=i.batch_id WHERE i.publish_date=#{date} UNION SELECT account_id FROM godp_manual_reservation WHERE publish_date=#{date} AND task_id&lt;1000000000000</select>
   <select id="reservedAccountIds" resultType="string">SELECT account_id FROM godp_manual_reservation WHERE publish_date=#{date}</select>
   <insert id="insertPreview">INSERT INTO godp_manual_preview(preview_code,payload,expires_at,created_by,created_at) VALUES(#{code},#{payload},#{expiresAt},#{createdBy},#{createdAt})</insert>

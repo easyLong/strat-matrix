@@ -1,142 +1,66 @@
 package com.stratmatrix.standalone;
 
-import com.stratmatrix.planning.adapter.legacy.LegacyPythonProperties;
 import com.stratmatrix.planning.adapter.python.PythonExecutionClient;
-import com.stratmatrix.planning.auto.AutoScheduleService;
-import com.stratmatrix.planning.config.ConfigReleaseService;
-import com.stratmatrix.planning.content.*;
-import com.stratmatrix.planning.manual.ManualContentStatusService;
-import com.stratmatrix.planning.manual.ManualPlanningService;
-import com.stratmatrix.planning.manual.MarketingTaskService;
-import java.io.IOException;
-import java.net.HttpURLConnection;
+import com.stratmatrix.planning.tasks.PlanningTaskService;
+import com.stratmatrix.planning.tasks.PlanningTaskService.Kind;
 import java.time.Instant;
-import org.springframework.beans.factory.ObjectProvider;
+import java.util.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.context.annotation.*;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.web.client.RestTemplate;
 
-/** 仅行外开发模拟宿主调度；驻场不复制本配置，改由客户调度器调用客户端。 */
+/** Outside timing adapter only. Host jobs invoke the same ordinary task service. */
 @Configuration
 @Profile("local & !inside")
 @ConditionalOnProperty(name = "planning.local-pulse.enabled", havingValue = "true")
 @EnableScheduling
 public class LocalExecutionConfiguration {
   @Bean
-  public LocalJobPulse localJobPulse(
-      LegacyPythonProperties properties,
-      ObjectProvider<ManualPlanningService> manual,
-      ObjectProvider<AutoScheduleService> auto,
-      ObjectProvider<ConfigReleaseService> configs,
-      ObjectProvider<SlotCompletionService> completion,
-      ObjectProvider<MarketingPlacementService> placements,
-      ObjectProvider<ManualContentStatusService> contentStatus,
-      ObjectProvider<MarketingTaskService> marketing,
-      org.springframework.core.env.Environment environment) {
-    java.util.Map<String, Long> cursors = new java.util.HashMap<>();
-    LocalDailyHotspotCheck dailyHotspots =
-        new LocalDailyHotspotCheck(
-            (now, after) -> {
-              SlotCompletionService service = completion.getIfAvailable();
-              return service == null
-                  ? com.stratmatrix.planning.manual.Json.map("applied", 0, "has_more", false)
-                  : service.hotspots(now, 100, after);
-            });
-    SimpleClientHttpRequestFactory factory =
-        new SimpleClientHttpRequestFactory() {
-          @Override
-          protected void prepareConnection(HttpURLConnection connection, String method)
-              throws IOException {
-            super.prepareConnection(connection, method);
-            connection.setInstanceFollowRedirects(false);
-          }
-        };
-    factory.setConnectTimeout(1000);
-    factory.setReadTimeout(3000);
+  public LocalJobPulse localJobPulse(PythonExecutionClient python, PlanningTaskService tasks) {
+    Map<Kind, Long> cursors = new EnumMap<>(Kind.class);
+    LocalDailyHotspotCheck daily =
+        new LocalDailyHotspotCheck((now, after) -> tasks.run(Kind.HOTSPOT, now, 100, after));
     LocalJobPulse pulse =
         new LocalJobPulse(
-            new PythonExecutionClient(
-                properties.baseUri(), properties.getIntegrationToken(), new RestTemplate(factory)),
+            python,
             () -> {
-              runPhase(
-                  () -> {
-                    ConfigReleaseService config = configs.getIfAvailable();
-                    if (config != null) config.advancePending();
-                  });
-              runPhase(
-                  () -> {
-                    ManualPlanningService service = manual.getIfAvailable();
-                    if (service != null) service.advance();
-                  });
-              runPhase(
-                  () -> {
-                    dailyHotspots.run(Instant.now());
-                  });
-              runPhase(
-                  () -> {
-                    SlotCompletionService s = completion.getIfAvailable();
-                    if (s != null)
-                      advanceCursor(
-                          cursors,
-                          "marketing",
-                          s.marketing(Instant.now(), 100, cursors.getOrDefault("marketing", 0L)));
-                  });
-              runPhase(
-                  () -> {
-                    MarketingPlacementService s = placements.getIfAvailable();
-                    if (s != null) s.reconcile(Instant.now(), 100);
-                  });
-              runPhase(
-                  () -> {
-                    ManualContentStatusService s = contentStatus.getIfAvailable();
-                    if (s != null)
-                      advanceCursor(
-                          cursors,
-                          "content",
-                          s.reconcile(100, cursors.getOrDefault("content", 0L)));
-                  });
-              runPhase(
-                  () -> {
-                    MarketingTaskService s = marketing.getIfAvailable();
-                    if (s != null)
-                      advanceCursor(
-                          cursors,
-                          "marketing-status",
-                          s.reconcile(100, cursors.getOrDefault("marketing-status", 0L)));
-                  });
+              for (Kind kind :
+                  Arrays.asList(
+                      Kind.CONFIGURATION,
+                      Kind.MANUAL,
+                      Kind.MARKETING,
+                      Kind.MARKETING_PLACEMENT,
+                      Kind.CONTENT_STATUS,
+                      Kind.MARKETING_STATUS)) {
+                try {
+                  Map<String, Object> result =
+                      tasks.run(kind, Instant.now(), 100, cursors.getOrDefault(kind, 0L));
+                  cursors.put(
+                      kind,
+                      Boolean.TRUE.equals(result.get("has_more"))
+                          ? com.stratmatrix.planning.manual.Json.number(result, "next_after_id")
+                          : 0L);
+                  if ("retry_required".equals(result.get("status"))) warn(kind);
+                } catch (RuntimeException failure) {
+                  warn(kind);
+                }
+              }
+              try {
+                daily.run(Instant.now());
+              } catch (RuntimeException failure) {
+                warn(Kind.HOTSPOT);
+              }
             });
-    if ("business_only".equals(environment.getProperty("planning.history.mode")))
-      pulse.enableJavaBusinessOwnership();
-    AutoScheduleService autoService = auto.getIfAvailable();
-    if (autoService != null)
-      pulse.enableJavaWeekly(
-          () -> {
-            Instant now = Instant.now();
-            autoService.advanceOpen(now);
-            autoService.tick(now);
-          });
+    pulse.enableJavaBusinessOwnership();
+    pulse.enableJavaWeekly(
+        () -> {
+          Map<String, Object> result = tasks.run(Kind.AUTOMATIC, Instant.now(), 100, 0);
+          if ("retry_required".equals(result.get("status"))) warn(Kind.AUTOMATIC);
+        });
     return pulse;
   }
 
-  private static void runPhase(Runnable action) {
-    try {
-      action.run();
-    } catch (RuntimeException unavailable) {
-      org.slf4j.LoggerFactory.getLogger(LocalExecutionConfiguration.class)
-          .warn("本地业务推进阶段暂不可用：{}", unavailable.getClass().getSimpleName());
-    }
-  }
-
-  private static void advanceCursor(
-      java.util.Map<String, Long> cursors, String key, java.util.Map<String, Object> result) {
-    cursors.put(
-        key,
-        Boolean.TRUE.equals(result.get("has_more"))
-            ? com.stratmatrix.planning.manual.Json.number(result, "next_after_id")
-            : 0L);
+  private static void warn(Kind kind) {
+    org.slf4j.LoggerFactory.getLogger(LocalExecutionConfiguration.class).warn("本地任务阶段待重试：{}", kind);
   }
 }

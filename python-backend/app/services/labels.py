@@ -99,8 +99,9 @@ def get_tag_taxonomy() -> dict:
     items = normalize_taxonomy(json.loads(row["config_json"]))
     return {"version": row["version"], "tags": active_tag_names(items), "items": items}
 
-def put_tag_taxonomy(payload: TagTaxonomyInput) -> dict:
-    operator = "运营人员"
+def put_tag_taxonomy(payload: TagTaxonomyInput, operator: str = "运营人员") -> dict:
+    if not operator.strip() or len(operator) > 64 or any(char in operator for char in '\r\n\0'):
+        raise ApplicationError(status_code=422, detail="操作人无效")
     try:
         with connection() as db, db.cursor() as cursor:
             # Lock the row even when the first dictionary is being created.
