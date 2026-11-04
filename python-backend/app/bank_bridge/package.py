@@ -20,7 +20,7 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
                        for part in path.relative_to(ROOT).parts)):
             continue
         files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
-    for name in ('requirements.txt', 'schema.sql', 'pipeline_schema.sql',
+    for name in ('.python-version', 'requirements.txt', 'schema.sql', 'pipeline_schema.sql',
                  'content_production_schema.sql', 'manual_marketing_schema.sql', 'matching_quality_schema.sql', 'manual_compute_schema.sql',
                  'algorithm_schema.sql', 'README.md', 'ONSITE.md'):
         path = ROOT / 'python-backend' / name

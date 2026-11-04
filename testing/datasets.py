@@ -32,7 +32,8 @@ def vector(domain, variant=0):
     values = [.02] * 8
     values[domain] = 1.0
     values[5 + variant % 3] = .04 + variant % 7 * .01
-    norm = math.sqrt(sum(v * v for v in values))
+    # Keep frozen fixture bytes stable across Python versions (float sum changed in 3.12).
+    norm = math.sqrt(math.fsum(v * v for v in values))
     return [v / norm for v in values]
 
 

@@ -1,5 +1,9 @@
 # Python 子项目
 
+行内运行版本已确认：**Python 3.10.11**。仓库根目录及本目录的`.python-version`记录目标版本；生产依赖以`requirements.txt`为准，开发测试使用`requirements-dev.txt`。请在该版本的独立虚拟环境安装，不沿用电脑全局Python的依赖。
+
+3.10.11独立环境已通过完整回归，版本表、安装步骤及驻场限制见[适配验收记录](../docs/Python310驻场适配_2026-11-04.md)。
+
 首轮[算法执行优化](../docs/算法执行优化记录_2026-11-03.md)已加入DBUtils连接池、冻结角色覆盖检查、不可变缓存批读及任务范围内2路打标；需更新`requirements.txt`依赖。配置/模型401或403会阻断准备任务，修复后显式重试，不会自动持续重放。
 
 驻场前已补齐[Python接入与预检](ONSITE.md)：可配置模型网关、25张算法自有表的[独立DDL](algorithm_schema.sql)、不依赖Java业务表的健康检查、显式只读预检及有限模型连通测试。新算法库使用`python -m app.init_algorithm_db --apply`；已有环境不要用旧业务初始化器补表。

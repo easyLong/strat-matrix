@@ -41,7 +41,7 @@ flowchart LR
 
 - 前端：Node 16.13.0/npm 8，Vue 2.6.14、Vuex 3.6.0、Axios 1.8.2、Element UI 2.15.13、Vue Router 3、TypeScript；行外使用Vite构建，驻场复用宿主构建。
 - Java业务子项目：Java 8、公开Spring Boot 2.7.18兼容开发壳，MyBatis持久化普通人工业务，XLSX导出使用Apache POI；未引入内部依赖。
-- 后端：Python、FastAPI、PyMySQL。
+- 后端：Python 3.10.11、FastAPI、PyMySQL；使用独立环境安装`python-backend/requirements.txt`。
 - 数据库：Java业务库与Python算法库隔离；本地可见历史已迁入Java，原Python历史保留；迁入行内时分别发布两库脚本。
 - 后台执行：已整合进FastAPI生命周期，收到人工提交或Java唤醒后执行，Python不启动定时轮询。Java本地开发壳模拟调度；行内由客户调度平台调用同一唤醒客户端。业务队列、租约和断点继续持久化，见[后台执行说明](docs/BACKGROUND_EXECUTION.md)。
 - 模型：共用一个文本模型入口和一个向量模型入口。当前适配火山方舟豆包，业务配置使用 `MODEL_NAME`、`EMBEDDING_MODEL_NAME` 和 `ARK_API_KEY`。
