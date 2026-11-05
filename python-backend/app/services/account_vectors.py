@@ -122,9 +122,7 @@ def save_account_vector(batch_id: int, account_id: str, payload: AccountVectorRe
                     raise ApplicationError(status_code=409, detail="该批次账号向量已就绪，不支持覆盖或退回失败")
             else:
                 cursor.execute(
-                    "UPDATE godp_account_profile SET status=%s, vector_json=%s, vector_model=%s, "
-                    "last_error=%s, completed_at=IF(%s='ready', UTC_TIMESTAMP(6), NULL), "
-                    "update_by='account-vector-worker' WHERE id=%s",
+                    "UPDATE godp_account_profile SET status=%s, vector_json=%s, vector_model=%s, last_error=%s, completed_at=IF(%s='ready', UTC_TIMESTAMP(6), NULL), update_by='account-vector-worker', updated_by=update_by WHERE del_flag='N' AND id=%s",
                     (payload.status, vector_json, vector_model,
                      payload.error.strip() if payload.status == "failed" else "", payload.status, row["id"]),
                 )

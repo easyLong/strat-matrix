@@ -68,7 +68,7 @@ def seed_sources(start):
 def demo_policy():
     key = 'ordinary-e2e-demo'
     with connection() as db, db.cursor() as cursor:
-        cursor.execute('SELECT * FROM godp_matching_policy WHERE policy_key=%s ORDER BY version DESC LIMIT 1', (key,))
+        cursor.execute("SELECT * FROM godp_matching_policy WHERE del_flag='N' AND policy_key=%s ORDER BY version DESC LIMIT 1", (key,))
         latest = cursor.fetchone()
     if latest and latest['status'] == 'approved':
         return latest['id']
@@ -144,8 +144,7 @@ def main():
     parser.add_argument('--output', type=Path, default=Path('artifacts/ordinary-workflow-report.json'))
     args = parser.parse_args()
     with connection() as db, db.cursor() as cursor:
-        cursor.execute("SELECT id,selection_json FROM godp_planning_pipeline_run WHERE cycle_start=%s "
-                       "AND planning_scope='ordinary_only' AND status<>'cancelled' ORDER BY id DESC LIMIT 1", (args.cycle_start,))
+        cursor.execute("SELECT id,selection_json FROM godp_planning_pipeline_run WHERE del_flag='N' AND cycle_start=%s AND planning_scope='ordinary_only' AND status<>'cancelled' ORDER BY id DESC LIMIT 1", (args.cycle_start,))
         existing = cursor.fetchone()
     if existing:
         if json.loads(existing['selection_json']) != [ACCOUNT]:

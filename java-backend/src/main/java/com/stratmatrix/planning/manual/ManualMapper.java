@@ -62,6 +62,11 @@ public interface ManualMapper {
       @Param("accountId") String accountId,
       @Param("taskId") long taskId);
 
+  int reviveReservation(
+      @Param("date") String date,
+      @Param("accountId") String accountId,
+      @Param("taskId") long taskId);
+
   int markComputing(@Param("id") long id, @Param("time") long time);
 
   int noteRetry(@Param("id") long id, @Param("message") String message, @Param("time") long time);

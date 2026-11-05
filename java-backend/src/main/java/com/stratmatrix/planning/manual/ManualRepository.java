@@ -88,7 +88,8 @@ public class ManualRepository {
   }
 
   public void reserve(String date, String accountId, long taskId) {
-    mapper.insertReservation(date, accountId, taskId);
+    if (mapper.reviveReservation(date, accountId, taskId) == 0)
+      mapper.insertReservation(date, accountId, taskId);
   }
 
   public int markComputing(long id, long time) {

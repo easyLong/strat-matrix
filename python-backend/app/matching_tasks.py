@@ -133,17 +133,13 @@ def locked_task(task_id: int):
 
 def finish_attempt(cursor, task: dict, state: str, code: str = "") -> None:
     if task["lease_id"]:
-        cursor.execute("UPDATE godp_matching_attempt SET status=%s,error_code=%s, "
-                       "completed_at=UTC_TIMESTAMP(6),update_by='matching-task-api' "
-                       "WHERE task_id=%s AND lease_id=%s AND status='processing'",
+        cursor.execute("UPDATE godp_matching_attempt SET status=%s,error_code=%s, completed_at=UTC_TIMESTAMP(6),update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND task_id=%s AND lease_id=%s AND status='processing'",
                        (state, code, task["id"], task["lease_id"]))
 
 
 def invalidate(db, cursor, task: dict, code: str) -> None:
     finish_attempt(cursor, task, "expired", code)
-    cursor.execute("UPDATE godp_matching_task SET status='invalidated',error_code=%s, "
-                   "version=version+1,lease_id=NULL,lease_expires_at=NULL, "
-                   "update_by='matching-task-api' WHERE id=%s", (code, task["id"]))
+    cursor.execute("UPDATE godp_matching_task SET status='invalidated',error_code=%s, version=version+1,lease_id=NULL,lease_expires_at=NULL, update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (code, task["id"]))
     db.commit()
 
 
@@ -180,7 +176,7 @@ def create_task(payload: MatchingTaskCreate) -> dict:
         policy = select_policy(cursor, payload.policy_id, lock=True)
         if preparation["version"] != payload.expected_preparation_version:
             raise HTTPException(409, "准备记录版本不一致，请重新查询")
-        cursor.execute("SELECT * FROM godp_matching_task WHERE preparation_id=%s FOR UPDATE",
+        cursor.execute("SELECT * FROM godp_matching_task WHERE del_flag='N' AND preparation_id=%s FOR UPDATE",
                        (payload.preparation_id,))
         existing = cursor.fetchone()
         if existing:
@@ -203,10 +199,7 @@ def create_task(payload: MatchingTaskCreate) -> dict:
         supplemental_hash = digest(canonical_json(supplemental)) if supplemental is not None else None
         contract = document.schema_version
         fingerprint = execution_hash(preparation, policy, contract_version=contract, supplemental_hash=supplemental_hash)
-        cursor.execute("INSERT INTO godp_matching_task "
-                       "(preparation_id,preparation_version,preparation_input_hash,policy_id,policy_hash, "
-                       "input_hash,contract_version,supplemental_hash,create_by,update_by) "
-                       "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'matching-task-api','matching-task-api')",
+        cursor.execute("INSERT INTO godp_matching_task (preparation_id,preparation_version,preparation_input_hash,policy_id,policy_hash,input_hash,contract_version,supplemental_hash,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'matching-task-api','matching-task-api',create_by,update_by)",
                        (preparation["id"], preparation["version"], preparation["input_hash"], policy["id"],
                         policy["document_hash"], fingerprint, contract, supplemental_hash))
         task_id = cursor.lastrowid
@@ -265,12 +258,8 @@ def claim_task(payload: ClaimTask, *, implementation_key: str | None = None, tas
         lease_id = uuid4().hex
         expires = (now + timedelta(seconds=payload.lease_seconds)).replace(tzinfo=None)
         attempt = task["attempt_count"] + 1
-        cursor.execute("UPDATE godp_matching_task SET status='processing',version=version+1, "
-                       "attempt_count=%s,lease_id=%s,lease_expires_at=%s,error_code='', "
-                       "update_by='matching-task-api' WHERE id=%s", (attempt, lease_id, expires, task["id"]))
-        cursor.execute("INSERT INTO godp_matching_attempt "
-                       "(task_id,attempt_number,lease_id,lease_expires_at,create_by,update_by) "
-                       "VALUES (%s,%s,%s,%s,'matching-task-api','matching-task-api')",
+        cursor.execute("UPDATE godp_matching_task SET status='processing',version=version+1, attempt_count=%s,lease_id=%s,lease_expires_at=%s,error_code='', update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (attempt, lease_id, expires, task["id"]))
+        cursor.execute("INSERT INTO godp_matching_attempt (task_id,attempt_number,lease_id,lease_expires_at,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,'matching-task-api','matching-task-api',create_by,update_by)",
                        (task["id"], attempt, lease_id, expires))
         claimed = select_task(cursor, task["id"])
         db.commit()
@@ -293,10 +282,8 @@ def heartbeat_task(task_id: int, payload: LeaseHeartbeat) -> dict:
         require_lease(task, payload, now)
         require_current_inputs(db, cursor, preparation, policy, task, now)
         expires = (now + timedelta(seconds=payload.lease_seconds)).replace(tzinfo=None)
-        cursor.execute("UPDATE godp_matching_task SET lease_expires_at=%s, "
-                       "update_by='matching-task-api' WHERE id=%s", (expires, task_id))
-        cursor.execute("UPDATE godp_matching_attempt SET lease_expires_at=%s, "
-                       "update_by='matching-task-api' WHERE task_id=%s AND lease_id=%s",
+        cursor.execute("UPDATE godp_matching_task SET lease_expires_at=%s, update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (expires, task_id))
+        cursor.execute("UPDATE godp_matching_attempt SET lease_expires_at=%s, update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND task_id=%s AND lease_id=%s",
                        (expires, task_id, payload.lease_id))
         db.commit()
         return {"task_id": task_id, "lease_id": payload.lease_id, "lease_expires_at": utc_text(expires)}
@@ -310,8 +297,7 @@ def yield_task(task_id: int, payload: LeaseIdentity) -> dict:
             raise HTTPException(409, '仅V19分批模型准备任务允许主动让出执行')
         require_current_inputs(db, cursor, preparation, policy, task, now_utc())
         finish_attempt(cursor, task, 'expired', 'batch_yield')
-        cursor.execute("UPDATE godp_matching_task SET status='queued',version=version+1,"
-                       "lease_id=NULL,lease_expires_at=NULL,error_code='',update_by='matching-quality-worker' WHERE id=%s", (task_id,))
+        cursor.execute("UPDATE godp_matching_task SET status='queued',version=version+1,lease_id=NULL,lease_expires_at=NULL,error_code='',update_by='matching-quality-worker', updated_by=update_by WHERE del_flag='N' AND id=%s", (task_id,))
         saved = select_task(cursor, task_id)
         db.commit()
         return task_summary(saved)
@@ -376,9 +362,7 @@ def save_evaluation(task_id: int, payload: MatchingEvaluation) -> dict:
         if document.implementation_key == 'builtin-v19-quality-v1':
             from .matching_quality_validation import validate_quality_evaluation
             validate_quality_evaluation(cursor,task,payload,inputs,document)
-        cursor.execute("UPDATE godp_matching_task SET status='evaluated',version=version+1, "
-                       "result_json=%s,result_hash=%s,completed_at=%s,error_code='', "
-                       "update_by='matching-task-api' WHERE id=%s", (encoded, fingerprint, now.replace(tzinfo=None), task_id))
+        cursor.execute("UPDATE godp_matching_task SET status='evaluated',version=version+1, result_json=%s,result_hash=%s,completed_at=%s,error_code='', update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (encoded, fingerprint, now.replace(tzinfo=None), task_id))
         finish_attempt(cursor, task, "evaluated")
         saved = select_task(cursor, task_id)
         db.commit()
@@ -395,8 +379,7 @@ def fail_task(task_id: int, payload: MatchingFailure) -> dict:
             return task_summary(task, reused=True)
         require_lease(task, payload, now)
         require_current_inputs(db, cursor, preparation, policy, task, now)
-        cursor.execute("UPDATE godp_matching_task SET status='failed',version=version+1,error_code=%s, "
-                       "update_by='matching-task-api' WHERE id=%s", (payload.error_code, task_id))
+        cursor.execute("UPDATE godp_matching_task SET status='failed',version=version+1,error_code=%s, update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (payload.error_code, task_id))
         finish_attempt(cursor, task, "failed", payload.error_code)
         saved = select_task(cursor, task_id)
         db.commit()
@@ -409,8 +392,7 @@ def retry_task(task_id: int, expected_version: int) -> dict:
         if task["version"] != expected_version or task["status"] != "failed":
             raise HTTPException(409, "任务版本不一致或不属于可重试失败状态")
         require_current_inputs(db, cursor, preparation, policy, task, now_utc())
-        cursor.execute("UPDATE godp_matching_task SET status='queued',version=version+1, "
-                       "lease_id=NULL,lease_expires_at=NULL,error_code='',update_by='matching-task-api' WHERE id=%s", (task_id,))
+        cursor.execute("UPDATE godp_matching_task SET status='queued',version=version+1, lease_id=NULL,lease_expires_at=NULL,error_code='',update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (task_id,))
         saved = select_task(cursor, task_id)
         db.commit()
         return task_summary(saved)
@@ -424,9 +406,7 @@ def cancel_task(task_id: int, expected_version: int) -> dict:
             raise HTTPException(409, "提案已保存或输入已失效，不能取消")
         if task["status"] != "cancelled":
             finish_attempt(cursor, task, "expired", "task_cancelled")
-            cursor.execute("UPDATE godp_matching_task SET status='cancelled',version=version+1, "
-                           "lease_id=NULL,lease_expires_at=NULL,error_code='task_cancelled', "
-                           "update_by='matching-task-api' WHERE id=%s", (task_id,))
+            cursor.execute("UPDATE godp_matching_task SET status='cancelled',version=version+1, lease_id=NULL,lease_expires_at=NULL,error_code='task_cancelled', update_by='matching-task-api', updated_by=update_by WHERE del_flag='N' AND id=%s", (task_id,))
         saved = select_task(cursor, task_id)
         db.commit()
         return task_summary(saved)

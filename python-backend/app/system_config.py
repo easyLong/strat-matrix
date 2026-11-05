@@ -121,8 +121,7 @@ def set_setting(key: str, value: str, expected_version: int | None = None) -> in
             raise SystemConfigError(f"系统配置 {key} 尚未初始化")
         if expected_version is not None and row["version"] != expected_version:
             raise SystemConfigError("系统配置版本已变化，请重新查询")
-        cursor.execute("UPDATE godp_system_config SET config_value=%s,version=version+1,"
-                       "update_by='config-cli' WHERE config_key=%s", (value, key))
+        cursor.execute("UPDATE godp_system_config SET config_value=%s,version=version+1,update_by='config-cli', updated_by=update_by WHERE del_flag='N' AND config_key=%s", (value, key))
         db.commit()
     clear_cache()
     return row["version"] + 1

@@ -43,8 +43,7 @@ def resolve_t6_tag(cursor, candidate: str, embedding: list[float], model: str
                 raise HTTPException(status_code=422, detail="同一 T6 向量模型返回了不同维度")
         if exact["embedding_json"] is None:
             cursor.execute(
-                "UPDATE godp_t6_tag SET embedding_model=%s, embedding_json=%s, "
-                "update_by='label-worker' WHERE id=%s",
+                "UPDATE godp_t6_tag SET embedding_model=%s, embedding_json=%s, update_by='label-worker', updated_by=update_by WHERE del_flag='N' AND id=%s",
                 (model, json.dumps(embedding, separators=(",", ":")), exact["id"]),
             )
         return exact["id"], exact["name"]
@@ -66,9 +65,7 @@ def resolve_t6_tag(cursor, candidate: str, embedding: list[float], model: str
     if closest:
         return closest["id"], closest["name"]
     cursor.execute(
-        "INSERT INTO godp_t6_tag "
-        "(name, embedding_model, embedding_json, create_by, update_by) "
-        "VALUES (%s, %s, %s, 'label-worker', 'label-worker')",
+        "INSERT INTO godp_t6_tag (name,embedding_model,embedding_json,create_by,update_by,created_by,updated_by) VALUES (%s, %s, %s, 'label-worker', 'label-worker',create_by,update_by)",
         (candidate, model, json.dumps(embedding, separators=(",", ":"))),
     )
     return cursor.lastrowid, candidate

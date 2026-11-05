@@ -39,6 +39,19 @@ class ManualBusinessSchemaTest {
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'",
                 String.class));
     assertEquals(14, tables.size());
+    Set<String> auditFields =
+        new HashSet<>(
+            Arrays.asList(
+                "id", "del_flag", "created_by", "updated_by", "created_time", "updated_time"));
+    for (String table : tables) {
+      Set<String> columns =
+          new HashSet<>(
+              db.queryForList(
+                  "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=?",
+                  String.class,
+                  table));
+      assertTrue(columns.containsAll(auditFields), table);
+    }
     assertEquals(
         new HashSet<>(
             Arrays.asList(

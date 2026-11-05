@@ -80,10 +80,7 @@ def save_batch_account_profiles(cursor, batch_id: int, accounts: list[dict],
         # No upsert: batch input is immutable. Repeated planning returns the
         # existing batch before reaching this code.
         cursor.execute(
-            "INSERT INTO godp_account_profile "
-            "(batch_id, account_id, config_version, source_updated_at, profile_hash, "
-            "snapshot_json, profile_json, create_by, update_by) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            'INSERT INTO godp_account_profile (batch_id,account_id,config_version,source_updated_at,profile_hash,snapshot_json,profile_json,create_by,update_by,created_by,updated_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,create_by,update_by)',
             (batch_id, account["account_id"], config_version,
              post_time(account["source_updated_at"]).replace(tzinfo=None),
              profile_hash, canonical_json(account), profile_json, actor, actor),

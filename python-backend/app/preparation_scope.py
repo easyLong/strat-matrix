@@ -16,8 +16,7 @@ def versions(cursor):
 
 
 def read_scope(cursor, preparation_id):
-    cursor.execute('SELECT scope_json,scope_hash,progress_json FROM godp_ai_preparation_progress '
-                   'WHERE preparation_id=%s', (preparation_id,))
+    cursor.execute("SELECT scope_json,scope_hash,progress_json FROM godp_ai_preparation_progress WHERE del_flag='N' AND preparation_id=%s", (preparation_id,))
     row = cursor.fetchone()
     if not row:
         return None
@@ -95,5 +94,5 @@ def readiness_reasons(scope, topics, checked_at, expected_space=None):
 
 
 def save_progress(cursor, preparation_id, progress):
-    cursor.execute('UPDATE godp_ai_preparation_progress SET progress_json=%s WHERE preparation_id=%s',
+    cursor.execute("UPDATE godp_ai_preparation_progress SET progress_json=%s WHERE del_flag='N' AND preparation_id=%s",
                    (canonical_json(progress), preparation_id))

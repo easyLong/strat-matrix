@@ -2,7 +2,12 @@
 -- No foreign keys, stored procedures, functions, or views.
 
 CREATE TABLE IF NOT EXISTS godp_planning_pipeline_run (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'Pipeline运行记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     pipeline_code VARCHAR(64) NOT NULL COMMENT 'Pipeline运行唯一编码',
     reservation_key VARCHAR(64) NULL COMMENT '正式策划周期占用键；取消后置空以允许重建',
     schema_version INT NOT NULL DEFAULT 1 COMMENT 'Pipeline编排契约版本，第一版固定为1',
@@ -28,7 +33,6 @@ CREATE TABLE IF NOT EXISTS godp_planning_pipeline_run (
     create_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '创建来源',
     update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '修改时间，按UTC保存',
     update_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '最后修改来源',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_planning_pipeline_code (pipeline_code),
     UNIQUE KEY uk_planning_pipeline_reservation (reservation_key),
     KEY idx_planning_pipeline_cycle (cycle_start, status, id),
@@ -37,24 +41,43 @@ CREATE TABLE IF NOT EXISTS godp_planning_pipeline_run (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式智能策划Pipeline统一运行状态与下游执行引用';
 
 CREATE TABLE IF NOT EXISTS godp_algorithm_proposal (
-    pipeline_id BIGINT NOT NULL PRIMARY KEY COMMENT '所属算法Pipeline编号，一个Pipeline仅冻结一份提案',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    pipeline_id BIGINT NOT NULL COMMENT '所属算法Pipeline编号，一个Pipeline仅冻结一份提案',
     proposal_hash CHAR(64) NOT NULL COMMENT '提案规范JSON原始字节的SHA256指纹',
     proposal_json LONGTEXT NOT NULL COMMENT '冻结的算法提案规范JSON，确认及重试期间保持不变',
     business_config_version INT NOT NULL COMMENT 'Java冻结业务配置版本',
     business_batch_id BIGINT NULL COMMENT 'Java业务库确认写入后的批次编号，仅保存引用',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '提案冻结时间，UTC',
-    accepted_at DATETIME(6) NULL COMMENT 'Java落库确认时间，UTC'
+    accepted_at DATETIME(6) NULL COMMENT 'Java落库确认时间，UTC',
+    UNIQUE KEY uk_audit_legacy_godp_algorithm_proposal (pipeline_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交由Java提交的不可变算法提案与接收凭证';
 
 CREATE TABLE IF NOT EXISTS godp_algorithm_config_command (
-    command_id VARCHAR(64) NOT NULL PRIMARY KEY COMMENT 'Java配置发布命令编号，重试保持不变',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    command_id VARCHAR(64) NOT NULL COMMENT 'Java配置发布命令编号，重试保持不变',
     request_hash CHAR(64) NOT NULL COMMENT '配置命令请求指纹',
     result_json LONGTEXT NOT NULL COMMENT '算法配置应用后的版本及配置响应快照',
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '配置命令应用时间，UTC'
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '配置命令应用时间，UTC',
+    UNIQUE KEY uk_audit_legacy_godp_algorithm_config_command (command_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='算法配置命令幂等接收记录';
 
 CREATE TABLE IF NOT EXISTS godp_planning_stage_run (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'Pipeline阶段运行记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     pipeline_id BIGINT NOT NULL COMMENT '逻辑关联Pipeline运行记录ID，无外键',
     stage_key VARCHAR(40) NOT NULL COMMENT '阶段稳定标识：数据接入、双侧准备、匹配、分配、组合或提交',
     stage_order INT NOT NULL COMMENT '阶段展示顺序；依赖关系由代码契约定义而非单纯顺序定义',
@@ -72,7 +95,6 @@ CREATE TABLE IF NOT EXISTS godp_planning_stage_run (
     create_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '创建来源',
     update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '修改时间，按UTC保存',
     update_by VARCHAR(50) NOT NULL DEFAULT 'planning-pipeline-api' COMMENT '最后修改来源',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_planning_stage_key (pipeline_id, stage_key),
     KEY idx_planning_stage_status (status, pipeline_id, stage_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式智能策划Pipeline各阶段生命周期、重试与后端引用';

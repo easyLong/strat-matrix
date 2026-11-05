@@ -32,9 +32,7 @@ def block_model_preparation(preparation_id, error_type):
             report.update(inputs_ready=False, status='blocked', blocking_reasons=[{
                 'code': 'model_access_blocked', 'error_type': error_type,
                 'message': '模型配置或访问异常，请检查配置、授权与账户余额，修复后显式重试'}])
-            cursor.execute("UPDATE godp_ai_preparation SET status='blocked',version=version+1, "
-                           "last_report_json=%s,update_by='planning-input-runner' WHERE id=%s "
-                           "AND reservation_key IS NOT NULL", (json.dumps(report,ensure_ascii=False),preparation_id))
+            cursor.execute("UPDATE godp_ai_preparation SET status='blocked',version=version+1, last_report_json=%s,update_by='planning-input-runner', updated_by=update_by WHERE del_flag='N' AND id=%s AND reservation_key IS NOT NULL", (json.dumps(report,ensure_ascii=False),preparation_id))
         db.commit()
 
 

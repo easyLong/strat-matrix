@@ -18,7 +18,8 @@ SELECT i.id,i.batch_id,i.slot_id,i.account_id,i.publish_date,i.publish_week,i.pa
  COALESCE(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.account_type')),'null'),''),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.source_payload.account_type')),'null'),'') AS account_type,
  COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.lifecycle_stage')),'null'),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.lifecycle_stage')),'null'),'') AS lifecycle_stage,
  CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.followers')),'null'),NULLIF(JSON_UNQUOTE(JSON_EXTRACT(i.payload,'$.account_snapshot.followers_count')),'null'),'0') AS SIGNED) AS followers
-FROM godp_planning_item i JOIN godp_planning_batch b ON b.id=i.batch_id;
+FROM godp_planning_item i JOIN godp_planning_batch b ON b.id=i.batch_id
+WHERE i.del_flag='N' AND b.del_flag='N';
 
 CREATE OR REPLACE VIEW godp_planning_batch_read AS
 SELECT id,payload,created_at,week_start,
@@ -31,7 +32,7 @@ SELECT id,payload,created_at,week_start,
  CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.completed_count')),'null'),'0') AS SIGNED) AS completed_count,
  CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.failed_count')),'null'),'0') AS SIGNED) AS failed_count,
  CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.topic_count')),'null'),'0') AS SIGNED) AS topic_count
-FROM godp_planning_batch;
+FROM godp_planning_batch WHERE del_flag='N';
 
 CREATE OR REPLACE VIEW godp_planning_task_read AS
 SELECT CONCAT('manual:',t.id) AS row_key,t.id,'manual' AS kind,t.payload,t.created_at,
@@ -40,10 +41,11 @@ SELECT CONCAT('manual:',t.id) AS row_key,t.id,'manual' AS kind,t.payload,t.creat
  JSON_UNQUOTE(JSON_EXTRACT(t.payload,'$.publish_date')) AS publish_date,
  COALESCE(JSON_UNQUOTE(JSON_EXTRACT(t.payload,'$.created_by')),'') AS created_by,
  COALESCE(JSON_UNQUOTE(JSON_EXTRACT(b.payload,'$.content_status')),'待生产') AS content_status
-FROM godp_manual_task t LEFT JOIN godp_planning_batch b ON b.id=t.id
+FROM godp_manual_task t LEFT JOIN godp_planning_batch b ON b.id=t.id AND b.del_flag='N'
+WHERE t.del_flag='N'
 UNION ALL
 SELECT CONCAT('marketing:',id),id,'marketing',topic_snapshot_json,created_at,task_name,task_code,NULL,created_by,status
-FROM godp_manual_marketing_task
+FROM godp_manual_marketing_task WHERE del_flag='N'
 UNION ALL
 SELECT archive_key,source_id,'archive',payload,created_at,
  COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.task_name')),''),
@@ -51,4 +53,4 @@ SELECT archive_key,source_id,'archive',payload,created_at,
  NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.publish_date')),'null'),
  COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.created_by')),''),
  COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.content_status')),'待生产')
-FROM godp_planning_task_archive;
+FROM godp_planning_task_archive WHERE del_flag='N';

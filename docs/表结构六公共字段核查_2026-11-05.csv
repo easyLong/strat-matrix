@@ -1,0 +1,235 @@
+﻿归属,表名,字段,类型,允许空值,默认值,额外属性,中文注释,结果
+算法库,godp_account_mapping_rule,id,bigint,NO,,auto_increment,账号标准画像映射规则主键ID,通过
+算法库,godp_account_mapping_rule,del_flag,varchar(1),NO,N,,逻辑删除标志：N正常、Y删除,通过
+算法库,godp_account_mapping_rule,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_account_mapping_rule,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_account_mapping_rule,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_account_mapping_rule,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_account_profile,id,bigint,NO,,auto_increment,批次账号画像与向量记录主键ID,通过
+算法库,godp_account_profile,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_account_profile,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_account_profile,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_account_profile,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_account_profile,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_ai_preparation,id,bigint,NO,,auto_increment,正式AI策划内部准备记录主键ID，与运营批次ID独立,通过
+算法库,godp_ai_preparation,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_ai_preparation,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_ai_preparation,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_ai_preparation,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_ai_preparation,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_ai_preparation_account,id,bigint,NO,,auto_increment,AI准备记录账号画像主键ID,通过
+算法库,godp_ai_preparation_account,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_ai_preparation_account,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_ai_preparation_account,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_ai_preparation_account,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_ai_preparation_account,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_ai_preparation_progress,id,bigint,NO,,auto_increment,主键ID,通过
+算法库,godp_ai_preparation_progress,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+算法库,godp_ai_preparation_progress,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_ai_preparation_progress,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_ai_preparation_progress,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_ai_preparation_progress,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_ai_preparation_topic,id,bigint,NO,,auto_increment,AI准备记录冻结选题主键ID,通过
+算法库,godp_ai_preparation_topic,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_ai_preparation_topic,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_ai_preparation_topic,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_ai_preparation_topic,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_ai_preparation_topic,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_algorithm_config_command,id,bigint,NO,,auto_increment,主键ID,通过
+算法库,godp_algorithm_config_command,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+算法库,godp_algorithm_config_command,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_algorithm_config_command,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_algorithm_config_command,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_algorithm_config_command,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_algorithm_proposal,id,bigint,NO,,auto_increment,主键ID,通过
+算法库,godp_algorithm_proposal,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+算法库,godp_algorithm_proposal,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_algorithm_proposal,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_algorithm_proposal,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_algorithm_proposal,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_manual_compute,id,bigint,NO,,auto_increment,主键ID,通过
+算法库,godp_manual_compute,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+算法库,godp_manual_compute,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_manual_compute,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_manual_compute,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_manual_compute,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_matching_ai_cache,id,bigint,NO,,auto_increment,主键ID,通过
+算法库,godp_matching_ai_cache,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+算法库,godp_matching_ai_cache,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_matching_ai_cache,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_matching_ai_cache,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_matching_ai_cache,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_matching_attempt,id,bigint,NO,,auto_increment,普通内容匹配执行尝试主键ID,通过
+算法库,godp_matching_attempt,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_matching_attempt,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_matching_attempt,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_matching_attempt,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_matching_attempt,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_matching_input_snapshot,id,bigint,NO,,auto_increment,匹配任务补充事实输入快照主键ID,通过
+算法库,godp_matching_input_snapshot,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_matching_input_snapshot,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_matching_input_snapshot,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_matching_input_snapshot,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_matching_input_snapshot,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_matching_policy,id,bigint,NO,,auto_increment,普通内容匹配算法策略版本主键ID,通过
+算法库,godp_matching_policy,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_matching_policy,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_matching_policy,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_matching_policy,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_matching_policy,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_matching_quality_run,id,bigint,NO,,auto_increment,主键ID,通过
+算法库,godp_matching_quality_run,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+算法库,godp_matching_quality_run,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_matching_quality_run,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_matching_quality_run,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_matching_quality_run,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_matching_task,id,bigint,NO,,auto_increment,普通内容匹配内部执行任务主键ID,通过
+算法库,godp_matching_task,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_matching_task,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_matching_task,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_matching_task,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_matching_task,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_planning_pipeline_run,id,bigint,NO,,auto_increment,Pipeline运行记录主键ID,通过
+算法库,godp_planning_pipeline_run,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_planning_pipeline_run,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_planning_pipeline_run,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_planning_pipeline_run,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_planning_pipeline_run,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_planning_stage_run,id,bigint,NO,,auto_increment,Pipeline阶段运行记录主键ID,通过
+算法库,godp_planning_stage_run,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_planning_stage_run,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_planning_stage_run,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_planning_stage_run,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_planning_stage_run,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_strategy_config,id,bigint,NO,,auto_increment,配置记录主键ID,通过
+算法库,godp_strategy_config,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_strategy_config,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_strategy_config,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_strategy_config,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_strategy_config,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_strategy_config_version,id,bigint,NO,,auto_increment,配置快照记录主键ID,通过
+算法库,godp_strategy_config_version,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_strategy_config_version,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_strategy_config_version,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_strategy_config_version,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_strategy_config_version,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_system_config,id,bigint,NO,,auto_increment,系统配置记录主键ID,通过
+算法库,godp_system_config,del_flag,varchar(1),NO,N,,逻辑删除标志：N正常、Y删除,通过
+算法库,godp_system_config,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_system_config,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_system_config,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_system_config,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_t6_tag,id,bigint,NO,,auto_increment,T6用户需求标签稳定ID,通过
+算法库,godp_t6_tag,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_t6_tag,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_t6_tag,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_t6_tag,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_t6_tag,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_topic_label_job,id,bigint,NO,,auto_increment,普通选题首次离线标签识别任务主键ID,通过
+算法库,godp_topic_label_job,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_topic_label_job,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_topic_label_job,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_topic_label_job,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_topic_label_job,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_topic_profile,id,bigint,NO,,auto_increment,普通选题画像和向量记录主键ID,通过
+算法库,godp_topic_profile,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_topic_profile,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_topic_profile,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_topic_profile,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_topic_profile,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_topic_tag,id,bigint,NO,,auto_increment,选题标签记录主键ID,通过
+算法库,godp_topic_tag,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_topic_tag,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_topic_tag,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_topic_tag,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_topic_tag,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+算法库,godp_topic_tag_history,id,bigint,NO,,auto_increment,选题标签历史快照主键ID,通过
+算法库,godp_topic_tag_history,del_flag,varchar(1),NO,N,,删除标志,通过
+算法库,godp_topic_tag_history,created_by,varchar(50),NO,system,,创建人,通过
+算法库,godp_topic_tag_history,updated_by,varchar(50),NO,system,,修改人,通过
+算法库,godp_topic_tag_history,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+算法库,godp_topic_tag_history,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_auto_planning_task,id,bigint,NO,,auto_increment,自动周策划业务任务主键,通过
+业务库,godp_auto_planning_task,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_auto_planning_task,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_auto_planning_task,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_auto_planning_task,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_auto_planning_task,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_business_planning_config,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_business_planning_config,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_business_planning_config,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_business_planning_config,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_business_planning_config,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_business_planning_config,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_business_planning_config_version,id,bigint,NO,,auto_increment,历史记录主键,通过
+业务库,godp_business_planning_config_version,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_business_planning_config_version,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_business_planning_config_version,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_business_planning_config_version,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_business_planning_config_version,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_manual_marketing_task,id,bigint,NO,,auto_increment,人工营销策划任务主键,通过
+业务库,godp_manual_marketing_task,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_manual_marketing_task,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_manual_marketing_task,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_manual_marketing_task,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_manual_marketing_task,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_manual_preview,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_manual_preview,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_manual_preview,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_manual_preview,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_manual_preview,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_manual_preview,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_manual_reservation,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_manual_reservation,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_manual_reservation,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_manual_reservation,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_manual_reservation,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_manual_reservation,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_manual_task,id,bigint,NO,,auto_increment,任务主键,通过
+业务库,godp_manual_task,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_manual_task,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_manual_task,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_manual_task,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_manual_task,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_adjustment,id,bigint,NO,,auto_increment,操作记录编号,通过
+业务库,godp_planning_adjustment,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_adjustment,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_adjustment,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_adjustment,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_adjustment,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_batch,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_planning_batch,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_batch,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_batch,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_batch,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_batch,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_config_release,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_config_release,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_planning_config_release,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_config_release,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_config_release,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_config_release,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_failure,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_planning_failure,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_failure,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_failure,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_failure,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_failure,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_item,id,bigint,NO,,auto_increment,策划明细主键,通过
+业务库,godp_planning_item,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_item,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_item,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_item,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_item,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_resource_claim,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_planning_resource_claim,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_resource_claim,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_resource_claim,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_resource_claim,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_resource_claim,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过
+业务库,godp_planning_task_archive,id,bigint,NO,,auto_increment,主键ID,通过
+业务库,godp_planning_task_archive,del_flag,varchar(1),NO,N,,删除标志：N正常、Y删除,通过
+业务库,godp_planning_task_archive,created_by,varchar(50),NO,system,,创建人,通过
+业务库,godp_planning_task_archive,updated_by,varchar(50),NO,system,,修改人,通过
+业务库,godp_planning_task_archive,created_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED,创建时间,通过
+业务库,godp_planning_task_archive,updated_time,datetime,NO,CURRENT_TIMESTAMP,DEFAULT_GENERATED on update CURRENT_TIMESTAMP,修改时间,通过

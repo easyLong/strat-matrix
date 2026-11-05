@@ -132,7 +132,8 @@ class SystemConfigMigrationTests(unittest.TestCase):
     def test_table_and_all_fourteen_fields_have_chinese_comments(self):
         source = migration.schema_statement()
         columns = column_definitions(source)["godp_system_config"]
-        self.assertEqual(len(columns), 14)
+        self.assertEqual(len(columns), 18)
+        self.assertTrue({'id','del_flag','created_by','updated_by','created_time','updated_time'} <= set(columns))
         self.assertIn("godp_system_config", table_descriptions(source))
         self.assertTrue(all(re.search(r"[\u4e00-\u9fff]", comment) for _, comment in columns.values()))
 

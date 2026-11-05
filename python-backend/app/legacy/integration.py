@@ -195,9 +195,7 @@ def full_snapshot_finish(cursor, payload: AccountSync | TopicSync, source_type: 
                 "WHERE topic_code=%s", (topic_id,),
             )
             cursor.execute(
-                "UPDATE godp_topic_label_job SET status='cancelled', lease_id=NULL, "
-                "lease_expires_at=NULL, update_by='integration' "
-                "WHERE topic_id=%s AND status<>'completed'", (topic_id,),
+                "UPDATE godp_topic_label_job SET status='cancelled', lease_id=NULL, lease_expires_at=NULL, update_by='integration', updated_by=update_by WHERE del_flag='N' AND topic_id=%s AND status<>'completed'", (topic_id,),
             )
     result = summary(payload.source_batch_id, len(payload.records),
                      {**counters, "deactivated": len(missing)})
@@ -329,12 +327,7 @@ def sync_topics(payload: TopicSync) -> SyncResult:
                     usable = record.status if record.status is not None else record.enabled
                     if not record.is_marketing and usable and not record.topic_id.startswith("DEMO-"):
                         cursor.execute(
-                            "UPDATE godp_topic_label_job SET status='pending', "
-                            "source_payload_json=%s, source_updated_at=%s, "
-                            "lease_id=NULL, lease_expires_at=NULL, taxonomy_version=NULL, "
-                            "last_error='', update_by='integration' "
-                            "WHERE topic_id=%s AND status='cancelled' "
-                            "AND completed_at IS NULL",
+                            "UPDATE godp_topic_label_job SET status='pending', source_payload_json=%s, source_updated_at=%s, lease_id=NULL, lease_expires_at=NULL, taxonomy_version=NULL, last_error='', update_by='integration', updated_by=update_by WHERE del_flag='N' AND topic_id=%s AND status='cancelled' AND completed_at IS NULL",
                             (raw, timestamp, record.topic_id),
                         )
                         cursor.execute(
@@ -347,9 +340,7 @@ def sync_topics(payload: TopicSync) -> SyncResult:
                         )
                     else:
                         cursor.execute(
-                            "UPDATE godp_topic_label_job SET status='cancelled', "
-                            "lease_id=NULL, lease_expires_at=NULL, update_by='integration' "
-                            "WHERE topic_id=%s AND status<>'completed'", (record.topic_id,),
+                            "UPDATE godp_topic_label_job SET status='cancelled', lease_id=NULL, lease_expires_at=NULL, update_by='integration', updated_by=update_by WHERE del_flag='N' AND topic_id=%s AND status<>'completed'", (record.topic_id,),
                         )
                     if usable and not record.is_marketing and not record.topic_id.startswith("DEMO-"):
                         cursor.execute(

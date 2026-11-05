@@ -27,6 +27,7 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
         files['python-backend/' + name] = path.read_bytes()
     for path in (ROOT / 'python-backend/migrations').glob('*.sql'):
         files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
+    files['python-backend/tools/migrate_table_audit.py'] = (ROOT / 'python-backend/tools/migrate_table_audit.py').read_bytes()
     for path in (ROOT / 'docs/integration/java-host').rglob('*'):
         if path.is_file() and (path.suffix in ('.md', '.json', '.example')):
             files[path.relative_to(ROOT).as_posix()] = path.read_bytes()

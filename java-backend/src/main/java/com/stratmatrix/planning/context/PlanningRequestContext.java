@@ -17,7 +17,7 @@ public final class PlanningRequestContext {
 
   public PlanningRequestContext(
       String userUm, Scope scope, Collection<String> organizationCodes, String traceId) {
-    this.userUm = text(userUm, 64, "可信操作人");
+    this.userUm = text(userUm, 50, "可信操作人");
     this.scope = Objects.requireNonNull(scope, "数据范围");
     LinkedHashSet<String> codes = new LinkedHashSet<>();
     for (String code : Objects.requireNonNull(organizationCodes, "机构范围"))

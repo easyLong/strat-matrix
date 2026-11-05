@@ -12,7 +12,7 @@ from .matching_quality_snapshot import content_hash
 
 
 def validate_quality_evaluation(cursor,task,result,inputs,document):
-    cursor.execute('SELECT status,lease_id,report_json,report_hash FROM godp_matching_quality_run WHERE task_id=%s', (task['id'],))
+    cursor.execute("SELECT status,lease_id,report_json,report_hash FROM godp_matching_quality_run WHERE del_flag='N' AND task_id=%s", (task['id'],))
     row=cursor.fetchone()
     if not row or row['status']!='ready' or row['lease_id']!=task['lease_id']:
         raise HTTPException(409,'V19精判过程尚未完成或租约不一致')

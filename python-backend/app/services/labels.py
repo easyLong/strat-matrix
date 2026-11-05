@@ -106,9 +106,7 @@ def put_tag_taxonomy(payload: TagTaxonomyInput, operator: str = "运营人员") 
         with connection() as db, db.cursor() as cursor:
             # Lock the row even when the first dictionary is being created.
             cursor.execute(
-                "INSERT IGNORE INTO godp_strategy_config "
-                "(config_key, config_json, version, create_by, update_by) "
-                "VALUES ('tag_taxonomy', '{}', 0, 'system', 'system')"
+                "INSERT IGNORE INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('tag_taxonomy', '{}', 0, 'system', 'system',create_by,update_by)"
             )
             cursor.execute(
                 "SELECT version, config_json FROM godp_strategy_config "
@@ -170,17 +168,11 @@ def put_tag_taxonomy(payload: TagTaxonomyInput, operator: str = "运营人员") 
             next_version = version + 1
             serialized = as_json(next_items)
             cursor.execute(
-                "INSERT INTO godp_strategy_config "
-                "(config_key, config_json, version, create_by, update_by) "
-                "VALUES ('tag_taxonomy', %s, %s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), "
-                "version=VALUES(version), update_by=VALUES(update_by), del_flag='N'",
+                "INSERT INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('tag_taxonomy', %s, %s, %s, %s,create_by,update_by) ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), version=VALUES(version), update_by=VALUES(update_by), del_flag='N', updated_by=update_by ",
                 (serialized, next_version, operator, operator),
             )
             cursor.execute(
-                "INSERT INTO godp_strategy_config_version "
-                "(config_key, version, config_json, action, create_by, update_by) "
-                "VALUES ('tag_taxonomy', %s, %s, '保存', %s, %s)",
+                "INSERT INTO godp_strategy_config_version (config_key,version,config_json,action,create_by,update_by,created_by,updated_by) VALUES ('tag_taxonomy', %s, %s, '保存', %s, %s,create_by,update_by)",
                 (next_version, serialized, operator, operator),
             )
             tags = active_tag_names(next_items)
@@ -281,10 +273,7 @@ def claim_topic_label_job(topic_id: str, lease_seconds: int = 1800) -> dict:
             lease_id = uuid4().hex.upper()
             expires_at = now + timedelta(seconds=lease_seconds)
             cursor.execute(
-                "UPDATE godp_topic_label_job SET status='processing', "
-                "attempt_count=attempt_count+1, lease_id=%s, lease_expires_at=%s, "
-                "taxonomy_version=%s, last_error='', update_by='label-worker' "
-                "WHERE topic_id=%s",
+                "UPDATE godp_topic_label_job SET status='processing', attempt_count=attempt_count+1, lease_id=%s, lease_expires_at=%s, taxonomy_version=%s, last_error='', update_by='label-worker', updated_by=update_by WHERE del_flag='N' AND topic_id=%s",
                 (lease_id, expires_at, config["version"], topic_id),
             )
             db.commit()
@@ -390,9 +379,7 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                                          tags_json, previous["version"])
                 if job and job["status"] != ("completed" if label_status == "已完成" else "failed"):
                     cursor.execute(
-                        "UPDATE godp_topic_label_job SET status=%s, completed_at=%s, "
-                        "lease_id=NULL, lease_expires_at=NULL, last_error=%s, "
-                        "update_by='label-worker' WHERE topic_id=%s",
+                        "UPDATE godp_topic_label_job SET status=%s, completed_at=%s, lease_id=NULL, lease_expires_at=NULL, last_error=%s, update_by='label-worker', updated_by=update_by WHERE del_flag='N' AND topic_id=%s",
                         ("completed" if label_status == "已完成" else "failed",
                          now if label_status == "已完成" else None,
                          payload.label_error if label_status == "失败" else "", topic_id),
@@ -407,15 +394,7 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                 raise ApplicationError(status_code=409, detail="普通选题标签任务已完成")
             version = previous["version"] + 1 if previous else 1
             cursor.execute(
-                "INSERT INTO godp_topic_tag "
-                "(topic_id, version, tags_json, tag_ids_json, taxonomy_version, t6_tag_id, "
-                "label_status, label_error) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE version=VALUES(version), tags_json=VALUES(tags_json), "
-                "tag_ids_json=VALUES(tag_ids_json), taxonomy_version=VALUES(taxonomy_version), "
-                "t6_tag_id=VALUES(t6_tag_id), "
-                "label_status=VALUES(label_status), label_error=VALUES(label_error), "
-                "update_by='system', del_flag='N'",
+                "INSERT INTO godp_topic_tag (topic_id, version, tags_json, tag_ids_json, taxonomy_version, t6_tag_id, label_status, label_error) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE version=VALUES(version), tags_json=VALUES(tags_json), tag_ids_json=VALUES(tag_ids_json), taxonomy_version=VALUES(taxonomy_version), t6_tag_id=VALUES(t6_tag_id), label_status=VALUES(label_status), label_error=VALUES(label_error), update_by='system', del_flag='N', updated_by=update_by ",
                 (topic_id, version, tags_json, ids_json, taxonomy_version, t6_tag_id,
                  label_status, payload.label_error),
             )
@@ -431,9 +410,7 @@ def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
                                      tags_json, version)
             if job:
                 cursor.execute(
-                    "UPDATE godp_topic_label_job SET status=%s, lease_id=NULL, "
-                    "lease_expires_at=NULL, completed_at=%s, last_error=%s, "
-                    "update_by='label-worker' WHERE topic_id=%s",
+                    "UPDATE godp_topic_label_job SET status=%s, lease_id=NULL, lease_expires_at=NULL, completed_at=%s, last_error=%s, update_by='label-worker', updated_by=update_by WHERE del_flag='N' AND topic_id=%s",
                     ("completed" if label_status == "已完成" else "failed",
                      now if label_status == "已完成" else None,
                      payload.label_error if label_status == "失败" else "", topic_id),

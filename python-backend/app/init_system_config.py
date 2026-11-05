@@ -46,16 +46,14 @@ def rename_legacy_config_keys(cursor) -> int:
         "DOUBAO_EMBEDDING_MODEL": ("EMBEDDING_MODEL_NAME", "全项目向量模型名称或接入点"),
     }
     for old_key, (new_key, name) in metadata.items():
-        cursor.execute("SELECT id FROM godp_system_config WHERE config_key=%s", (new_key,))
+        cursor.execute("SELECT id FROM godp_system_config WHERE del_flag='N' AND config_key=%s", (new_key,))
         canonical_exists = cursor.fetchone() is not None
         if canonical_exists:
             # A value already saved under the new key takes precedence.
             cursor.execute("DELETE FROM godp_system_config WHERE config_key=%s", (old_key,))
         else:
             cursor.execute(
-                "UPDATE godp_system_config SET config_key=%s,config_group='models',"
-                "config_name=%s,value_type='string',is_secret=0,update_by='config-key-migration' "
-                "WHERE config_key=%s",
+                "UPDATE godp_system_config SET config_key=%s,config_group='models',config_name=%s,value_type='string',is_secret=0,update_by='config-key-migration', updated_by=update_by WHERE del_flag='N' AND config_key=%s",
                 (new_key, name, old_key),
             )
             renamed += max(0, cursor.rowcount)
@@ -85,11 +83,7 @@ def seed_config(cursor, imported: dict[str, str] | None = None, *, migrate_legac
         spec = CATALOG.get(key) or Setting("custom", "历史迁移配置项", secret=bool(
             re.search(r"KEY|TOKEN|SECRET|PASSWORD", key)))
         cursor.execute(
-            "INSERT INTO godp_system_config "
-            "(config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by) "
-            "VALUES (%s,%s,%s,%s,%s,%s,'config-migration','config-migration') "
-            "ON DUPLICATE KEY UPDATE config_group=VALUES(config_group),config_name=VALUES(config_name),"
-            "value_type=VALUES(value_type),is_secret=VALUES(is_secret)",
+            "INSERT INTO godp_system_config (config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,'config-migration','config-migration',create_by,update_by) ON DUPLICATE KEY UPDATE config_group=VALUES(config_group),config_name=VALUES(config_name),value_type=VALUES(value_type),is_secret=VALUES(is_secret)",
             (key, spec.group, spec.name, value, spec.kind, int(spec.secret)),
         )
         inserted += int(cursor.rowcount == 1)
@@ -111,8 +105,7 @@ def restore_retained_ports(cursor) -> int:
     """Bring the four formerly retired listener settings back into service."""
     placeholders = ",".join("%s" for _ in PORT_KEYS)
     cursor.execute(
-        "UPDATE godp_system_config SET del_flag='N',enabled=1,version=version+1,"
-        "update_by='config-simplification' WHERE config_key IN (" + placeholders + ") "
+        "UPDATE godp_system_config SET del_flag='N',enabled=1,version=version+1,update_by='config-simplification', updated_by=update_by WHERE config_key IN (" + placeholders + ") "
         "AND (del_flag<>'N' OR enabled<>1)",
         PORT_KEYS,
     )

@@ -76,11 +76,7 @@ def select(mode):
     require_ready(values)
     spec = CATALOG["PLANNING_ENV"]
     with connection() as db, db.cursor() as cursor:
-        cursor.execute("INSERT INTO godp_system_config "
-                       "(config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by) "
-                       "VALUES('PLANNING_ENV',%s,%s,%s,'string',0,'environment-cli','environment-cli') "
-                       "ON DUPLICATE KEY UPDATE config_value=VALUES(config_value),enabled=1,del_flag='N',"
-                       "version=version+1,update_by='environment-cli'", (spec.group, spec.name, mode))
+        cursor.execute("INSERT INTO godp_system_config (config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by,created_by,updated_by) VALUES('PLANNING_ENV',%s,%s,%s,'string',0,'environment-cli','environment-cli',create_by,update_by) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value),enabled=1,del_flag='N',version=version+1,update_by='environment-cli', updated_by=update_by ", (spec.group, spec.name, mode))
         db.commit()
     clear_cache()
     return resolve(values)

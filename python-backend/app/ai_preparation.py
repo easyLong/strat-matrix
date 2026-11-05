@@ -146,11 +146,7 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
                       "publish_date": (start + timedelta(days=day - 1)).isoformat()}
                      for account in accounts for day in config.planning_days]
         cursor.execute(
-            "INSERT INTO godp_ai_preparation "
-            "(preparation_code, reservation_key, cycle_start, cycle_end, selection_json, "
-            "config_version, config_json, business_config_version, business_config_json, account_snapshot_json, slot_blueprint_json, "
-            "account_count, slot_count, create_by, update_by) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            'INSERT INTO godp_ai_preparation (preparation_code,reservation_key,cycle_start,cycle_end,selection_json,config_version,config_json,business_config_version,business_config_json,account_snapshot_json,slot_blueprint_json,account_count,slot_count,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,create_by,update_by)',
             (f"AI-PREP-{start:%Y%m%d}-{uuid4().hex[:12]}", reservation_key(start),
              start, start + timedelta(days=6), selection, config_version, config.model_dump_json(),
              business_config_version, business_json,
@@ -161,9 +157,7 @@ def create_preparation(cycle_start: date | None = None, account_ids: list[str] |
         for account in accounts:
             profile_json, fingerprint = profile_from_preparation(account, preparation_id, config_version)
             cursor.execute(
-                "INSERT INTO godp_ai_preparation_account "
-                "(preparation_id, account_id, config_version, source_updated_at, profile_hash, "
-                "snapshot_json, profile_json, create_by, update_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                'INSERT INTO godp_ai_preparation_account (preparation_id,account_id,config_version,source_updated_at,profile_hash,snapshot_json,profile_json,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,create_by,update_by)',
                 (preparation_id, account["account_id"], config_version,
                  post_time(account["source_updated_at"]).replace(tzinfo=None), fingerprint,
                  canonical_json(account), profile_json, ACTOR, ACTOR),
@@ -261,8 +255,7 @@ def advance_preparation(preparation_id: int, expected_version: int) -> dict:
         if row["status"] in ("cancelled", "expired"):
             raise HTTPException(409, "该准备记录已取消或过期")
         if row["cycle_end"] < today():
-            cursor.execute("UPDATE godp_ai_preparation SET status='expired', reservation_key=NULL, "
-                           "version=version+1, update_by=%s WHERE id=%s", (ACTOR, preparation_id))
+            cursor.execute("UPDATE godp_ai_preparation SET status='expired', reservation_key=NULL, version=version+1, update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s", (ACTOR, preparation_id))
             result = summary(select_preparation(cursor, preparation_id))
             db.commit()
             return result
@@ -312,14 +305,11 @@ def advance_preparation(preparation_id: int, expected_version: int) -> dict:
             snapshots = [freeze_topic(topic) for topic in selected]
             fingerprint = input_digest(frozen_input(row, accounts, snapshots))
             for topic in snapshots:
-                cursor.execute("INSERT INTO godp_ai_preparation_topic "
-                               "(preparation_id, topic_id, snapshot_json, create_by, update_by) "
-                               "VALUES (%s,%s,%s,%s,%s)",
+                cursor.execute('INSERT INTO godp_ai_preparation_topic (preparation_id,topic_id,snapshot_json,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,create_by,update_by)',
                                (preparation_id, topic["topic_id"], canonical_json(topic), ACTOR, ACTOR))
             report["topic_input_scope"] = "preparation_snapshot"
         cursor.execute(
-            "UPDATE godp_ai_preparation SET status=%s, version=version+1, attempt_count=attempt_count+1, "
-            "last_report_json=%s, topic_count=%s, input_hash=%s, frozen_at=%s, update_by=%s WHERE id=%s",
+            "UPDATE godp_ai_preparation SET status=%s, version=version+1, attempt_count=attempt_count+1, last_report_json=%s, topic_count=%s, input_hash=%s, frozen_at=%s, update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
             (state, canonical_json(report), len(selected) if frozen else 0, fingerprint,
              checked_at.replace(tzinfo=None) if frozen else None, ACTOR, preparation_id),
         )
@@ -336,8 +326,7 @@ def cancel_preparation(preparation_id: int, expected_version: int) -> dict:
         if row["version"] != expected_version:
             raise HTTPException(409, "准备记录已更新，请重新查询版本")
         if row["status"] != "cancelled":
-            cursor.execute("UPDATE godp_ai_preparation SET status='cancelled', reservation_key=NULL, "
-                           "version=version+1, update_by=%s WHERE id=%s", (ACTOR, preparation_id))
+            cursor.execute("UPDATE godp_ai_preparation SET status='cancelled', reservation_key=NULL, version=version+1, update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s", (ACTOR, preparation_id))
         result = summary(select_preparation(cursor, preparation_id))
         db.commit()
         return result

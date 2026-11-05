@@ -23,7 +23,7 @@ ACCOUNTS = ['E2E-ORD10-001','E2E-ORD10-003','E2E-ORD10-004','E2E-ORD10-005','E2E
 def quality_policy():
     with connection() as db,db.cursor() as cursor:
         base = json.loads(select_policy(cursor,int(get_setting('AUTO_PLANNING_POLICY_ID','0')))['document_json'])
-        cursor.execute("SELECT * FROM godp_matching_policy WHERE policy_key='v19-quality-test' ORDER BY version DESC LIMIT 1")
+        cursor.execute("SELECT * FROM godp_matching_policy WHERE del_flag='N' AND policy_key='v19-quality-test' ORDER BY version DESC LIMIT 1")
         latest = cursor.fetchone()
     base['implementation_key'] = IMPLEMENTATION_KEY
     base['quality'] = MatchingQualityOptions(minimum_adjacent_topic_fit=.80).model_dump(mode='json')

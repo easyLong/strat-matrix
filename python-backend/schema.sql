@@ -2,7 +2,12 @@
 -- No foreign keys, stored procedures, functions, or views.
 
 CREATE TABLE IF NOT EXISTS godp_system_config (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '系统配置记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     config_key VARCHAR(100) COLLATE utf8mb4_bin NOT NULL COMMENT '系统配置唯一键，区分大小写并沿用原配置项名称',
     config_group VARCHAR(64) NOT NULL COMMENT '配置分组：服务端口、模型名称或鉴权密钥',
     config_name VARCHAR(200) NOT NULL COMMENT '配置项中文名称及用途',
@@ -15,13 +20,17 @@ CREATE TABLE IF NOT EXISTS godp_system_config (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '配置创建人或初始化进程',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '配置最后修改人或更新进程',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '逻辑删除标志：N正常、Y删除',
     UNIQUE KEY uk_system_config_key (config_key),
     KEY idx_system_config_group (config_group, del_flag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服务监听地址与端口、模型名称及鉴权密钥配置；MySQL连接信息单独保存在.env';
 
 CREATE TABLE IF NOT EXISTS godp_strategy_config (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     config_key VARCHAR(64) NOT NULL COMMENT '配置项唯一标识',
     config_json LONGTEXT NOT NULL COMMENT '配置内容JSON',
     version INT NOT NULL DEFAULT 1 COMMENT '配置版本号',
@@ -29,7 +38,6 @@ CREATE TABLE IF NOT EXISTS godp_strategy_config (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_config_key (config_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营策划配置';
 
@@ -141,7 +149,12 @@ CREATE TABLE IF NOT EXISTS godp_slot_state (
 
 
 CREATE TABLE IF NOT EXISTS godp_topic_tag (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题标签记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户选题唯一编码',
     version INT NOT NULL DEFAULT 1 COMMENT '选题标签当前版本号',
     tags_json LONGTEXT NOT NULL COMMENT '选题标签关联内容JSON',
@@ -154,12 +167,16 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_tag_topic (topic_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本项目识别和维护的选题标签';
 
 CREATE TABLE IF NOT EXISTS godp_topic_tag_history (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '选题标签历史快照主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
     version INT NOT NULL COMMENT '该选题标签结果版本号',
     tags_json LONGTEXT NOT NULL COMMENT '该版本T1到T6标签名称快照JSON',
@@ -172,12 +189,16 @@ CREATE TABLE IF NOT EXISTS godp_topic_tag_history (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_tag_history_version (topic_id, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题标签名称与稳定ID的版本历史';
 
 CREATE TABLE IF NOT EXISTS godp_t6_tag (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'T6用户需求标签稳定ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     name VARCHAR(80) NOT NULL COMMENT 'T6用户需求标签名称',
     embedding_model VARCHAR(100) NULL COMMENT '该标签语义向量所使用的模型标识；旧标签无向量时为空',
     embedding_json LONGTEXT NULL COMMENT '该标签在对应模型下的语义向量JSON；旧标签无向量时为空',
@@ -185,13 +206,17 @@ CREATE TABLE IF NOT EXISTS godp_t6_tag (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_t6_tag_name (name),
     KEY idx_t6_tag_embedding_model (embedding_model)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题T6用户需求标签及语义向量库';
 
 CREATE TABLE IF NOT EXISTS godp_matching_policy (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配算法策略版本主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     policy_key VARCHAR(32) NOT NULL COMMENT '算法策略系列唯一标识',
     version INT NOT NULL COMMENT '同一策略系列的递增版本号',
     document_json LONGTEXT NOT NULL COMMENT '该版本明确规则、参数、输入依赖及验收样例完整JSON，不允许原地修改',
@@ -203,12 +228,16 @@ CREATE TABLE IF NOT EXISTS godp_matching_policy (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_matching_policy_version (policy_key, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配算法不可变策略版本与确认记录';
 
 CREATE TABLE IF NOT EXISTS godp_matching_task (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配内部执行任务主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     preparation_id BIGINT NOT NULL COMMENT '逻辑关联已冻结AI准备记录ID，无外键',
     preparation_version INT NOT NULL COMMENT '创建任务时绑定的AI准备记录版本',
     preparation_input_hash CHAR(64) NOT NULL COMMENT '创建任务时绑定的完整准备输入指纹',
@@ -230,13 +259,17 @@ CREATE TABLE IF NOT EXISTS godp_matching_task (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_matching_task_preparation (preparation_id),
     KEY idx_matching_task_queue (status, lease_expires_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配提案内部执行队列，不是运营策划批次';
 
 CREATE TABLE IF NOT EXISTS godp_matching_input_snapshot (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '匹配任务补充事实输入快照主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     task_id BIGINT NOT NULL COMMENT '逻辑关联第二版匹配任务ID，无外键；每个任务仅冻结一次',
     as_of DATETIME(6) NOT NULL COMMENT '历史窗口截止及补充输入首次读取时点，按UTC保存',
     snapshot_json LONGTEXT NOT NULL COMMENT '本任务冻结的兜底选题、历史事实及正式使用计数JSON，未知值不补零',
@@ -246,12 +279,16 @@ CREATE TABLE IF NOT EXISTS godp_matching_input_snapshot (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_matching_input_task (task_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通匹配任务不可变的兜底、历史和正式使用计数事实快照';
 
 CREATE TABLE IF NOT EXISTS godp_matching_attempt (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通内容匹配执行尝试主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     task_id BIGINT NOT NULL COMMENT '逻辑关联内部匹配任务ID，无外键',
     attempt_number INT NOT NULL COMMENT '同一执行任务的领取序号',
     lease_id CHAR(32) NOT NULL COMMENT '本次尝试唯一租约标识，旧尝试不能回写新尝试',
@@ -263,13 +300,17 @@ CREATE TABLE IF NOT EXISTS godp_matching_attempt (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_matching_attempt_sequence (task_id, attempt_number),
     UNIQUE KEY uk_matching_attempt_lease (lease_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通内容匹配每次领取、续租、异常与过期的执行历史';
 
 CREATE TABLE IF NOT EXISTS godp_account_mapping_rule (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '账号标准画像映射规则主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     mapping_version INT NOT NULL COMMENT '策划侧映射规则集版本，调用方显式指定',
     taxonomy_version INT NOT NULL COMMENT '规则绑定的选题标签词表版本',
     source_field VARCHAR(32) NOT NULL COMMENT '账号原始字段：persona人设、family_identity家庭身份、interests兴趣、gender性别、expression_style表达风格',
@@ -289,22 +330,33 @@ CREATE TABLE IF NOT EXISTS godp_account_mapping_rule (
     create_by VARCHAR(50) NOT NULL DEFAULT 'account-mapping-init' COMMENT '规则创建人或初始化进程',
     update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '规则最后修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'account-mapping-init' COMMENT '规则最后修改人或维护进程',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '逻辑删除标志：N正常、Y删除',
     UNIQUE KEY uk_account_mapping_target (mapping_version, taxonomy_version, source_field, source_value, target_dimension, target_node_id),
     KEY idx_account_mapping_version (mapping_version, taxonomy_version, status, del_flag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='策划侧账号原始信息到标准标签及需求能力的映射规则';
 
 CREATE TABLE IF NOT EXISTS godp_ai_preparation_progress (
-  preparation_id BIGINT NOT NULL PRIMARY KEY COMMENT '准备任务主键，关联账号和候选选题范围',
-  scope_json LONGTEXT NOT NULL COMMENT '任务固定输入范围及标签字典和模型版本，不含密钥',
-  scope_hash CHAR(64) NOT NULL COMMENT '任务输入范围的完整性校验指纹',
-  progress_json LONGTEXT NOT NULL COMMENT '分批准备阶段、分页断点、统计及等待原因',
-  create_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '任务准备进度创建时间',
-  update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '任务准备进度最后更新时间'
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    preparation_id BIGINT NOT NULL COMMENT '准备任务主键，关联账号和候选选题范围',
+    scope_json LONGTEXT NOT NULL COMMENT '任务固定输入范围及标签字典和模型版本，不含密钥',
+    scope_hash CHAR(64) NOT NULL COMMENT '任务输入范围的完整性校验指纹',
+    progress_json LONGTEXT NOT NULL COMMENT '分批准备阶段、分页断点、统计及等待原因',
+    create_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '任务准备进度创建时间',
+    update_time DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '任务准备进度最后更新时间',
+    UNIQUE KEY uk_audit_legacy_godp_ai_preparation_progress (preparation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='策划任务输入范围与分批准备进度';
 
 CREATE TABLE IF NOT EXISTS godp_ai_preparation (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '正式AI策划内部准备记录主键ID，与运营批次ID独立',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     preparation_code VARCHAR(64) NOT NULL COMMENT '内部准备记录唯一编码',
     reservation_key VARCHAR(64) NULL COMMENT '正式周期占用键；取消或过期后为空以释放周期',
     cycle_start DATE NOT NULL COMMENT '目标策划周期开始日期，必须为周一',
@@ -329,14 +381,18 @@ CREATE TABLE IF NOT EXISTS godp_ai_preparation (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_ai_preparation_code (preparation_code),
     UNIQUE KEY uk_ai_preparation_reservation (reservation_key),
     KEY idx_ai_preparation_cycle (cycle_start, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式AI策划结果生成前的内部输入准备与周期占用';
 
 CREATE TABLE IF NOT EXISTS godp_ai_preparation_account (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'AI准备记录账号画像主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     preparation_id BIGINT NOT NULL COMMENT '逻辑关联内部AI准备记录ID，无外键；不是运营批次ID',
     account_id VARCHAR(64) NOT NULL COMMENT '冻结的客户账号唯一编码',
     config_version INT NOT NULL COMMENT '本次账号画像使用的冻结运营配置版本',
@@ -353,13 +409,17 @@ CREATE TABLE IF NOT EXISTS godp_ai_preparation_account (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_ai_preparation_account (preparation_id, account_id),
     KEY idx_ai_preparation_account_jobs (status, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式AI准备记录独立冻结的账号画像及向量任务';
 
 CREATE TABLE IF NOT EXISTS godp_ai_preparation_topic (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'AI准备记录冻结选题主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     preparation_id BIGINT NOT NULL COMMENT '逻辑关联内部AI准备记录ID，无外键',
     topic_id VARCHAR(64) NOT NULL COMMENT '冻结的正式普通选题唯一编码',
     snapshot_json LONGTEXT NOT NULL COMMENT '冻结的来源、有效期、标签稳定ID及版本、画像指纹和向量完整JSON',
@@ -367,12 +427,16 @@ CREATE TABLE IF NOT EXISTS godp_ai_preparation_topic (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_ai_preparation_topic (preparation_id, topic_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='正式AI准备记录不可变的兼容普通选题输入快照';
 
 CREATE TABLE IF NOT EXISTS godp_account_profile (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '批次账号画像与向量记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     batch_id BIGINT NOT NULL COMMENT '逻辑关联策划批次ID，无外键；画像仅供该批次使用',
     account_id VARCHAR(64) NOT NULL COMMENT '参与该批次策划的客户账号唯一编码',
     config_version INT NOT NULL COMMENT '该批次冻结的策划配置版本号',
@@ -389,13 +453,17 @@ CREATE TABLE IF NOT EXISTS godp_account_profile (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_account_profile_batch_account (batch_id, account_id),
     KEY idx_account_profile_status (status, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='按策划批次冻结的账号画像与向量准备状态';
 
 CREATE TABLE IF NOT EXISTS godp_topic_profile (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题画像和向量记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
     content_hash CHAR(64) NOT NULL COMMENT '当前有效内容与T1到T6标签画像的SHA256指纹',
     tag_version INT NOT NULL COMMENT '画像使用的普通选题标签结果版本号',
@@ -409,13 +477,17 @@ CREATE TABLE IF NOT EXISTS godp_topic_profile (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_profile_topic (topic_id),
     KEY idx_topic_profile_status (status, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题当前内容版本的画像与向量准备状态';
 
 CREATE TABLE IF NOT EXISTS godp_topic_label_job (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '普通选题首次离线标签识别任务主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     topic_id VARCHAR(64) NOT NULL COMMENT '客户普通选题唯一编码',
     source_payload_json LONGTEXT NOT NULL COMMENT '当前待识别或已识别普通选题的计算输入快照JSON',
     source_updated_at DATETIME(6) NOT NULL COMMENT '当前计算输入的来源记录更新时间，按UTC保存',
@@ -430,7 +502,6 @@ CREATE TABLE IF NOT EXISTS godp_topic_label_job (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_topic_label_job_topic (topic_id),
     KEY idx_topic_label_job_status (status, lease_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通选题首次离线标签识别任务及重试状态';
@@ -466,7 +537,12 @@ CREATE TABLE IF NOT EXISTS godp_topic_official_usage_history (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='选题正式使用次数独立计数历史';
 
 CREATE TABLE IF NOT EXISTS godp_strategy_config_version (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '配置快照记录主键ID',
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志：N正常、Y删除',
+    created_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    updated_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     config_key VARCHAR(64) NOT NULL COMMENT '配置项唯一标识',
     version INT NOT NULL COMMENT '配置快照版本号',
     config_json LONGTEXT NOT NULL COMMENT '该版本完整配置内容JSON',
@@ -476,7 +552,6 @@ CREATE TABLE IF NOT EXISTS godp_strategy_config_version (
     create_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '创建人',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     update_by VARCHAR(50) NOT NULL DEFAULT 'system' COMMENT '修改人',
-    del_flag VARCHAR(1) NOT NULL DEFAULT 'N' COMMENT '删除标志',
     UNIQUE KEY uk_config_version (config_key, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营配置不可变历史快照';
 

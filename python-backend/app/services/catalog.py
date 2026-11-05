@@ -42,8 +42,7 @@ def attach_topic_labels(cursor, rows: list[dict]) -> None:
     if ordinary:
         placeholders = ",".join(["%s"] * len(ordinary))
         cursor.execute(
-            "SELECT topic_id, tags_json, label_status, version, taxonomy_version "
-            f"FROM godp_topic_tag WHERE topic_id IN ({placeholders}) AND del_flag='N'", ordinary,
+            "SELECT topic_id, tags_json, label_status, version, taxonomy_version FROM godp_topic_tag WHERE del_flag='N' AND topic_id IN (", ordinary,
         )
         saved = {row["topic_id"]: row for row in cursor.fetchall()}
     for row in rows:

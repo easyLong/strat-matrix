@@ -18,9 +18,7 @@ def main():
             if statement.strip():
                 cursor.execute(statement)
         spec = CATALOG['CONTENT_PRODUCTION_MODE']
-        cursor.execute("INSERT IGNORE INTO godp_system_config "
-                       '(config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by) '
-                       "VALUES ('CONTENT_PRODUCTION_MODE',%s,%s,%s,'string',0,'workflow-migration','workflow-migration')",
+        cursor.execute("INSERT IGNORE INTO godp_system_config (config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by,created_by,updated_by) VALUES ('CONTENT_PRODUCTION_MODE',%s,%s,%s,'string',0,'workflow-migration','workflow-migration',create_by,update_by)",
                        (spec.group, spec.name, spec.default))
         db.commit()
     print('Planning and content workflow schema ready')

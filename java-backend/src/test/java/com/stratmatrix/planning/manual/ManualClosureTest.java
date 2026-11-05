@@ -8,9 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.*;
-import org.junit.jupiter.api.*;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.junit.jupiter.api.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -30,6 +30,44 @@ class ManualClosureTest {
   ManualPlanningService service;
   Fixture fixture;
   ManualQueryService query;
+
+  @Test
+  void releasedReservationsRemainAuditableAndCanBeReusedWithoutAllowingAnActiveDuplicate() {
+    repo.reserve("2026-11-20", "AUDIT-A", 101L);
+    Long rowId = jdbc.queryForObject("SELECT id FROM godp_manual_reservation", Long.class);
+    assertTrue(repo.reserved("2026-11-20").contains("AUDIT-A"));
+    assertEquals(1, repo.release(101L));
+    assertTrue(repo.reserved("2026-11-20").isEmpty());
+    assertEquals(
+        "Y", jdbc.queryForObject("SELECT del_flag FROM godp_manual_reservation", String.class));
+    repo.reserve("2026-11-20", "AUDIT-A", 102L);
+    assertEquals(rowId, jdbc.queryForObject("SELECT id FROM godp_manual_reservation", Long.class));
+    assertEquals(
+        102L, jdbc.queryForObject("SELECT task_id FROM godp_manual_reservation", Long.class));
+    assertThrows(
+        org.springframework.dao.DataIntegrityViolationException.class,
+        () -> repo.reserve("2026-11-20", "AUDIT-A", 103L));
+  }
+
+  @Test
+  void deletedPlansCannotLeakIntoDetailListsReportsOrUsageCounts() {
+    jdbc.execute(
+        "CREATE ALIAS JSON_EXTRACT FOR 'com.stratmatrix.planning.query.ReadDatabaseFixture.extract'");
+    jdbc.execute(
+        "CREATE ALIAS JSON_UNQUOTE FOR 'com.stratmatrix.planning.query.ReadDatabaseFixture.unquote'");
+    task("2026-11-20");
+    service.advance();
+    assertEquals(2, repo.items().size());
+    assertEquals(
+        "trusted-actor",
+        jdbc.queryForObject("SELECT created_by FROM godp_manual_task", String.class));
+    assertNotNull(
+        jdbc.queryForObject("SELECT created_time FROM godp_manual_task", java.sql.Timestamp.class));
+    jdbc.update("UPDATE godp_planning_item SET del_flag='Y'");
+    assertTrue(repo.items().isEmpty());
+    assertEquals(0L, number(query.accounts(map("filters", map())), "total"));
+    assertTrue(repo.completedTopicUsage(Arrays.asList("T1", "T2")).isEmpty());
+  }
 
   static class Fixture extends ManualTestTransition
       implements ManualPorts.Source, ManualPorts.Computer {
@@ -112,7 +150,6 @@ class ManualClosureTest {
           "result",
           result(input, malformed));
     }
-
   }
 
   static Map<String, Object> result(Map<String, Object> input, boolean malformed) {
@@ -145,8 +182,7 @@ class ManualClosureTest {
     repo = new ManualRepository(ManualTestMapper.bind(ds), new DataSourceTransactionManager(ds));
     jdbc = new JdbcTemplate(ds);
     jdbc.execute("ALTER TABLE godp_manual_task ALTER COLUMN id RESTART WITH 1000000000000");
-    jdbc.execute(
-        "ALTER TABLE godp_planning_item ALTER COLUMN id RESTART WITH 1000000000000");
+    jdbc.execute("ALTER TABLE godp_planning_item ALTER COLUMN id RESTART WITH 1000000000000");
     fixture = new Fixture();
     service = new ManualPlanningService(repo, fixture, fixture, () -> "trusted-actor");
     query = new ManualQueryService(repo, service, fixture, fixture);
@@ -170,8 +206,9 @@ class ManualClosureTest {
   void exportsExcelWithTopicFieldsAndKeepsCsvCompatibility() throws Exception {
     Map<String, Object> created = task("2026-11-18");
     service.advance();
-    ManualExportService exporter = new ManualExportService(query,
-        new ManualItemService(repo, fixture, () -> "trusted-actor"), fixture);
+    ManualExportService exporter =
+        new ManualExportService(
+            query, new ManualItemService(repo, fixture, () -> "trusted-actor"), fixture);
     Map<String, Object> scope = map("mode", "batch", "batch_id", created.get("id"));
     Map<String, Object> excelScope = new LinkedHashMap<>(scope);
     excelScope.put("format", "xlsx");
@@ -325,14 +362,21 @@ class ManualClosureTest {
     service.advance();
     long itemId = number(repo.items().get(0), "id");
     ManualPorts.ContentObservation[] observation = {
-        new ManualPorts.ContentObservation(itemId, 1, "生产中", "", 1000L, "P1", "")};
-    ManualContentStatusService states = new ManualContentStatusService(repo,
-        candidates -> Collections.singletonList(observation[0]));
+      new ManualPorts.ContentObservation(itemId, 1, "生产中", "", 1000L, "P1", "")
+    };
+    ManualContentStatusService states =
+        new ManualContentStatusService(
+            repo, candidates -> Collections.singletonList(observation[0]));
     assertEquals(1L, number(states.reconcile(20), "applied"));
     assertEquals("ready", repo.items().get(0).get("production_status"));
-    assertEquals(409, assertThrows(BusinessException.class,
-        () -> new ManualItemService(repo, fixture, () -> "operator")
-            .replace(itemId, map("new_topic_id", "T2", "expected_version", 1))).status);
+    assertEquals(
+        409,
+        assertThrows(
+                BusinessException.class,
+                () ->
+                    new ManualItemService(repo, fixture, () -> "operator")
+                        .replace(itemId, map("new_topic_id", "T2", "expected_version", 1)))
+            .status);
     assertEquals("生成中", service.taskView(repo.tasks().get(0)).get("content_status"));
     assertEquals(1L, number(query.tasks(map("filters", map("contentStatus", "生成中"))), "total"));
 
@@ -344,8 +388,12 @@ class ManualClosureTest {
     assertEquals("C1", repo.items().get(0).get("content_id"));
     assertEquals(1L, number(service.taskView(repo.tasks().get(0)), "content_completed_count"));
     assertEquals(1L, number(query.batch(number(accepted, "id")), "content_completed_count"));
-    assertEquals(0L, number(new ManualContentStatusService(repo,
-        candidates -> Collections.emptyList()).reconcile(20), "applied"));
+    assertEquals(
+        0L,
+        number(
+            new ManualContentStatusService(repo, candidates -> Collections.emptyList())
+                .reconcile(20),
+            "applied"));
   }
 
   @Test
@@ -358,21 +406,27 @@ class ManualClosureTest {
     Map<String, Object> extra = new LinkedHashMap<>(first);
     extra.put("slot_id", "EXTRA-" + batchId + "-" + accountId);
     extra.put("publish_date", "2026-11-18");
-    long extraId = repo.saveItem(batchId, text(extra, "slot_id"), accountId,
-        text(extra, "publish_date"), write(extra));
+    long extraId =
+        repo.saveItem(
+            batchId, text(extra, "slot_id"), accountId, text(extra, "publish_date"), write(extra));
     assertEquals(3, repo.items().size());
     assertEquals(3, rows(query.batch(batchId).get("items")).size());
-    assertEquals(3, rows(query.plans(map("mode", "batch", "batch_id", batchId,
-        "unit", "records")).get("items")).size());
+    assertEquals(
+        3,
+        rows(query.plans(map("mode", "batch", "batch_id", batchId, "unit", "records")).get("items"))
+            .size());
     assertEquals(3, query.exportRecords(map("mode", "batch", "batch_id", batchId)).size());
-    assertThrows(org.springframework.dao.DuplicateKeyException.class,
-        () -> repo.saveItem(batchId, text(extra, "slot_id"), accountId,
-            "2026-11-20", write(extra)));
+    assertThrows(
+        org.springframework.dao.DuplicateKeyException.class,
+        () ->
+            repo.saveItem(batchId, text(extra, "slot_id"), accountId, "2026-11-20", write(extra)));
 
     final ManualPorts.ContentObservation[] observation = {
-        new ManualPorts.ContentObservation(firstId, 1, "已完成", "C1", 1000L, "P1", "")};
-    ManualContentStatusService states = new ManualContentStatusService(repo,
-        candidates -> Collections.singletonList(observation[0]));
+      new ManualPorts.ContentObservation(firstId, 1, "已完成", "C1", 1000L, "P1", "")
+    };
+    ManualContentStatusService states =
+        new ManualContentStatusService(
+            repo, candidates -> Collections.singletonList(observation[0]));
     states.reconcile(20);
     assertEquals(0L, number(query.batch(batchId), "content_completed_account_count"));
     observation[0] = new ManualPorts.ContentObservation(extraId, 1, "已完成", "C2", 2000L, "P2", "");

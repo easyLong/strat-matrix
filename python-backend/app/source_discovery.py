@@ -67,7 +67,7 @@ def discover_topics(*, topic_ids=None):
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             for topic in topics:
                 report['scanned'] += 1
-                cursor.execute('SELECT * FROM godp_topic_label_job WHERE topic_id=%s FOR UPDATE',
+                cursor.execute("SELECT * FROM godp_topic_label_job WHERE del_flag='N' AND topic_id=%s FOR UPDATE",
                                (topic['topic_id'],))
                 job = cursor.fetchone()
                 action = discovery_action(topic, job, config['version'])
@@ -76,31 +76,21 @@ def discover_topics(*, topic_ids=None):
                     continue
                 status = 'completed' if action == 'baseline' else 'pending'
                 cursor.execute(
-                    'INSERT INTO godp_topic_label_job '
-                    '(topic_id,source_payload_json,source_updated_at,status,taxonomy_version,completed_at,create_by,update_by) '
-                    "VALUES (%s,%s,%s,%s,%s,%s,'source-discovery','source-discovery') "
-                    'ON DUPLICATE KEY UPDATE source_payload_json=VALUES(source_payload_json),'
-                    'source_updated_at=VALUES(source_updated_at),status=VALUES(status),'
-                    'taxonomy_version=VALUES(taxonomy_version),completed_at=VALUES(completed_at),'
-                    "lease_id=NULL,lease_expires_at=NULL,last_error='',del_flag='N',update_by='source-discovery'",
+                    "INSERT INTO godp_topic_label_job (topic_id,source_payload_json,source_updated_at,status,taxonomy_version,completed_at,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,'source-discovery','source-discovery',create_by,update_by) ON DUPLICATE KEY UPDATE source_payload_json=VALUES(source_payload_json),source_updated_at=VALUES(source_updated_at),status=VALUES(status),taxonomy_version=VALUES(taxonomy_version),completed_at=VALUES(completed_at),lease_id=NULL,lease_expires_at=NULL,last_error='',del_flag='N',update_by='source-discovery', updated_by=update_by ",
                     (topic['topic_id'], topic['payload_json'], topic['source_updated_at'], status,
                      config['version'] if action == 'baseline' else None, now if action == 'baseline' else None))
                 report['baselined' if action == 'baseline' else 'enqueued'] += 1
                 if action == 'enqueue':
-                    cursor.execute("UPDATE godp_topic_tag SET label_status='处理中',label_error='',"
-                                   "update_by='source-discovery' WHERE topic_id=%s AND del_flag='N'",
+                    cursor.execute("UPDATE godp_topic_tag SET label_status='处理中',label_error='',update_by='source-discovery', updated_by=update_by WHERE topic_id=%s AND del_flag='N'",
                                    (topic['topic_id'],))
-                    cursor.execute("UPDATE godp_topic_profile SET status='pending',vector_json=NULL,"
-                                   "vector_model=NULL,completed_at=NULL,last_error='',update_by='source-discovery' "
-                                   "WHERE topic_id=%s AND del_flag='N'", (topic['topic_id'],))
+                    cursor.execute("UPDATE godp_topic_profile SET status='pending',vector_json=NULL,vector_model=NULL,completed_at=NULL,last_error='',update_by='source-discovery', updated_by=update_by WHERE topic_id=%s AND del_flag='N'", (topic['topic_id'],))
             scope_sql=(' AND topic_id IN ('+','.join(['%s']*len(topic_ids))+')' if topic_ids is not None else '')
             cursor.execute("SELECT topic_id FROM godp_topic_label_job WHERE del_flag='N' "
                            "AND status IN ('pending','failed','processing')"+scope_sql+" FOR UPDATE",topic_ids or ())
             for job in cursor.fetchall():
                 if topic_ids is not None and job['topic_id'] not in topic_ids:continue
                 if job['topic_id'] not in active:
-                    cursor.execute("UPDATE godp_topic_label_job SET status='cancelled',lease_id=NULL,"
-                                   "lease_expires_at=NULL,update_by='source-discovery' WHERE topic_id=%s",
+                    cursor.execute("UPDATE godp_topic_label_job SET status='cancelled',lease_id=NULL,lease_expires_at=NULL,update_by='source-discovery', updated_by=update_by WHERE del_flag='N' AND topic_id=%s",
                                    (job['topic_id'],))
                     report['cancelled'] += 1
             db.commit()

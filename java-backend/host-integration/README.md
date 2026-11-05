@@ -2,6 +2,8 @@
 
 本目录用于将业务模块合入现有Java工程，不另建一套行内Java应用。公共装配入口为`PlanningHostConfiguration`；它没有私有SDK、数据源创建、自动建表或定时器。部署参数示例见[inside-sample.properties](inside-sample.properties)。
 
+2026-11-05更新：业务库14张表统一六公共字段。迁入时包含`context/AuditFields`，可信UM须为1至50字符；存量表先发布[表结构V6及查询视图](../../docs/表结构公共字段规范与升级_2026-11-05.md)，再部署新版Mapper。原业务编号和唯一约束保留，宿主不必改前端接口对象。
+
 ## 1. 保留和迁入
 
 迁入`planning/{manual,config,auto,content,query,source,tasks,context,api,host}`和`planning/adapter/python`、`resources/mapper/*.xml`、经过发布审核的`resources/db`脚本。使用宿主父POM、依赖管理、启动类和配置来源。

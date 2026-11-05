@@ -114,15 +114,12 @@ def create_policy(payload: PolicyCreate) -> dict:
         if cursor.fetchone()["acquired"] != 1:
             raise HTTPException(409, "该算法策略正在更新")
         try:
-            cursor.execute("SELECT version FROM godp_matching_policy WHERE policy_key=%s "
-                           "ORDER BY version DESC LIMIT 1 FOR UPDATE", (payload.policy_key,))
+            cursor.execute("SELECT version FROM godp_matching_policy WHERE del_flag='N' AND policy_key=%s ORDER BY version DESC LIMIT 1 FOR UPDATE", (payload.policy_key,))
             latest = cursor.fetchone()
             version = latest["version"] if latest else 0
             if version != payload.expected_latest_version:
                 raise HTTPException(409, "算法策略已有新版本，请重新查询")
-            cursor.execute("INSERT INTO godp_matching_policy "
-                           "(policy_key,version,document_json,document_hash,create_by,update_by) "
-                           "VALUES (%s,%s,%s,%s,'matching-policy-api','matching-policy-api')",
+            cursor.execute("INSERT INTO godp_matching_policy (policy_key,version,document_json,document_hash,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,'matching-policy-api','matching-policy-api',create_by,update_by)",
                            (payload.policy_key, version + 1, encoded, digest(encoded)))
             row = select_policy(cursor, cursor.lastrowid)
             db.commit()
@@ -153,11 +150,10 @@ def confirm_policy(policy_id: int, payload: PolicyConfirmation, *, disable: bool
                 raise HTTPException(409, "已停用策略不可重新批准，请创建新版本")
             if problems := approval_errors(document):
                 raise HTTPException(409, {"message": "算法规则尚未完整确认", "problems": problems})
-            cursor.execute("UPDATE godp_matching_policy SET status='approved',confirmed_by=%s, "
-                           "confirmed_at=UTC_TIMESTAMP(6),update_by=%s WHERE id=%s",
+            cursor.execute("UPDATE godp_matching_policy SET status='approved',confirmed_by=%s, confirmed_at=UTC_TIMESTAMP(6),update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                            (payload.confirmed_by.strip(), payload.confirmed_by.strip(), policy_id))
         else:
-            cursor.execute("UPDATE godp_matching_policy SET status='disabled',update_by=%s WHERE id=%s",
+            cursor.execute("UPDATE godp_matching_policy SET status='disabled',update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                            (payload.confirmed_by.strip(), policy_id))
         row = select_policy(cursor, policy_id)
         db.commit()

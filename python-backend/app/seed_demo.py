@@ -125,12 +125,10 @@ def main() -> None:
     created_batches = 0
     created_items = 0
     with connection() as db, db.cursor() as cursor:
-        cursor.execute("SELECT id FROM godp_strategy_config WHERE config_key='operations'")
+        cursor.execute("SELECT id FROM godp_strategy_config WHERE del_flag='N' AND config_key='operations'")
         if not cursor.fetchone():
             cursor.execute(
-                "INSERT INTO godp_strategy_config "
-                "(config_key, config_json, version, create_by, update_by) "
-                "VALUES ('operations', %s, 1, 'demo-seed', 'demo-seed')",
+                "INSERT INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('operations', %s, 1, 'demo-seed', 'demo-seed',create_by,update_by)",
                 (StrategyConfig().model_dump_json(),),
             )
             created_config = 1

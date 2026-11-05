@@ -18,39 +18,38 @@
   <select id="current" resultMap="configRow">
     SELECT version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,
            updated_by,CAST(updated_at AS CHAR) AS updated_at
-    FROM godp_business_planning_config WHERE config_key='operations'
+    FROM godp_business_planning_config WHERE del_flag='N' AND config_key='operations'
   </select>
   <select id="version" resultMap="configRow">
     SELECT version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,
            action,source_version,created_by,CAST(created_at AS CHAR) AS created_at
     FROM godp_business_planning_config_version
-    WHERE config_key='operations' AND version=#{version}
+    WHERE del_flag='N' AND config_key='operations' AND version=#{version}
   </select>
-  <select id="lockedCurrent" resultMap="configRow">SELECT * FROM godp_business_planning_config WHERE config_key='operations' FOR UPDATE</select>
+  <select id="lockedCurrent" resultMap="configRow">SELECT * FROM godp_business_planning_config WHERE del_flag='N' AND config_key='operations' FOR UPDATE</select>
   <select id="versions" resultMap="configRow">
     SELECT version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,
            action,source_version,created_by,CAST(created_at AS CHAR) AS created_at
     FROM godp_business_planning_config_version
-    WHERE config_key='operations' ORDER BY version DESC LIMIT #{limit}
+    WHERE del_flag='N' AND config_key='operations' ORDER BY version DESC LIMIT #{limit}
   </select>
-  <insert id="insertCurrent">
+  <insert id="insertCurrent"><bind name="auditActor" value="@com.stratmatrix.planning.context.AuditFields@actor(_parameter, true)"/>
     INSERT INTO godp_business_planning_config
-      (config_key,version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,updated_by,updated_at)
+      (config_key,version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,updated_by,updated_at,created_by)
     VALUES ('operations',1,#{days},#{config.schedule_day},#{config.schedule_time},
-            #{config.marketing_max},#{config.hotspot_ratio},#{actor},CURRENT_TIMESTAMP(3))
+            #{config.marketing_max},#{config.hotspot_ratio},#{actor},CURRENT_TIMESTAMP(3),#{auditActor})
   </insert>
-  <update id="updateCurrent">
+  <update id="updateCurrent"><bind name="auditActor" value="@com.stratmatrix.planning.context.AuditFields@actor(_parameter, false)"/>
     UPDATE godp_business_planning_config SET version=version+1,planning_days=#{days},
       schedule_day=#{config.schedule_day},schedule_time=#{config.schedule_time},
       marketing_max=#{config.marketing_max},hotspot_ratio=#{config.hotspot_ratio},
       updated_by=#{actor},updated_at=CURRENT_TIMESTAMP(3)
-    WHERE config_key='operations' AND version=#{expected}
+    WHERE del_flag='N' AND config_key='operations' AND version=#{expected}
   </update>
-  <insert id="insertVersion">
+  <insert id="insertVersion"><bind name="auditActor" value="@com.stratmatrix.planning.context.AuditFields@actor(_parameter, true)"/>
     INSERT INTO godp_business_planning_config_version
-      (config_key,version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,
-       action,source_version,created_by,created_at)
+      (config_key,version,planning_days,schedule_day,schedule_time,marketing_max,hotspot_ratio,action,source_version,created_by,created_at,updated_by)
     VALUES ('operations',#{version},#{days},#{config.schedule_day},#{config.schedule_time},
-            #{config.marketing_max},#{config.hotspot_ratio},#{action},#{sourceVersion},#{actor},CURRENT_TIMESTAMP(3))
+            #{config.marketing_max},#{config.hotspot_ratio},#{action},#{sourceVersion},#{actor},CURRENT_TIMESTAMP(3),#{auditActor})
   </insert>
 </mapper>

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.stratmatrix.planning.config.ConfigReleaseMapper">
- <select id="current" resultType="map">SELECT * FROM godp_planning_config_release WHERE status='completed' ORDER BY version DESC LIMIT 1</select>
- <select id="pending" resultType="map">SELECT * FROM godp_planning_config_release WHERE status='pending' ORDER BY version LIMIT 1</select>
- <select id="locked" resultType="map">SELECT * FROM godp_planning_config_release WHERE command_id=#{id} FOR UPDATE</select>
- <select id="version" resultType="map">SELECT * FROM godp_planning_config_release WHERE version=#{version} AND status='completed'</select>
- <select id="versions" resultType="map">SELECT * FROM godp_planning_config_release WHERE status='completed' ORDER BY version DESC LIMIT #{limit}</select>
- <insert id="insert">INSERT INTO godp_planning_config_release(command_id,version,active_version,status,request_hash,config_json,business_expected_version,algorithm_version,created_by,created_at,action,source_version) VALUES(#{id},#{version},#{version},#{status},#{hash},#{config},#{businessVersion},#{algorithmVersion},#{actor},#{time},#{action},#{sourceVersion})</insert>
- <update id="complete">UPDATE godp_planning_config_release SET status='completed',algorithm_version=#{algorithmVersion},config_json=#{configJson},last_error='' WHERE command_id=#{id} AND status='pending'</update>
- <update id="reject">UPDATE godp_planning_config_release SET status='rejected',active_version=NULL,last_error=#{error} WHERE command_id=#{id} AND status='pending'</update>
+ <select id="current" resultType="map">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND status='completed' ORDER BY version DESC LIMIT 1</select>
+ <select id="pending" resultType="map">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND status='pending' ORDER BY version LIMIT 1</select>
+ <select id="locked" resultType="map">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND command_id=#{id} FOR UPDATE</select>
+ <select id="version" resultType="map">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND version=#{version} AND status='completed'</select>
+ <select id="versions" resultType="map">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND status='completed' ORDER BY version DESC LIMIT #{limit}</select>
+ <insert id="insert"><bind name="auditActor" value="@com.stratmatrix.planning.context.AuditFields@actor(_parameter, true)"/>INSERT INTO godp_planning_config_release(command_id,version,active_version,status,request_hash,config_json,business_expected_version,algorithm_version,created_by,created_at,action,source_version,updated_by) VALUES(#{id},#{version},#{version},#{status},#{hash},#{config},#{businessVersion},#{algorithmVersion},#{actor},#{time},#{action},#{sourceVersion},#{auditActor})</insert>
+ <update id="complete"><bind name="auditActor" value="@com.stratmatrix.planning.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_planning_config_release SET status='completed',algorithm_version=#{algorithmVersion},config_json=#{configJson},last_error='',updated_by=#{auditActor} WHERE del_flag='N' AND command_id=#{id} AND status='pending'</update>
+ <update id="reject"><bind name="auditActor" value="@com.stratmatrix.planning.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_planning_config_release SET status='rejected',active_version=NULL,last_error=#{error},updated_by=#{auditActor} WHERE del_flag='N' AND command_id=#{id} AND status='pending'</update>
 </mapper>

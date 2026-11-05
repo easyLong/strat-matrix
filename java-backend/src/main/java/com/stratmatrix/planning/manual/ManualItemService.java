@@ -86,6 +86,7 @@ public class ManualItemService {
                   "labels")) item.put(key, topic.get(key));
           item.put("topic_snapshot", topic);
           item.put("result_version", version);
+          item.put("updated_by", actor.current());
           item.put("id", id);
           repo.updateItemVersion(id, write(item), version);
           long adjustmentId = repo.saveAdjustment(id, write(adjustment));

@@ -242,9 +242,7 @@ def save_snapshot(cursor, task_id: int, snapshot: dict) -> str:
     encoded = canonical_json(snapshot)
     fingerprint = digest(encoded)
     as_of = datetime.fromisoformat(snapshot["as_of"]).astimezone(timezone.utc).replace(tzinfo=None)
-    cursor.execute("INSERT INTO godp_matching_input_snapshot "
-                   "(task_id,as_of,snapshot_json,snapshot_hash,counts_json,create_by,update_by) "
-                   "VALUES (%s,%s,%s,%s,%s,'matching-task-api','matching-task-api')",
+    cursor.execute("INSERT INTO godp_matching_input_snapshot (task_id,as_of,snapshot_json,snapshot_hash,counts_json,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,'matching-task-api','matching-task-api',create_by,update_by)",
                    (task_id, as_of, encoded, fingerprint, canonical_json(snapshot_counts(snapshot))))
     return fingerprint
 

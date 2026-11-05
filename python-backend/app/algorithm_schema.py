@@ -38,6 +38,8 @@ def definitions(root=ROOT):
 
 
 def column_specs(ddl):
+    from .table_audit import validate_ddl
+    validate_ddl(ddl)
     columns = {}
     for line in ddl.splitlines()[1:]:
         found = re.match(r'\s*([a-z][a-z0-9_]*)\s+', line)

@@ -135,9 +135,7 @@ def save_topic_vector(topic_id: str, payload: TopicVectorResult) -> dict:
                             "content_hash": current_hash, "tag_version": current["tag_version"]}
                 raise ApplicationError(status_code=409, detail="当前画像向量已就绪，不支持覆盖")
             cursor.execute(
-                "UPDATE godp_topic_profile SET status=%s, vector_json=%s, "
-                "vector_model=%s, last_error=%s, completed_at=%s, "
-                "update_by='vector-worker' WHERE topic_id=%s",
+                "UPDATE godp_topic_profile SET status=%s, vector_json=%s, vector_model=%s, last_error=%s, completed_at=%s, update_by='vector-worker', updated_by=update_by WHERE del_flag='N' AND topic_id=%s",
                 (payload.status, vector_json, vector_model,
                  payload.error.strip() if payload.status == "failed" else "",
                  now if payload.status == "ready" else None, topic_id),

@@ -54,7 +54,7 @@ def run(cycle, account_ids, policy_id, output):
         evaluation = read_evaluation(select_task(cursor, task['task_id']))
         preparation = select_preparation(cursor, identity)
         accounts = json.loads(preparation['account_snapshot_json'])
-        cursor.execute('SELECT topic_id,snapshot_json FROM godp_ai_preparation_topic WHERE preparation_id=%s',
+        cursor.execute("SELECT topic_id,snapshot_json FROM godp_ai_preparation_topic WHERE del_flag='N' AND preparation_id=%s",
                        (identity,))
         topics = {t['topic_id']: json.loads(t['snapshot_json']) for t in cursor.fetchall()}
     report['accounts'] = {a['account_id']: a for a in accounts}

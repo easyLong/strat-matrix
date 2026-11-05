@@ -106,34 +106,22 @@ def seed_config(cursor, now: datetime) -> None:
     }
     config_json = json.dumps(config, ensure_ascii=False, separators=(",", ":"))
     cursor.execute(
-        "INSERT INTO godp_strategy_config (config_key, config_json, version, create_by, update_by) "
-        "VALUES ('operations', %s, 3, 'demo-seed', 'demo-seed') "
-        "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), version=3, "
-        "create_by='demo-seed', update_by='demo-seed', del_flag='N'",
+        "INSERT INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('operations', %s, 3, 'demo-seed', 'demo-seed',create_by,update_by) ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), version=3, create_by='demo-seed', update_by='demo-seed', del_flag='N', updated_by=update_by ",
         (config_json,),
     )
     for module in ("marketing", "strategy"):
         for version, action, operator in ((1, "迁移基线", "运营小王"), (2, "保存", "运营小冰"), (3, "保存", "运营小冰")):
             cursor.execute(
-                "INSERT INTO godp_strategy_config_version "
-                "(config_key, version, config_json, action, create_by, update_by) "
-                "VALUES (%s, %s, %s, %s, %s, 'demo-seed') "
-                "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), action=VALUES(action), "
-                "create_by=VALUES(create_by), update_by='demo-seed', del_flag='N'",
+                "INSERT INTO godp_strategy_config_version (config_key,version,config_json,action,create_by,update_by,created_by,updated_by) VALUES (%s, %s, %s, %s, %s, 'demo-seed',create_by,update_by) ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), action=VALUES(action), create_by=VALUES(create_by), update_by='demo-seed', del_flag='N', updated_by=update_by ",
                 (module, version, config_json, action, operator),
             )
     cursor.execute(
-        "INSERT INTO godp_strategy_config_version "
-        "(config_key, version, config_json, action, create_by, update_by) "
-        "VALUES ('operations', 3, %s, '保存', 'demo-seed', 'demo-seed') "
-        "ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), action='保存', del_flag='N'",
+        "INSERT INTO godp_strategy_config_version (config_key,version,config_json,action,create_by,update_by,created_by,updated_by) VALUES ('operations', 3, %s, '保存', 'demo-seed', 'demo-seed',create_by,update_by) ON DUPLICATE KEY UPDATE config_json=VALUES(config_json), action='保存', del_flag='N'",
         (config_json,),
     )
     tags_json = json.dumps(normalize_taxonomy(TAGS), ensure_ascii=False, separators=(",", ":"))
     cursor.execute(
-        "INSERT IGNORE INTO godp_strategy_config "
-        "(config_key, config_json, version, create_by, update_by) "
-        "VALUES ('tag_taxonomy', %s, 1, 'demo-seed', 'demo-seed')",
+        "INSERT IGNORE INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('tag_taxonomy', %s, 1, 'demo-seed', 'demo-seed',create_by,update_by)",
         (tags_json,),
     )
 
@@ -240,8 +228,7 @@ def seed_accounts_topics(cursor, now: datetime) -> list[str]:
     )
     for topic_id, tags in zip(topic_ids, (["非营销", "流量", "本地生活", "年轻客群", "周末休闲"], ["营销", "转化", "金融理财", "年轻客群", "餐饮"], ["非营销", "转化", "金融理财", "家庭客群", "居家"], ["非营销", "流量", "金融理财", "职场人群", "通勤"], ["非营销", "流量", "健康生活", "宝妈客群", "家庭消费"], ["非营销", "流量", "数码科技", "年轻客群", "通勤"], ["营销", "转化", "本地生活", "家庭客群", "餐饮"], ["非营销", "流量", "本地生活", "年轻客群", "出行"])):
         cursor.execute(
-            "INSERT INTO godp_topic_tag (topic_id, version, tags_json, create_by, update_by) VALUES (%s, 1, %s, 'demo-seed', 'demo-seed') "
-            "ON DUPLICATE KEY UPDATE tags_json=VALUES(tags_json), update_by='demo-seed', del_flag='N'",
+            "INSERT INTO godp_topic_tag (topic_id,version,tags_json,create_by,update_by,created_by,updated_by) VALUES (%s, 1, %s, 'demo-seed', 'demo-seed',create_by,update_by) ON DUPLICATE KEY UPDATE tags_json=VALUES(tags_json), update_by='demo-seed', del_flag='N', updated_by=update_by ",
             (topic_id, json.dumps({f"T{i + 1}": [tag] for i, tag in enumerate(tags)}, ensure_ascii=False)),
         )
     return account_ids, topic_ids

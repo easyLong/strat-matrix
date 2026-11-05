@@ -39,14 +39,11 @@ def _record_commit_failure(pipeline_id: int, expected_version: int,
         # The transition into waiting already counted this attempt in the base
         # orchestrator. Failure only closes that same attempt.
         cursor.execute(
-            "UPDATE godp_planning_stage_run SET status='failed',"
-            "detail_json=%s,error_code=%s,error_message=%s,started_at=COALESCE(started_at,%s),"
-            "finished_at=%s,version=version+1,update_by=%s WHERE id=%s",
+            "UPDATE godp_planning_stage_run SET status='failed',detail_json=%s,error_code=%s,error_message=%s,started_at=COALESCE(started_at,%s),finished_at=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
             (detail, error.code[:64], error.message[:500], now, now, ACTOR, stage["id"]),
         )
         cursor.execute(
-            "UPDATE godp_planning_pipeline_run SET status='failed',current_stage='result_commit',"
-            "last_error_code=%s,last_error_message=%s,version=version+1,update_by=%s WHERE id=%s",
+            "UPDATE godp_planning_pipeline_run SET status='failed',current_stage='result_commit',last_error_code=%s,last_error_message=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
             (error.code[:64], error.message[:500], ACTOR, pipeline_id),
         )
         db.commit()

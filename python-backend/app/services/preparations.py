@@ -120,9 +120,7 @@ def save_preparation_account_vector(preparation_id: int, account_id: str, payloa
                 raise ApplicationError(409, "匹配输入已冻结，不支持改变账号向量")
             else:
                 cursor.execute(
-                    "UPDATE godp_ai_preparation_account SET status=%s, vector_json=%s, vector_model=%s, "
-                    "last_error=%s, completed_at=IF(%s='ready',UTC_TIMESTAMP(6),NULL), "
-                    "update_by='account-vector-worker' WHERE id=%s",
+                    "UPDATE godp_ai_preparation_account SET status=%s, vector_json=%s, vector_model=%s, last_error=%s, completed_at=IF(%s='ready',UTC_TIMESTAMP(6),NULL), update_by='account-vector-worker', updated_by=update_by WHERE del_flag='N' AND id=%s",
                     (payload.status, vector_json, model, payload.error.strip() if payload.status == "failed" else "",
                      payload.status, profile["id"]),
                 )

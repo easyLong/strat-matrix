@@ -32,7 +32,7 @@ def put_config(config: StrategyConfig,
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
-                "SELECT version FROM godp_strategy_config WHERE config_key='operations' FOR UPDATE"
+                "SELECT version FROM godp_strategy_config WHERE del_flag='N' AND config_key='operations' FOR UPDATE"
             )
             previous = cursor.fetchone()
             current_version = previous["version"] if previous else 0
@@ -41,25 +41,20 @@ def put_config(config: StrategyConfig,
             version = current_version + 1
             if previous:
                 cursor.execute(
-                    "UPDATE godp_strategy_config SET config_json=%s, version=%s, "
-                    "update_by=%s, del_flag='N' WHERE config_key='operations'",
+                    "UPDATE godp_strategy_config SET config_json=%s, version=%s, update_by=%s, del_flag='N', updated_by=update_by WHERE config_key='operations'",
                     (config.model_dump_json(), version, operator),
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO godp_strategy_config "
-                    "(config_key, config_json, version, create_by, update_by) "
-                    "VALUES ('operations', %s, 1, %s, %s)",
+                    "INSERT INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('operations', %s, 1, %s, %s,create_by,update_by)",
                     (config.model_dump_json(), operator, operator),
                 )
             cursor.execute(
-                "INSERT INTO godp_strategy_config_version "
-                "(config_key, version, config_json, action, create_by, update_by) "
-                "VALUES ('operations', %s, %s, '保存', %s, %s)",
+                "INSERT INTO godp_strategy_config_version (config_key,version,config_json,action,create_by,update_by,created_by,updated_by) VALUES ('operations', %s, %s, '保存', %s, %s,create_by,update_by)",
                 (version, config.model_dump_json(), operator, operator),
             )
             cursor.execute(
-                "SELECT version, update_time FROM godp_strategy_config WHERE config_key=%s",
+                "SELECT version, update_time FROM godp_strategy_config WHERE del_flag='N' AND config_key=%s",
                 ("operations",),
             )
             row = cursor.fetchone()
@@ -99,7 +94,7 @@ def restore_config(version: int,
             if not source:
                 raise ApplicationError(status_code=404, detail="配置快照不存在")
             cursor.execute(
-                "SELECT version FROM godp_strategy_config WHERE config_key='operations' FOR UPDATE"
+                "SELECT version FROM godp_strategy_config WHERE del_flag='N' AND config_key='operations' FOR UPDATE"
             )
             current = cursor.fetchone()
             if not current:
@@ -109,18 +104,15 @@ def restore_config(version: int,
             next_version = current["version"] + 1
             config = StrategyConfig.model_validate_json(source["config_json"])
             cursor.execute(
-                "UPDATE godp_strategy_config SET config_json=%s, version=%s, "
-                "update_by=%s WHERE config_key='operations'",
+                "UPDATE godp_strategy_config SET config_json=%s, version=%s, update_by=%s, updated_by=update_by WHERE del_flag='N' AND config_key='operations'",
                 (source["config_json"], next_version, operator),
             )
             cursor.execute(
-                "INSERT INTO godp_strategy_config_version "
-                "(config_key, version, config_json, action, source_version, create_by, update_by) "
-                "VALUES ('operations', %s, %s, '恢复', %s, %s, %s)",
+                "INSERT INTO godp_strategy_config_version (config_key,version,config_json,action,source_version,create_by,update_by,created_by,updated_by) VALUES ('operations', %s, %s, '恢复', %s, %s, %s,create_by,update_by)",
                 (next_version, source["config_json"], version, operator, operator),
             )
             cursor.execute(
-                "SELECT update_time FROM godp_strategy_config WHERE config_key='operations'"
+                "SELECT update_time FROM godp_strategy_config WHERE del_flag='N' AND config_key='operations'"
             )
             updated_at = cursor.fetchone()["update_time"]
             db.commit()
@@ -160,8 +152,7 @@ def change_module(module: str, expected_version: int | None,
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute(
-                "SELECT config_json, version FROM godp_strategy_config "
-                "WHERE config_key='operations' FOR UPDATE"
+                "SELECT config_json, version FROM godp_strategy_config WHERE del_flag='N' AND config_key='operations' FOR UPDATE"
             )
             current = cursor.fetchone()
             aggregate_version = current["version"] if current else 0
@@ -169,8 +160,7 @@ def change_module(module: str, expected_version: int | None,
                 raise ApplicationError(status_code=409, detail="配置已被其他操作更新，请刷新后重试")
             base = StrategyConfig.model_validate_json(current["config_json"]) if current else StrategyConfig()
             cursor.execute(
-                "SELECT COALESCE(MAX(version), 0) AS version FROM godp_strategy_config_version "
-                "WHERE config_key=%s", (module,),
+                "SELECT COALESCE(MAX(version), 0) AS version FROM godp_strategy_config_version WHERE del_flag='N' AND config_key=%s", (module,),
             )
             module_version = cursor.fetchone()["version"] + 1
             if source_version is not None:
@@ -191,26 +181,21 @@ def change_module(module: str, expected_version: int | None,
             snapshot = merged.model_dump_json()
             if current:
                 cursor.execute(
-                    "UPDATE godp_strategy_config SET config_json=%s, version=%s, "
-                    "update_by=%s, del_flag='N' WHERE config_key='operations'",
+                    "UPDATE godp_strategy_config SET config_json=%s, version=%s, update_by=%s, del_flag='N', updated_by=update_by WHERE config_key='operations'",
                     (snapshot, aggregate_version + 1, operator),
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO godp_strategy_config "
-                    "(config_key, config_json, version, create_by, update_by) "
-                    "VALUES ('operations', %s, 1, %s, %s)", (snapshot, operator, operator),
+                    "INSERT INTO godp_strategy_config (config_key,config_json,version,create_by,update_by,created_by,updated_by) VALUES ('operations', %s, 1, %s, %s,create_by,update_by)", (snapshot, operator, operator),
                 )
             cursor.execute(
-                "INSERT INTO godp_strategy_config_version "
-                "(config_key, version, config_json, action, source_version, create_by, update_by) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                'INSERT INTO godp_strategy_config_version (config_key,version,config_json,action,source_version,create_by,update_by,created_by,updated_by) VALUES (%s, %s, %s, %s, %s, %s, %s,create_by,update_by)',
                 (module, module_version, snapshot,
                  '恢复' if source_version is not None else '保存', source_version,
                  operator, operator),
             )
             cursor.execute(
-                "SELECT update_time FROM godp_strategy_config WHERE config_key='operations'"
+                "SELECT update_time FROM godp_strategy_config WHERE del_flag='N' AND config_key='operations'"
             )
             updated_at = cursor.fetchone()["update_time"]
             db.commit()

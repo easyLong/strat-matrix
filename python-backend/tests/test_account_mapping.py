@@ -177,7 +177,8 @@ class MappingInitializationTests(unittest.TestCase):
     def test_all_table_fields_have_chinese_comments(self):
         sql = (Path(__file__).resolve().parents[1] / 'schema.sql').read_text(encoding='utf-8')
         columns = column_definitions(sql)['godp_account_mapping_rule']
-        self.assertEqual(len(columns), 21)
+        self.assertEqual(len(columns), 25)
+        self.assertTrue({'id','del_flag','created_by','updated_by','created_time','updated_time'} <= set(columns))
         self.assertIn('策划侧', table_descriptions(sql)['godp_account_mapping_rule'])
 
 

@@ -330,7 +330,7 @@ def build_pipeline_proposal(pipeline_id: int, business_config: dict,
             _check_business_config(json.loads(pipeline['business_config_json']), business_config)
             if pipeline['business_config_version'] != business_config_version:
                 raise ResultCommitError('business_config_mismatch', '提案请求与Pipeline业务配置版本不同')
-        cursor.execute("SELECT * FROM godp_algorithm_proposal WHERE pipeline_id=%s FOR UPDATE",
+        cursor.execute("SELECT * FROM godp_algorithm_proposal WHERE del_flag='N' AND pipeline_id=%s FOR UPDATE",
                        (pipeline_id,))
         saved = cursor.fetchone()
         if saved:
@@ -393,7 +393,7 @@ def acknowledge_pipeline_proposal(pipeline_id: int, proposal_hash: str,
         pipeline = _pipeline_row(cursor, pipeline_id, lock=True)
         if pipeline.get("commit_owner", "python") != "java" or pipeline["status"] == "cancelled":
             raise HTTPException(409, "该Pipeline不能确认Java提交")
-        cursor.execute("SELECT * FROM godp_algorithm_proposal WHERE pipeline_id=%s FOR UPDATE",
+        cursor.execute("SELECT * FROM godp_algorithm_proposal WHERE del_flag='N' AND pipeline_id=%s FOR UPDATE",
                        (pipeline_id,))
         proposal = cursor.fetchone()
         if not proposal or proposal["proposal_hash"] != proposal_hash:
@@ -408,25 +408,17 @@ def acknowledge_pipeline_proposal(pipeline_id: int, proposal_hash: str,
                 raise HTTPException(409, "Pipeline已有不同的提交凭证")
             stage = _stage_row(cursor, pipeline_id, "result_commit", lock=True)
             now = datetime.now(timezone.utc).replace(tzinfo=None)
-            cursor.execute("UPDATE godp_matching_task SET production_batch_id=%s,"
-                           "operations_committed_at=%s,version=version+1,update_by=%s "
-                           "WHERE id=%s AND production_batch_id IS NULL AND status='evaluated'",
+            cursor.execute("UPDATE godp_matching_task SET production_batch_id=%s,operations_committed_at=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s AND production_batch_id IS NULL AND status='evaluated'",
                            (business_batch_id, now, ACTOR, pipeline["matching_task_id"]))
             if cursor.rowcount != 1:
                 raise HTTPException(409, "匹配任务已经变化，不能关联业务批次")
             detail = canonical_json({"commit_owner": "java", "proposal_hash": proposal_hash,
                                      "business_batch_id": business_batch_id})
-            cursor.execute("UPDATE godp_planning_stage_run SET status='succeeded',"
-                           "backend_type='java_business_batch',backend_id=%s,detail_json=%s,"
-                           "error_code='',error_message='',started_at=COALESCE(started_at,%s),"
-                           "finished_at=%s,version=version+1,update_by=%s WHERE id=%s",
+            cursor.execute("UPDATE godp_planning_stage_run SET status='succeeded',backend_type='java_business_batch',backend_id=%s,detail_json=%s,error_code='',error_message='',started_at=COALESCE(started_at,%s),finished_at=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                            (business_batch_id, detail, now, now, ACTOR, stage["id"]))
-            cursor.execute("UPDATE godp_planning_pipeline_run SET status='succeeded',"
-                           "current_stage=NULL,production_batch_id=%s,last_error_code='',"
-                           "last_error_message='',version=version+1,update_by=%s WHERE id=%s",
+            cursor.execute("UPDATE godp_planning_pipeline_run SET status='succeeded',current_stage=NULL,production_batch_id=%s,last_error_code='',last_error_message='',version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                            (business_batch_id, ACTOR, pipeline_id))
-            cursor.execute("UPDATE godp_algorithm_proposal SET business_batch_id=%s,accepted_at=%s "
-                           "WHERE pipeline_id=%s", (business_batch_id, now, pipeline_id))
+            cursor.execute("UPDATE godp_algorithm_proposal SET business_batch_id=%s,accepted_at=%s WHERE del_flag='N' AND pipeline_id=%s", (business_batch_id, now, pipeline_id))
             db.commit()
         return {"status": "accepted", "pipeline_id": pipeline_id,
                 "proposal_hash": proposal_hash, "business_batch_id": business_batch_id,
@@ -538,8 +530,7 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
 
             committed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             cursor.execute(
-                "UPDATE godp_matching_task SET production_batch_id=%s,operations_committed_at=%s,"
-                "version=version+1,update_by=%s WHERE id=%s",
+                "UPDATE godp_matching_task SET production_batch_id=%s,operations_committed_at=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                 (batch_id, committed_at, ACTOR, task["id"]),
             )
             detail = canonical_json({
@@ -555,15 +546,11 @@ def commit_pipeline_result(pipeline_id: int, expected_version: int) -> dict:
                 "conversion_slots": plan["conversion_slots"],
             })
             cursor.execute(
-                "UPDATE godp_planning_stage_run SET status='succeeded',backend_type='planning_batch',"
-                "backend_id=%s,detail_json=%s,error_code='',error_message='',"
-                "started_at=COALESCE(started_at,%s),finished_at=%s,version=version+1,update_by=%s WHERE id=%s",
+                "UPDATE godp_planning_stage_run SET status='succeeded',backend_type='planning_batch',backend_id=%s,detail_json=%s,error_code='',error_message='',started_at=COALESCE(started_at,%s),finished_at=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                 (batch_id, detail, committed_at, committed_at, ACTOR, commit_stage["id"]),
             )
             cursor.execute(
-                "UPDATE godp_planning_pipeline_run SET status='succeeded',current_stage=NULL,"
-                "production_batch_id=%s,last_error_code='',last_error_message='',version=version+1,update_by=%s "
-                "WHERE id=%s",
+                "UPDATE godp_planning_pipeline_run SET status='succeeded',current_stage=NULL,production_batch_id=%s,last_error_code='',last_error_message='',version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
                 (batch_id, ACTOR, pipeline_id),
             )
             db.commit()

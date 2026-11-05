@@ -44,7 +44,7 @@ def accept(payload):
     with connection() as db, db.cursor() as cursor:
         cursor.execute('INSERT IGNORE INTO godp_manual_compute(request_id,input_hash,input_json) VALUES(%s,%s,%s)',
                        (payload.request_id, digest, frozen))
-        cursor.execute('SELECT input_hash FROM godp_manual_compute WHERE request_id=%s', (payload.request_id,))
+        cursor.execute("SELECT input_hash FROM godp_manual_compute WHERE del_flag='N' AND request_id=%s", (payload.request_id,))
         if cursor.fetchone()['input_hash'] != digest:
             raise HTTPException(409, '同一计算任务不可更改输入')
         db.commit()
@@ -53,7 +53,7 @@ def accept(payload):
 
 def read(request_id):
     with connection() as db, db.cursor() as cursor:
-        cursor.execute('SELECT request_id,status,result_json,error_message FROM godp_manual_compute WHERE request_id=%s', (request_id,))
+        cursor.execute("SELECT request_id,status,result_json,error_message FROM godp_manual_compute WHERE del_flag='N' AND request_id=%s", (request_id,))
         row = cursor.fetchone()
     if not row:
         raise HTTPException(404, '计算任务不存在')
@@ -66,13 +66,11 @@ def run_once(limit=10):
     for _ in range(limit):
         token = uuid4().hex
         with connection() as db, db.cursor() as cursor:
-            cursor.execute("SELECT request_id,input_json FROM godp_manual_compute WHERE status='pending' "
-                           "OR (status='running' AND lease_until<UTC_TIMESTAMP(6)) ORDER BY created_at LIMIT 1 FOR UPDATE")
+            cursor.execute("SELECT request_id,input_json FROM godp_manual_compute WHERE del_flag='N' AND (status='pending' OR (status='running' AND lease_until<UTC_TIMESTAMP(6))) ORDER BY created_at LIMIT 1 FOR UPDATE")
             row = cursor.fetchone()
             if not row:
                 break
-            cursor.execute("UPDATE godp_manual_compute SET status='running',execution_token=%s,"
-                           'lease_until=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 2 MINUTE) WHERE request_id=%s', (token,row['request_id']))
+            cursor.execute("UPDATE godp_manual_compute SET status='running',execution_token=%s,lease_until=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 2 MINUTE) WHERE del_flag='N' AND request_id=%s", (token,row['request_id']))
             db.commit()
         try:
             result = allocate(ComputeInput.model_validate_json(row['input_json']))
@@ -80,9 +78,7 @@ def run_once(limit=10):
         except Exception:
             result, status, error = None, 'failed', '冻结输入无法完成计算，请检查账号和选题'
         with connection() as db, db.cursor() as cursor:
-            cursor.execute('UPDATE godp_manual_compute SET status=%s,result_json=%s,error_message=%s,'
-                           'execution_token=NULL,lease_until=NULL WHERE request_id=%s AND execution_token=%s '
-                           'AND lease_until>UTC_TIMESTAMP(6)',
+            cursor.execute("UPDATE godp_manual_compute SET status=%s,result_json=%s,error_message=%s,execution_token=NULL,lease_until=NULL WHERE del_flag='N' AND request_id=%s AND execution_token=%s AND lease_until>UTC_TIMESTAMP(6)",
                            (status,json.dumps(result,ensure_ascii=False),error,row['request_id'],token))
             db.commit()
         completed += 1

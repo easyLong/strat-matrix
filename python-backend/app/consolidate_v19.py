@@ -58,7 +58,7 @@ def migrate(*, apply: bool = False) -> dict:
     if plan['active_legacy_leases']:
         raise ValueError('仍有旧算法有效租约，请先停止旧服务并等待租约结束后迁移')
     with connection() as db, db.cursor() as cursor:
-        cursor.execute("SELECT * FROM godp_matching_policy WHERE policy_key=%s ORDER BY version DESC LIMIT 1", (POLICY_KEY,))
+        cursor.execute("SELECT * FROM godp_matching_policy WHERE del_flag='N' AND policy_key=%s ORDER BY version DESC LIMIT 1", (POLICY_KEY,))
         latest = cursor.fetchone()
     fingerprint = digest(canonical_json(document.model_dump()))
     if latest and latest['document_hash'] == fingerprint and latest['status'] in ('draft', 'approved'):
@@ -82,11 +82,9 @@ def migrate(*, apply: bool = False) -> dict:
         row = cursor.fetchone()
         if not row or int(row['config_value']) != plan['bound_policy_id']:
             raise ValueError('自动策划绑定已变化，请重新检查后迁移')
-        cursor.execute("UPDATE godp_system_config SET config_value=%s,config_name=%s,version=version+1,update_by=%s "
-                       "WHERE config_key='AUTO_PLANNING_POLICY_ID' AND config_value<>%s",
+        cursor.execute("UPDATE godp_system_config SET config_value=%s,config_name=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND config_key='AUTO_PLANNING_POLICY_ID' AND config_value<>%s",
                        (str(target), CATALOG['AUTO_PLANNING_POLICY_ID'].name, ACTOR, str(target)))
-        cursor.execute("UPDATE godp_matching_policy SET status='disabled',update_by=%s WHERE del_flag='N' "
-                       "AND status IN ('draft','approved') AND JSON_UNQUOTE(JSON_EXTRACT(document_json,'$.implementation_key'))<>%s",
+        cursor.execute("UPDATE godp_matching_policy SET status='disabled',update_by=%s, updated_by=update_by WHERE del_flag='N' AND status IN ('draft','approved') AND JSON_UNQUOTE(JSON_EXTRACT(document_json,'$.implementation_key'))<>%s",
                        (ACTOR, IMPLEMENTATION_KEY))
         retired = cursor.rowcount
         # End obsolete pending work explicitly. Keep immutable result/evidence rows.

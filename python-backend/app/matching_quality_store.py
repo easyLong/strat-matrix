@@ -44,7 +44,7 @@ class QualityRuntime:
         for offset in range(0,len(keys),100):
             group=keys[offset:offset+100]
             with connection() as db,db.cursor() as cursor:
-                cursor.execute('SELECT cache_key,result_json,result_hash FROM godp_matching_ai_cache WHERE cache_key IN ('
+                cursor.execute("SELECT cache_key,result_json,result_hash FROM godp_matching_ai_cache WHERE del_flag='N' AND cache_key IN ("
                                +','.join(['%s']*len(group))+')',group)
                 rows=cursor.fetchall()
             pending={k:None for k in group}
@@ -58,7 +58,7 @@ class QualityRuntime:
         key, _ = self.key(kind, payload)
         if refresh or key not in self._memory:
             with connection() as db, db.cursor() as cursor:
-                cursor.execute('SELECT result_json,result_hash FROM godp_matching_ai_cache WHERE cache_key=%s', (key,))
+                cursor.execute("SELECT result_json,result_hash FROM godp_matching_ai_cache WHERE del_flag='N' AND cache_key=%s", (key,))
                 self._memory[key]=cursor.fetchone()
         value=self._decode(self._memory[key])
         if value is None:return None
@@ -112,7 +112,7 @@ def save_quality_report(job, report, status, phase):
 
 def read_quality_report(task_id):
     with connection() as db, db.cursor() as cursor:
-        cursor.execute('SELECT status,phase,report_json,report_hash FROM godp_matching_quality_run WHERE task_id=%s', (task_id,))
+        cursor.execute("SELECT status,phase,report_json,report_hash FROM godp_matching_quality_run WHERE del_flag='N' AND task_id=%s", (task_id,))
         row = cursor.fetchone()
     if not row: return None
     report = json.loads(row['report_json'])

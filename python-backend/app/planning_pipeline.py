@@ -268,10 +268,7 @@ def create_pipeline(cycle_start: date | None, account_ids: list[str] | None, pol
                 db.rollback()
                 return pipeline_summary(existing, stages, reused=True)
             cursor.execute(
-                "INSERT INTO godp_planning_pipeline_run "
-                "(pipeline_code,reservation_key,schema_version,cycle_start,cycle_end,selection_json,"
-                "selection_hash,policy_id,planning_scope,production_provider,commit_owner,business_config_version,business_config_json,status,current_stage,create_by,update_by) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending','source_ingestion',%s,%s)",
+                "INSERT INTO godp_planning_pipeline_run (pipeline_code,reservation_key,schema_version,cycle_start,cycle_end,selection_json,selection_hash,policy_id,planning_scope,production_provider,commit_owner,business_config_version,business_config_json,status,current_stage,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending','source_ingestion',%s,%s,create_by,update_by)",
                 (f"PIPE-{start:%Y%m%d}-{uuid4().hex[:12]}", reservation, PIPELINE_SCHEMA_VERSION,
                  start, start + timedelta(days=6), selection_json, selection_hash, policy_id,
                  planning_scope, production_provider, commit_owner, business_config_version, business_json, ACTOR, ACTOR),
@@ -279,9 +276,7 @@ def create_pipeline(cycle_start: date | None, account_ids: list[str] | None, pol
             pipeline_id = cursor.lastrowid
             for spec in STAGES:
                 cursor.execute(
-                    "INSERT INTO godp_planning_stage_run "
-                    "(pipeline_id,stage_key,stage_order,status,create_by,update_by) "
-                    "VALUES (%s,%s,%s,'pending',%s,%s)",
+                    "INSERT INTO godp_planning_stage_run (pipeline_id,stage_key,stage_order,status,create_by,update_by,created_by,updated_by) VALUES (%s,%s,%s,'pending',%s,%s,create_by,update_by)",
                     (pipeline_id, spec.key, spec.order, ACTOR, ACTOR),
                 )
             row = select_pipeline(cursor, pipeline_id)
@@ -413,9 +408,7 @@ def _apply_stage(cursor, row: dict, desired: dict, now: datetime) -> dict:
     started_at = row["started_at"] or (now if active else None)
     finished_at = now if desired["status"] in (STAGE_SUCCEEDED, STAGE_FAILED, STAGE_CANCELLED) else None
     cursor.execute(
-        "UPDATE godp_planning_stage_run SET status=%s,attempt_count=%s,backend_type=%s,backend_id=%s,"
-        "detail_json=%s,error_code=%s,error_message=%s,started_at=%s,finished_at=%s,"
-        "version=version+1,update_by=%s WHERE id=%s",
+        "UPDATE godp_planning_stage_run SET status=%s,attempt_count=%s,backend_type=%s,backend_id=%s,detail_json=%s,error_code=%s,error_message=%s,started_at=%s,finished_at=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
         (desired["status"], attempt_count, desired["backend_type"], desired["backend_id"], detail_json,
          desired["error_code"], desired["error_message"], started_at, finished_at, ACTOR, row["id"]),
     )
@@ -450,9 +443,7 @@ def _persist(pipeline_id: int, expected_version: int, desired: dict[str, dict], 
         prep = preparation_id if preparation_id is not None else row["preparation_id"]
         task = matching_task_id if matching_task_id is not None else row["matching_task_id"]
         cursor.execute(
-            "UPDATE godp_planning_pipeline_run SET status=%s,current_stage=%s,preparation_id=%s,"
-            "matching_task_id=%s,last_error_code=%s,last_error_message=%s,version=version+1,update_by=%s "
-            "WHERE id=%s",
+            "UPDATE godp_planning_pipeline_run SET status=%s,current_stage=%s,preparation_id=%s,matching_task_id=%s,last_error_code=%s,last_error_message=%s,version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
             (status, current_stage, prep, task, error_code, error_message, ACTOR, pipeline_id),
         )
         saved = select_pipeline(cursor, pipeline_id)
@@ -604,8 +595,7 @@ def cancel_pipeline(pipeline_id: int, expected_version: int) -> dict:
                 detail=_json(item["detail_json"]), error_code="pipeline_cancelled",
                 error_message="Pipeline已取消"), now)
         cursor.execute(
-            "UPDATE godp_planning_pipeline_run SET status='cancelled',reservation_key=NULL,current_stage=NULL,"
-            "last_error_code='',last_error_message='',version=version+1,update_by=%s WHERE id=%s",
+            "UPDATE godp_planning_pipeline_run SET status='cancelled',reservation_key=NULL,current_stage=NULL,last_error_code='',last_error_message='',version=version+1,update_by=%s, updated_by=update_by WHERE del_flag='N' AND id=%s",
             (ACTOR, pipeline_id),
         )
         saved = select_pipeline(cursor, pipeline_id)

@@ -54,13 +54,13 @@
  </sql>
  <select id="taskCount" resultType="long">SELECT COUNT(*) FROM godp_planning_task_read <include refid="taskScope"/></select>
  <select id="tasks" resultType="map">SELECT * FROM godp_planning_task_read <include refid="taskScope"/> ORDER BY created_at DESC,row_key DESC LIMIT #{limit} OFFSET #{offset}</select>
- <select id="latestOperations" resultType="map">SELECT a.* FROM godp_planning_adjustment a JOIN (SELECT item_id,MAX(id) latest FROM godp_planning_adjustment WHERE item_id IN <foreach collection="ids" item="i" open="(" close=")" separator=",">#{i}</foreach> GROUP BY item_id) x ON a.id=x.latest</select>
- <select id="failures" resultType="map">SELECT f.payload FROM godp_planning_failure f JOIN godp_planning_batch_read b ON b.id=f.batch_id WHERE 1=1
+ <select id="latestOperations" resultType="map">SELECT a.* FROM godp_planning_adjustment a JOIN (SELECT item_id,MAX(id) latest FROM godp_planning_adjustment WHERE del_flag='N' AND item_id IN <foreach collection="ids" item="i" open="(" close=")" separator=",">#{i}</foreach> GROUP BY item_id) x ON a.id=x.latest WHERE a.del_flag='N'</select>
+ <select id="failures" resultType="map">SELECT f.payload FROM godp_planning_failure f JOIN godp_planning_batch_read b ON b.id=f.batch_id WHERE f.del_flag='N'
   <if test="mode=='batch'">AND b.id=#{batchId}</if>
   <if test="mode=='account'">AND f.account_key=#{accountId}</if>
   <if test="mode=='cycle'">AND b.week_start BETWEEN #{cycleStart} AND #{cycleEnd}</if>
   <if test="planType!=null and planType!='' and planType!='all'">AND b.plan_type=#{planType}</if>
   ORDER BY b.created_at DESC,f.account_key
  </select>
- <select id="archivedTask" resultType="map">SELECT payload FROM godp_planning_task_archive WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.task_code'))=#{code} ORDER BY created_at DESC LIMIT 1</select>
+ <select id="archivedTask" resultType="map">SELECT payload FROM godp_planning_task_archive WHERE del_flag='N' AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.task_code'))=#{code} ORDER BY created_at DESC LIMIT 1</select>
 </mapper>
