@@ -295,6 +295,26 @@ class BankSourceFactsTest {
   }
 
   @Test
+  void marketingTopicsUseActivityOrProductFactsWithoutTitleOrOutline() {
+    BankSourceMapping mapper = new BankSourceMapping();
+    Map<String, Object> row = topic();
+    row.remove("选题标题");
+    row.remove("选题大纲");
+    assertEquals(502, assertThrows(BusinessException.class, () -> mapper.topic(row)).status);
+    row.put("选题类型", "营销");
+    row.put("关联活动ID", "ACT-001");
+    row.put("关联活动", "测试活动");
+    row.put("活动所属组织", "测试二级分行");
+    row.put("关联产品ID", "PRODUCT-001");
+    Map<String, Object> result = mapper.topic(row);
+    assertEquals("", result.get("title"));
+    assertEquals("", result.get("outline"));
+    assertEquals("ACT-001", result.get("related_activity_id"));
+    assertEquals("测试二级分行", result.get("activity_organization"));
+    assertEquals("PRODUCT-001", result.get("related_product_id"));
+  }
+
+  @Test
   void topicFiltersAndValidityAreChecked() {
     BankSourceFacts f = new BankSourceFacts(new Reader());
     for (Map<String, Object> q :

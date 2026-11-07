@@ -1,5 +1,6 @@
 """Java-owned generation rules, frozen once per business task."""
 
+from typing import Annotated, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .account_profile import canonical_json
@@ -12,6 +13,10 @@ class BusinessConfigSnapshot(BaseModel):
     schedule_time: str = Field(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')
     marketing_max: int = Field(ge=0, le=10000, strict=True)
     hotspot_ratio: int = Field(ge=0, le=100, strict=True)
+    content_production_lead_days: dict[
+        Literal['ordinary', 'marketing', 'hotspot'],
+        Annotated[int, Field(ge=0, le=365, strict=True)] | None,
+    ] | None = None
 
     @field_validator('planning_days')
     @classmethod
@@ -27,7 +32,8 @@ def normalize_business_snapshot(version=None, config=None):
     if type(version) is not int or version < 1 or not isinstance(config, dict):
         raise HTTPException(422, 'Java业务配置版本和快照必须同时提供')
     try:
-        normalized = BusinessConfigSnapshot.model_validate(config).model_dump()
+        # New optional metadata must not change old frozen payload fingerprints.
+        normalized = BusinessConfigSnapshot.model_validate(config).model_dump(exclude_unset=True)
     except ValueError as exc:
         raise HTTPException(422, 'Java业务配置快照无效') from exc
     return version, canonical_json(normalized)

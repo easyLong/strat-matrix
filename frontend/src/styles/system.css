@@ -278,4 +278,15 @@ tbody tr.selected b { color: var(--primary-600); }
   .query-filter-grid[data-query-filters] > .query-filter-tail > :is(label, select) { --filter-field-width: 100%; }
 }
 @media(max-width:1100px) { .account-week-calendar { grid-template-columns: repeat(7,minmax(160px,1fr)); width: max-content; min-width: 100%; } }
+
+/* One button radius across page, scoped component and portal overlay styles. */
+button,
+[role='button'],
+input[type='button'],
+input[type='submit'],
+input[type='reset'],
+.btn,
+.el-button {
+  border-radius: var(--radius-button, 12px) !important;
+}
 .vue2-component-root { display: contents; }

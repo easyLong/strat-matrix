@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .security import require_integration_token
 from ..jobs.runtime import BackgroundExecutor
+from ..model_capacity import model_api_admission
 
 
 @asynccontextmanager
@@ -40,7 +41,7 @@ def executor_for(request):
     return executor
 
 
-@router.post('/wakeup', status_code=202)
+@router.post('/wakeup', status_code=202, dependencies=[Depends(model_api_admission)])
 def wakeup(payload: WakeupInput, request: Request):
     try:
         return executor_for(request).wake(payload.jobs)

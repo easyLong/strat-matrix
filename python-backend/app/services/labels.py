@@ -286,6 +286,19 @@ def claim_topic_label_job(topic_id: str, lease_seconds: int = 1800) -> dict:
             "topic": json.loads(job["source_payload_json"]),
             "source_updated_at": job["source_updated_at"].isoformat() + "Z"}
 
+def defer_topic_label_job(topic_id: str, lease_id: str) -> dict:
+    """Return a rate-limited claim without changing any formal labels."""
+    if not isinstance(lease_id,str) or not 1 <= len(lease_id) <= 64:
+        raise ApplicationError(422,'打标租约标识无效')
+    with connection() as db, db.cursor() as cursor:
+        cursor.execute("UPDATE godp_topic_label_job SET status='pending',lease_id=NULL,lease_expires_at=NULL,"
+            "last_error='',update_by='label-worker',updated_by=update_by WHERE del_flag='N' "
+            "AND topic_id=%s AND lease_id=%s AND status='processing'",(topic_id,lease_id))
+        deferred=cursor.rowcount==1
+        db.commit()
+    return {'topic_id':topic_id,'deferred':deferred}
+
+
 def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
     if not topic_id or topic_id.startswith("DEMO-"):
         raise ApplicationError(status_code=422, detail="无效的选题 ID")

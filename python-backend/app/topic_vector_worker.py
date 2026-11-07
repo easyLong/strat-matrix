@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from .topic_profile import normalized_topic_vector
 from .system_config import get_setting
-from .worker_http import StaleResult, WorkerError, json_request
+from .worker_http import StaleResult, WorkerError, WorkerRateLimited, json_request
 from .doubao_labeling import DoubaoConfigurationError, read_embedding_config
 
 
@@ -36,6 +36,8 @@ def process_job(job: dict, api_url: str, api_token: str, model_timeout: int = 18
             "vector_model": response["vector_model"].strip(),
         }, headers=headers, stale_conflict=True)
         LOG.info("选题 %s 当前画像向量已就绪", topic_id)
+    except WorkerRateLimited:
+        LOG.info('选题 %s 模型限流，保持待处理',topic_id)
     except StaleResult:
         LOG.info("选题 %s 画像版本已变化或结果已由其他进程提交", topic_id)
     except (WorkerError, KeyError) as exc:

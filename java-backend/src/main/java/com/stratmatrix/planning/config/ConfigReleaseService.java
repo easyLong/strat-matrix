@@ -18,14 +18,16 @@ public final class ConfigReleaseService {
   public static final Set<String> BUSINESS =
       new HashSet<>(
           Arrays.asList(
-              "planning_days", "schedule_day", "schedule_time", "marketing_max", "hotspot_ratio"));
+              "planning_days", "schedule_day", "schedule_time", "marketing_max", "hotspot_ratio",
+              "content_production_lead_days"));
   private final ConfigReleaseMapper releases;
   private final BusinessPlanningConfigService business;
   private final BusinessConfigDatabase db;
   private final AlgorithmConfigPort algorithm;
   private final TransactionTemplate tx;
   private final ObjectMapper json =
-      new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+      new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+          .configure(DeserializationFeature.ACCEPT_FLOAT_AS_INT, false);
 
   public ConfigReleaseService(
       ConfigReleaseMapper releases,

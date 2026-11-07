@@ -2,6 +2,7 @@
 import { defineComponent, type PropType } from '../../compat/composition';
 import { computed } from '../../compat/composition';
 import TaxonomyPanel from '../TaxonomyPanel.vue';
+import ProductionTimingConfig from './ProductionTimingConfig.vue';
 import type { StrategyConfig } from '../../types';
 import type { TagTaxonomyItem } from '../../api';
 import { lifecycleRuleSummary } from '../../ui/lifecycleRules';
@@ -21,7 +22,7 @@ export default defineComponent({
             lifecycleRules
         };
     },
-    components: {TaxonomyPanel}
+    components: {TaxonomyPanel, ProductionTimingConfig}
 });
 </script>
 <template>
@@ -35,6 +36,7 @@ export default defineComponent({
         <div class="config-glance-item"><span>营销内容周上限</span><b>{{ config.marketing_max }} 条 / 营销账号</b></div>
         <div class="config-glance-item"><span>热点选题占比</span><b>{{ config.hotspot_ratio }}%</b></div>
       </div>
+      <ProductionTimingConfig :value="config.content_production_lead_days" readonly />
     </div>
   </section>
   <section class="card config-overview-card">

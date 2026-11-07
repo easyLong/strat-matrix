@@ -127,7 +127,17 @@ public class PlanningApiErrors {
       if (detail instanceof String && ((String) detail).length() <= 500) message = (String) detail;
     } catch (Exception ignored) {
     }
-    return render(error.getRawStatusCode(), "UPSTREAM_REJECTED", message);
+    ResponseEntity<?> result = render(error.getRawStatusCode(), "UPSTREAM_REJECTED", message);
+    if (error.getRawStatusCode() == 429) {
+      String value = error.getResponseHeaders() == null ? null : error.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+      int seconds = value != null && value.matches("[0-9]{1,3}") ? Integer.parseInt(value) : 2;
+      HttpHeaders headers = new HttpHeaders();
+      headers.putAll(result.getHeaders());
+      headers.set(HttpHeaders.RETRY_AFTER, Integer.toString(Math.max(1, Math.min(120, seconds))));
+      headers.setCacheControl("no-store");
+      return ResponseEntity.status(result.getStatusCode()).headers(headers).body(result.getBody());
+    }
+    return result;
   }
 
   @ExceptionHandler(Exception.class)

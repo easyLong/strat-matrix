@@ -13,6 +13,10 @@ class StaleResult(WorkerError):
     pass
 
 
+class WorkerRateLimited(WorkerError):
+    pass
+
+
 def json_request(url: str, method: str, *, body: dict | None = None,
                  headers: dict[str, str] | None = None, timeout: int = 30,
                  stale_conflict: bool = False) -> dict:
@@ -26,6 +30,9 @@ def json_request(url: str, method: str, *, body: dict | None = None,
         with urlopen(request, timeout=timeout) as response:
             result = json.load(response)
     except HTTPError as exc:
+        if exc.code == 429:
+            exc.close()
+            raise WorkerRateLimited('模型服务繁忙，等待后续重试') from None
         if stale_conflict and exc.code in (404, 409):
             raise StaleResult(f"HTTP {exc.code}") from exc
         # Do not copy URLs, tokens, response bodies or raw model inputs into

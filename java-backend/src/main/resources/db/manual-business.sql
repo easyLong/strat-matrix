@@ -93,7 +93,8 @@ CREATE TABLE IF NOT EXISTS godp_planning_item (
     version INT NOT NULL DEFAULT 1 COMMENT '结果乐观锁版本',
     UNIQUE KEY uq_batch_slot(batch_id,slot_id),
     KEY idx_result_account_date(account_id,publish_date),
-    KEY idx_result_batch_date(batch_id,publish_date)
+    KEY idx_result_batch_date(batch_id,publish_date),
+    KEY idx_result_content_flow_scan(content_status,id)
 ) ENGINE=InnoDB AUTO_INCREMENT=1000000000000 DEFAULT CHARSET=utf8mb4 COMMENT='Java普通人工策划正式明细';
 CREATE TABLE IF NOT EXISTS godp_planning_adjustment (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',

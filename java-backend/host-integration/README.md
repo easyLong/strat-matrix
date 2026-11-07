@@ -83,6 +83,7 @@ Map<String, Object> result = tasks.run(
 | `MARKETING` | 自动营销槽位引用 | 按返回游标分页 |
 | `MARKETING_PLACEMENT` | 人工营销过审内容确定日期、形成正式策划 | 未得到内容事实时保持等待，不伪造完成 |
 | `CONTENT_STATUS` | 普通/热点内容状态对账 | 按返回游标分页 |
+| `CONTENT_FLOW` | 到达T−x生产日期后，将已定题、待生产的账号策划结果写入现有内容流水 | 每天由宿主触发3次；需先提供`ContentFlowWriter`并启用`planning.content-flow.enabled`，未接入时返回503 |
 | `MARKETING_STATUS` | 营销需求生产/分配进度对账 | 按返回游标分页 |
 | `ALGORITHM` | 唤醒Python的`planning`与`manual_compute`角色 | `accepted`仅代表受理信号，业务完成必须查持久化任务 |
 

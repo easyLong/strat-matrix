@@ -41,5 +41,17 @@ class PlanningTaskServiceTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> tasks.run(PlanningTaskService.Kind.HOTSPOT, now, 0, 0));
+    assertEquals(503, assertThrows(BusinessException.class,
+        () -> tasks.run(PlanningTaskService.Kind.CONTENT_FLOW, now, 100, 0)).status);
+  }
+
+  @Test
+  void hostCanRunContentFlowWithoutIntroducingAnInternalTimer() {
+    ContentFlowDispatchService flow = mock(ContentFlowDispatchService.class);
+    Instant now = Instant.parse("2026-11-05T08:00:00Z");
+    when(flow.scan(now, 100, 42)).thenReturn(map("status", "processed", "has_more", false));
+    PlanningTaskService tasks = new PlanningTaskService(null, null, null, null, null, null, null, null, flow);
+    assertEquals("processed", tasks.run(PlanningTaskService.Kind.CONTENT_FLOW, now, 100, 42).get("status"));
+    verify(flow).scan(now, 100, 42);
   }
 }

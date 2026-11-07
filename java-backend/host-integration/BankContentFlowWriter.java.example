@@ -1,0 +1,22 @@
+package your.host.integration;
+
+import com.stratmatrix.planning.content.ContentFlowEntry;
+import com.stratmatrix.planning.content.ContentFlowReceipt;
+import com.stratmatrix.planning.content.ContentFlowWriter;
+
+/**
+ * Register this as a host Bean only after the existing content-flow table is mapped.
+ * Keep the host's real table name, field names, Mapper and transaction binding here.
+ */
+public final class BankContentFlowWriter implements ContentFlowWriter {
+  @Override
+  public ContentFlowReceipt upsert(ContentFlowEntry entry) {
+    // 1. Look up the existing flow by planningItemId under the host's transaction/unique key.
+    // 2. Same resultVersion: return its original receipt and original productionTime.
+    // 3. Newer resultVersion: update only a waiting flow; reject producing/completed flows.
+    // 4. Map entry.planningResult, accountInfo, topicInfo and productionTime to the real columns.
+    // 5. Return CREATED / UPDATED / ALREADY_PRESENT only after the write is durable.
+    // Use entry.idempotencyKey() for retries whose first successful reply was lost.
+    throw new IllegalStateException("请先补齐现有内容流水表字段映射与幂等写入SQL");
+  }
+}

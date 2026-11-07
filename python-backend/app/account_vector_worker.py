@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from .vector_utils import normalized_vector
 from .system_config import get_setting
-from .worker_http import StaleResult, WorkerError, json_request
+from .worker_http import StaleResult, WorkerError, WorkerRateLimited, json_request
 from .doubao_labeling import DoubaoConfigurationError, read_embedding_config
 
 
@@ -107,6 +107,9 @@ def process_job(job: dict, cfg: WorkerConfig, ready_results: dict[JobKey, dict])
             # for identical retries if its acknowledgement is lost.
             ready_results[key] = {"profile_hash": fingerprint, "status": "ready",
                                   "vector": response["vector"], "vector_model": response["vector_model"].strip()}
+        except WorkerRateLimited:
+            LOG.info('账号向量模型限流，保持待处理')
+            return False
         except WorkerError as exc:
             reason = str(exc)[:500]
             try:

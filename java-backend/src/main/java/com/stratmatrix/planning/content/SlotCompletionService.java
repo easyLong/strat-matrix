@@ -88,6 +88,7 @@ public final class SlotCompletionService {
                         "待生产",
                         "production_status",
                         "planned"));
+                item.put("topic_snapshot", new LinkedHashMap<>(selected));
                 complete(current, item, "planned", fallback ? "合法热点不足，采用冻结普通选题兜底" : "热点T-1定题", now);
                 return true;
               });

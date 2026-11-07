@@ -21,6 +21,7 @@ from .bank_bridge.api import router as bank_bridge_router
 from .api.labels import router as labels_router
 from .bank_bridge.ports import DataContractError, IntegrationUnavailable
 from .services.errors import ApplicationError
+from .model_capacity import CapacityExceeded
 from .api.background_execution import execution_lifespan, router as background_execution_router
 from .algorithm_config_commands import router as algorithm_config_router
 from .api.catalog_projection import router as catalog_projection_router
@@ -120,6 +121,13 @@ async def system_config_error(request: Request, exc: SystemConfigError):
 @app.exception_handler(ApplicationError)
 async def application_error(request: Request, exc: ApplicationError):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(CapacityExceeded)
+async def capacity_exceeded(request: Request, exc: CapacityExceeded):
+    return JSONResponse(status_code=429,
+        content={'detail':exc.detail,'code':'ai_capacity_exceeded','scope':exc.scope},
+        headers={'Retry-After':str(exc.retry_after),'Cache-Control':'no-store'})
 
 
 @app.exception_handler(pymysql.MySQLError)

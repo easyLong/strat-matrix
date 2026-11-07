@@ -62,11 +62,7 @@ public class ManualPlanningService {
     for (Map<String, Object> topic : topics.values()) {
       if (Boolean.TRUE.equals(topic.get("is_marketing")))
         throw new BusinessException(422, "非营销策划只能选择非营销选题");
-      String start = text(topic, "valid_from"),
-          end = text(topic, "valid_to"),
-          date = input.publish_date.toString();
-      if ((start.length() >= 10 && date.compareTo(start.substring(0, 10)) < 0)
-          || (end.length() >= 10 && date.compareTo(end.substring(0, 10)) > 0))
+      if (!TopicValidity.includes(topic, input.publish_date))
         throw new BusinessException(422, "投放日期不在选题有效期内：" + text(topic, "topic_title"));
     }
     String code = "JPREV-" + UUID.randomUUID();

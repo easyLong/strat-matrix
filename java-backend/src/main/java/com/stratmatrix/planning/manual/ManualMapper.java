@@ -30,6 +30,8 @@ public interface ManualMapper {
 
   List<Map<String, Object>> pendingTasks();
 
+  List<Map<String, Object>> contentFlowCandidates(@Param("afterId") long afterId, @Param("limit") int limit);
+
   int insertMarketingTask(Map<String, Object> values);
 
   Map<String, Object> marketingByRequest(@Param("requestId") String requestId);

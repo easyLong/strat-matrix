@@ -35,11 +35,16 @@ class BusinessPlanningConfigServiceTest {
     BusinessPlanningConfig first = completeConfig();
     first.planning_days = Arrays.asList(5, 1, 3);
     first.hotspot_ratio = 25;
+    first.content_production_lead_days.put("ordinary", 3);
+    first.content_production_lead_days.put("marketing", 0);
+    first.content_production_lead_days.put("hotspot", 1);
     assertEquals(1, service.save(first, 0, "UM001").version);
     assertEquals(Arrays.asList(1, 3, 5), service.current().config.planning_days);
+    assertEquals(first.content_production_lead_days, service.current().config.content_production_lead_days);
 
     BusinessPlanningConfig second = completeConfig();
     second.marketing_max = 2;
+    second.content_production_lead_days.put("hotspot", 2);
     assertEquals(2, service.save(second, 1, "UM002").version);
     BusinessPlanningConfigService.ConfigConflict stale = assertThrows(
         BusinessPlanningConfigService.ConfigConflict.class,
@@ -49,6 +54,7 @@ class BusinessPlanningConfigServiceTest {
 
     assertEquals(3, service.restore(1, 2, "UM004").version);
     assertEquals(25, service.current().config.hotspot_ratio);
+    assertEquals(first.content_production_lead_days, service.current().config.content_production_lead_days);
     assertEquals("恢复", service.versions(10).get(0).action);
     assertEquals(1, service.versions(10).get(0).source_version);
     assertEquals("UM004", service.versions(10).get(0).created_by);
@@ -63,6 +69,14 @@ class BusinessPlanningConfigServiceTest {
     invalid.planning_days = Arrays.asList(1, 1);
     assertThrows(IllegalArgumentException.class, invalid::validate);
     assertThrows(IllegalArgumentException.class, new BusinessPlanningConfig()::validate);
+    BusinessPlanningConfig invalidTiming = completeConfig();
+    invalidTiming.content_production_lead_days.put("ordinary", -1);
+    assertThrows(IllegalArgumentException.class, invalidTiming::validate);
+    invalidTiming.content_production_lead_days.put("ordinary", 366);
+    assertThrows(IllegalArgumentException.class, invalidTiming::validate);
+    invalidTiming.content_production_lead_days.clear();
+    invalidTiming.content_production_lead_days.put("unknown", 1);
+    assertThrows(IllegalArgumentException.class, invalidTiming::validate);
   }
 
   private static BusinessPlanningConfig completeConfig() {

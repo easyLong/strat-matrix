@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 from .doubao_labeling import DoubaoConfigurationError, read_config as doubao_config
 from .system_config import get_setting
 from .t6_tags import normalized_embedding
+from .worker_http import WorkerRateLimited
 
 
 LOG = logging.getLogger("topic-label-worker")
@@ -38,6 +39,9 @@ def json_request(url: str, method: str, *, body: dict | None = None,
         with urlopen(request, timeout=timeout) as response:
             result = json.load(response)
     except HTTPError as exc:
+        if exc.code == 429:
+            exc.close()
+            raise WorkerRateLimited('模型服务繁忙，等待后续重试') from None
         if lease_conflict and exc.code in (404, 409):
             raise LeaseLost(f"HTTP {exc.code}") from exc
         raise WorkerError(f"HTTP {exc.code}") from exc
@@ -98,6 +102,11 @@ def process_job(topic_id: str, api_url: str, api_token: str,
         }, headers=internal_headers, lease_conflict=True)
         LOG.info("选题 %s 标签识别完成", topic_id)
         return True
+    except WorkerRateLimited:
+        json_request(f'{api_url}/api/internal/topic-label-jobs/{topic_path}/defer','POST',
+                     body={'lease_id':lease_id},headers=internal_headers,lease_conflict=True)
+        LOG.info('选题 %s 模型限流，已退回待处理',topic_id)
+        return None
     except LeaseLost:
         LOG.info("选题 %s 租约已失效，忽略旧结果", topic_id)
     except (WorkerError, KeyError) as exc:

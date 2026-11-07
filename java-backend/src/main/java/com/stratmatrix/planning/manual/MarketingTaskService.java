@@ -60,6 +60,10 @@ public class MarketingTaskService {
     if (topics.size() != 1 || !topicId.equals(text(topics.get(0), "topic_id")))
       throw new BusinessException(409, "选题已停用或不存在，请重新选择");
     Map<String, Object> topic = topics.get(0);
+    if (!Boolean.TRUE.equals(topic.get("is_marketing")))
+      throw new BusinessException(422, "营销策划只能选择营销选题");
+    if (!TopicValidity.includes(topic, TopicValidity.today()))
+      throw new BusinessException(422, "当前日期不在营销选题有效期内，请重新选择");
     long now = System.currentTimeMillis();
     Map<String, Object> values =
         map(

@@ -40,6 +40,7 @@
   --shadow-4: 0 24px 64px rgb(16 24 40 / 18%);
   --radius-sm: 4px;
   --radius-control: 4px;
+  --radius-button: 12px;
   --radius-panel: 8px;
   --radius-card: 12px;
   --radius-overlay: 16px;

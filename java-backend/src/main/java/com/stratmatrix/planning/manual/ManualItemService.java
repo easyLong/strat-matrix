@@ -43,11 +43,7 @@ public class ManualItemService {
             throw new BusinessException(409, "仅待生产状态可以替换选题");
           if (number(record, "version") != number(request, "expected_version"))
             throw new BusinessException(409, "策划结果已更新，请重新打开");
-          String date = text(record, "publish_date"),
-              from = text(topic, "valid_from"),
-              to = text(topic, "valid_to");
-          if ((from.length() >= 10 && date.compareTo(from.substring(0, 10)) < 0)
-              || (to.length() >= 10 && date.compareTo(to.substring(0, 10)) > 0))
+          if (!TopicValidity.includes(topic, java.time.LocalDate.parse(text(record, "publish_date"))))
             throw new BusinessException(422, "投放日期不在选题有效期内");
           Map<String, Object> item = read(text(record, "payload"));
           if (topicId.equals(item.get("topic_id"))) throw new BusinessException(409, "请选择不同的选题");
@@ -83,6 +79,12 @@ public class ManualItemService {
                   "topic_type",
                   "valid_from",
                   "valid_to",
+                  "related_activity_id",
+                  "related_activity",
+                  "activity_organization",
+                  "related_product_id",
+                  "related_product",
+                  "related_hotspot",
                   "labels")) item.put(key, topic.get(key));
           item.put("topic_snapshot", topic);
           item.put("result_version", version);

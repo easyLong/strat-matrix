@@ -4,6 +4,7 @@ import PageBreadcrumbs from './PageBreadcrumbs.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from '../compat/composition';
 import AccountTypeBadge from './AccountTypeBadge.vue';
 import ListPagination from './ListPagination.vue';
+import MarketingTopicTable from './MarketingTopicTable.vue';
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types';
 export default defineComponent({
     props: { details: { required: true, type: Object as PropType<{
@@ -56,7 +57,7 @@ export default defineComponent({
             awaitingExternalAllocation
         };
     },
-    components: {PageBreadcrumbs, AccountTypeBadge, ListPagination}
+    components: {PageBreadcrumbs, AccountTypeBadge, ListPagination, MarketingTopicTable}
 });
 </script>
 
@@ -68,7 +69,7 @@ export default defineComponent({
         <PageBreadcrumbs compact />
         <div class="marketing-detail-counts"><template v-if="awaitingExternalAllocation"><span>生成内容数量 <b>{{ details.task.allocation_count }}</b> 条</span><span>账号分配 <b>待外部系统</b></span></template><template v-else><span>账号数 <b>{{ details.accounts.length }}</b></span><span>每账号 <b>{{ details.task.content_per_account }}</b> 条</span><span>总生产数量 <b>{{ details.task.content_total_count }}</b> 条</span></template><span class="tag gray">{{ details.task.status }}</span></div>
         <template v-if="details.accounts.length"><div class="table-wrap"><table><thead><tr><th>账号昵称</th><th>账号 ID</th><th>属主 UM 号</th><th>账号类型</th></tr></thead><tbody><tr v-for="account in rows" :key="account.account_id"><td>{{ account.account_name }}</td><td>{{ account.account_id }}</td><td>{{ account.um_no || '—' }}</td><td><AccountTypeBadge type="认证" /></td></tr></tbody></table></div><ListPagination :page.sync="page" :page-size.sync="size" :total="details.accounts.length" unit="个账号" /></template>
-        <section><h3>选题</h3><div v-if="details.topics.length" class="table-wrap"><table><thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>选题二级分类</th></tr></thead><tbody><tr v-for="topic in details.topics" :key="topic.topic_id"><td>{{ topic.topic_id }}</td><td>{{ topic.topic_title }}</td><td>{{ topic.outline || '—' }}</td><td>{{ topic.content_type || '—' }}</td></tr></tbody></table></div><div v-else class="empty-state">暂无选题</div></section>
+        <section><h3>选题</h3><div v-if="details.topics.length" class="table-wrap"><MarketingTopicTable :topics="details.topics" /></div><div v-else class="empty-state">暂无选题</div></section>
       </section>
     </div>
   </BodyPortal>

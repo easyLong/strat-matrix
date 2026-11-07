@@ -156,6 +156,7 @@ def topic_labels(cursor, query):
 
 def test_labels(cursor, query, labeler=None):
     from ..doubao_labeling import LabelInput, label_topic, DoubaoError
+    from ..model_capacity import CapacityExceeded
     from ..taxonomy import active_tag_names
     version, taxonomy = taxonomy_snapshot(cursor)
     result = []
@@ -166,6 +167,8 @@ def test_labels(cursor, query, labeler=None):
                 taxonomy_version=version, taxonomy=active_tag_names(taxonomy)))
             labels = label_paths(output['labels'], {}, taxonomy)
             result.append({'选题ID': topic.topic_id, 'label_status': '已完成', 'labels': labels, 'label_error': ''})
+        except CapacityExceeded:
+            raise
         except (DoubaoError, DataContractError):
             result.append({'选题ID': topic.topic_id, 'label_status': '打标失败', 'labels': {}, 'label_error': '模型调用或标签结构校验失败'})
     return LabelTestOutput(tested_at=queried_at(), status='success' if any(r['label_status'] == '已完成' for r in result) else 'failed',

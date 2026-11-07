@@ -9,6 +9,9 @@ import TaxonomyPanel from '../components/TaxonomyPanel.vue';
 import ConfigOverview from '../components/config/ConfigOverview.vue';
 import ConfigHistory from '../components/config/ConfigHistory.vue';
 import LifecycleRulesEditor from '../components/config/LifecycleRulesEditor.vue';
+import ProductionTimingConfig from '../components/config/ProductionTimingConfig.vue';
+import { productionTimingValid } from '../ui/productionTiming';
+import { configValuesEqual } from '../ui/configHistory';
 import { recommendedTaxonomy, tagNames } from '../topicTaxonomy';
 import { formatDateTime } from '../planningTime';
 import { api, type TagTaxonomyItem } from '../api';
@@ -25,6 +28,7 @@ export default defineComponent({
                 schedule_day: value.schedule_day,
                 schedule_time: value.schedule_time,
                 hotspot_ratio: value.hotspot_ratio,
+                ...(value.content_production_lead_days !== undefined ? { content_production_lead_days: value.content_production_lead_days === null ? null : { ...value.content_production_lead_days } } : {}),
                 rolling_posts: value.rolling_posts,
                 stage_targets: value.stage_targets.map(stage => ({
                     ...stage
@@ -44,7 +48,7 @@ export default defineComponent({
         const error = ref('');
         const versions = ref<ConfigVersionSummary[]>([]);
         const versionDetail = ref<ConfigVersionSummary | null>(null);
-        const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(store.config));
+        const dirty = computed(() => !configValuesEqual(draft.value, store.config));
         let removeRouteGuard: (() => void) | undefined;
         const tagVersion = ref(0);
         const tagItems = ref<Record<string, TagTaxonomyItem[]>>({
@@ -346,7 +350,7 @@ export default defineComponent({
                 error.value = exc instanceof Error ? exc.message : '读取标签配置失败';
             }
         }
-        const marketingValid = computed(() => Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 && planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size && planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) && Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 && /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) && Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100);
+        const marketingValid = computed(() => Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 && planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size && planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) && Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 && /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) && Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100 && productionTimingValid(draft.value.content_production_lead_days));
         const strategyValid = computed(() => Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 && draft.value.stage_targets.length === 5 && draft.value.stage_targets.every(stage => Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) && stage.traffic >= 0 && stage.conversion >= 0 && stage.traffic + stage.conversion === 100) && lifecycleRules.value.length === 5 && lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 && rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) && lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0);
         function restore() {
             if (!editing.value)
@@ -507,7 +511,7 @@ export default defineComponent({
             cancelEditing
         };
     },
-    components: {LoadingSkeleton, LifecycleRulesEditor, TaxonomyPanel, ConfigOverview, ConfigHistory}
+    components: {LoadingSkeleton, LifecycleRulesEditor, TaxonomyPanel, ConfigOverview, ConfigHistory, ProductionTimingConfig}
 });
 </script>
 
@@ -545,7 +549,8 @@ export default defineComponent({
           <label class="field"><span>热点选题占比</span><div class="input-unit"><input v-model.number="hotspotRatio" type="number" min="0" max="100" /><span>%</span></div></label>
         </div>
 
-        <p v-if="editing && !marketingValid" class="inline-error">请检查每周策划日、调度时间、营销上限和热点占比。</p>
+        <ProductionTimingConfig v-model="draft.content_production_lead_days" />
+        <p v-if="editing && !marketingValid" class="inline-error">请检查策划日、调度时间、营销上限、热点占比，以及0至365之间的内容生产提前天数。</p>
 
       </div>
     </section>

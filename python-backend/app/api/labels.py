@@ -29,6 +29,11 @@ def claim_topic_label_job(topic_id: str, lease_seconds: int = 1800) -> dict:
 def put_topic_tags(topic_id: str, payload: TopicTagsInput) -> dict:
     return invoke(service.put_topic_tags, topic_id=topic_id, payload=payload)
 
+
+@router.post('/api/internal/topic-label-jobs/{topic_id}/defer',dependencies=[Depends(require_integration_token)])
+def defer_topic_label(topic_id: str, payload: dict) -> dict:
+    return invoke(service.defer_topic_label_job,topic_id=topic_id,lease_id=payload.get('lease_id'))
+
 @router.get("/api/internal/topic-tags/{topic_id}/history", dependencies=[Depends(require_integration_token)])
 def topic_tag_history(topic_id: str, limit: int = 100) -> dict:
     return invoke(service.topic_tag_history, topic_id=topic_id, limit=limit)

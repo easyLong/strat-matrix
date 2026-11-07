@@ -18,7 +18,8 @@
       "topic_id": "T1", "source": "普通", "topic_type": "非营销", "title": "选题标题",
       "outline": "选题大纲", "content_type": "金融科普", "heat": 2.5, "available": true,
       "valid_from": "2026-11-01T00:00:00+08:00", "valid_to": "2026-12-31T23:59:59+08:00",
-      "updated_at": "2026-11-03T16:00:00+08:00", "related_product": "", "related_activity": "", "related_hotspot": ""
+      "updated_at": "2026-11-03T16:00:00+08:00", "related_product": "", "related_activity": "", "related_hotspot": "",
+      "related_product_id": "", "related_activity_id": "", "activity_organization": ""
     }]
   },
   "marketing-contents": {

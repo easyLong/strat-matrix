@@ -99,7 +99,7 @@ class InsideThreePagesAcceptanceTest {
 
         public Map<String, Object> topics(Map<String, Object> q) {
           List<Map<String, Object>> topics =
-              new ArrayList<>(Arrays.asList(topic("T1"), topic("T2")));
+              new ArrayList<>(Arrays.asList(topic("T1"), topic("T2"), marketingTopic(false), marketingTopic(true)));
           if (q.get("topic_ids") instanceof List)
             topics.removeIf(t -> !((List<?>) q.get("topic_ids")).contains(t.get("topic_id")));
           return page(q, topics);
@@ -183,6 +183,25 @@ class InsideThreePagesAcceptanceTest {
         "2026-01-01",
         "valid_to",
         "2027-12-31");
+  }
+
+  static Map<String, Object> marketingTopic(boolean product) {
+    Map<String, Object> row = topic(product ? "M-PRODUCT" : "M-ACTIVITY");
+    row.put("is_marketing", true);
+    row.put("topic_type", "营销");
+    row.put("title", "");
+    row.put("topic_title", "");
+    row.put("outline", "");
+    row.put("content_type", product ? "银行产品类" : "活动类");
+    if (product) {
+      row.put("related_product", "测试银行产品");
+      row.put("related_product_id", "PRODUCT-001");
+    } else {
+      row.put("related_activity", "测试营销活动");
+      row.put("related_activity_id", "ACTIVITY-001");
+      row.put("activity_organization", "测试二级分行");
+    }
+    return row;
   }
 
   static Map<String, Object> taxonomy() {
@@ -567,11 +586,15 @@ class InsideThreePagesAcceptanceTest {
                               "task_name",
                               "营销需求验收",
                               "topic_id",
-                              "T1",
+                              "M-ACTIVITY",
                               "allocation_count",
                               2))))
           .andExpect(status().isCreated());
-      for (Kind kind : Kind.values()) assertNotNull(tasks.run(kind, now, 100, 0));
+      for (Kind kind : Kind.values()) {
+        if (kind == Kind.CONTENT_FLOW) {
+          assertEquals(503, assertThrows(BusinessException.class, () -> tasks.run(kind, now, 100, 0)).status);
+        } else assertNotNull(tasks.run(kind, now, 100, 0));
+      }
       mvc.perform(get("/api/plan/config").header("X-Deny", "yes"))
           .andExpect(status().isForbidden());
       mvc.perform(

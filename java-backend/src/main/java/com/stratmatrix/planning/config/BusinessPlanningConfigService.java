@@ -7,7 +7,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Versioned authority for the four business-owned planning settings. */
+/** Versioned authority for business-owned planning and content production settings. */
 public class BusinessPlanningConfigService {
   private final BusinessPlanningConfigMapper mapper;
   private final TransactionTemplate transactions;

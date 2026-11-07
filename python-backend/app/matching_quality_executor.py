@@ -13,6 +13,7 @@ from .matching_quality_store import QualityRuntime, QualityPending, save_quality
 from .taxonomy import selectable_tags
 from .vector_utils import normalized_vector
 from .matching_precheck import role_coverage,InsufficientRoleCoverage
+from .model_capacity import CapacityExceeded
 
 
 def raw_account(account):
@@ -208,7 +209,7 @@ def execute_quality_job(job):
         checkpoint('ready')
         result.stages[2].summary['quality_report_hash'] = content_hash(report)
         return result
-    except QualityPending:
+    except (QualityPending,CapacityExceeded):
         checkpoint('waiting')
         raise
     except Exception as exc:

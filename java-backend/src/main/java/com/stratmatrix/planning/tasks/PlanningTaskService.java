@@ -20,6 +20,7 @@ public final class PlanningTaskService {
     MARKETING,
     MARKETING_PLACEMENT,
     CONTENT_STATUS,
+    CONTENT_FLOW,
     MARKETING_STATUS,
     ALGORITHM
   }
@@ -32,6 +33,7 @@ public final class PlanningTaskService {
   private final ManualContentStatusService content;
   private final MarketingTaskService marketing;
   private final PythonExecutionClient python;
+  private final ContentFlowDispatchService contentFlow;
 
   public PlanningTaskService(
       ConfigReleaseService config,
@@ -42,6 +44,13 @@ public final class PlanningTaskService {
       ManualContentStatusService content,
       MarketingTaskService marketing,
       PythonExecutionClient python) {
+    this(config, manual, auto, slots, placement, content, marketing, python, null);
+  }
+
+  public PlanningTaskService(
+      ConfigReleaseService config, ManualPlanningService manual, AutoScheduleService auto,
+      SlotCompletionService slots, MarketingPlacementService placement, ManualContentStatusService content,
+      MarketingTaskService marketing, PythonExecutionClient python, ContentFlowDispatchService contentFlow) {
     this.config = config;
     this.manual = manual;
     this.auto = auto;
@@ -50,6 +59,7 @@ public final class PlanningTaskService {
     this.content = content;
     this.marketing = marketing;
     this.python = python;
+    this.contentFlow = contentFlow;
   }
   /** Throws on integration failure so host scheduling must not report false success. */
   public Map<String, Object> run(Kind kind, Instant now, int limit, long after) {
@@ -90,6 +100,9 @@ public final class PlanningTaskService {
         return placement.reconcile(now, limit);
       case CONTENT_STATUS:
         return content.reconcile(limit, after);
+      case CONTENT_FLOW:
+        if (contentFlow == null) throw new BusinessException(503, "内容流水写入尚未接入，请配置宿主写入方法");
+        return contentFlow.scan(now, limit, after);
       case MARKETING_STATUS:
         return marketing.reconcile(limit, after);
       case ALGORITHM:

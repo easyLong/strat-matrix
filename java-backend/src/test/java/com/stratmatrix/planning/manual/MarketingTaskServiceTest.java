@@ -15,6 +15,7 @@ class MarketingTaskServiceTest {
   MarketingTaskService service;
   ManualQueryService query;
   List<ManualPorts.MarketingObservation> observations;
+  Map<String, Object> topicOverrides;
 
   @BeforeEach
   void setup() {
@@ -23,6 +24,7 @@ class MarketingTaskServiceTest {
             + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1", "sa", "");
     LocalManualBusinessSchema.initialize(ds);
     repo = new ManualRepository(ManualTestMapper.bind(ds), new DataSourceTransactionManager(ds));
+    topicOverrides = new LinkedHashMap<>();
     ManualPorts.Source source = new ManualPorts.Source() {
       public List<Map<String, Object>> accountOptions(int limit, boolean includeDisabled) {
         return Collections.emptyList();
@@ -31,10 +33,12 @@ class MarketingTaskServiceTest {
         return map("topic_id", topicId);
       }
       public Map<String, Object> snapshot(List<String> accounts, List<String> topics) {
+        Map<String, Object> topic = map("topic_id", topics.get(0), "topic_title", "",
+            "outline", "", "is_marketing", true, "related_activity_id", "ACT-1",
+            "related_activity", "营销活动", "activity_organization", "测试二级分行");
+        topic.putAll(topicOverrides);
         return map("accounts", Collections.emptyList(), "topics", topics.get(0).equals("MISSING")
-            ? Collections.emptyList() : Collections.singletonList(map(
-                "topic_id", topics.get(0), "topic_title", "营销测试选题",
-                "outline", "选题大纲", "is_marketing", true)));
+            ? Collections.emptyList() : Collections.singletonList(topic));
       }
       public Map<String, Object> sourceAccounts(List<String> ids) { return map("accounts", Collections.emptyList()); }
       public List<Map<String, Object>> topicCandidates(int limit) { return Collections.emptyList(); }
@@ -77,6 +81,25 @@ class MarketingTaskServiceTest {
     assertEquals(409, assertThrows(BusinessException.class, () -> service.create(input)).status);
     assertEquals(409, assertThrows(BusinessException.class,
         () -> service.create(request("MISSING"))).status);
+  }
+
+  @Test
+  void marketingRejectsNonmarketingExpiredAndFutureTopicsBeforeWriting() {
+    topicOverrides.put("is_marketing", false);
+    assertEquals(422, assertThrows(BusinessException.class, () -> service.create(request("N1"))).status);
+    topicOverrides.put("is_marketing", true);
+    topicOverrides.put("valid_from", TopicValidity.today().plusDays(1).toString());
+    assertEquals(422, assertThrows(BusinessException.class, () -> service.create(request("FUTURE"))).status);
+    topicOverrides.remove("valid_from");
+    topicOverrides.put("valid_to", TopicValidity.today().minusDays(1).toString());
+    assertEquals(422, assertThrows(BusinessException.class, () -> service.create(request("EXPIRED"))).status);
+    assertEquals(0, service.all().size());
+    topicOverrides.put("valid_from", TopicValidity.today().toString());
+    topicOverrides.put("valid_to", TopicValidity.today().toString());
+    Map<String, Object> task = service.create(request("TODAY"));
+    Map<String, Object> snapshot = rows(service.detail(text(task, "task_code")).get("topics")).get(0);
+    assertEquals("ACT-1", snapshot.get("related_activity_id"));
+    assertEquals("测试二级分行", snapshot.get("activity_organization"));
   }
 
   @Test

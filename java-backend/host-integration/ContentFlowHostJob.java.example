@@ -1,0 +1,22 @@
+package your.host.integration;
+
+import com.stratmatrix.planning.tasks.PlanningTaskService;
+import java.time.Instant;
+import java.util.Map;
+
+/** Invoke from the bank's existing scheduler three times each day; no private timer. */
+public final class ContentFlowHostJob {
+  private final PlanningTaskService tasks;
+
+  public ContentFlowHostJob(PlanningTaskService tasks) {
+    this.tasks = tasks;
+  }
+
+  public Map<String, Object> runPage(Instant triggerTime, long afterId) {
+    // At each of the three daily runs start with afterId=0.
+    // When has_more=true, continue with next_after_id and the same triggerTime.
+    // Apply the host's page/time budget and keep the cursor if that budget is exhausted.
+    // retry_required/needs_next_tick must be reported as needing retry, not successful delivery.
+    return tasks.run(PlanningTaskService.Kind.CONTENT_FLOW, triggerTime, 500, afterId);
+  }
+}

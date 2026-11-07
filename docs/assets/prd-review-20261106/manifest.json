@@ -1,0 +1,55 @@
+{
+  "captured_at": "2026-11-06T03:05:01.731Z",
+  "figures": [
+    {
+      "id": "CFG-01",
+      "file": "CFG-01.png",
+      "url": "http://127.0.0.1:930/config",
+      "read_only_capture": true
+    },
+    {
+      "id": "CFG-06",
+      "file": "CFG-06.png",
+      "url": "http://127.0.0.1:930/config",
+      "read_only_capture": true
+    },
+    {
+      "id": "CFG-02",
+      "file": "CFG-02.png",
+      "url": "http://127.0.0.1:930/config",
+      "read_only_capture": true
+    },
+    {
+      "id": "MAN-10",
+      "file": "MAN-10.png",
+      "url": "http://127.0.0.1:930/manual",
+      "read_only_capture": true
+    },
+    {
+      "id": "MAN-11",
+      "file": "MAN-11.png",
+      "url": "http://127.0.0.1:930/manual",
+      "read_only_capture": true
+    },
+    {
+      "id": "MAN-10B",
+      "file": "MAN-10B.png",
+      "url": "http://127.0.0.1:930/manual",
+      "read_only_capture": true
+    },
+    {
+      "id": "MAN-07",
+      "file": "MAN-07.png",
+      "url": "http://127.0.0.1:930/manual",
+      "read_only_capture": true
+    },
+    {
+      "id": "MAN-08",
+      "file": "MAN-08.png",
+      "url": "http://127.0.0.1:930/manual",
+      "read_only_capture": true
+    }
+  ],
+  "errors": [],
+  "blocked_writes": []
+}

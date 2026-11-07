@@ -4,6 +4,8 @@ import { computed, toRef } from '../../compat/composition';
 import HoverHint from '../HoverHint.vue';
 import ListPagination from '../ListPagination.vue';
 import LoadingSkeleton from '../LoadingSkeleton.vue';
+import MarketingTopicTable from '../MarketingTopicTable.vue';
+import { marketingTopicName, topicValidityLabel } from '../../ui/manualTopics';
 import type { ManualTopicSelection } from '../../composables/useManualTopicSelection';
 export default defineComponent({
     props: { selection: { required: true, type: null as unknown as PropType<ManualTopicSelection> },
@@ -23,9 +25,12 @@ export default defineComponent({
             set: value => emit('update:allocationCount', value)
         });
         const emit = context.emit;
-        const { topicListRef, topicFiltersExpanded, selectedTopicIds, topicIdFilter, topicQuery, topicTypeFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, appliedTopicFilters, topicPage, topicPageSize, contentTypes, relatedProducts, relatedActivities, relatedHotspots, filteredTopics, topicPageCount, pagedTopics, applyTopicFilters, toggleTopicRow, setTopicSelected, removeTopic, topicTooltip, selectedTopics } = props.selection;
+        const { topicListRef, topicFiltersExpanded, selectedTopicIds, topicIdFilter, topicQuery, topicTypeFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, appliedTopicFilters, topicPage, topicPageSize, contentTypes, relatedProducts, relatedActivities, relatedHotspots, filteredTopics, topicPageCount, pagedTopics, applyTopicFilters, toggleTopicRow, setTopicSelected, removeTopic, topicTooltip, selectedTopics, validityHint } = props.selection;
         return {
             isMarketing,
+            validityHint,
+            marketingTopicName,
+            topicValidityLabel,
             topicReview,
             allocationCountModel,
             emit,
@@ -55,7 +60,7 @@ export default defineComponent({
             selectedTopics
         };
     },
-    components: {LoadingSkeleton, HoverHint, ListPagination}
+    components: {LoadingSkeleton, HoverHint, ListPagination, MarketingTopicTable}
 });
 </script>
 <template>
@@ -77,8 +82,8 @@ export default defineComponent({
             <div class="topic-filters-toggle"><button class="filter-collapse-toggle" type="button" :aria-expanded="topicFiltersExpanded" aria-controls="manual-topic-filters" @click="topicFiltersExpanded = !topicFiltersExpanded">筛选条件 <span>{{ topicFiltersExpanded ? '\u2303' : '\u2304' }}</span></button></div>
             <fieldset :disabled="topicReview" id="manual-topic-filters" v-show="topicFiltersExpanded" class="manual-topic-filters query-filter-grid" data-query-filters="standard">
               <label class="field"><span class="field-label-with-tip">选题 ID <span class="field-help-tip" tabindex="0" title="输入完整选题 ID;进行精确匹配">?</span></span><input v-model="topicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="输入完整选题 ID" /></label>
-              <label class="field"><span class="field-label-with-tip">选题标题 <span class="field-help-tip" tabindex="0" title="输入标题关键词;进行模糊搜索">?</span></span><input v-model="topicQuery" type="search" placeholder="输入选题标题关键词" /></label>
-              <label class="field"><span>选题类型</span><select v-model="topicTypeFilter" :disabled="!isMarketing"><option value="non_marketing">非营销</option><option v-if="isMarketing" value="marketing">营销</option></select></label>
+              <label class="field"><span class="field-label-with-tip">{{ isMarketing ? '活动／产品名称' : '选题标题' }} <span class="field-help-tip" tabindex="0" :title="isMarketing ? '输入活动或产品名称关键词进行模糊搜索' : '输入标题关键词进行模糊搜索'">?</span></span><input v-model="topicQuery" type="search" :placeholder="isMarketing ? '输入活动或产品名称关键词' : '输入选题标题关键词'" /></label>
+              <label class="field"><span>选题类型</span><select :value="isMarketing ? 'marketing' : 'non_marketing'" disabled><option value="non_marketing">非营销</option><option value="marketing">营销</option></select></label>
               <label class="field"><span>选题二级分类</span><select v-model="contentType"><option value="">全部</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>关联产品</span><select v-model="relatedProduct"><option value="">全部</option><option v-for="value in relatedProducts" :key="value" :value="value">{{ value }}</option></select></label>
               <label class="field"><span>关联活动</span><select v-model="relatedActivity"><option value="">全部</option><option v-for="value in relatedActivities" :key="value" :value="value">{{ value }}</option></select></label>
@@ -87,10 +92,11 @@ export default defineComponent({
                 <div class="manual-topic-filter-actions query-filter-actions"><button class="text-btn manual-topic-clear-filters" type="button" @click="topicIdFilter = ''; topicQuery = ''; topicTypeFilter = isMarketing ? 'marketing' : 'non_marketing'; contentType = ''; relatedProduct = ''; relatedActivity = ''; relatedHotspot = ''">清空筛选</button><button class="btn primary filter-query-inline" type="button" @click="applyTopicFilters">查询</button></div>
               </div>
             </fieldset>
+            <p class="manual-topic-validity-hint" role="note">{{ validityHint }}</p>
             <div class="manual-topic-list-meta"><b>符合条件 {{ filteredTopics.length }} 个</b></div>
             <LoadingSkeleton v-if="loading || !initialized" />
-            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><table><thead><tr><th class="manual-topic-checkbox-cell">选择</th><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>选题类型</th><th>选题二级分类</th><th>关联产品</th><th>关联活动</th><th>关联属地热点</th><th>有效期</th></tr></thead><tbody>
-              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-disabled="topicReview || (!isMarketing && !selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100) || undefined" @click="toggleTopicRow(topic.topic_id, $event)" @keydown.enter.self.prevent="toggleTopicRow(topic.topic_id, $event)" @keydown.space.self.prevent="toggleTopicRow(topic.topic_id, $event)"><td class="manual-topic-checkbox-cell"><input :type="isMarketing ? 'radio' : 'checkbox'" :name="isMarketing ? 'marketing-topic' : undefined" :checked="selectedTopicIds.includes(topic.topic_id)" :disabled="topicReview || (!isMarketing && !selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100)" :aria-label="`选择选题 ${topic.topic_title}`" @change="setTopicSelected(topic.topic_id, $event.target.checked)" /></td><td>{{ topic.topic_id }}</td><td><HoverHint :text="topic.topic_title" :show-icon="false" class="manual-topic-title-tooltip"><span class="manual-topic-title-value">{{ topic.topic_title }}</span></HoverHint></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topic.valid_from ? topic.valid_from.slice(0, 10) : '不限' }}<i>至</i>{{ topic.valid_to ? topic.valid_to.slice(0, 10) : '不限' }}</span></td></tr>
+            <div v-else ref="topicListRef" class="table-wrap manual-topic-table"><MarketingTopicTable v-if="isMarketing" :topics="pagedTopics" selectable :selected-ids="selectedTopicIds" :readonly="topicReview" @select="setTopicSelected($event, true)" /><table v-else><thead><tr><th class="manual-topic-checkbox-cell">选择</th><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>选题类型</th><th>选题二级分类</th><th>关联产品</th><th>关联活动</th><th>关联属地热点</th><th>有效期</th></tr></thead><tbody>
+              <tr v-for="topic in pagedTopics" :key="topic.topic_id" :class="{ selected: selectedTopicIds.includes(topic.topic_id) }" class="selection-row" tabindex="0" :aria-disabled="topicReview || (!isMarketing && !selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100) || undefined" @click="toggleTopicRow(topic.topic_id, $event)" @keydown.enter.self.prevent="toggleTopicRow(topic.topic_id, $event)" @keydown.space.self.prevent="toggleTopicRow(topic.topic_id, $event)"><td class="manual-topic-checkbox-cell"><input :type="isMarketing ? 'radio' : 'checkbox'" :name="isMarketing ? 'marketing-topic' : undefined" :checked="selectedTopicIds.includes(topic.topic_id)" :disabled="topicReview || (!isMarketing && !selectedTopicIds.includes(topic.topic_id) && selectedTopicIds.length >= 100)" :aria-label="`选择选题 ${topic.topic_title}`" @change="setTopicSelected(topic.topic_id, $event.target.checked)" /></td><td>{{ topic.topic_id }}</td><td><HoverHint :text="topic.topic_title" :show-icon="false" class="manual-topic-title-tooltip"><span class="manual-topic-title-value">{{ topic.topic_title }}</span></HoverHint></td><td><div class="manual-topic-outline-value" :title="topic.outline || '暂无选题大纲'">{{ topic.outline || '\u6682\u65e0\u9009\u9898\u5927\u7eb2' }}</div></td><td><span class="topic-type-badge" :class="topic.is_marketing ? 'marketing' : 'non-marketing'">{{ topic.is_marketing ? '营销' : '非营销' }}</span></td><td>{{ topic.content_type || '\u2014' }}</td><td>{{ topic.related_product || '\u2014' }}</td><td>{{ topic.related_activity || '\u2014' }}</td><td>{{ topic.related_hotspot || '\u2014' }}</td><td><span class="manual-topic-validity">{{ topicValidityLabel(topic) }}</span></td></tr>
               <tr v-if="filteredTopics.length === 0"><td colspan="10"><div class="empty-state">没有符合条件的可用选题</div></td></tr>
             </tbody></table></div>
             <ListPagination :page.sync="topicPage" :page-size.sync="topicPageSize" :total="filteredTopics.length" unit="个选题" :page-size-options="[20, 50, 100]" class="manual-topic-pagination" />
@@ -101,7 +107,7 @@ export default defineComponent({
         <section v-if="isMarketing" class="card manual-generation-settings" :class="{ waiting: !selectedTopics.length }" aria-label="生成内容数量">
           <div class="card-head manual-topic-substep-head"><h2><span class="manual-topic-substep-number" aria-hidden="true">2</span>设置生成内容数量</h2></div>
           <div class="card-body">
-            <div v-if="selectedTopics[0]" class="manual-generation-selected"><span>已选选题</span><b :title="selectedTopics[0].topic_title">{{ selectedTopics[0].topic_title }}</b><small>{{ selectedTopics[0].topic_id }}</small></div>
+            <div v-if="selectedTopics[0]" class="manual-generation-selected"><span>已选选题</span><b :title="topicTooltip(selectedTopics[0])">{{ marketingTopicName(selectedTopics[0]) }}</b><small>{{ selectedTopics[0].topic_id }}</small></div>
             <label class="field manual-generation-count-field"><span class="field-label-with-tip">生成内容数量 <em>*</em><span class="field-help-tip" tabindex="0" title="根据所选选题需要生成的内容总条数，后续由外部系统分配账号。">?</span></span><div class="manual-generation-count-input"><input v-model.number="allocationCountModel" type="number" inputmode="numeric" min="1" max="1000" :placeholder="selectedTopics.length ? '请输入生成内容数量' : '请先选择选题'" :disabled="topicReview || !selectedTopics.length" required /><span>条</span></div></label>
           </div>
         </section>
@@ -112,6 +118,8 @@ export default defineComponent({
 </template>
 <style scoped>
 .manual-topic-filters{min-width:0;margin:0;padding:0;border:0}
+.manual-topic-validity-hint{margin:0 0 12px;color:var(--neutral-500);font-size:12px;line-height:20px}
+.manual-topic-filters select:disabled{background:var(--neutral-100);color:var(--neutral-400);cursor:not-allowed}
 
 
 .manual-account-filters,.manual-topic-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;margin-bottom:18px}.manual-account-filters .field,.manual-topic-filters .field{min-width:0}.manual-account-filters input,.manual-account-filters select,.manual-topic-filters input,.manual-topic-filters select{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:7px;background:var(--surface);color:var(--neutral-900)}.manual-follower-range i,.manual-topic-validity i{color:var(--neutral-400);font-size:12px;font-style:normal;white-space:nowrap}.manual-account-list-meta,.manual-topic-list-meta{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:13px}.manual-account-list-meta span,.manual-topic-list-meta span{color:var(--neutral-400);font-size:12px}.manual-account-table,.manual-topic-table{max-height:430px;overflow:auto;border:1px solid var(--neutral-200);border-radius:8px}.manual-topic-table table{min-width:1160px}.manual-account-table thead th,.manual-topic-table thead th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}.manual-account-table tbody tr:hover,.manual-account-table tbody tr.selected,.manual-topic-table tbody tr:hover,.manual-topic-table tbody tr.selected{background:var(--primary-50)}.manual-account-table input,.manual-topic-table input{accent-color:var(--primary-600)}.manual-account-pagination,.manual-topic-pagination{margin:14px 0 18px}.manual-topic-outline{display:block;max-width:360px;margin-top:4px;color:var(--neutral-400);font-size:11px;line-height:1.5;white-space:normal}.manual-topic-validity{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px}.manual-step-review{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--primary-100);border-radius:8px;background:var(--primary-50)}.manual-step-review-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:14px;font-weight:700}.manual-step-review>strong{flex:1;min-width:0;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.5}.manual-step-review>strong em{display:inline-block;margin:0 2px;color:var(--primary-600);font-size:20px;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-1px}

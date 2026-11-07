@@ -60,6 +60,7 @@ class ConfigReleaseServiceTest {
 
           public Map<String, Object> apply(
               String id, int expected, Map<String, Object> cfg, String actor) {
+            assertFalse(cfg.containsKey("content_production_lead_days"));
             if (accepted.containsKey(id)) return accepted.get(id);
             count[0]++;
             Map<String, Object> normalized = new LinkedHashMap<>(initial);
@@ -75,6 +76,7 @@ class ConfigReleaseServiceTest {
     Map<String, Object> changed = new LinkedHashMap<>(initial);
     changed.put("planning_days", Arrays.asList(2, 4));
     changed.put("rolling_window_posts", 15);
+    changed.put("content_production_lead_days", map("ordinary", 3, "marketing", 0, "hotspot", 1));
     assertEquals(
         503, assertThrows(BusinessException.class, () -> service.save(changed, 4, "UM001")).status);
     assertNotNull(releases.pending());
@@ -86,8 +88,12 @@ class ConfigReleaseServiceTest {
     assertEquals(5, number(service.current(), "version"));
     assertEquals(Arrays.asList(2, 4), business.current().config.planning_days);
     assertEquals(15, object(service.current().get("config")).get("rolling_window_posts"));
+    assertEquals(3, business.current().config.content_production_lead_days.get("ordinary"));
+    assertEquals(0, business.current().config.content_production_lead_days.get("marketing"));
+    assertEquals(map("ordinary", 3, "marketing", 0, "hotspot", 1), object(service.current().get("config")).get("content_production_lead_days"));
     service.restore(4, 5, "UM002");
     assertEquals(Arrays.asList(1, 3, 5), business.current().config.planning_days);
+    assertTrue(business.current().config.content_production_lead_days.isEmpty());
     assertEquals(6, number(service.current(), "version"));
     assertEquals(3, service.versions(30).size());
   }

@@ -185,6 +185,10 @@ public class ManualRepository {
     return mapper.pendingItems(afterId, limit);
   }
 
+  public List<Map<String, Object>> contentFlowCandidates(long afterId, int limit) {
+    return mapper.contentFlowCandidates(afterId, limit);
+  }
+
   public List<Map<String, Object>> batchItemStatuses(long id) {
     return mapper.batchItemStatuses(id);
   }

@@ -222,6 +222,7 @@ public class ManualPlanningController {
     topics.removeIf(
         t ->
             Boolean.TRUE.equals(t.get("is_marketing"))
+                || !TopicValidity.includes(t, LocalDate.parse(text(item, "publish_date")))
                 || Objects.equals(t.get("topic_id"), item.get("topic_id")));
     return topics;
   }

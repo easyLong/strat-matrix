@@ -74,12 +74,15 @@ public class BankSourceMapping {
   };
   private static final Field[] TOPIC = {
     f("topic_id", "选题ID", 'i', true), f("source", "选题来源", 's', true),
-    f("topic_type", "选题类型", 's', true), f("title", "选题标题", 's', true),
+    f("topic_type", "选题类型", 's', true), f("title", "选题标题", 's', false),
     f("outline", "选题大纲", 's', false), f("content_type", "选题二级分类", 's', false),
     f("heat", "热度", 'h', false), f("available", "可用状态", 'b', true),
     f("valid_from", "有效开始时间", 't', false), f("valid_to", "有效结束时间", 't', false),
     f("updated_at", "选题更新时间", 't', true), f("related_product", "关联产品", 's', false),
-    f("related_activity", "关联活动", 's', false), f("related_hotspot", "关联属地热点", 's', false)
+    f("related_activity", "关联活动", 's', false), f("related_hotspot", "关联属地热点", 's', false),
+    f("related_product_id", "关联产品ID", 's', false),
+    f("related_activity_id", "关联活动ID", 's', false),
+    f("activity_organization", "活动所属组织", 's', false)
   };
   private static final Field[] MARKETING = {
     f("content_id", "内容ID", 'i', true), f("account_id", "绑定账号ID", 'i', true),
@@ -125,6 +128,8 @@ public class BankSourceMapping {
     Map<String, Object> out = normalize(Kind.TOPIC, row);
     member(out, "source", "普通", "热点");
     member(out, "topic_type", "营销", "非营销");
+    if ("非营销".equals(out.get("topic_type")) && text(out.get("title"), "选题标题", false, 0, 502).trim().isEmpty())
+      throw invalid(502, "非营销选题必须提供选题标题");
     if (out.get("valid_from") != null
         && out.get("valid_to") != null
         && instant(out, "valid_from").isAfter(instant(out, "valid_to")))

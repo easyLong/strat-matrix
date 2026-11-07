@@ -6,10 +6,11 @@ from .security import require_integration_token
 from ..services import preparations as service
 from ..services.account_vectors import AccountVectorResult
 from ..services.preparations import PreparationCreate, PreparationAction
+from ..model_capacity import model_api_admission, task_api_admission
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
 
-@router.post("/api/internal/ai-preparations")
+@router.post("/api/internal/ai-preparations", dependencies=[Depends(model_api_admission), Depends(task_api_admission('preparation'))])
 def create_ai_preparation(payload: PreparationCreate) -> dict:
     return invoke(service.create_ai_preparation, payload=payload)
 

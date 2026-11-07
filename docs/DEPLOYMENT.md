@@ -1,5 +1,7 @@
 # strat-matrix 服务器部署说明
 
+**当前阿里云部署优先阅读[复用现有两库部署步骤](ALIYUN_DEPLOYMENT.md)**。下方包含历史升级说明，不能作为新版本从头顺序执行的命令清单；当前两库已升级时不要重复建库、迁历史或运行演示种子。
+
 环境名称现统一为`outside`和`inside`，由MySQL中的`PLANNING_ENV`选择。先阅读[双环境切换](双环境切换_V0.1.md)；下文旧`local_development`／`bank`名称作为兼容说明，不能在显式设置统一模式后继续作为独立开关。
 
 日常outside与完整验收已[统一到Java资料入口](统一资料链路_2026-11-03.md)。升级需同时构建Java、更新Python并重新生成本地Java配置，不能只替换其中一个服务。`run/bank-source-fixture.json`及私有配置不随Git交付，新环境须准备自己的模拟资料文件；缺失时明确返回503，不创建假成功数据。升级后在仓库根目录运行`python -m testing.source_verify`只读核查，真实模型验收使用`python -m testing.live --execute`并遵守暂停调度要求。
@@ -37,7 +39,7 @@ sudo apt update
 sudo apt install -y git curl nginx python3 python3-venv python3-pip nodejs npm
 ```
 
-建议 Node.js 使用 20 LTS 或更高版本，Python 使用 3.11 或更高版本。
+当前项目兼容基线为Node.js 16.13.0、npm 8.1.0、Python 3.10.11及JDK 8；按该基线准备环境，不再沿用早期Node20/Python3.11的建议。
 
 Java开发壳按Java8兼容开发；安装客户兼容的JDK及Maven，确认`java -version`和`mvn -version`可执行。`start.sh`默认构建Java；已离线准备好jar时可用`BUILD_JAVA=0`，工具路径可通过`JAVA_BIN`、`MVN_BIN`指定。不要复制内部框架依赖作为行外启动前提。
 

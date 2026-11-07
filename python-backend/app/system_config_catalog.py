@@ -15,7 +15,7 @@ class Setting:
     choices: tuple[str, ...] = ()
 
 
-# Keep current model/authentication values, listeners and the active content-provider mode.
+# Keep model/authentication values, model capacity limits, listeners and integration modes.
 # Worker switches and implementation details remain code defaults.
 CATALOG = {
     "PLANNING_ENV": Setting("integration", "部署环境：outside行外模拟接入，inside行内宿主接入", "outside", choices=('outside', 'inside')),
@@ -33,6 +33,11 @@ CATALOG = {
     "MODEL_BASE_URL": Setting("models", "文本与向量共用模型网关前缀；行外空值使用方舟，行内必须明确填写", ""),
     "MODEL_NAME": Setting("models", "全项目文本生成模型名称或接入点", "doubao-seed-2-1-lite-260915"),
     "EMBEDDING_MODEL_NAME": Setting("models", "全项目向量模型名称或接入点", "doubao-embedding-vision-251215"),
+    "AI_API_MAX_CONCURRENT_REQUESTS": Setting('model_limits','模型能力入口最大并发请求数','4','int',minimum=1,maximum=64),
+    "MODEL_MAX_CONCURRENT_REQUESTS": Setting('model_limits','所有文本模型实际调用共享并发上限','2','int',minimum=1,maximum=64),
+    "EMBEDDING_MAX_CONCURRENT_REQUESTS": Setting('model_limits','账号及选题向量模型共享并发上限','2','int',minimum=1,maximum=64),
+    "AI_PENDING_TASK_LIMIT": Setting('model_limits','每类外部创建的待处理算法任务上限','32','int',minimum=1,maximum=1000),
+    "AI_LIMIT_SCOPE": Setting('model_limits','实际模型调用限流范围：process单进程，mysql跨进程共享','process',choices=('process','mysql')),
     "CONTENT_PRODUCTION_MODE": Setting('production', '内容生产模式', 'disabled', choices=('disabled', 'local_mock')),
     "AUTO_PLANNING_POLICY_ID": Setting('planning', '周自动策划绑定的已批准V19策略ID，0表示尚未绑定', '0', 'int', minimum=0),
     "AUTO_PLANNING_ACCOUNT_IDS": Setting('planning', '周自动策划试运行账号ID的JSON数组；空数组表示全部可参与账号', '[]'),

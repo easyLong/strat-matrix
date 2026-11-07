@@ -13,7 +13,11 @@ def project_catalog(accounts, topics, *, available_only=True):
     source = MemorySource(accounts=accounts, topics=topics)
     with use_adapters(source), connection() as db, db.cursor() as cursor:
         account_rows = account_options(cursor, config.config, limit=1000) if accounts else []
-        topic_rows = topic_options(cursor, limit=1000, available_only=available_only) if topics else []
+        # Java owns the business reference date: a future manual publish date may
+        # legitimately use a topic which is not effective today. Project active
+        # facts without silently imposing the algorithm service's current time.
+        topic_rows = topic_options(cursor, limit=1000, available_only=available_only,
+                                   check_current_validity=False) if topics else []
         attach_topic_labels(cursor, topic_rows)
         for row in topic_rows:
             row.pop('topic_payload', None)

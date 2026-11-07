@@ -77,7 +77,7 @@ function selectionFixture(marketing = false) {
     { topic_id: 'N2', topic_title: 'Beta', is_marketing: false, content_type: 'type-b' },
     { topic_id: 'M1', topic_title: 'Marketing', is_marketing: true, content_type: 'type-a' },
   ])
-  const options = { topics, isMarketing: ref(marketing), topicReview: ref(false), error: ref('') }
+  const options = { topics, isMarketing: ref(marketing), publishDate: ref('2026-11-06'), topicReview: ref(false), error: ref('') }
   return { ...options, scope, selection: scope.run(() => useManualTopicSelection(options)) }
 }
 
@@ -114,7 +114,7 @@ test('saved topic selection freezes both query application and checkbox changes'
   } finally { fixture.scope.stop() }
 })
 
-test('marketing starts with marketing topics, supports nonmarketing topics and keeps exactly one selection', () => {
+test('marketing type is fixed and rejects nonmarketing topics even if filter state is tampered with', () => {
   const fixture = selectionFixture(true)
   try {
     const s = fixture.selection
@@ -123,9 +123,46 @@ test('marketing starts with marketing topics, supports nonmarketing topics and k
     s.topicTypeFilter.value = 'non_marketing'
     s.applyTopicFilters()
     s.setTopicSelected('N2', true)
-    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['N2'])
-    assert.equal(s.selectedTopics.value[0].topic_id, 'N2')
+    assert.deepEqual(s.filteredTopics.value.map(t => t.topic_id), ['M1'])
+    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['M1'])
+    assert.equal(s.selectedTopics.value[0].topic_id, 'M1')
+    assert.match(fixture.error.value, /类型或有效期/)
   } finally { fixture.scope.stop() }
+})
+
+test('manual topics use publish day for nonmarketing, current Beijing day for marketing, with inclusive boundaries', async () => {
+  const { topicValidOn, beijingDate, manualTopicTooltip } = loadTs('../src/ui/manualTopics.ts')
+  assert.equal(beijingDate(new Date('2026-11-05T16:05:00Z')), '2026-11-06')
+  const topic = { topic_id: 'FUTURE', topic_title: 'Future', is_marketing: false, valid_from: '2026-11-05T16:00:00Z', valid_to: '2026-11-07T15:59:59Z' }
+  assert.equal(topicValidOn(topic, '2026-11-05'), false)
+  assert.equal(topicValidOn(topic, '2026-11-06'), true)
+  assert.equal(topicValidOn(topic, '2026-11-07'), true)
+  assert.equal(topicValidOn(topic, '2026-11-08'), false)
+  assert.equal(topicValidOn({ ...topic, valid_from: 'bad-date' }, '2026-11-06'), false)
+  const fixture = selectionFixture()
+  try {
+    fixture.topics.value = [topic]
+    assert.deepEqual(fixture.selection.filteredTopics.value.map(t => t.topic_id), ['FUTURE'])
+    fixture.selection.setTopicSelected('FUTURE', true)
+    fixture.topicReview.value = true
+    fixture.publishDate.value = '2026-11-08'
+    await nextTick()
+    assert.equal(fixture.selection.filteredTopics.value.length, 0)
+    assert.equal(fixture.selection.selectedTopicIds.value.length, 0)
+    assert.equal(fixture.topicReview.value, false)
+    assert.match(fixture.error.value, /已移除/)
+  } finally { fixture.scope.stop() }
+  const scope = effectScope()
+  try {
+    const marketing = { ...topic, is_marketing: true, topic_title: '', related_activity_id: 'ACT-1', related_activity: '活动名称', activity_organization: '测试分行' }
+    const options = { topics: ref([marketing]), isMarketing: ref(true), publishDate: ref('2026-11-09'), today: ref('2026-11-06'), topicReview: ref(false), error: ref('') }
+    const s = scope.run(() => useManualTopicSelection(options))
+    assert.equal(s.filteredTopics.value.length, 1)
+    options.today.value = '2026-11-08'
+    assert.equal(s.filteredTopics.value.length, 0)
+    assert.match(manualTopicTooltip(marketing), /ACT-1/)
+    assert.doesNotMatch(manualTopicTooltip(marketing), /选题标题|选题大纲/)
+  } finally { scope.stop() }
 })
 
 test('nonmarketing selection stays bounded while filters and pagination change', async () => {

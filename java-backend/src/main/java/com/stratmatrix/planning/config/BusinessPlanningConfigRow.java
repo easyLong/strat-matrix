@@ -8,6 +8,7 @@ public class BusinessPlanningConfigRow {
   public String scheduleTime;
   public int marketingMax;
   public int hotspotRatio;
+  public String productionLeadDaysJson;
   public String action;
   public Integer sourceVersion;
   public String createdBy;

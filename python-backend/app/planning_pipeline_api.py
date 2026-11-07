@@ -17,6 +17,7 @@ from .planning_pipeline_runner import (advance_pipeline_to_commit,
 from .ordinary_scheduler import start_v19_pipeline
 from .ordinary_planning import PlanningError
 from .business_snapshot import BusinessConfigSnapshot
+from .model_capacity import model_api_admission, task_api_admission
 from .planning_result_commit import (ResultCommitError, build_pipeline_proposal,
                                      acknowledge_pipeline_proposal)
 
@@ -59,19 +60,19 @@ def guarded(handler, *args):
         raise db_error(exc) from exc
 
 
-@router.post("/api/internal/auto-planning/start")
+@router.post("/api/internal/auto-planning/start", dependencies=[Depends(model_api_admission), Depends(task_api_admission('pipeline'))])
 def start_auto_algorithm(payload: AutoStart) -> dict:
     """Java supplies the due cycle; Python selects the approved V19 algorithm policy."""
     try:
         return start_v19_pipeline(payload.cycle_start, commit_owner='java',
             business_config_version=payload.business_config_version,
-            business_config=payload.business_config.model_dump())
+            business_config=payload.business_config.model_dump(exclude_unset=True))
     except PlanningError as exc:
         from fastapi import HTTPException
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/api/internal/planning-pipelines")
+@router.post("/api/internal/planning-pipelines", dependencies=[Depends(model_api_admission), Depends(task_api_admission('pipeline'))])
 def create_planning_pipeline(payload: PipelineCreate) -> dict:
     return guarded(create_pipeline, payload.cycle_start, payload.account_ids, payload.policy_id,
                    payload.planning_scope, payload.production_provider)
@@ -122,7 +123,7 @@ def advance_planning_pipeline(pipeline_id: int, payload: PipelineAction) -> dict
     return guarded(advance_pipeline_to_commit, pipeline_id, payload.expected_version)
 
 
-@router.post("/api/internal/planning-pipelines/{pipeline_id}/retry")
+@router.post("/api/internal/planning-pipelines/{pipeline_id}/retry", dependencies=[Depends(model_api_admission), Depends(task_api_admission('pipeline',retry=True))])
 def retry_planning_pipeline(pipeline_id: int, payload: PipelineAction) -> dict:
     return guarded(retry_pipeline_to_commit, pipeline_id, payload.expected_version)
 

@@ -97,7 +97,7 @@ class Topic(Contract):
     topic_id: str = Field(min_length=1, max_length=64, alias='选题ID')
     source: Literal['普通', '热点'] = Field(alias='选题来源')
     topic_type: Literal['营销', '非营销'] = Field(alias='选题类型')
-    title: str = Field(min_length=1, alias='选题标题')
+    title: str = Field('', alias='选题标题')
     outline: str = Field('', alias='选题大纲')
     content_type: str = Field('', alias='选题二级分类')
     heat: float | None = Field(None, ge=0, allow_inf_nan=False, alias='热度')
@@ -106,12 +106,22 @@ class Topic(Contract):
     valid_to: datetime | None = Field(None, alias='有效结束时间')
     updated_at: datetime = Field(alias='选题更新时间')
     related_product: str = Field('', alias='关联产品')
+    related_product_id: str = Field('', alias='关联产品ID')
     related_activity: str = Field('', alias='关联活动')
+    related_activity_id: str = Field('', alias='关联活动ID')
+    activity_organization: str = Field('', alias='活动所属组织')
     related_hotspot: str = Field('', alias='关联属地热点')
     _local_payload: dict = PrivateAttr(default_factory=dict)
 
+    @field_validator('title', 'outline', mode='before')
+    @classmethod
+    def empty_optional_marketing_text(cls, value):
+        return '' if value is None else value
+
     @model_validator(mode='after')
     def check_validity(self):
+        if self.topic_type == '非营销' and not self.title.strip():
+            raise ValueError('非营销选题必须提供选题标题')
         if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
             raise ValueError('选题有效开始时间不可晚于结束时间')
         return self

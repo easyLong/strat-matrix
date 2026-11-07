@@ -13,6 +13,7 @@ from .contracts import (Account, AccountPlanningQuery, AccountQuery, EffectivePl
                         PlanningOutput, UsageOutput, LabelOutput, LabelTestOutput)
 from .factory import get_source, get_production
 from .ports import DataContractError, IntegrationUnavailable
+from ..model_capacity import model_api_admission
 
 router = APIRouter(prefix='/api/integrations/bank', tags=['驻场对接契约'],
                    dependencies=[Depends(require_integration_token)])
@@ -73,6 +74,7 @@ def query_labels(query: TopicIdentity):
     return invoke(lambda cursor: operations.topic_labels(cursor, query))
 
 
-@router.post('/op04/topic-labels/test', response_model=LabelTestOutput)
+@router.post('/op04/topic-labels/test', response_model=LabelTestOutput,
+             dependencies=[Depends(model_api_admission)])
 def query_test_labels(query: LabelTestQuery):
     return invoke(lambda cursor: operations.test_labels(cursor, query))

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS godp_business_planning_config (
     schedule_time CHAR(5) NOT NULL COMMENT '自动策划调度时间，24小时制HH:mm',
     marketing_max INT NOT NULL COMMENT '单营销账号每周营销内容上限',
     hotspot_ratio INT NOT NULL COMMENT '热点选题占比，整数百分比',
+    content_production_lead_days_json VARCHAR(255) NULL COMMENT '按普通营销热点配置的内容生产提前自然日JSON，空或缺项表示未配置，0为投放当天',
     updated_at DATETIME(3) NOT NULL COMMENT '最近修改时间',
     UNIQUE KEY uk_audit_legacy_godp_business_planning_config (config_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI策划业务配置当前版本';
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS godp_business_planning_config_version (
     schedule_time CHAR(5) NOT NULL COMMENT '该版本自动策划调度时间',
     marketing_max INT NOT NULL COMMENT '该版本单营销账号每周营销内容上限',
     hotspot_ratio INT NOT NULL COMMENT '该版本热点选题占比',
+    content_production_lead_days_json VARCHAR(255) NULL COMMENT '该版本按选题类型配置的内容生产提前自然日JSON，空表示历史未记录',
     action VARCHAR(16) NOT NULL COMMENT '版本动作，保存或恢复',
     source_version INT NULL COMMENT '恢复动作所引用的历史版本号',
     created_at DATETIME(3) NOT NULL COMMENT '该版本创建时间',

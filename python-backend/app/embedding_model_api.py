@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .doubao_labeling import (DoubaoConfigurationError, DoubaoResponseError,
                               DoubaoUnavailable, embed_profile)
 from .api.security import require_integration_token
+from .model_capacity import model_api_admission, CapacityExceeded
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
@@ -48,11 +49,13 @@ class EmbeddingInput(BaseModel):
         return self
 
 
-@router.post("/api/internal/embedding-model")
+@router.post("/api/internal/embedding-model", dependencies=[Depends(model_api_admission)])
 def generate_embedding(payload: EmbeddingInput) -> dict:
     """Embed a frozen topic or account profile using the globally configured model."""
     try:
         return embed_profile(payload.profile)
+    except CapacityExceeded:
+        raise
     except DoubaoConfigurationError as exc:
         raise HTTPException(503, str(exc)) from None
     except DoubaoUnavailable as exc:

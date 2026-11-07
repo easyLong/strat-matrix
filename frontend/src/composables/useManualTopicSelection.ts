@@ -1,10 +1,13 @@
 import { computed, ref, watch, type Ref } from '../compat/composition';
 import type { TopicOption } from '../types';
-export function useManualTopicSelection({ topics, isMarketing, topicReview, error }: {
+import { beijingDate, manualTopicTooltip, marketingTopicName, topicValidOn } from '../ui/manualTopics';
+export function useManualTopicSelection({ topics, isMarketing, publishDate, topicReview, error, today = ref(beijingDate()) }: {
     topics: Ref<TopicOption[]>;
     isMarketing: Ref<boolean>;
+    publishDate: Ref<string>;
     topicReview: Ref<boolean>;
     error: Ref<string>;
+    today?: Ref<string>;
 }) {
     const topicListRef = ref<HTMLElement | null>(null);
     const topicFiltersExpanded = ref(true);
@@ -22,6 +25,7 @@ export function useManualTopicSelection({ topics, isMarketing, topicReview, erro
     function applyTopicFilters() {
         if (topicReview.value)
             return;
+        topicTypeFilter.value = isMarketing.value ? 'marketing' : 'non_marketing';
         appliedTopicFilters.value = { topicId: topicIdFilter.value, query: topicQuery.value, topicType: topicTypeFilter.value, contentType: contentType.value, product: relatedProduct.value, activity: relatedActivity.value, hotspot: relatedHotspot.value };
         topicPage.value = 1;
     }
@@ -29,9 +33,15 @@ export function useManualTopicSelection({ topics, isMarketing, topicReview, erro
     const relatedProducts = computed(() => [...new Set(topics.value.map(item => item.related_product).filter(Boolean))].sort());
     const relatedActivities = computed(() => [...new Set(topics.value.map(item => item.related_activity).filter(Boolean))].sort());
     const relatedHotspots = computed(() => [...new Set(topics.value.map(item => item.related_hotspot).filter(Boolean))].sort());
-    const filteredTopics = computed(() => topics.value.filter(topic => (appliedTopicFilters.value.topicType === 'marketing' ? topic.is_marketing : !topic.is_marketing) &&
+    const referenceDate = computed(() => isMarketing.value ? today.value : publishDate.value);
+    const eligibleTopics = computed(() => topics.value.filter(topic => topic.is_marketing === isMarketing.value &&
+        !['停用', '已停用', '不可用'].includes(topic.status) && topicValidOn(topic, referenceDate.value)));
+    const validityHint = computed(() => isMarketing.value
+        ? `仅支持选择当前日期（${referenceDate.value}）在有效期内的营销选题。`
+        : `仅支持选择投放日期（${referenceDate.value || '未选择'}）在有效期内的非营销选题。`);
+    const filteredTopics = computed(() => eligibleTopics.value.filter(topic =>
         (!appliedTopicFilters.value.topicId.trim() || topic.topic_id === appliedTopicFilters.value.topicId.trim()) &&
-        (!appliedTopicFilters.value.query.trim() || topic.topic_title.toLocaleLowerCase().includes(appliedTopicFilters.value.query.trim().toLocaleLowerCase())) &&
+        (!appliedTopicFilters.value.query.trim() || (isMarketing.value ? marketingTopicName(topic) : topic.topic_title).toLocaleLowerCase().includes(appliedTopicFilters.value.query.trim().toLocaleLowerCase())) &&
         (!appliedTopicFilters.value.contentType || topic.content_type === appliedTopicFilters.value.contentType) &&
         (!appliedTopicFilters.value.product || topic.related_product === appliedTopicFilters.value.product) &&
         (!appliedTopicFilters.value.activity || topic.related_activity === appliedTopicFilters.value.activity) &&
@@ -51,6 +61,10 @@ export function useManualTopicSelection({ topics, isMarketing, topicReview, erro
     function setTopicSelected(topicId: string, checked: boolean) {
         if (topicReview.value)
             return;
+        if (checked && !eligibleTopics.value.some(topic => topic.topic_id === topicId)) {
+            error.value = '该选题类型或有效期不符合本次策划要求，请重新选择';
+            return;
+        }
         if (isMarketing.value) {
             selectedTopicIds.value = checked ? [topicId] : [];
             error.value = '';
@@ -72,21 +86,23 @@ export function useManualTopicSelection({ topics, isMarketing, topicReview, erro
         selectedTopicIds.value = selectedTopicIds.value.filter((_, itemIndex) => itemIndex !== index);
         topicReview.value = false;
     }
-    function topicTooltip(topic: TopicOption) {
-        const dash = '\u2014';
-        const validity = `${topic.valid_from?.slice(0, 10) || dash} - ${topic.valid_to?.slice(0, 10) || dash}`;
-        return [
-            `\u9009\u9898 ID: ${topic.topic_id}`,
-            `\u9009\u9898\u6807\u9898: ${topic.topic_title}`,
-            `\u9009\u9898\u5927\u7eb2: ${topic.outline || dash}`,
-            `\u5185\u5bb9\u7c7b\u578b: ${topic.content_type || dash}`,
-            `\u9009\u9898\u7c7b\u578b: ${topic.is_marketing ? '\u8425\u9500' : '\u975e\u8425\u9500'}`,
-            `\u5173\u8054\u4ea7\u54c1: ${topic.related_product || dash}`,
-            `\u5173\u8054\u6d3b\u52a8: ${topic.related_activity || dash}`,
-            `\u5173\u8054\u5c5e\u5730\u70ed\u70b9: ${topic.related_hotspot || dash}`,
-            `\u6709\u6548\u671f: ${validity}`,
-        ].join('\n');
+    const topicTooltip = manualTopicTooltip;
+    const selectionValid = computed(() => selectedTopicIds.value.length > 0 && selectedTopicIds.value.every(id => eligibleTopics.value.some(topic => topic.topic_id === id)));
+    function validateSelection() {
+        today.value = beijingDate();
+        if (selectionValid.value) return true;
+        error.value = '所选选题已不符合类型或有效期要求，请返回选择选题';
+        topicReview.value = false;
+        return false;
     }
+    watch(eligibleTopics, available => {
+        const retained = selectedTopicIds.value.filter(id => available.some(topic => topic.topic_id === id));
+        if (retained.length !== selectedTopicIds.value.length) {
+            selectedTopicIds.value = retained;
+            topicReview.value = false;
+            error.value = '部分已选选题不符合当前类型或日期的有效期要求，已移除，请重新确认';
+        }
+    }, { flush: 'sync' });
     function interactiveRowTarget(event: Event) {
         return event.target instanceof Element && Boolean(event.target.closest('input, button, a, select, textarea, label'));
     }
@@ -105,6 +121,6 @@ export function useManualTopicSelection({ topics, isMarketing, topicReview, erro
     }
     watch(topicPageSize, () => { topicPage.value = 1; });
     watch(topicPageCount, count => { topicPage.value = Math.min(topicPage.value, count); });
-    return { topicListRef, topicFiltersExpanded, selectedTopicIds, topicIdFilter, topicQuery, topicTypeFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, appliedTopicFilters, topicPage, topicPageSize, contentTypes, relatedProducts, relatedActivities, relatedHotspots, filteredTopics, topicPageCount, pagedTopics, selectedTopics, applyTopicFilters, toggleTopicRow, setTopicSelected, removeTopic, topicTooltip, reset };
+    return { topicListRef, topicFiltersExpanded, selectedTopicIds, topicIdFilter, topicQuery, topicTypeFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, appliedTopicFilters, topicPage, topicPageSize, contentTypes, relatedProducts, relatedActivities, relatedHotspots, filteredTopics, topicPageCount, pagedTopics, selectedTopics, validityHint, selectionValid, validateSelection, applyTopicFilters, toggleTopicRow, setTopicSelected, removeTopic, topicTooltip, reset };
 }
 export type ManualTopicSelection = ReturnType<typeof useManualTopicSelection>;

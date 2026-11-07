@@ -111,6 +111,27 @@ class PythonClientTest {
   }
 
   @Test
+  void capacityRejectionSurvivesJavaWithOnlySafeRetryHeaders() {
+    RestTemplate http = new RestTemplate();
+    MockRestServiceServer server = MockRestServiceServer.createServer(http);
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("Retry-After", "999");
+    headers.set("X-Private", "secret");
+    server.expect(anything()).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+        .headers(headers).contentType(MediaType.APPLICATION_JSON).body("{\"detail\":\"模型服务繁忙\"}"));
+    PythonClient client = new PythonClient(URI.create("http://python.test"), "token", http);
+    HttpClientErrorException error = assertThrows(HttpClientErrorException.class,
+        () -> client.call(HttpMethod.POST, "/api/internal/topic-label-model", Collections.emptyMap()));
+    assertEquals(429, error.getRawStatusCode());
+    assertEquals("120", error.getResponseHeaders().getFirst("Retry-After"));
+    assertFalse(error.getResponseHeaders().containsKey("X-Private"));
+    ResponseEntity<?> response = new com.stratmatrix.planning.api.PlanningApiErrors().upstream(error);
+    assertEquals(429, response.getStatusCodeValue());
+    assertEquals("120", response.getHeaders().getFirst("Retry-After"));
+    server.verify();
+  }
+
+  @Test
   void manualUsesSameClientAndRequiresAcceptance() {
     RestTemplate http = new RestTemplate();
     MockRestServiceServer server = MockRestServiceServer.createServer(http);

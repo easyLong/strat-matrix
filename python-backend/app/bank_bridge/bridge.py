@@ -55,7 +55,9 @@ def topic_payload(topic):
             'status': topic.available, 'updated_at': topic.updated_at.isoformat(),
             'valid_from': topic.valid_from.isoformat() if topic.valid_from else None,
             'valid_to': topic.valid_to.isoformat() if topic.valid_to else None,
-            'related_product': topic.related_product, 'related_activity': topic.related_activity,
+            'related_product': topic.related_product, 'related_product_id': topic.related_product_id,
+            'related_activity': topic.related_activity, 'related_activity_id': topic.related_activity_id,
+            'activity_organization': topic.activity_organization,
             'related_hotspot': topic.related_hotspot}
 
 
@@ -112,9 +114,9 @@ def planning_accounts(cursor, scope, config, *, account_ids=None):
     return result
 
 
-def topic_options(cursor, limit=1000, topic_ids=None, available_only=True):
+def topic_options(cursor, limit=1000, topic_ids=None, available_only=True, *, check_current_validity=True):
     query = TopicQuery(topic_ids=topic_ids, available_only=available_only,
-                       valid_at=datetime.now(timezone.utc) if available_only else None)
+                       valid_at=datetime.now(timezone.utc) if available_only and check_current_validity else None)
     rows = []
     for topic in collect(get_source(cursor), 'topics', query):
         rows.append(dict(topic_id=topic.topic_id, topic_title=topic.title, category=topic.content_type,
@@ -123,7 +125,9 @@ def topic_options(cursor, limit=1000, topic_ids=None, available_only=True):
                          topic_type='营销' if topic.topic_type == '营销' else topic.source,
                          valid_from=topic.valid_from.isoformat() if topic.valid_from else None,
                          valid_to=topic.valid_to.isoformat() if topic.valid_to else None,
-                         related_product=topic.related_product, related_activity=topic.related_activity,
+                         related_product=topic.related_product, related_product_id=topic.related_product_id,
+                         related_activity=topic.related_activity, related_activity_id=topic.related_activity_id,
+                         activity_organization=topic.activity_organization,
                          related_hotspot=topic.related_hotspot, _catalog_topic=True,
                          topic_payload=topic_payload(topic)))
         if len(rows) >= limit:

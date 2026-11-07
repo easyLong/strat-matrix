@@ -28,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
   BusinessPlanningConfigModule.class,
   AutoScheduleModule.class,
   ContentCompletionModule.class,
+  ContentFlowModule.class,
   PlanningReadModule.class,
   PlanningTaskModule.class,
   ManualPlanningController.class,

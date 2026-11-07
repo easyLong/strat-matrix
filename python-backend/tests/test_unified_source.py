@@ -59,6 +59,63 @@ def test_projection_uses_supplied_facts_and_restores_the_previous_source():
         assert factory.get_source(None) is previous
 
 
+@pytest.mark.parametrize('count',[1,3])
+def test_projection_binds_every_topic_id_and_keeps_saved_labels_without_network(count):
+    """Use the real MySQL parameter binder: a MagicMock alone misses truncated SQL."""
+    import json
+    from pymysql.connections import Connection
+    now=datetime.now(timezone.utc)
+    topics=[Topic(topic_id=f'BIND-{index}',title='test topic',source='普通',topic_type='非营销',
+                  available=True,updated_at=now) for index in range(count)]
+    mysql=Connection(defer_connect=True)
+    mysql.server_status=0
+    binder=mysql.cursor()
+    database=MagicMock()
+    cursor=database.cursor.return_value.__enter__.return_value
+    captured=[]
+    def execute(sql,args):
+        captured.append(binder.mogrify(sql,args))
+        assert sql.count('%s')==len(args)==count
+        assert "del_flag='N'" in sql
+        assert sql.rstrip().endswith(')')
+    cursor.execute.side_effect=execute
+    cursor.fetchall.return_value=[dict(topic_id=topic.topic_id,tags_json=json.dumps({'T1':'非营销'}),
+                                     label_status='已完成',version=2,taxonomy_version=4) for topic in topics]
+    @contextmanager
+    def connection():yield database
+    with patch('app.services.catalog_projection.connection',connection), \
+         patch('app.services.catalog_projection.get_config',return_value=SimpleNamespace(config=StrategyConfig())):
+        result=project_catalog([],topics)
+    assert len(captured)==1
+    assert len(result['topics'])==count
+    assert all(topic['labels']=={'T1':'非营销'} and topic['label_version']==2 for topic in result['topics'])
+
+
+def test_projection_keeps_future_active_topics_and_untitled_marketing_metadata_for_java_date_validation():
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    future = Topic(topic_id='FUTURE', title='future ordinary', source='普通', topic_type='非营销',
+                   available=True, valid_from=now + timedelta(days=2), updated_at=now)
+    marketing = Topic(topic_id='MARKETING', source='普通', topic_type='营销', available=True,
+                      related_activity='活动', related_activity_id='ACT-1', activity_organization='测试二级分行',
+                      related_product='产品', related_product_id='PRODUCT-1', updated_at=now)
+    disabled = future.model_copy(update={'topic_id': 'DISABLED', 'available': False})
+    @contextmanager
+    def database():
+        yield MagicMock()
+    with patch('app.services.catalog_projection.connection', database), \
+         patch('app.services.catalog_projection.get_config', return_value=SimpleNamespace(config=StrategyConfig())), \
+         patch('app.services.catalog_projection.attach_topic_labels'):
+        result = project_catalog([], [future, marketing, disabled])
+    assert [r['topic_id'] for r in result['topics']] == ['FUTURE', 'MARKETING']
+    assert result['topics'][1]['topic_title'] == ''
+    assert result['topics'][1]['related_activity_id'] == 'ACT-1'
+    assert result['topics'][1]['activity_organization'] == '测试二级分行'
+    assert result['topics'][1]['related_product_id'] == 'PRODUCT-1'
+    with pytest.raises(ValueError):
+        Topic(topic_id='UNTITLED-NORMAL', source='普通', topic_type='非营销', available=True, updated_at=now)
+
+
 def test_acceptance_scopes_ids_but_reuses_the_same_java_source():
     from testing.live_server import AcceptanceSource
     source = MagicMock()

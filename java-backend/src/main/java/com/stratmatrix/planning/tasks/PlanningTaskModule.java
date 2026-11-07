@@ -20,8 +20,9 @@ public class PlanningTaskModule {
       MarketingPlacementService placement,
       ManualContentStatusService content,
       MarketingTaskService marketing,
-      PythonExecutionClient python) {
+      PythonExecutionClient python,
+      org.springframework.beans.factory.ObjectProvider<ContentFlowDispatchService> contentFlow) {
     return new PlanningTaskService(
-        config, manual, auto, slots, placement, content, marketing, python);
+        config, manual, auto, slots, placement, content, marketing, python, contentFlow.getIfAvailable());
   }
 }

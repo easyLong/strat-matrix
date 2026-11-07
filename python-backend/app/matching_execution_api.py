@@ -14,6 +14,7 @@ from .matching_policy import confirm_policy, create_policy, policy_summary, sele
 from .matching_tasks import (cancel_task, claim_task, create_task, fail_task, heartbeat_task,
                              read_evaluation, read_task_inputs, retry_task, save_evaluation, select_task, task_summary)
 from .planning_pipeline_api import router as planning_pipeline_router
+from .model_capacity import model_api_admission, task_api_admission
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
@@ -72,7 +73,7 @@ def disable_matching_policy(policy_id: int, payload: PolicyConfirmation) -> dict
         raise db_error(exc) from exc
 
 
-@router.post("/api/internal/matching-tasks")
+@router.post("/api/internal/matching-tasks", dependencies=[Depends(model_api_admission), Depends(task_api_admission('matching'))])
 def create_matching_task(payload: MatchingTaskCreate) -> dict:
     return guarded(create_task, payload)
 
@@ -167,7 +168,7 @@ def matching_task_failure(task_id: int, payload: MatchingFailure) -> dict:
     return guarded(fail_task, task_id, payload)
 
 
-@router.post("/api/internal/matching-tasks/{task_id}/retry")
+@router.post("/api/internal/matching-tasks/{task_id}/retry", dependencies=[Depends(model_api_admission), Depends(task_api_admission('matching',retry=True))])
 def matching_task_retry(task_id: int, payload: TaskVersion) -> dict:
     return guarded(retry_task, task_id, payload.expected_version)
 

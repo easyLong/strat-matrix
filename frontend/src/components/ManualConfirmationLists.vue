@@ -4,6 +4,7 @@ import { computed, ref, watch } from '../compat/composition';
 import HoverHint from './HoverHint.vue';
 import AccountTypeBadge from './AccountTypeBadge.vue';
 import ListPagination from './ListPagination.vue';
+import MarketingTopicTable from './MarketingTopicTable.vue';
 import type { AccountOption, TopicOption } from '../types';
 export default defineComponent({
     props: { accounts: { required: true, type: Array as PropType<AccountOption[]> },
@@ -43,7 +44,7 @@ export default defineComponent({
             submitTopicsPage
         };
     },
-    components: {HoverHint, AccountTypeBadge, ListPagination}
+    components: {HoverHint, AccountTypeBadge, ListPagination, MarketingTopicTable}
 });
 </script>
 
@@ -67,7 +68,8 @@ export default defineComponent({
           <section class="manual-submit-group" :class="{ 'manual-marketing-topic-group': isMarketing }">
             <div class="manual-submit-group-head"><h3>本次使用选题</h3><span>{{ selectedTopics.length }} 个</span></div>
             <div class="manual-submit-items manual-submit-table">
-              <table class="manual-submit-topic-table" data-native-confirm="true">
+              <MarketingTopicTable v-if="isMarketing" :topics="submitTopicsPage" />
+              <table v-else class="manual-submit-topic-table" data-native-confirm="true">
                 <colgroup><col style="width:21%" /><col style="width:27%" /><col style="width:34%" /><col style="width:18%" /></colgroup>
                 <thead><tr><th>选题 ID</th><th>选题标题</th><th>选题大纲</th><th>选题二级分类</th></tr></thead>
                 <tbody><tr v-for="topic in submitTopicsPage" :key="topic.topic_id">
@@ -96,6 +98,7 @@ export default defineComponent({
 .manual-marketing-topic-group{grid-column:1/-1}
 .manual-submit-table{overflow:auto;border:1px solid var(--neutral-200);border-radius:6px}
 .manual-submit-table table{width:100%;min-width:0;table-layout:fixed}
+.manual-submit-table .marketing-topic-table{min-width:1080px;table-layout:auto}
 .manual-submit-table th,.manual-submit-table td{padding:10px 8px;text-align:left;font-size:12px}
 .manual-submit-table th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}
 .manual-submit-table :deep(.manual-submit-tooltip){width:100%;min-width:0;text-align:left;font-size:12px;color:var(--neutral-700)}

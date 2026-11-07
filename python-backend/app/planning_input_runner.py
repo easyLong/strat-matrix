@@ -6,6 +6,8 @@ from contextvars import copy_context
 from .db import connection
 from .doubao_labeling import LabelInput, label_topic, embed_profile, DoubaoConfigurationError
 from .services.labels import (TopicTagsInput, claim_topic_label_job, list_topic_label_jobs, put_topic_tags)
+from .services.labels import defer_topic_label_job
+from .model_capacity import CapacityExceeded
 from .services.topic_vectors import TopicVectorResult, topic_vector_jobs, save_topic_vector
 from .services.account_vectors import AccountVectorResult
 from .services.preparations import preparation_account_jobs, save_preparation_account_vector
@@ -40,6 +42,11 @@ def _label_job(job,scope):
                 label_error=f'模型准备失败：{type(error).__name__}',lease_id=claim['lease_id']))
     try:
         _execute_input(counts,'labels',job['topic_id'],label,fail,progress)
+    except CapacityExceeded as exc:
+        if claim:
+            defer_topic_label_job(job['topic_id'],claim['lease_id'])
+        exc.counts=counts
+        raise
     except InputModelBlocked as exc:
         exc.counts=counts
         raise
@@ -66,6 +73,7 @@ def _parallel_labels(jobs,counts,batch,workers):
             # Only this coordinator updates counters/checkpoints, in input order.
             # Each thread claims and saves its own topic using its own DB lease.
             blocked=None
+            busy=None
             for job,future in zip(group,futures):
                 if future is None:counts['deferred']+=1
                 else:
@@ -73,8 +81,13 @@ def _parallel_labels(jobs,counts,batch,workers):
                     except InputModelBlocked as exc:
                         _merge_counts(counts,exc.counts)
                         blocked=exc
-                batch.checkpoint('labels',job['id'],counts)
+                    except CapacityExceeded as exc:
+                        _merge_counts(counts,exc.counts)
+                        busy=exc
+                # Do not move the durable cursor beyond a deferred label.
+                if busy is None: batch.checkpoint('labels',job['id'],counts)
             if blocked:raise InputModelBlocked(blocked.error_type)
+            if busy:raise busy
             offset+=width
 
 
@@ -83,6 +96,9 @@ def _execute_input(counts, kind, identity, operation, record_failure, progress):
     try:
         operation()
         counts[kind] += 1
+    except CapacityExceeded:
+        counts['deferred'] += 1
+        raise
     except Exception as exc:
         status = getattr(exc, 'status_code', None)
         concurrent_claim = getattr(exc, 'detail', None) in (
@@ -150,6 +166,8 @@ def _prepare_batch(preparation_id, state, max_jobs, max_seconds,label_workers=2)
     except BatchLimit:
         counts['has_more'] = True
         counts['budget_exhausted'] = True
+    except CapacityExceeded as exc:
+        counts.update(has_more=True,busy=True,capacity_scope=exc.scope,retry_after=exc.retry_after)
     except InputModelBlocked as exc:
         counts.update(has_more=False,blocked=True,blocking_error_type=exc.error_type)
         if preparation_id is not None:
@@ -189,6 +207,9 @@ def _run_jobs(preparation_id, counts, batch,label_workers=2):
                 batch.checkpoint('labels', job['id'], counts)
                 continue
             try:_merge_counts(counts,_label_job(job,batch.scope))
+            except CapacityExceeded as exc:
+                _merge_counts(counts,exc.counts)
+                raise
             except InputModelBlocked as exc:
                 _merge_counts(counts,exc.counts)
                 batch.checkpoint('labels',job['id'],counts)

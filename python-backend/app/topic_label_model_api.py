@@ -7,17 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from .doubao_labeling import (DoubaoConfigurationError, DoubaoResponseError,
                               DoubaoUnavailable, LabelInput, label_topic)
 from .api.security import require_integration_token
+from .model_capacity import model_api_admission, CapacityExceeded
 
 
 router = APIRouter(dependencies=[Depends(require_integration_token)])
 LOG = logging.getLogger("topic-label-model")
 
 
-@router.post("/api/internal/topic-label-model")
+@router.post("/api/internal/topic-label-model", dependencies=[Depends(model_api_admission)])
 def generate_topic_labels(payload: LabelInput) -> dict:
     """Infer labels without modifying topics or claiming/completing a job."""
     try:
         return label_topic(payload)
+    except CapacityExceeded:
+        raise
     except DoubaoConfigurationError as exc:
         raise HTTPException(503, str(exc)) from None
     except DoubaoUnavailable as exc:

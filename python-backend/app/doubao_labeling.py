@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .system_config import get_setting, snapshot
 from .model_endpoint import DEFAULT_BASE_URL, ModelEndpointError, resolve_base_url
 from .vector_utils import normalized_vector
+from .model_capacity import CapacityExceeded, model_slot
 
 
 DIMENSIONS = tuple(f"T{i}" for i in range(1, 7))
@@ -88,6 +89,7 @@ class DoubaoConfig:
     chat_model: str
     embedding_model: str
     timeout: int
+    managed_capacity: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,7 @@ class EmbeddingConfig:
     api_key: str = field(repr=False)
     embedding_model: str
     timeout: int
+    managed_capacity: bool = False
 
 
 def _timeout() -> int:
@@ -117,7 +120,7 @@ def read_embedding_config() -> EmbeddingConfig:
         base_url = resolve_base_url(snapshot())
     except ModelEndpointError as error:
         raise DoubaoConfigurationError(str(error)) from None
-    return EmbeddingConfig(base_url, key, embedding, _timeout())
+    return EmbeddingConfig(base_url, key, embedding, _timeout(), managed_capacity=True)
 
 
 def read_config() -> DoubaoConfig:
@@ -126,10 +129,22 @@ def read_config() -> DoubaoConfig:
     if not model:
         raise DoubaoConfigurationError("需要配置 MODEL_NAME")
     return DoubaoConfig(embedding.base_url, embedding.api_key, model,
-                        embedding.embedding_model, embedding.timeout)
+                        embedding.embedding_model, embedding.timeout, managed_capacity=True)
 
 
 def ark_post(config: DoubaoConfig | EmbeddingConfig, path: str, payload: dict) -> dict:
+    # Every text/embedding path (including V19 and background workers) enters
+    # here. Hold the permit until the actual network response is read/closed.
+    kind = 'embedding' if path.startswith('/embeddings') else 'text'
+    with model_slot(kind, managed=config.managed_capacity):
+        return _ark_post(config, path, payload)
+
+
+class DoubaoRateLimited(CapacityExceeded, DoubaoUnavailable):
+    pass
+
+
+def _ark_post(config: DoubaoConfig | EmbeddingConfig, path: str, payload: dict) -> dict:
     data = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
     request = Request(config.base_url + path, data=data, method="POST", headers={
         "Authorization": "Bearer " + config.api_key,
@@ -143,8 +158,13 @@ def ark_post(config: DoubaoConfig | EmbeddingConfig, path: str, payload: dict) -
         result = json.loads(raw)
     except HTTPError as exc:
         # Never persist upstream bodies, model input, API keys or URLs in jobs.
+        retry_after=exc.headers.get('Retry-After','2') if exc.headers else '2'
         exc.close()
-        if exc.code in (408, 429) or exc.code >= 500:
+        if exc.code == 429:
+            try: retry_after=int(retry_after)
+            except (TypeError,ValueError): retry_after=2
+            raise DoubaoRateLimited('provider',retry_after) from None
+        if exc.code == 408 or exc.code >= 500:
             raise DoubaoUnavailable(f"豆包服务暂不可用，HTTP {exc.code}") from None
         if exc.code in (401, 403):
             raise DoubaoAccessError(f"模型访问被拒绝，HTTP {exc.code}；请检查凭据、授权与账户余额") from None

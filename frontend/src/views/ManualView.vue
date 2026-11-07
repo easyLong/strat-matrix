@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, type PropType } from '../compat/composition';
-import { computed, nextTick, onBeforeUnmount, ref, toRef, watch } from '../compat/composition';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from '../compat/composition';
 import { useRouter } from '../compat/router';
 import ManualAccountStep from '../components/manual/ManualAccountStep.vue';
 import { useManualAccountSelection } from '../composables/useManualAccountSelection';
@@ -14,6 +14,7 @@ import ManualConfirmationLists from '../components/ManualConfirmationLists.vue';
 import { usePlanningStore } from '../store';
 import type { AccountOption, ManualTaskSummary, TopicOption } from '../types';
 import { createRequestId } from '../ui/requestId';
+import { beijingDate } from '../ui/manualTopics';
 export default defineComponent({
     setup(props, context) {
         const store = usePlanningStore();
@@ -83,6 +84,9 @@ export default defineComponent({
         });
         const validAllocationCount = computed(() => Number.isInteger(allocationCount.value) && Number(allocationCount.value) >= 1 && Number(allocationCount.value) <= 1000);
         const publishDate = ref('');
+        const today = ref(beijingDate());
+        let validityTimer: ReturnType<typeof setInterval> | undefined;
+        onMounted(() => { validityTimer = setInterval(() => { today.value = beijingDate(); }, 30000); });
         const accounts = ref<AccountOption[]>([]);
         const topics = ref<TopicOption[]>([]);
         watch([taskName, allocationCount], () => {
@@ -113,6 +117,8 @@ export default defineComponent({
         const topicSelection = useManualTopicSelection({
             topics,
             isMarketing,
+            publishDate,
+            today,
             topicReview,
             error
         });
@@ -145,7 +151,7 @@ export default defineComponent({
                 list.scrollLeft = 0;
             }
         }
-        const canSubmit = computed(() => isMarketing.value ? store.databaseReady && !busy.value && taskName.value.trim() !== '' && selectedTopicIds.value.length === 1 && validAllocationCount.value : store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0 && publishDate.value !== '');
+        const canSubmit = computed(() => topicSelection.selectionValid.value && (isMarketing.value ? store.databaseReady && !busy.value && taskName.value.trim() !== '' && selectedTopicIds.value.length === 1 && validAllocationCount.value : store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0 && publishDate.value !== ''));
         watch(contentMode, () => {
             accountSelection.reset();
             topicSelection.reset();
@@ -214,6 +220,7 @@ export default defineComponent({
             immediate: true
         });
         onBeforeUnmount(() => {
+            if (validityTimer !== undefined) clearInterval(validityTimer);
             catalogRequest++;
             store.manualCreating = false;
         });
@@ -299,6 +306,7 @@ export default defineComponent({
         }
         function saveTopicStep() {
             error.value = '';
+            if (!topicSelection.validateSelection()) return;
             if (!selectedTopicIds.value.length || isMarketing.value && selectedTopicIds.value.length !== 1) {
                 error.value = isMarketing.value ? '请选择一个选题' : '请至少选择一个选题';
                 return;
@@ -322,6 +330,7 @@ export default defineComponent({
             void revealStepProgress();
         }
         function confirmTopicReview() {
+            if (!topicSelection.validateSelection()) return;
             if (!selectedTopicIds.value.length || isMarketing.value && selectedTopicIds.value.length !== 1) {
                 topicReview.value = false;
                 error.value = isMarketing.value ? '请选择一个选题' : '请选择至少一个选题';
@@ -338,6 +347,7 @@ export default defineComponent({
             void revealStepProgress();
         }
         async function submit() {
+            if (!topicSelection.validateSelection()) return;
             if (!canSubmit.value)
                 return;
             busy.value = true;

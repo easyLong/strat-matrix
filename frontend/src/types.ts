@@ -18,12 +18,16 @@ export interface LifecycleRule {
   condition_mode?: 'legacy' | 'grouped'
 }
 
+export type ProductionTopicType = 'ordinary' | 'marketing' | 'hotspot'
+export type ProductionLeadDays = Partial<Record<ProductionTopicType, number | null>>
+
 export interface StrategyConfig {
   marketing_max: number
   planning_days: number[]
   schedule_day: number
   schedule_time: string
   hotspot_ratio: number
+  content_production_lead_days?: ProductionLeadDays | null
   rolling_posts: number
   stage_targets: StageTarget[]
   lifecycle_rules: LifecycleRule[]
@@ -83,7 +87,10 @@ export interface TopicOption {
   outline: string
   account_type?: string
   related_product?: string
+  related_product_id?: string
   related_activity?: string
+  related_activity_id?: string
+  activity_organization?: string
   related_hotspot?: string
   valid_from?: string | null
   valid_to?: string | null
