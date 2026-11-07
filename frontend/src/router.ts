@@ -10,6 +10,7 @@ export const router = new VueRouter({
   mode: typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'hash' : 'history',
   routes: [
     { path: '/', redirect: '/config' },
+    { path: '/workspace', component: Vue.extend({ name: 'PlanningWorkspaceEmpty', render: h => h('div') }) },
     { path: '/config', component: ConfigView, meta: { title: 'AI策划配置' } },
     { path: '/auto', redirect: '/results' },
     { path: '/manual', component: ManualView, meta: { title: '人工策划' } },

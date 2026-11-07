@@ -1,9 +1,11 @@
 <script lang="ts">
+import DateRangeFields from '../components/DateRangeFields.vue';
+import QueryActions from '../components/QueryActions.vue';
+import PeriodBatchDialog from '../components/planning/PeriodBatchDialog.vue';
 import { defineComponent, type PropType } from '../compat/composition';
 import { computed, ref, watch, onBeforeUnmount } from '../compat/composition';
 import { useRoute, useRouter } from '../compat/router';
-import PageBreadcrumbs from '../components/PageBreadcrumbs.vue';
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
+import { useActivePage } from '../composables/useActivePage';
 import ContentProgress from '../components/ContentProgress.vue';
 import ListPagination from '../components/ListPagination.vue';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
@@ -19,6 +21,7 @@ import AccountResultsList from '../components/AccountResultsList.vue';
 import type { PeriodSummary } from '../api/queries';
 type ResultDimension = 'account' | 'period';
 export default defineComponent({
+    name: 'PlanningResultsPage',
     setup(props, context) {
         const store = usePlanningStore();
         const route = useRoute();
@@ -38,12 +41,6 @@ export default defineComponent({
             batchQuery: ''
         });
         const failurePeriod = ref<PeriodSummary | null>(null);
-        usePageBreadcrumbs(() => failurePeriod.value ? [{
-                label: '失败详情'
-            }] : [], {
-            append: true,
-            close: closeFailureDetails
-        });
         const page = ref(1);
         const pageSize = ref(20);
         const periodRows = ref<PeriodSummary[]>([]);
@@ -51,6 +48,7 @@ export default defineComponent({
         const periodTotal = ref(0);
         let loadVersion = 0;
         let controller: AbortController | undefined;
+        let resultsPaused = false;
         const requestedBatchId = computed(() => typeof route.query.batch === 'string' && /^\d+$/.test(route.query.batch) ? Number(route.query.batch) : null);
         const requestedAccountId = computed(() => typeof route.query.account === 'string' ? route.query.account.trim() : '');
         const requestedCycle = computed(() => typeof route.query.cycle === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(route.query.cycle) ? route.query.cycle : '');
@@ -188,7 +186,7 @@ export default defineComponent({
                 });
         }
         async function loadBatches() {
-            if (!store.databaseReady)
+            if (resultsPaused || route.path !== '/results' || !store.databaseReady)
                 return;
             const version = ++loadVersion;
             controller?.abort();
@@ -247,11 +245,18 @@ export default defineComponent({
             if (store.databaseReady && dimension.value === 'period' && !showingBatchDetail.value && !showingPeriodDetail.value)
                 void loadBatches();
         });
-        onBeforeUnmount(() => {
+        useActivePage(() => {
+            const resumed = resultsPaused;
+            resultsPaused = false;
+            if (resumed && store.databaseReady && (dimension.value === 'period' || showingAccountDetail.value)) void loadBatches();
+        }, () => {
+            resultsPaused = true;
             ++loadVersion;
             controller?.abort();
         });
+        const periodBatchDetail = computed(() => periods.value.find(period => period.cycleStart === expandedPeriod.value) || null);
         return {
+            periodBatchDetail,
             formatDateTime,
             statusTone,
             store,
@@ -297,12 +302,13 @@ export default defineComponent({
             returnToBatchCycle
         };
     },
-    components: {AccountResultsList, LoadingSkeleton, PlanningDetailsView, PlanningExport, ContentProgress, ListPagination, ResultFailureDrawer}
+    components: {DateRangeFields, QueryActions, PeriodBatchDialog, AccountResultsList, LoadingSkeleton, PlanningDetailsView, PlanningExport, ContentProgress, ListPagination, ResultFailureDrawer}
 });
 </script>
 
 <template>
 <div class="vue2-component-root">
+  <PeriodBatchDialog v-if="periodBatchDetail" :period="periodBatchDetail" @close="expandedPeriod = null" @open-batch="openBatch($event, periodBatchDetail.cycleStart); expandedPeriod = null" />
   <div v-if="dimension === 'account' && !showingAccountDetail" class="account-results-shell">
     <div class="result-tabs" role="group" aria-label="策划结果查看方式">
       <button type="button" class="active" aria-pressed="true" @click="switchDimension('account')">账号列表</button>
@@ -358,16 +364,12 @@ export default defineComponent({
 
       <section class="card period-result-card">
         <div class="card-body batch-dimension-filters">
-          <button class="filter-collapse-toggle" type="button" aria-controls="period-dimension-filter-fields" :aria-expanded="filtersExpanded" @click="filtersExpanded = !filtersExpanded">
-            <span>筛选条件</span>
-            <svg :class="{ expanded: filtersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
-          </button>
-          <div id="period-dimension-filter-fields" v-show="filtersExpanded" class="batch-filter-fields">
+
+          <div id="period-dimension-filter-fields"  class="batch-filter-fields">
             <div class="batch-filter-row query-filter-grid" data-query-filters="standard">
-              <label><span>开始时间</span><input v-model="startDate" type="date" :max="endDate || undefined" aria-label="开始时间" @keydown.enter.prevent="applyFilters" /></label>
-              <label><span>结束时间</span><input v-model="endDate" type="date" :min="startDate || undefined" aria-label="结束时间" @keydown.enter.prevent="applyFilters" /></label>
+              <DateRangeFields :start.sync="startDate" :end.sync="endDate" @query="applyFilters" />
               <label><span>批次号或批次 ID</span><input v-model="batchQuery" type="search" aria-label="批次号或批次 ID" placeholder="输入批次号或批次 ID" @keydown.enter.prevent="applyFilters" /></label>
-              <div class="query-filter-actions"><button class="btn primary" type="button" @click="applyFilters">查询</button></div>
+              <QueryActions @query="applyFilters" @clear="startDate=''; endDate=''; batchQuery=''" />
             </div>
             <p v-if="dateFilterError" class="inline-error" role="alert">{{ dateFilterError }}</p>
           </div>
@@ -388,32 +390,13 @@ export default defineComponent({
                   <td class="batch-count" :class="{ failed: period.failedCount > 0 }">{{ period.failedCount }}</td>
                   <td>{{ formatDateTime(period.updatedAt) }}</td>
                   <td><div class="period-actions">
-                    <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">{{ expandedPeriod === period.cycleStart ? '收起批次' : '查看批次' }}</button>
+                    <button class="text-btn" type="button" :aria-expanded="expandedPeriod === period.cycleStart" @click="togglePeriod(period.cycleStart)">查看批次</button>
                     <button class="text-btn" type="button" @click="openPeriod(period)">查看策划</button>
                     <PlanningExport inline :batches="period.batches" :filename="`策划明细_${period.cycleStart}_${period.cycleEnd}.xlsx`" />
-                    <button v-if="period.failedCount > 0" class="text-btn failure-action" type="button" @click="showFailureDetails(period)">查看失败详情</button>
+                    <button v-if="period.failedCount > 0" class="text-btn failure-action" type="button" @click="showFailureDetails(period)">查看失败详情（{{ period.failedCount }}）</button>
                   </div></td>
                 </tr>
-                <tr :key="(period.cycleStart) + '-1'" v-if="expandedPeriod === period.cycleStart" class="period-expansion-row">
-                  <td colspan="9">
-                    <div class="period-batch-panel"><div class="table-wrap"><table>
-                      <thead><tr><th>批次</th><th>策划方式</th><th>批次周期</th><th>账号数</th><th>完成数</th><th>失败数</th><th>选题数</th><th>策划状态</th><th title="完成内容生产的账号数 / 总账号数">内容进度</th><th>更新时间</th><th>操作</th></tr></thead>
-                      <tbody><tr v-for="batch in period.batches" :key="batch.id">
-                        <td><div class="account-name-cell"><b>{{ batch.task_name || '—' }}</b><small>ID {{ batch.batch_code }}</small></div></td>
-                        <td>{{ batch.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</td>
-                        <td>{{ batch.cycle_start }} 至 {{ batch.cycle_end }}</td>
-                        <td>{{ batch.account_count }}</td>
-                        <td class="batch-count" :class="{ completed: batch.completed_count > 0 }">{{ batch.completed_count }}</td>
-                        <td class="batch-count" :class="{ failed: batch.failed_count > 0 }">{{ batch.failed_count }}</td>
-                        <td>{{ batch.topic_count }}</td>
-                        <td><span :class="['tag', statusTone(batch.planning_status)]">{{ batch.planning_status || batch.status }}</span></td>
-                        <td><ContentProgress display="status" :completed="batch.content_completed_account_count" :total="batch.account_count" /></td>
-                        <td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td>
-                        <td><div class="period-actions"><button class="text-btn" type="button" @click="openBatch(batch, period.cycleStart)">查看策划</button><PlanningExport inline :batches="[batch]" :filename="`策划明细_${batch.batch_code}.xlsx`" /></div></td>
-                      </tr></tbody>
-                    </table></div></div>
-                  </td>
-                </tr>
+
               </template>
               <tr v-if="periods.length === 0"><td colspan="9"><div class="empty-state"><b>暂无符合条件的策划周期</b></div></td></tr>
             </tbody>
@@ -429,7 +412,7 @@ export default defineComponent({
 </template>
 
 <style scoped>
-.legacy-account-view :deep(.result-tabs){display:none}
+.legacy-account-view ::v-deep .result-tabs{display:none}
 .batch-filter-row>label{display:flex;min-width:0;flex-direction:column;gap:6px;color:var(--neutral-500);font-size:12px;font-weight:600}
 .batch-filter-row>label>input{width:100%;box-sizing:border-box}
 .failure-action{color:var(--danger)!important}

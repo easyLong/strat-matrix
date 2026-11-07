@@ -2,13 +2,14 @@
 import { defineComponent, type PropType } from '../compat/composition';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from '../compat/composition';
 import { useRouter } from '../compat/router';
+import { canPlanning } from '../host/runtime';
+import { useActivePage } from '../composables/useActivePage';
 import ManualAccountStep from '../components/manual/ManualAccountStep.vue';
 import { useManualAccountSelection } from '../composables/useManualAccountSelection';
 import ManualTopicStep from '../components/manual/ManualTopicStep.vue';
 import { useManualTopicSelection } from '../composables/useManualTopicSelection';
 import ManualTaskList from '../components/manual/ManualTaskList.vue';
 import MarketingTaskDetails from '../components/MarketingTaskDetails.vue';
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
 import { api } from '../api';
 import ManualConfirmationLists from '../components/ManualConfirmationLists.vue';
 import { usePlanningStore } from '../store';
@@ -16,6 +17,7 @@ import type { AccountOption, ManualTaskSummary, TopicOption } from '../types';
 import { createRequestId } from '../ui/requestId';
 import { beijingDate } from '../ui/manualTopics';
 export default defineComponent({
+    name: 'PlanningManualPage',
     setup(props, context) {
         const store = usePlanningStore();
         const router = useRouter();
@@ -58,35 +60,14 @@ export default defineComponent({
             }]);
         const topicStepNumber = computed(() => isMarketing.value ? 2 : 3);
         const submitStepNumber = computed(() => isMarketing.value ? 3 : 4);
-        usePageBreadcrumbs(() => {
-            const toList = () => {
-                mode.value = 'list';
-                marketingDetails.value = null;
-                error.value = '';
-            };
-            const parents = [{
-                    label: '人工策划',
-                    action: toList
-                }, {
-                    label: '策划任务列表',
-                    action: toList
-                }];
-            if (mode.value === 'create')
-                return [...parents, {
-                        label: '新建人工策划',
-                        action: () => returnToStep(1)
-                    }, {
-                        label: workflowSteps.value.find(item => item.number === step.value)?.label || '创建策划'
-                    }];
-            return marketingDetails.value ? [...parents, {
-                    label: '营销策划详情'
-                }] : parents;
-        });
         const validAllocationCount = computed(() => Number.isInteger(allocationCount.value) && Number(allocationCount.value) >= 1 && Number(allocationCount.value) <= 1000);
         const publishDate = ref('');
         const today = ref(beijingDate());
         let validityTimer: ReturnType<typeof setInterval> | undefined;
-        onMounted(() => { validityTimer = setInterval(() => { today.value = beijingDate(); }, 30000); });
+        useActivePage(() => {
+            today.value = beijingDate();
+            validityTimer = setInterval(() => { today.value = beijingDate(); }, 30000);
+        }, () => { if (validityTimer !== undefined) clearInterval(validityTimer); });
         const accounts = ref<AccountOption[]>([]);
         const topics = ref<TopicOption[]>([]);
         watch([taskName, allocationCount], () => {
@@ -220,7 +201,6 @@ export default defineComponent({
             immediate: true
         });
         onBeforeUnmount(() => {
-            if (validityTimer !== undefined) clearInterval(validityTimer);
             catalogRequest++;
             store.manualCreating = false;
         });
@@ -407,6 +387,7 @@ export default defineComponent({
             }
         }
         return {
+            canPlanning,
             store,
             mode,
             step,
@@ -452,10 +433,10 @@ export default defineComponent({
 <template>
 <div class="vue2-component-root">
   <MarketingTaskDetails v-if="marketingDetails" :details="marketingDetails" @close="marketingDetails = null" />
-  <div class="page-head manual-page-head">
+  <div v-if="mode !== 'create'" class="page-head manual-page-head">
     <div class="manual-head-actions">
-      <button v-if="mode === 'create'" class="btn" type="button" @click="mode = 'list'; error = ''">返回任务列表</button>
-      <button v-else class="btn primary" type="button" :disabled="!store.databaseReady" @click="startCreate">新建人工策划</button>
+
+      <button v-if="canPlanning('manual.create')" class="btn primary" type="button" :disabled="!store.databaseReady" @click="startCreate">新建人工策划</button>
     </div>
   </div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
@@ -465,7 +446,7 @@ export default defineComponent({
   <ManualTaskList v-if="mode === 'list'" @plan-details="openTaskDetails" />
 
   <template v-else>
-    <div ref="stepperRef" class="manual-stepper" aria-label="手动策划流程">
+    <div class="manual-create-toolbar"><button class="text-btn manual-back" type="button" aria-label="返回" @click="mode='list'; error=''">← 返回</button><span class="manual-task-context">{{ taskName || '新建人工策划' }}</span></div><div ref="stepperRef" class="manual-stepper" aria-label="手动策划流程">
       <button v-for="(item, index) in workflowSteps" :key="item.number" :class="['manual-step', { active: step === item.number, done: step > item.number }]" type="button" :disabled="item.number > step || busy" :aria-current="step === item.number ? 'step' : undefined" @click="returnToStep(item.number)">
         <span>{{ step > item.number ? '✓' : index + 1 }}</span><b>{{ item.label }}</b>
       </button>
@@ -476,9 +457,9 @@ export default defineComponent({
       <div class="card-head"><div><h2>创建策划</h2></div></div>
       <div class="card-body manual-step-body">
         <div class="manual-create-meta">
-          <label class="field"><span>任务名称 <em>*</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入任务名称" required /></label>
-          <label class="field"><span>选题类型 <em>*</em></span><select v-model="contentMode"><option value="marketing">营销</option><option value="non_marketing">非营销</option></select></label>
-          <label v-if="!isMarketing" class="field"><span>投放日期 <em>*</em></span><input v-model="publishDate" type="date" required /></label>
+          <label class="field"><span>任务名称 <em class="required-mark">✳</em></span><input v-model="taskName" type="text" maxlength="120" placeholder="请输入任务名称" required /></label>
+          <label class="field"><span>选题类型 <em class="required-mark">✳</em></span><select v-model="contentMode"><option value="marketing">营销</option><option value="non_marketing">非营销</option></select></label>
+          <label v-if="!isMarketing" class="field"><span>投放日期 <em class="required-mark">✳</em></span><input v-model="publishDate" type="date" required /></label>
         </div>
         <div class="footer-actions manual-step-actions"><button class="btn primary" type="button" :disabled="busy" @click="savePlanStep">下一步</button></div>
       </div>
@@ -535,7 +516,7 @@ export default defineComponent({
 .manual-eligibility-modal-enter-active,.manual-eligibility-modal-leave-active{transition:opacity .16s ease}
 .manual-eligibility-modal-enter,.manual-eligibility-modal-leave-to{opacity:0}
 .topic-type-badge{display:inline-flex;align-items:center;min-height:22px;padding:1px 7px;border-radius:5px;font-size:12px;line-height:18px;white-space:nowrap}.topic-type-badge.marketing{background:var(--primary-50);color:var(--primary-600)}.topic-type-badge.non-marketing{background:var(--neutral-100);color:var(--neutral-600)}
-.manual-page-head{align-items:center}.manual-head-actions{display:flex;align-items:center;gap:8px}.manual-stepper{display:flex;align-items:center;gap:0;margin:0 0 18px;padding:16px 22px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface);scroll-margin-top:76px}.manual-step{display:flex;align-items:center;gap:9px;flex:1;color:var(--neutral-400);font-size:13px}.manual-step:not(:last-child)::after{content:'';height:1px;flex:1;margin:0 16px;background:#e5e9f0}.manual-step span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--neutral-100);font-weight:600}.manual-step.active{color:var(--primary-600)}.manual-step.active span,.manual-step.done span{background:var(--primary-600);color:var(--surface)}.manual-step.done{color:var(--neutral-700)}.manual-create-meta{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}.manual-create-meta .field{min-width:180px}.manual-unknown-list{margin-top:5px;max-height:90px;overflow:auto;color:var(--processing);font-size:12px;line-height:1.6}.manual-step-change-enter-active,.manual-step-change-leave-active{transition:opacity .2s ease,transform .2s ease}.manual-step-change-enter{opacity:0;transform:translateY(8px)}.manual-step-change-leave-to{opacity:0;transform:translateY(-5px)}.manual-step-review{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--primary-100);border-radius:8px;background:var(--primary-50)}.manual-step-review-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:14px;font-weight:700}.manual-step-review>strong{flex:1;min-width:0;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.5}.manual-step-review>strong em{display:inline-block;margin:0 2px;color:var(--primary-600);font-size:20px;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-1px}.manual-submit-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.manual-submit-summary>div{display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--neutral-200);border-radius:8px}.manual-submit-summary span,.manual-submit-group-head h3{color:var(--neutral-400);font-size:12px}.manual-submit-groups{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.manual-submit-group{min-width:0;padding:14px;border:1px solid var(--neutral-200);border-radius:9px;background:var(--surface)}.manual-submit-group-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.manual-submit-group-head h3{margin:0;color:var(--neutral-700);font-size:13px}.manual-submit-group-head>span{color:var(--primary-600);font-size:12px;font-weight:600}.manual-review-total{color:var(--primary-600);font-size:22px;font-variant-numeric:tabular-nums}.manual-review-total small{font-size:12px;font-weight:500}.manual-review-items{display:flex;flex-direction:column;max-height:300px;overflow:auto;border-top:1px solid var(--neutral-200)}.manual-submit-items{height:300px;overflow-y:scroll;scrollbar-gutter:stable}.manual-submit-pagination{margin-top:10px}.manual-review-item{display:flex;flex-direction:column;gap:4px;padding:9px 2px;border-bottom:1px solid var(--neutral-100)}.manual-review-item:last-child{border-bottom:0}.manual-review-item>b{color:var(--neutral-700);font-size:13px;line-height:1.45;overflow-wrap:anywhere}.manual-review-item>small{color:var(--neutral-400);font-size:11px;line-height:1.4;overflow-wrap:anywhere}.manual-selected-count{color:var(--primary-600);font-weight:600}.manual-availability-error{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.manual-page-head{align-items:center}.manual-head-actions{display:flex;align-items:center;gap:8px}.manual-stepper{display:flex;align-items:center;gap:0;margin:0 0 18px;padding:16px 22px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface);scroll-margin-top:76px}.manual-step{display:flex;align-items:center;gap:9px;flex:1;color:var(--neutral-400);font-size:13px}.manual-step:not(:last-child)::after{content:'';height:1px;flex:1;margin:0 16px;background:#e5e9f0}.manual-step span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--neutral-100);font-weight:600}.manual-step.active{color:var(--primary-600)}.manual-step.active span,.manual-step.done span{background:var(--primary-600);color:var(--surface)}.manual-step.done{color:var(--neutral-700)}.manual-create-meta{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}.manual-create-meta .field{min-width:180px}.manual-unknown-list{margin-top:5px;max-height:90px;overflow:auto;color:var(--processing);font-size:12px;line-height:1.6}.manual-step-change-enter-active,.manual-step-change-leave-active{transition:opacity .16s ease}.manual-step-change-enter{opacity:0}.manual-step-change-leave-to{opacity:0}.manual-step-review{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--primary-100);border-radius:8px;background:var(--primary-50)}.manual-step-review-icon{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:14px;font-weight:700}.manual-step-review>strong{flex:1;min-width:0;color:var(--neutral-700);font-size:13px;font-weight:500;line-height:1.5}.manual-step-review>strong em{display:inline-block;margin:0 2px;color:var(--primary-600);font-size:20px;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-1px}.manual-submit-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.manual-submit-summary>div{display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--neutral-200);border-radius:8px}.manual-submit-summary span,.manual-submit-group-head h3{color:var(--neutral-400);font-size:12px}.manual-submit-groups{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.manual-submit-group{min-width:0;padding:14px;border:1px solid var(--neutral-200);border-radius:9px;background:var(--surface)}.manual-submit-group-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.manual-submit-group-head h3{margin:0;color:var(--neutral-700);font-size:13px}.manual-submit-group-head>span{color:var(--primary-600);font-size:12px;font-weight:600}.manual-review-total{color:var(--primary-600);font-size:22px;font-variant-numeric:tabular-nums}.manual-review-total small{font-size:12px;font-weight:500}.manual-review-items{display:flex;flex-direction:column;max-height:300px;overflow:auto;border-top:1px solid var(--neutral-200)}.manual-submit-items{height:300px;overflow-y:scroll;scrollbar-gutter:stable}.manual-submit-pagination{margin-top:10px}.manual-review-item{display:flex;flex-direction:column;gap:4px;padding:9px 2px;border-bottom:1px solid var(--neutral-100)}.manual-review-item:last-child{border-bottom:0}.manual-review-item>b{color:var(--neutral-700);font-size:13px;line-height:1.45;overflow-wrap:anywhere}.manual-review-item>small{color:var(--neutral-400);font-size:11px;line-height:1.4;overflow-wrap:anywhere}.manual-selected-count{color:var(--primary-600);font-weight:600}.manual-availability-error{display:flex;align-items:center;justify-content:space-between;gap:12px}
 @media(max-width:900px){.manual-submit-groups{grid-template-columns:1fr}}
 @media(max-width:580px){.manual-submit-summary{grid-template-columns:1fr}.manual-stepper{padding:12px;scroll-margin-top:124px}.manual-step{gap:5px;font-size:11px}.manual-step:not(:last-child)::after{margin:0 7px}.manual-step span{width:22px;height:22px}.manual-create-meta{align-items:stretch;flex-direction:column}.manual-create-meta .field{min-width:0}.manual-step-review{flex-wrap:wrap}.manual-step-review>strong{flex-basis:calc(100% - 36px)}.manual-step-review .btn{flex:1}}
 @media(prefers-reduced-motion:reduce){.manual-step-change-enter-active,.manual-step-change-leave-active{transition:none}}
@@ -550,7 +531,7 @@ export default defineComponent({
 .manual-submit-table table{width:100%;min-width:0;table-layout:fixed}
 .manual-submit-table th,.manual-submit-table td{padding:10px 8px;text-align:left;font-size:12px}
 .manual-submit-table th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}
-.manual-submit-table :deep(.manual-submit-tooltip){width:100%;min-width:0;text-align:left;font-size:12px;color:var(--neutral-700)}
+.manual-submit-table ::v-deep .manual-submit-tooltip{width:100%;min-width:0;text-align:left;font-size:12px;color:var(--neutral-700)}
 .manual-submit-truncate{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .manual-submit-truncate.account-name,.manual-submit-truncate.topic-title{font-weight:500;color:var(--neutral-800)}
 .manual-submit-truncate.identifier{font-variant-numeric:tabular-nums;color:var(--neutral-500)}

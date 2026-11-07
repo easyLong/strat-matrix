@@ -1,23 +1,16 @@
 <script lang="ts">
+import { useActivePage } from '../composables/useActivePage';
 import { defineComponent, type PropType } from '../compat/composition';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
 import { api } from '../api';
 import type { TopicOption } from '../types';
 import type { TaxonomyItems } from '../topicTaxonomy';
 import TopicLabelDetails from './TopicLabelDetails.vue';
-import PageBreadcrumbs from './PageBreadcrumbs.vue';
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
 export default defineComponent({
     props: { topic: { required: true, type: null as unknown as PropType<TopicOption> },
         items: { required: true, type: null as unknown as PropType<TaxonomyItems> } },
     setup(props, context) {
         const emit = context.emit;
-        usePageBreadcrumbs(() => [{
-                label: '选题详情'
-            }], {
-            append: true,
-            close: () => emit('close')
-        });
         const loaded = ref<TopicOption | null>(null);
         const loading = ref(false);
         const error = ref('');
@@ -68,18 +61,17 @@ export default defineComponent({
                 first.focus();
             }
         }
-        onMounted(async () => {
+        const drawerActive = useActivePage(async () => {
             document.addEventListener('keydown', keyboard, true);
             await nextTick();
-            panel.value?.querySelector<HTMLButtonElement>('button')?.focus();
-        });
-        onBeforeUnmount(() => {
-            requestId++;
+            if (drawerActive.value) panel.value?.querySelector<HTMLButtonElement>('button')?.focus();
+        }, () => {
             document.removeEventListener('keydown', keyboard, true);
-            returnFocus?.focus({
+            if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus({
                 preventScroll: true
             });
         });
+        onBeforeUnmount(() => { requestId++; });
         return {
             emit,
             loading,
@@ -88,13 +80,13 @@ export default defineComponent({
             detail
         };
     },
-    components: {PageBreadcrumbs, TopicLabelDetails}
+    components: {TopicLabelDetails}
 });
 </script>
 <template>
   <BodyPortal><div class="drawer-mask topic-detail-mask" @click.self="emit('close')"><aside ref="panel" class="drawer topic-detail-drawer" role="dialog" aria-modal="true" aria-label="选题详情"><div class="drawer-head"><h2>选题详情</h2><button class="icon-btn" type="button" aria-label="关闭选题详情" @click="emit('close')">×</button></div><div class="drawer-body">
-    <PageBreadcrumbs compact />
-    <div class="topic-detail-heading"><span class="topic-detail-id">{{ detail.topic_id }}</span><h3>{{ detail.topic_title }}</h3><div class="topic-detail-meta"><span>{{ detail.content_type || '未设置选题二级分类' }}</span><span>{{ detail.is_marketing ? '营销' : '非营销' }}</span><span v-if="detail.label_status">{{ detail.label_status }}</span></div></div>
+
+    <div class="topic-detail-heading"><h3 class="topic-identity-inline"><span>{{ detail.topic_title || '—' }}</span><span class="topic-identity-separator">-</span><span>{{ detail.topic_id || '—' }}</span></h3><div class="topic-detail-meta"><span>{{ detail.content_type || '未设置选题二级分类' }}</span><span>{{ detail.is_marketing ? '营销' : '非营销' }}</span><span v-if="detail.label_status">{{ detail.label_status }}</span></div></div>
     <section class="topic-detail-outline"><h4>选题大纲</h4><p>{{ detail.outline || '暂无选题大纲' }}</p></section>
     <div class="topic-detail-validity"><span>有效期</span><b>{{ detail.valid_from?.slice(0, 10) || '不限' }} 至 {{ detail.valid_to?.slice(0, 10) || '不限' }}</b></div>
     <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div><div v-if="loading" class="topic-detail-loading" role="status">正在读取标签…</div><TopicLabelDetails v-else :topic="detail" :items="items" />

@@ -1,14 +1,16 @@
 <script lang="ts">
+import DialogTitle from '../DialogTitle.vue';
+import QueryActions from '../QueryActions.vue';
+import PlanOperationTimeline from './PlanOperationTimeline.vue';
 import { defineComponent, type PropType } from '../../compat/composition';
 import { computed, nextTick, ref, watch, onBeforeUnmount } from '../../compat/composition';
 import TopicDetailDrawer from '../TopicDetailDrawer.vue';
-import PageBreadcrumbs from '../PageBreadcrumbs.vue';
 import { formatDateTime } from '../../planningTime';
 import { topicLabels, type TaxonomyItems } from '../../topicTaxonomy';
-import { canReplacePlanTopic, productionStatusLabel } from '../../ui/slotContentStatus';
+import { canReplacePlanTopic as isReplaceable, productionStatusLabel } from '../../ui/slotContentStatus';
+import { canPlanning } from '../../host/runtime';
 import { api } from '../../api';
 import type { AccountPlanRecord, AdjustmentRecord, TopicOption } from '../../types';
-import { usePageBreadcrumbs } from '../../composables/usePageBreadcrumbs';
 type SlotOperationLog = {
     key: string;
     createdAt: string;
@@ -19,6 +21,7 @@ type SlotOperationLog = {
 export default defineComponent({
     props: { plan: { required: true, type: null as unknown as PropType<AccountPlanRecord> } },
     setup(props, context) {
+        const canReplacePlanTopic = (item: AccountPlanRecord) => canPlanning('results.replace') && isReplaceable(item);
         const emit = context.emit;
         const error = ref('');
         const replaceTarget = ref<AccountPlanRecord | null>(null);
@@ -103,7 +106,7 @@ export default defineComponent({
                 logs.push({
                     key: `adjustment-${record.id}`,
                     createdAt: record.created_at,
-                    action: record.adjustment_source || '选题调整',
+                    action: ({ manual_replace:'替换选题', manual:'替换选题', hotspot_replace:'热点定题' } as Record<string,string>)[record.adjustment_source] || '选题调整',
                     actor: record.created_by || '—',
                     detail: `${record.old_topic_title || record.old_topic_id} → ${record.new_topic_title || record.new_topic_id}${record.reason ? ` · ${record.reason}` : ''}`
                 });
@@ -183,6 +186,8 @@ export default defineComponent({
             replacementReason.value = '';
             replacementTopics.value = [];
             adjustmentHistory.value = [];
+            planOperationsLoading.value = true;
+            planOperationsError.value = '';
             try {
                 const [topics, history, taxonomy] = await Promise.all([api.replacementCandidates(item.id), api.adjustments(item.id), api.tagTaxonomy()]);
                 if (request !== planDetailRequest)
@@ -195,6 +200,7 @@ export default defineComponent({
                 if (request === planDetailRequest)
                     error.value = exc instanceof Error ? exc.message : '读取替换信息失败';
             }
+            finally { if (request === planDetailRequest) planOperationsLoading.value = false; }
         }
         async function openPlanDetails(item: AccountPlanRecord, known?: {
             topic?: TopicOption;
@@ -274,30 +280,6 @@ export default defineComponent({
                 replaceBusy.value = false;
             }
         }
-        usePageBreadcrumbs(() => {
-            if (!replaceTarget.value)
-                return [];
-            const plan = {
-                label: '计划详情',
-                action: async () => {
-                    if (replaceBusy.value || !replaceTarget.value)
-                        return;
-                    await openPlanDetails(replaceTarget.value);
-                }
-            };
-            if (drawerMode.value === 'replace')
-                return [plan, {
-                        label: '替换选题'
-                    }];
-            if (drawerMode.value === 'history')
-                return [plan, {
-                        label: '调整记录'
-                    }];
-            return [plan];
-        }, {
-            append: true,
-            close: closeReplacement
-        });
         watch(() => props.plan, item => {
             void openPlanDetails(item);
             const request = planDetailRequest;
@@ -352,29 +334,29 @@ export default defineComponent({
             confirmReplacement
         };
     },
-    components: {PageBreadcrumbs, TopicDetailDrawer}
+    components: {PlanOperationTimeline, DialogTitle, QueryActions, TopicDetailDrawer}
 });
 </script>
 
 <template>
 <div class="vue2-component-root">
   <div v-if="replaceTarget" class="drawer-mask" @click.self="closeReplacement">
-    <aside class="drawer" role="dialog" aria-modal="true" :aria-label="drawerMode === 'view' ? String.fromCharCode(35745,21010,35814,24773) : drawerMode === 'replace' ? String.fromCharCode(26367,25442,36873,39064) : String.fromCharCode(26597,30475,35843,25972,35760,24405)">
-      <div class="drawer-head"><div><small>{{ drawerMode === 'view' ? String.fromCharCode(35745,21010,35814,24773) : drawerMode === 'replace' ? String.fromCharCode(26367,25442,36873,39064) : String.fromCharCode(26597,30475,35843,25972,35760,24405) }}</small><h2>{{ replaceTarget.account_name }}</h2></div><button class="icon-btn" type="button" aria-label="关闭" @click="closeReplacement">&times;</button></div>
+    <aside class="drawer plan-detail-drawer" role="dialog" aria-modal="true" :aria-label="drawerMode === 'view' ? String.fromCharCode(35745,21010,35814,24773) : drawerMode === 'replace' ? String.fromCharCode(26367,25442,36873,39064) : String.fromCharCode(26597,30475,35843,25972,35760,24405)">
+      <div class="drawer-head"><DialogTitle :title="drawerMode === 'view' ? '计划详情' : drawerMode === 'replace' ? '替换选题' : '调整记录'" :context="replaceTarget.account_name" /><button class="icon-btn" type="button" aria-label="关闭" @click="closeReplacement">&times;</button></div>
       <div ref="planDrawerBody" class="drawer-body">
-        <PageBreadcrumbs compact />
+
         <div v-if="error && drawerMode === 'replace'" class="banner error-banner" role="alert">{{ error }}</div>
         <template v-if="drawerMode === 'view'">
           <section class="slot-detail-section"><h3>策划信息</h3><div class="slot-detail-grid"><div><small>投放日期</small><b>{{ replaceTarget.publish_date }} · {{ weekdayLabel(replaceTarget.publish_date) }}</b></div><div><small>批次周期</small><b>{{ replaceTarget.cycle_start }} 至 {{ replaceTarget.cycle_end }}</b></div><div><small>批次编号</small><b>{{ replaceTarget.batch_code || '—' }}</b></div><div><small>策划方式</small><b>{{ replaceTarget.plan_type === 'manual' ? '人工策划' : 'AI 自动策划' }}</b></div><div><small>经营阶段</small><b>{{ replaceTarget.lifecycle_stage || '—' }}</b></div><div><small>经营作用</small><b>{{ replaceTarget.content_role || '—' }}</b></div><div><small>内容状态</small><b>{{ productionStatusLabel(replaceTarget) }}</b></div></div></section>
           <section class="slot-detail-section"><div class="slot-detail-section-head"><h3>选题信息</h3><button v-if="canReplacePlanTopic(replaceTarget)" class="btn primary" type="button" @click="openReplacement(replaceTarget)">替换选题</button></div><div v-if="planDetailLoading" class="slot-detail-loading">正在读取选题信息…</div><template v-else-if="planTopicDetail"><div class="slot-detail-grid"><div><small>选题二级分类</small><b>{{ planTopicDetail.content_type || replaceTarget.content_type || '—' }}</b></div><div><small>选题 ID</small><b>{{ planTopicDetail.topic_id || '—' }}</b></div><div class="slot-detail-wide"><small>选题标题</small><b>{{ planTopicDetail.topic_title || replaceTarget.topic_title || '—' }}</b></div><div class="slot-detail-wide"><small>选题大纲</small><b class="slot-detail-outline">{{ planTopicDetail.outline || replaceTarget.outline || '—' }}</b></div><div class="slot-detail-wide"><small>选题有效期</small><b>{{ planTopicDetail.valid_from?.slice(0, 10) || '不限' }} 至 {{ planTopicDetail.valid_to?.slice(0, 10) || '不限' }}</b></div></div><div class="slot-topic-label-groups"><div v-for="group in planTopicTagGroups" :key="group.name"><small>{{ group.name }}</small><div v-if="group.values.length" class="slot-topic-labels"><span v-for="label in group.values" :key="label">{{ label }}</span></div><b v-else class="slot-topic-label-empty">未识别</b></div></div></template><div v-else class="empty-state">暂无选题信息</div></section>
-          <section class="slot-detail-section"><h3>操作记录</h3><div v-if="planOperationsLoading" class="slot-detail-loading">正在读取操作记录…</div><div v-else-if="planOperationsError" class="detail-note" role="alert">{{ planOperationsError }}</div><div v-else-if="planOperationLogs.length" class="slot-operation-list"><article v-for="log in planOperationLogs" :key="log.key" class="slot-operation-item"><span class="slot-operation-dot" aria-hidden="true"/><div class="slot-operation-content"><div><b>{{ log.action }}</b><time>{{ formatDateTime(log.createdAt) }}</time></div><p>{{ log.detail }}</p><small>操作方：{{ log.actor }}</small></div></article></div><div v-else class="empty-state">暂无操作记录</div></section>
+          <PlanOperationTimeline class="slot-detail-section" :logs="planOperationLogs" :loading="planOperationsLoading" :error="planOperationsError" />
         </template>
         <template v-else>
-        <div class="detail-note"><b>当前选题:</b>{{ replaceTarget.topic_title }}<br /><b>投放日期:</b>{{ replaceTarget.publish_date }}<br /><b>类型:</b>{{ slotLabel(replaceTarget.slot_type, replaceTarget.plan_type) }}<br /><b>状态:</b>{{ replaceTarget.publish_status }}</div>
+        <dl class="replacement-current-plan"><div><dt>当前选题</dt><dd>{{ replaceTarget.topic_title || '待定题' }}</dd></div><div><dt>投放日期</dt><dd>{{ replaceTarget.publish_date || '—' }}</dd></div><div><dt>策划方式</dt><dd>{{ replaceTarget.plan_type==='manual' ? '人工策划' : 'AI 自动策划' }}</dd></div><div><dt>内容状态</dt><dd>{{ productionStatusLabel(replaceTarget) }}</dd></div></dl>
         <template v-if="drawerMode === 'replace' && canReplacePlanTopic(replaceTarget)">
           <h3>选择新选题</h3>
-          <div class="replacement-filter-collapse-row"><button class="filter-collapse-toggle" type="button" aria-controls="replacement-topic-filters" :aria-expanded="replacementFiltersExpanded" @click="replacementFiltersExpanded = !replacementFiltersExpanded"><span>筛选条件</span><svg :class="{ expanded: replacementFiltersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></button></div>
-          <div id="replacement-topic-filters" v-show="replacementFiltersExpanded" class="replacement-topic-filters query-filter-grid" data-query-filters="narrow">
+
+          <div id="replacement-topic-filters"  class="replacement-topic-filters query-filter-grid" data-query-filters="narrow">
             <label class="field"><span class="field-label-with-tip">选题 ID <span class="field-help-tip" tabindex="0" title="输入完整选题 ID，进行精确匹配">?</span></span><input v-model="replacementTopicIdFilter" type="text" inputmode="text" autocomplete="off" placeholder="输入完整选题 ID" /></label>
             <label class="field"><span class="field-label-with-tip">选题标题 <span class="field-help-tip" tabindex="0" title="输入标题关键词，进行模糊搜索">?</span></span><input v-model="replacementQuery" type="search" placeholder="输入选题标题关键词" /></label>
             <label class="field"><span>选题类型</span><select v-model="replacementMarketingFilter"><option value="">全部</option><option value="true">营销</option><option value="false">非营销</option></select></label>
@@ -383,22 +365,21 @@ export default defineComponent({
             <label class="field"><span>关联活动</span><select v-model="replacementActivity"><option value="">全部</option><option v-for="value in replacementActivities" :key="value" :value="value">{{ value }}</option></select></label>
             <div class="query-filter-tail">
                 <label class="field"><span>关联属地热点</span><select v-model="replacementHotspot"><option value="">全部</option><option v-for="value in replacementHotspots" :key="value" :value="value">{{ value }}</option></select></label>
-                <div class="replacement-filter-actions query-filter-actions"><button class="text-btn replacement-filter-clear" type="button" @click="replacementTopicIdFilter = ''; replacementQuery = ''; replacementMarketingFilter = ''; replacementContentType = ''; replacementProduct = ''; replacementActivity = ''; replacementHotspot = ''">清空筛选</button><button class="btn primary" type="button" @click="applyReplacementFilters">查询</button></div>
+                <QueryActions @query="applyReplacementFilters" @clear="replacementTopicIdFilter = ''; replacementQuery = ''; replacementMarketingFilter = ''; replacementContentType = ''; replacementProduct = ''; replacementActivity = ''; replacementHotspot = ''" />
               </div>
           </div>
           <div class="replacement-topic-count">符合条件 {{ replacementCandidates.length }} 个选题</div>
-          <div class="topic-check-list"><label v-for="topic in replacementCandidates" :key="topic.topic_id" class="topic-check"><input v-model="replacementTopicId" type="radio" :value="topic.topic_id" name="replacement-topic" /><span><button class="topic-title-link" type="button" @click.prevent.stop="detailTopic = topic">{{ topic.topic_title }}</button><small>{{ topic.topic_id }}<template v-if="topic.content_type"> · {{ topic.content_type }}</template><template v-if="topic.valid_to"> · 有效至 {{ topic.valid_to.slice(0, 10) }}</template></small><small class="replacement-topic-outline"><b>选题大纲</b>{{ topic.outline || '暂无选题大纲' }}</small></span></label></div>
+          <div class="topic-check-list"><label v-for="topic in replacementCandidates" :key="topic.topic_id" class="topic-check"><input v-model="replacementTopicId" type="radio" :value="topic.topic_id" name="replacement-topic" /><span><button class="topic-title-link" type="button" :title="topic.topic_title" @click.prevent.stop="detailTopic = topic">{{ topic.topic_title }}</button><small class="replacement-topic-meta"><span :title="`选题 ID：${topic.topic_id}`">{{ topic.topic_id }}</span><span v-if="topic.content_type" :title="`选题二级分类：${topic.content_type}`">{{ topic.content_type }}</span><span v-if="topic.valid_to">有效至 {{ topic.valid_to.slice(0, 10) }}</span></small><small class="replacement-topic-outline" :title="topic.outline || '暂无选题大纲'"><b>选题大纲：</b>{{ topic.outline || '暂无选题大纲' }}</small></span></label></div>
           <div v-if="replacementCandidates.length === 0" class="empty-state">没有可用候选选题</div>
           <label class="field"><span>替换原因（可选）</span><select v-model="replacementReason"><option value="">请选择原因</option><option>原选题与账号不匹配</option><option>选题重复</option><option>内容方向不合适</option><option>业务临时调整</option><option>其他</option></select></label>
         </template>
         <div v-else-if="drawerMode === 'replace'" class="detail-note">{{ replaceTarget.replace_block_reason || '\u5F53\u524D\u8BB0\u5F55\u6682\u4E0D\u53EF\u66FF\u6362' }}</div>
 
-        <h3>调整记录</h3>
-        <div v-if="adjustmentHistory.length === 0" class="empty-state">暂无历史调整</div>
-        <div v-for="record in adjustmentHistory" :key="record.id" class="detail-note">{{ formatDateTime(record.created_at) }} · {{ record.created_by }} · {{ record.adjustment_source }}<br />{{ record.old_topic_title }} · {{ record.new_topic_title }}<span v-if="record.reason"> · {{ record.reason }}</span></div>
+        <PlanOperationTimeline :logs="planOperationLogs" :loading="planOperationsLoading" :error="planOperationsError" />
         </template>
-        <div v-if="drawerMode === 'replace' && canReplacePlanTopic(replaceTarget)" class="footer-actions"><button class="btn primary" type="button" :disabled="replaceBusy || !replacementTopicId" @click="confirmReplacement">{{ replaceBusy ? '\u4fdd\u5b58\u4e2d\u2026' : '\u786e\u8ba4\u66ff\u6362' }}</button></div>
+
       </div>
+        <div v-if="drawerMode === 'replace' && canReplacePlanTopic(replaceTarget)" class="drawer-foot replacement-save-actions"><button class="btn primary" type="button" :disabled="replaceBusy || !replacementTopicId" @click="confirmReplacement">{{ replaceBusy ? '\u4fdd\u5b58\u4e2d\u2026' : '\u786e\u8ba4\u66ff\u6362' }}</button></div>
     </aside>
   </div>
   <TopicDetailDrawer v-if="detailTopic" :topic="detailTopic" :items="taxonomyItems" @close="detailTopic = null" />

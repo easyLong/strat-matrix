@@ -328,4 +328,74 @@ class AutoScheduleServiceTest {
       pool.shutdownNow();
     }
   }
+
+  @Test
+  void largeResultIsHiddenUntilCompleteAndResumesAfterPageFailure() throws Exception {
+    values.hotspot_ratio = 0;
+    long id = number(computingTask(), "id");
+    Map<String, Object> p = read(text(envelope(read(write(values))), "proposal_json"));
+    Map<String, Object> accounts = new LinkedHashMap<>();
+    List<Map<String, Object>> slots = new ArrayList<>();
+    Map<String, Object> template = rows(p.get("slots")).get(0);
+    for (int a = 0; a < 201; a++) {
+      String account = "A" + a;
+      accounts.put(account, map("account_id", account, "account_name", "测试账号" + a));
+      for (int d = 0; d < 3; d++) {
+        Map<String, Object> slot = new LinkedHashMap<>(template);
+        slot.putAll(map("account_id", account, "slot_id", account + "-" + d,
+            "publish_date", LocalDate.parse("2026-11-09").plusDays(d * 2).toString()));
+        slots.add(slot);
+      }
+    }
+    p.putAll(map("accounts", accounts, "slots", slots, "hotspot_slots", 0, "hotspot_fallbacks", map()));
+    Map<String, Object> proposal = wrap(p);
+    assertEquals("计算中", commit.commit(id, proposal, due).get("status"));
+    assertTrue(results.batches().isEmpty());
+    assertTrue(results.items().isEmpty());
+    assertTrue(results.contentFlowCandidates(0, 500).isEmpty());
+    assertTrue(results.pendingItems(0, 500).isEmpty());
+    assertNull(results.batchById(id));
+    assertEquals(500, results.stagedItemCount(id));
+    Map<String, Object> stage = results.transaction(() -> results.lockedBatchWrite(id));
+    assertEquals(500, number(stage, "write_cursor"));
+    org.springframework.jdbc.core.JdbcTemplate jdbc = new org.springframework.jdbc.core.JdbcTemplate(tx.getDataSource());
+    jdbc.execute("CREATE ALIAS JSON_EXTRACT FOR 'com.stratmatrix.planning.query.ReadDatabaseFixture.extract'");
+    jdbc.execute("CREATE ALIAS JSON_UNQUOTE FOR 'com.stratmatrix.planning.query.ReadDatabaseFixture.unquote'");
+    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
+        new ClassPathResource("db/planning-query-views.sql")).execute(tx.getDataSource());
+    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_item_read", Integer.class));
+    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_batch_read", Integer.class));
+    long hiddenId = jdbc.queryForObject("SELECT MIN(id) FROM godp_planning_item", Long.class);
+    assertNull(results.itemById(hiddenId));
+    Map<String, Object> drift = read(text(proposal, "proposal_json"));
+    rows(drift.get("slots")).get(0).put("topic_title", "变更后的提案");
+    assertThrows(IllegalStateException.class, () -> commit.commit(id, wrap(drift), due));
+    ManualRepository interrupted = new ManualRepository(resultMapper, tx) {
+      public long saveItem(long batch, String slot, String account, String date, String payload, String status) {
+        super.saveItem(batch, slot, account, date, payload, status);
+        throw new IllegalStateException("interrupted second page");
+      }
+    };
+    assertThrows(IllegalStateException.class,
+        () -> new AutoResultCommitService(mapper, interrupted).commit(id, proposal, due.plusSeconds(60)));
+    assertEquals(500, results.stagedItemCount(id));
+    assertEquals(500, number(results.transaction(() -> results.lockedBatchWrite(id)), "write_cursor"));
+    AutoScheduleMapper failedReceipt = org.mockito.Mockito.mock(AutoScheduleMapper.class,
+        org.mockito.AdditionalAnswers.delegatesTo(mapper));
+    org.mockito.Mockito.doThrow(new IllegalStateException("commit receipt failed")).when(failedReceipt)
+        .committed(id, id, text(proposal, "proposal_hash"), due.plusSeconds(90).toEpochMilli());
+    assertThrows(IllegalStateException.class,
+        () -> new AutoResultCommitService(failedReceipt, results).commit(id, proposal, due.plusSeconds(90)));
+    // Publication and task receipt are atomic, including the final page's rows.
+    assertEquals(500, results.stagedItemCount(id));
+    assertNull(results.batchById(id));
+    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_item_read", Integer.class));
+    AutoResultCommitService resumed = new AutoResultCommitService(mapper, results);
+    assertEquals("待确认", resumed.commit(id, proposal, due.plusSeconds(120)).get("status"));
+    assertEquals(603, results.itemsByBatch(id).size());
+    assertEquals(603, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_item_read", Integer.class));
+    assertTrue(results.itemsByBatch(id).stream().allMatch(row -> due.toString().equals(row.get("batch_created_at"))));
+    resumed.commit(id, proposal, due.plusSeconds(180));
+    assertEquals(603, results.stagedItemCount(id));
+  }
 }

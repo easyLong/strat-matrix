@@ -1,7 +1,8 @@
 <script lang="ts">
+import DialogTitle from '../../components/DialogTitle.vue';
 import { defineComponent, type PropType } from '../../compat/composition';
 import { computed, toRef } from '../../compat/composition';
-import PageBreadcrumbs from '../PageBreadcrumbs.vue';
+import { canPlanning } from '../../host/runtime';
 import { formatDateTime } from '../../planningTime';
 import { lifecycleRuleSummary } from '../../ui/lifecycleRules';
 import { canRestoreConfig, configDetailRows, configHistorySummary, configVersionNumber } from '../../ui/configHistory';
@@ -43,6 +44,7 @@ export default defineComponent({
             });
         });
         return {
+            canPlanning,
             formatDateTime,
             lifecycleRuleSummary,
             canRestoreConfig,
@@ -56,23 +58,23 @@ export default defineComponent({
             versionChanges
         };
     },
-    components: {PageBreadcrumbs}
+    components: {DialogTitle}
 });
 </script>
 <template>
 <div class="vue2-component-root">
   <section class="card">
     <div class="table-wrap"><table><thead><tr><th>版本</th><th>生成时间</th><th>配置摘要</th><th>操作人</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>{{ configHistorySummary(version.config) }}</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version" class="text-btn" type="button" :disabled="disabled || !canRestoreConfig(version.config)" :title="canRestoreConfig(version.config) ? undefined : '该版本未记录完整配置，仅支持查看'" @click="emit('restore',version)">恢复此版本</button></div></td></tr>
+      <tr v-for="version in versions" :key="version.version"><td><b>V{{ displayVersionNumber(version) }}</b><span v-if="version.version === versions[0]?.version" class="tag green row-tag">当前</span></td><td>{{ formatDateTime(version.created_at) }}</td><td>{{ configHistorySummary(version.config) }}</td><td>{{ version.created_by }}</td><td><div class="page-actions"><button class="text-btn" type="button" @click="showVersionDetail(version)">查看详情</button><button v-if="version.version !== versions[0]?.version && canPlanning('config.restore')" class="text-btn" type="button" :disabled="disabled || !canRestoreConfig(version.config)" :title="canRestoreConfig(version.config) ? undefined : '该版本未记录完整配置，仅支持查看'" @click="emit('restore',version)">恢复此版本</button></div></td></tr>
       <tr v-if="versions.length === 0"><td colspan="5"><div class="empty-state">暂无配置记录</div></td></tr>
     </tbody></table></div>
   </section>
 
   <div v-if="versionDetail" class="drawer-mask show" @click.self="versionDetail = null">
     <aside class="drawer" role="dialog" aria-modal="true" :aria-label="`总配置版本 V${versionDetail.version} 详情`">
-      <div class="drawer-head"><div><small>总配置 · {{ formatDateTime(versionDetail.created_at) }}</small><h2>V{{ displayVersionNumber(versionDetail) }} 配置详情</h2></div><button class="icon-btn" type="button" aria-label="关闭" @click="versionDetail = null">×</button></div>
+      <div class="drawer-head"><DialogTitle :title="`V${displayVersionNumber(versionDetail)} 配置详情`" :context="formatDateTime(versionDetail.created_at)" /><button class="icon-btn" type="button" aria-label="关闭" @click="versionDetail = null">×</button></div>
       <div class="drawer-body">
-        <PageBreadcrumbs compact />
+
         <h3>修改摘要</h3>
         <p v-if="versionPrevious" class="muted">与总配置 V{{ displayVersionNumber(versionPrevious) }} 对比</p>
         <div v-if="versionPrevious && versionChanges.length" class="table-wrap"><table><thead><tr><th>配置项</th><th>原值</th><th>新值</th></tr></thead><tbody><tr v-for="change in versionChanges" :key="change.key"><td>{{ change.label }}</td><td>{{ change.oldValue }}</td><td>{{ change.newValue }}</td></tr></tbody></table></div>

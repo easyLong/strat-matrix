@@ -87,6 +87,17 @@ public interface ManualMapper {
 
   Map<String, Object> batchById(@Param("id") long id);
 
+  Map<String, Object> lockedBatchWrite(@Param("id") long id);
+
+  int insertStagingBatch(@Param("id") long id, @Param("payload") String payload,
+      @Param("time") long time, @Param("week") String week);
+
+  int advanceBatchWrite(@Param("id") long id, @Param("cursor") int cursor);
+
+  long stagedItemCount(@Param("id") long id);
+
+  int publishBatch(@Param("id") long id);
+
   Map<String, Object> lockedBatch(@Param("id") long id);
 
   List<Map<String, Object>> allBatchPayloads();

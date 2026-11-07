@@ -8,8 +8,10 @@ import { installPlanningUi } from './install'
 import './styles/tokens.css'
 import './style.css'
 import './styles/system.css'
+import './styles/review.css'
+import './styles/standalone.css'
 
 installPlanningUi()
 Vue.config.productionTip = false
-new Vue({ router, store: planningStore, render: h => h(App) }).$mount('#app')
+new Vue({ router, store: planningStore, render: h => h('div', { class: 'planning-ui' }, [h(App)]) }).$mount('#app')
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useActivePage } from '../composables/useActivePage';
 import { defineComponent, type PropType } from '../compat/composition';
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from '../compat/composition';
 export default defineComponent({
@@ -67,13 +68,13 @@ export default defineComponent({
             if (event.key === 'Escape')
                 close();
         }
-        onMounted(() => {
+        useActivePage(() => {
             document.addEventListener('pointerdown', dismissOutside);
             document.addEventListener('keydown', dismissEscape);
             window.addEventListener('resize', place);
             window.addEventListener('scroll', place, true);
-        });
-        onBeforeUnmount(() => {
+        }, () => {
+            close();
             if (closeTimer !== undefined) clearTimeout(closeTimer);
             document.removeEventListener('pointerdown', dismissOutside);
             document.removeEventListener('keydown', dismissEscape);

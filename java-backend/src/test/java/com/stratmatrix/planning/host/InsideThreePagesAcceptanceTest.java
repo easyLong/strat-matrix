@@ -42,7 +42,7 @@ class InsideThreePagesAcceptanceTest {
   static class Host {
     @Bean
     ReadDatabaseFixture database() throws Exception {
-      return new ReadDatabaseFixture();
+      return new ReadDatabaseFixture(true);
     }
 
     @Bean("planningBusinessSessions")
@@ -427,6 +427,12 @@ class InsideThreePagesAcceptanceTest {
       TestPropertyValues.of(insideSettings()).applyTo(context);
       context.register(Host.class);
       context.refresh();
+      org.springframework.jdbc.core.JdbcTemplate runtimeSql = context.getBean(ReadDatabaseFixture.class).jdbc;
+      assertEquals("planning_runtime", runtimeSql.queryForObject("SELECT CURRENT_USER", String.class));
+      assertThrows(org.springframework.dao.DataAccessException.class,
+          () -> runtimeSql.execute("CREATE TABLE must_not_create(id INT)"));
+      assertThrows(org.springframework.dao.DataAccessException.class,
+          () -> runtimeSql.execute("ALTER TABLE godp_planning_batch ADD must_not_alter INT"));
       assertTrue(context.getBeansOfType(LegacyPageController.class).isEmpty());
       assertTrue(context.getBeansOfType(LocalJobPulse.class).isEmpty());
       assertTrue(context.getBeansOfType(FixtureSourceFacts.class).isEmpty());

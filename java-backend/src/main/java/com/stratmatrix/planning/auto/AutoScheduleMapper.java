@@ -6,6 +6,8 @@ import org.apache.ibatis.annotations.Param;
 
 /** MyBatis persistence contract for Java-owned automatic planning triggers. */
 public interface AutoScheduleMapper {
+  Map<String, Object> byId(@Param("id") long id);
+
   Map<String, Object> byCycle(@Param("cycleStart") String cycleStart);
 
   Map<String, Object> lockedById(@Param("id") long id);

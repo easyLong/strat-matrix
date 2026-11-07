@@ -1,0 +1,151 @@
+/* Shared UI review: consistent compact actions and bounded selection surfaces. */
+.planning-ui .card,.planning-ui .drawer,.planning-ui .export-dialog,.planning-ui .app-confirm,.planning-ui .manual-eligibility-dialog { border-radius:12px; }
+.planning-ui .query-filter-grid input,.planning-ui .query-filter-grid select { box-sizing:border-box;width:100%;min-width:0;height:32px;min-height:32px;font-size:14px;border-radius:12px; }
+.planning-ui .query-filter-grid label>span,.planning-ui .query-filter-grid .field>span { min-height:20px;font-size:14px;line-height:20px;white-space:nowrap; }
+.planning-ui .query-filter-grid input::placeholder { font-size:14px;color:var(--text-muted); }
+.planning-ui .query-filter-actions .btn { height:32px;min-height:32px;padding:0 12px;font-size:14px; }
+.planning-ui .query-filter-grid .field,.planning-ui .query-filter-grid label { min-width:0; }
+.planning-ui label.field { display:flex;flex-direction:column;align-items:stretch;gap:8px; }
+.planning-ui .query-filter-grid { align-items:end; }
+.planning-ui .required-mark { margin-left:3px;color:var(--danger);font-size:12px;font-style:normal; }
+.planning-ui .config-rules-head { display:flex;align-items:center;justify-content:flex-start;gap:16px;flex-wrap:wrap; }
+.planning-ui .config-rules-head h2 { margin:0; }
+.planning-ui .config-window-inline { display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:0;font-size:14px;color:var(--text-secondary); }
+.planning-ui .config-window-inline .input-unit { display:flex;align-items:center;gap:8px; }
+.planning-ui .config-window-inline .input-unit { border:0;background:transparent;padding:0; }
+.planning-ui .config-window-inline input { width:64px;height:32px;min-height:32px;border:1px solid var(--neutral-200);border-radius:12px;padding:0 8px;text-align:center; }
+.planning-ui .config-section-toggle { margin-left:auto; }
+.planning-ui .manual-create-toolbar { display:flex;align-items:center;gap:12px;margin-bottom:12px;min-width:0; }
+.planning-ui .manual-create-toolbar .manual-back { height:32px;flex:none; }
+.planning-ui .manual-task-context { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);font-size:14px; }
+.planning-ui .manual-create-meta .field { display:flex;flex-direction:column;align-items:stretch;gap:8px; }
+.planning-ui .manual-create-meta .field>span { margin:0;white-space:nowrap; }
+.planning-ui .manual-account-table,.planning-ui .manual-topic-table { min-height:240px;max-height:min(52dvh,520px);overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable; }
+.planning-ui .manual-account-table table,.planning-ui .manual-topic-table table { width:100%; }
+.planning-ui .manual-account-table td { max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px; }
+.planning-ui .manual-account-table thead,.planning-ui .manual-topic-table thead { position:sticky;top:0;z-index:2; }
+.planning-ui .manual-topic-picker-available { min-width:0; }
+.planning-ui .manual-topic-list-meta { display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative; }
+.planning-ui .manual-upload-panel { padding:24px;border:1px dashed var(--primary-300);border-radius:12px;background:var(--primary-50); }
+.planning-ui .manual-upload-heading { display:flex;align-items:center;gap:12px;margin-bottom:16px; }
+.planning-ui .manual-upload-heading>div { display:flex;flex-wrap:wrap;align-items:center;gap:12px; }
+.planning-ui .manual-upload-heading b { font-size:14px;color:var(--text-primary); }
+.planning-ui .manual-upload-heading small { font-size:13px;color:var(--text-secondary); }
+.planning-ui .upload-template-icon { display:grid;place-items:center;width:36px;height:36px;border-radius:12px;color:var(--primary-600);background:var(--surface);font-size:24px; }
+.planning-ui .manual-upload-actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+.planning-ui .drawer-head { gap:16px; }
+.planning-ui .drawer-head>div,.planning-ui .drawer-head>.dialog-title-line { min-width:0;flex:1; }
+.planning-ui .drawer-head .icon-btn { flex:none; }
+.planning-ui .drawer-foot { display:flex;align-items:center;justify-content:flex-end;gap:8px; }
+.planning-ui .failure-action { white-space:nowrap; }
+.planning-ui .failure-account { display:flex;flex-direction:row;align-items:baseline;gap:6px;min-width:0; }
+.planning-ui .failure-account b,.planning-ui .failure-account small { font-size:13px;font-weight:400; }
+.planning-ui .failure-account small::before { content:'-';margin-right:6px; }
+.planning-ui .topic-identity-inline { display:flex;align-items:center;gap:8px;min-width:0; }
+.planning-ui .topic-identity-inline>span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500; }
+.planning-ui .topic-identity-inline .topic-identity-separator { flex:none;color:var(--text-muted); }
+.planning-ui .section-title-with-icon { display:flex;align-items:center;gap:8px; }
+.planning-ui .section-title-with-icon>span { color:var(--primary-600); }
+.planning-ui .account-pagination .pagination-total { white-space:nowrap; }
+.planning-ui .export-dates { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:20px; }
+.planning-ui .config-stack .lifecycle-global-head { margin-top:0;padding-top:0;border-top:0; }
+.planning-ui .period-summary-table { min-width:1280px; }
+.planning-ui .period-summary-table th:last-child,.planning-ui .period-summary-table td:last-child { position:sticky;right:0;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-200); }
+.planning-ui .period-summary-table th:last-child { z-index:2;background:var(--neutral-50); }
+.planning-ui .period-summary-table .period-actions { justify-content:flex-end; }
+.planning-ui .section-title-with-icon>svg { color:var(--primary-600);flex:none; }
+.planning-ui .planning-dashboard { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.planning-ui .period-batches-dialog table { min-width:1480px; }
+.planning-ui .period-batches-dialog th,.planning-ui .period-batches-dialog td { white-space:nowrap; }
+.planning-ui .period-batches-dialog th:last-child,.planning-ui .period-batches-dialog td:last-child { position:sticky;right:0;min-width:150px;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-200); }
+.planning-ui .period-batches-dialog th:last-child { z-index:2;background:var(--neutral-50); }
+.planning-ui .period-batches-dialog .account-name-cell { min-width:200px;max-width:260px; }
+.planning-ui .period-batches-dialog .account-name-cell b,.planning-ui .period-batches-dialog .account-name-cell small { overflow:hidden;text-overflow:ellipsis; }
+.planning-ui .failure-drawer .drawer-body { flex:1;min-height:0; }
+/* 11-6 supplied mockups: structure follows the artwork; theme follows bank tokens. */
+.planning-ui .card-head h2 { display:flex;align-items:center;gap:8px; }
+.planning-ui .card-head h2::before { flex:none;width:3px;height:16px;border-radius:2px;background:var(--primary-600);content:''; }
+.planning-ui .card-head h2:has(.manual-topic-substep-number)::before,.planning-ui .card-head h2.section-title-with-icon::before { display:none; }
+.planning-ui .config-overview-card .card-head { justify-content:space-between; }
+.planning-ui .config-glance-item,.planning-ui .production-timing-item,.planning-ui .manual-submit-summary>div { border-color:var(--primary-100);border-radius:12px;background:var(--primary-50); }
+.planning-ui .config-glance-item>span { color:var(--text-secondary);font-size:14px; }
+.planning-ui .config-glance-item>b { margin-top:8px;font-size:16px; }
+.planning-ui .config-glance-days-list b { padding:0;border:0;background:transparent;color:var(--text-primary);font-size:14px; }
+.planning-ui .config-glance-days-list { gap:14px; }
+.planning-ui .config-edit-actions { position:fixed;z-index:35;left:var(--sidebar-width);right:0;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding:14px 24px;border-top:1px solid var(--neutral-200);background:var(--surface);box-shadow:0 -4px 16px rgb(0 0 0 / 3%); }
+.planning-ui .config-stack { padding-bottom:80px; }
+.planning-ui .manual-create-toolbar { padding:0 0 16px;border-bottom:1px solid var(--divider);margin-bottom:20px; }
+.planning-ui .manual-create-toolbar .manual-back { border:1px solid var(--neutral-200);padding:0 12px;color:var(--text-secondary);background:var(--surface); }
+.planning-ui .manual-task-context { border-left:1px solid var(--neutral-200);padding-left:12px;color:var(--text-primary); }
+.planning-ui .manual-topic-picker { grid-template-columns:minmax(220px,27%) minmax(0,1fr);align-items:start; }
+.planning-ui .manual-topic-picked { padding:0;border:1px solid var(--neutral-200);border-radius:12px;background:var(--neutral-50);overflow:hidden; }
+.planning-ui .manual-topic-picked-head { display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:14px 12px;border-bottom:1px solid var(--neutral-200); }
+.planning-ui .manual-topic-picked-head .picked-count-badge { display:inline-grid;place-items:center;width:24px;height:24px;margin:0;border-radius:50%;background:var(--primary-600);color:var(--surface);font-size:12px; }
+.planning-ui .manual-topic-picked-head .picked-clear { margin-left:auto; }
+.planning-ui .manual-topic-picked-list { display:flex;flex-direction:column;gap:10px;padding:12px;max-height:640px;overflow:auto; }
+.planning-ui .manual-topic-picker .manual-topic-picked-list .manual-topic-picked-item { flex:none;border:1px solid var(--neutral-200); }
+.planning-ui .manual-topic-picked-item { position:relative;padding:14px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--surface); }
+.planning-ui .picked-topic-identity { display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-right:20px; }
+.planning-ui .picked-topic-number { display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:12px; }
+.planning-ui .picked-topic-identity small { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.planning-ui .manual-topic-picked-item b { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;line-height:22px; }
+.planning-ui .manual-topic-picked-item p { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin:8px 0 10px;font-size:13px;line-height:22px;color:var(--text-secondary); }
+.planning-ui .picked-topic-type { display:inline-block;padding:3px 8px;border-radius:6px;background:var(--primary-50);color:var(--primary-600);font-size:12px; }
+.planning-ui .manual-generation-settings>.card-body { display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,240px);align-items:end;gap:20px; }
+.planning-ui .manual-generation-selected { margin:0;min-width:0;padding:12px;border-radius:12px;background:var(--primary-50); }
+.planning-ui .main .manual-stepper { border-radius:12px;background:var(--surface); }
+.planning-ui .manual-stepper .manual-step.active { color:var(--primary-600); }
+.planning-ui .manual-stepper .manual-step.done>span { border-color:var(--primary-600);background:var(--primary-600);color:var(--surface); }
+.planning-ui .manual-marketing-topic-step .manual-topic-table { min-height:160px;max-height:min(42dvh,360px); }
+.planning-ui .manual-marketing-topic-step .manual-topic-pagination { margin-top:12px; }
+.planning-ui .manual-marketing-topic-step .manual-topic-selection-section>.card-body { padding-bottom:16px; }
+.planning-ui .manual-topic-step .manual-generation-count-input input { height:32px;min-height:32px;border-radius:12px; }
+.planning-ui .manual-submit-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.planning-ui .manual-submit-group { border:0;padding:0; }
+.planning-ui .manual-import-dialog { padding:0;width:min(760px,calc(100vw - 32px));max-height:calc(100dvh - 48px);display:flex;flex-direction:column;overflow:hidden; }
+.planning-ui .manual-import-dialog-head { padding:20px 24px;border-bottom:1px solid var(--neutral-200); }
+.planning-ui .manual-import-dialog-head h2 { font-size:16px; }
+.planning-ui .manual-import-metrics { margin:20px 24px;padding:16px 12px;gap:0; }
+.planning-ui .manual-import-metrics>div { display:flex;align-items:center;justify-content:center;gap:10px; }
+.planning-ui .manual-import-metrics>div+div { border-left:1px solid var(--neutral-200); }
+.planning-ui .manual-import-metrics strong { margin:0;font-size:24px; }
+.planning-ui .manual-import-metrics small { font-size:14px; }
+.planning-ui .manual-import-metrics>div:nth-child(3) strong { color:var(--processing); }
+.planning-ui .manual-import-metrics .warning { color:var(--danger); }
+.planning-ui .manual-import-details { min-height:0;max-height:min(52dvh,440px);margin:0 24px;overflow:auto; }
+.planning-ui .manual-import-issues-table { width:100%;min-width:560px; }
+.planning-ui .manual-import-issues-table th { position:sticky;top:0;z-index:1;background:var(--neutral-50); }
+.planning-ui .manual-import-issues-table td:first-child { max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.planning-ui .manual-import-issues-table td:last-child { white-space:nowrap; }
+.planning-ui .manual-import-issues-table small { display:block;max-width:320px;margin-top:4px;font-size:12px;color:var(--text-muted); }
+.planning-ui .import-issue-kind { display:inline-flex;align-items:center;gap:6px;white-space:nowrap; }
+.planning-ui .import-issue-kind::before { content:'';width:6px;height:6px;border-radius:50%;background:var(--danger); }
+.planning-ui .import-issue-kind.warning::before { background:var(--processing); }
+.planning-ui .manual-import-dialog .manual-eligibility-actions { margin-top:20px;padding:16px 24px;border-top:1px solid var(--neutral-200); }
+.planning-ui .plan-detail-drawer { width:min(840px,calc(100vw - 24px)); }
+.planning-ui .plan-detail-drawer>.drawer-body { flex:1;min-height:0; }
+.planning-ui .replacement-save-actions { flex:none;padding:14px 24px;border-top:1px solid var(--neutral-200); }
+.planning-ui .replacement-current-plan { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;margin:0 0 20px;padding:16px;border:1px solid var(--primary-100);border-radius:12px;background:var(--primary-50); }
+.planning-ui .replacement-current-plan>div:first-child { grid-column:1/-1; }
+.planning-ui .replacement-current-plan dt { color:var(--text-secondary);font-size:13px;margin-bottom:6px; }
+.planning-ui .replacement-current-plan dd { margin:0;font-size:14px;overflow-wrap:anywhere; }
+.planning-ui .plan-detail-drawer .topic-check-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-height:480px;overflow:auto;padding:2px;margin:12px 0 20px; }
+.planning-ui .plan-detail-drawer .topic-check { display:flex;align-items:flex-start;gap:10px;min-width:0;margin:0;padding:14px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--surface); }
+.planning-ui .plan-detail-drawer .topic-check:has(input:checked) { border-color:var(--primary-300);background:var(--primary-50); }
+.planning-ui .plan-detail-drawer .topic-check>span { min-width:0; }
+.planning-ui .plan-detail-drawer .topic-check input { flex:none;margin-top:5px; }
+.planning-ui .plan-detail-drawer .topic-check small { display:block;margin-top:7px;font-size:12px;line-height:20px;color:var(--text-secondary); }
+.planning-ui .plan-detail-drawer .topic-check .replacement-topic-meta { display:flex;flex-wrap:wrap;gap:4px 6px; }
+.planning-ui .plan-detail-drawer .replacement-topic-meta>span { display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 5px;border-radius:4px;background:var(--neutral-100); }
+.planning-ui .plan-detail-drawer .replacement-topic-outline b { font:inherit; }
+.planning-ui .plan-detail-drawer .topic-title-link { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px; }
+.planning-ui .plan-detail-drawer .replacement-topic-outline { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden; }
+.planning-ui .plan-detail-drawer .plan-operation-timeline { margin-top:24px; }
+@media(max-width:980px) { .planning-ui .manual-topic-picker { grid-template-columns:minmax(200px,30%) minmax(0,1fr); } }
+@media(max-width:700px) { .planning-ui .manual-topic-picker { grid-template-columns:1fr; }.planning-ui .manual-topic-picked-list { max-height:280px; }.planning-ui .manual-generation-settings>.card-body { grid-template-columns:1fr; }.planning-ui .plan-detail-drawer .topic-check-list { grid-template-columns:1fr; }.planning-ui .manual-submit-summary { grid-template-columns:1fr; } }
+@media(max-width:480px) { .planning-ui .manual-import-metrics { grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px; }.planning-ui .manual-import-metrics>div:nth-child(3) { border-left:0; } }
+@media(max-width:580px) {
+  .planning-ui .manual-account-table,.planning-ui .manual-topic-table { min-height:200px;max-height:48dvh; }
+  .planning-ui .config-window-inline { flex-wrap:wrap; }
+  .planning-ui .export-dates { grid-template-columns:1fr; }
+}

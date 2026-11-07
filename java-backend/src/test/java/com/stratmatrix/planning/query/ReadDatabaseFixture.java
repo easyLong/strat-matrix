@@ -43,6 +43,10 @@ public final class ReadDatabaseFixture {
   public final SqlPlanningReadQueries reads;
 
   public ReadDatabaseFixture() throws Exception {
+    this(false);
+  }
+
+  public ReadDatabaseFixture(boolean runtimePrivilegesOnly) throws Exception {
     ds =
         new DriverManagerDataSource(
             "jdbc:h2:mem:read-"
@@ -60,6 +64,17 @@ public final class ReadDatabaseFixture {
         new ResourceDatabasePopulator(new ClassPathResource("db/planning-query-views.sql"));
     views.setSqlScriptEncoding("UTF-8");
     views.execute(ds);
+    if (runtimePrivilegesOnly) {
+      // Simulated DBA installation above; the application below gets DML only.
+      jdbc.execute("CREATE USER planning_runtime PASSWORD 'test-only'");
+      for (String table : jdbc.queryForList(
+          "SELECT table_name FROM information_schema.tables WHERE table_schema='public'", String.class))
+        jdbc.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON \"" + table + "\" TO planning_runtime");
+      // H2 URL settings themselves require ADMIN; the DBA already applied them.
+      ds.setUrl(ds.getUrl().split(";")[0]);
+      ds.setUsername("planning_runtime");
+      ds.setPassword("test-only");
+    }
     SqlSessionFactoryBean f = new SqlSessionFactoryBean();
     f.setDataSource(ds);
     f.setMapperLocations(

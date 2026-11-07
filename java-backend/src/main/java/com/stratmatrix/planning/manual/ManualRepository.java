@@ -63,6 +63,22 @@ public class ManualRepository {
     return mapper.batchById(id);
   }
 
+  public Map<String, Object> lockedBatchWrite(long id) { return mapper.lockedBatchWrite(id); }
+
+  public void saveStagingBatch(long id, String payload, long time) {
+    mapper.insertStagingBatch(id, payload, time, week(Json.text(Json.read(payload), "cycle_start")));
+  }
+
+  public void advanceBatchWrite(long id, int cursor) {
+    if (mapper.advanceBatchWrite(id, cursor) != 1) throw new IllegalStateException("批次写入游标更新失败");
+  }
+
+  public long stagedItemCount(long id) { return mapper.stagedItemCount(id); }
+
+  public void publishBatch(long id) {
+    if (mapper.publishBatch(id) != 1) throw new IllegalStateException("批次发布状态变化");
+  }
+
   public List<Map<String, Object>> completedTopicUsage(List<String> topicIds) {
     if (topicIds == null || topicIds.isEmpty() || topicIds.size() > 500)
       throw new BusinessException(422, "选题ID数量须为1至500");

@@ -1,4 +1,5 @@
 <script lang="ts">
+import QueryActions from './QueryActions.vue';
 import { defineComponent, type PropType } from '../compat/composition';
 import { ref, watch, onBeforeUnmount } from '../compat/composition';
 import { api } from '../api';
@@ -106,22 +107,22 @@ export default defineComponent({
             search
         };
     },
-    components: {PlanningExport, LoadingSkeleton, AccountTypeBadge, ListPagination}
+    components: {QueryActions, PlanningExport, LoadingSkeleton, AccountTypeBadge, ListPagination}
 });
 </script>
 <template>
 <div class="vue2-component-root">
   <div v-if="error" class="banner error-banner" role="alert">{{error}}</div>
   <section class="card">
-    <div class="card-head"><button class="filter-collapse-toggle" :aria-expanded="expanded" @click="expanded=!expanded">筛选条件 <span>{{expanded?'⌃':'⌄'}}</span></button><PlanningExport :scope="{mode:'all',page:1,page_size:200,filters:{accountFilters:applied}}" account-dates /></div>
-    <form v-show="expanded" class="card-body query-filter-grid account-query-fields" data-query-filters="standard" @submit.prevent="search">
+    <div class="card-head"><h2 class="section-title-with-icon"><span aria-hidden="true">▤</span>账号列表</h2><PlanningExport :scope="{mode:'all',page:1,page_size:200,filters:{accountFilters:applied}}" account-dates /></div>
+    <form  class="card-body query-filter-grid account-query-fields" data-query-filters="standard" @submit.prevent="search">
       <label class="field"><span>生命周期</span><select v-model="draft.lifecycle"><option value="">全部</option><option v-for="x in facets.lifecycles" :key="x">{{x}}</option></select></label>
       <label class="field"><span>粉丝量</span><div class="follower-range"><input v-model.number="draft.followersMin" type="number" min="0" placeholder="起始粉丝量" /><span>至</span><input v-model.number="draft.followersMax" type="number" min="0" placeholder="截止粉丝量" /></div></label>
       <label class="field"><span>账号类型</span><select v-model="draft.accountType"><option value="">全部</option><option>认证</option><option>非认证</option></select></label>
       <label class="field"><span>属主组织</span><select v-model="draft.organization"><option value="">全部</option><option v-for="x in facets.organizations" :key="x">{{x}}</option></select></label>
       <label class="field"><span>平台</span><select v-model="draft.platform"><option value="">全部</option><option v-for="x in facets.platforms" :key="x">{{x}}</option></select></label>
-      <label class="field"><span>账号 ID 或昵称</span><input v-model="draft.keyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
-      <div class="query-filter-tail"><label class="field"><span>属主 UM 号</span><input v-model="draft.umNo" type="search" placeholder="输入属主 UM 号" /></label><div class="query-filter-actions"><button class="btn primary" type="submit">查询</button></div></div>
+      <label class="field"><span>账号 ID 或昵称</span><input v-model="draft.keyword" type="search" placeholder="请输入" /></label>
+      <div class="query-filter-tail"><label class="field"><span>属主 UM 号</span><input v-model="draft.umNo" type="search" placeholder="请输入" /></label><QueryActions @query="search" @clear="draft.lifecycle=''; draft.followersMin=null; draft.followersMax=null; draft.accountType=''; draft.organization=''; draft.platform=''; draft.keyword=''; draft.umNo=''" /></div>
     </form>
     <LoadingSkeleton v-if="loading&&!items.length" />
     <div v-else class="table-wrap account-dimension-table-scroll" tabindex="0" aria-label="账号列表"><table>

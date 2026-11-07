@@ -21,12 +21,14 @@ class ContentFlowDispatchServiceTest {
   ContentFlowDispatchService service;
   JdbcTemplate contentSql;
   TestWriter writer;
+  JdbcTemplate businessSql;
   final Instant now = Instant.parse("2026-11-09T01:00:00Z");
 
   @BeforeEach
   void setup() throws Exception {
     DriverManagerDataSource business = dataSource("planning");
     LocalManualBusinessSchema.initialize(business);
+    businessSql = new JdbcTemplate(business);
     SqlSessionFactoryBean f = new SqlSessionFactoryBean();
     f.setDataSource(business);
     f.setMapperLocations(new ClassPathResource("mapper/ManualMapper.xml"),
@@ -224,5 +226,53 @@ class ContentFlowDispatchServiceTest {
           ((Number) row.get("result_version")).intValue(), OffsetDateTime.parse(row.get("production_time").toString()),
           ((Number) row.get("lead_days")).intValue(), ((Number) row.get("config_version")).intValue(), outcome);
     }
+  }
+
+  @Test
+  void independentWriteDoesNotHoldBusinessTransactionOrOverwriteAConcurrentChange() {
+    long id = item("CONCURRENT", "普通", "planned");
+    ContentFlowWriter independent = entry -> {
+      assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+      ContentFlowReceipt receipt = writer.upsert(entry);
+      Map<String, Object> changed = new LinkedHashMap<>(repo.itemById(id));
+      changed.put("topic_id", "NEW-TOPIC");
+      repo.updateItemVersion(id, write(changed), 2);
+      return receipt;
+    };
+    Map<String, Object> result = new ContentFlowDispatchService(repo, config, independent).scan(now, 100, 0);
+    assertEquals(1, object(result.get("outcomes")).get("changed"));
+    assertEquals("NEW-TOPIC", repo.itemById(id).get("topic_id"));
+    assertTrue(object(repo.itemById(id).get("content_flow_dispatch")).isEmpty());
+    // Next scan updates the waiting flow to the current version, without duplicates.
+    service.scan(now, 100, 0);
+    assertEquals(1, count());
+    assertEquals(2, contentSql.queryForObject("SELECT result_version FROM test_content_flow", Integer.class));
+  }
+
+  @Test
+  void sameTransactionWriterRollsBackWithReceiptAndCanRetry() {
+    long id = item("ATOMIC", "普通", "planned");
+    businessSql.execute("CREATE TABLE test_atomic_flow (planning_item_id BIGINT PRIMARY KEY COMMENT '测试策划明细编号')");
+    ContentFlowWriter atomic = new ContentFlowWriter() {
+      public TransactionMode transactionMode() { return TransactionMode.SAME_TRANSACTION; }
+      public ContentFlowReceipt upsert(ContentFlowEntry entry) {
+        assertTrue(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+        businessSql.update("INSERT INTO test_atomic_flow(planning_item_id) VALUES(?)", entry.planningItemId);
+        return new ContentFlowReceipt("TEST-ATOMIC", entry.planningItemId, entry.resultVersion,
+            entry.productionTime, entry.productionLeadDays, entry.configurationVersion, ContentFlowReceipt.Outcome.CREATED);
+      }
+    };
+    ManualRepository failing = new ManualRepository(
+        org.mockito.Mockito.mock(ManualMapper.class),
+        new DataSourceTransactionManager(businessSql.getDataSource())) {
+      public List<Map<String, Object>> contentFlowCandidates(long after, int limit) { return repo.contentFlowCandidates(after, limit); }
+      public Map<String, Object> lockedItem(long itemId) { return repo.lockedItem(itemId); }
+      public int updateItemContent(long itemId, String state, String payload) { throw new IllegalStateException("receipt failed"); }
+    };
+    assertEquals("retry_required", new ContentFlowDispatchService(failing, config, atomic).scan(now, 100, 0).get("status"));
+    assertEquals(0, businessSql.queryForObject("SELECT COUNT(*) FROM test_atomic_flow", Integer.class));
+    assertTrue(object(repo.itemById(id).get("content_flow_dispatch")).isEmpty());
+    new ContentFlowDispatchService(repo, config, atomic).scan(now, 100, 0);
+    assertEquals(1, businessSql.queryForObject("SELECT COUNT(*) FROM test_atomic_flow", Integer.class));
   }
 }

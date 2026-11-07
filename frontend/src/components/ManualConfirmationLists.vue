@@ -101,7 +101,7 @@ export default defineComponent({
 .manual-submit-table .marketing-topic-table{min-width:1080px;table-layout:auto}
 .manual-submit-table th,.manual-submit-table td{padding:10px 8px;text-align:left;font-size:12px}
 .manual-submit-table th{position:sticky;top:0;z-index:1;background:var(--neutral-50);white-space:nowrap}
-.manual-submit-table :deep(.manual-submit-tooltip){width:100%;min-width:0;text-align:left;font-size:12px;color:var(--neutral-700)}
+.manual-submit-table ::v-deep .manual-submit-tooltip{width:100%;min-width:0;text-align:left;font-size:12px;color:var(--neutral-700)}
 .manual-submit-truncate{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .manual-submit-truncate.account-name,.manual-submit-truncate.topic-title{font-weight:500;color:var(--neutral-800)}
 .manual-submit-truncate.identifier{font-variant-numeric:tabular-nums;color:var(--neutral-500)}

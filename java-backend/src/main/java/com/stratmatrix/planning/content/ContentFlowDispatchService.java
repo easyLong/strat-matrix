@@ -34,7 +34,24 @@ public class ContentFlowDispatchService {
     for (Map<String, Object> row : candidates) {
       String result;
       try {
-        result = repo.transaction(() -> dispatch(row, rules, now));
+        if (writer.transactionMode() == ContentFlowWriter.TransactionMode.SAME_TRANSACTION) {
+          result = repo.transaction(() -> {
+            Candidate candidate = prepare(row, rules, now);
+            if (candidate.entry == null) return candidate.outcome;
+            ContentFlowReceipt receipt = writer.upsert(candidate.entry);
+            validateReceipt(candidate.entry, receipt);
+            return saveReceipt(candidate.entry, receipt);
+          });
+        } else {
+          Candidate candidate = repo.transaction(() -> prepare(row, rules, now));
+          if (candidate.entry == null) result = candidate.outcome;
+          else {
+            // Independent writes must not hold the planning transaction/row lock.
+            ContentFlowReceipt receipt = writer.upsert(candidate.entry);
+            validateReceipt(candidate.entry, receipt);
+            result = repo.transaction(() -> saveReceipt(candidate.entry, receipt));
+          }
+        }
       } catch (RuntimeException failure) {
         result = "failed";
         LOG.warn("内容流水写入待重试，策划明细ID={}，异常类别={}", number(row, "id"), failure.getClass().getSimpleName());
@@ -50,24 +67,30 @@ public class ContentFlowDispatchService {
         "next_after_id", candidates.isEmpty() ? afterId : number(candidates.get(candidates.size()-1), "id"));
   }
 
-  private String dispatch(Map<String, Object> scanned, BusinessPlanningConfigService.Result rules, Instant now) {
+  private Candidate prepare(Map<String, Object> scanned, BusinessPlanningConfigService.Result rules, Instant now) {
     Map<String, Object> current = repo.lockedItem(number(scanned, "id"));
-    if (current == null || !"planned".equals(current.get("content_status"))) return "changed";
+    if (current == null || !"planned".equals(current.get("content_status"))) return Candidate.skip("changed");
     Map<String, Object> item = read(text(current, "payload"));
     if (number(object(item.get("content_flow_dispatch")), "result_version") == number(current, "version")
-        && !text(object(item.get("content_flow_dispatch")), "flow_id").isEmpty()) return "already_written";
+        && !text(object(item.get("content_flow_dispatch")), "flow_id").isEmpty()) return Candidate.skip("already_written");
     // Existing approved content is a reference, not a new production request.
-    if (!text(item, "content_id").isEmpty()) return "existing_content";
+    if (!text(item, "content_id").isEmpty()) return Candidate.skip("existing_content");
     if (text(current, "account_id").isEmpty() || text(current, "slot_id").isEmpty()
-        || text(current, "publish_date").isEmpty() || text(item, "topic_id").isEmpty()) return "incomplete";
+        || text(current, "publish_date").isEmpty() || text(item, "topic_id").isEmpty()) return Candidate.skip("incomplete");
     String type = topicType(item);
     Integer lead = rules.config.content_production_lead_days == null ? null
         : rules.config.content_production_lead_days.get(type);
-    if (lead == null) return "unconfigured";
+    if (lead == null) return Candidate.skip("unconfigured");
     ContentFlowEntry entry = new ContentFlowEntry(current, type, lead, rules.version);
-    if (entry.productionTime.toInstant().isAfter(now)) return "not_due";
-    ContentFlowReceipt receipt = writer.upsert(entry);
-    validateReceipt(entry, receipt);
+    if (entry.productionTime.toInstant().isAfter(now)) return Candidate.skip("not_due");
+    return new Candidate(entry, null);
+  }
+
+  private String saveReceipt(ContentFlowEntry entry, ContentFlowReceipt receipt) {
+    Map<String, Object> current = repo.lockedItem(entry.planningItemId);
+    if (current == null || !"planned".equals(current.get("content_status"))
+        || number(current, "version") != entry.resultVersion) return "changed";
+    Map<String, Object> item = read(text(current, "payload"));
     item.put("content_flow_dispatch", map("flow_id", receipt.flowId, "result_version", receipt.resultVersion,
         "production_time", receipt.productionTime.toString(), "production_lead_days", receipt.productionLeadDays,
         "configuration_version", receipt.configurationVersion, "written_at", Instant.now().toString()));
@@ -75,6 +98,13 @@ public class ContentFlowDispatchService {
     if (repo.updateItemContent(entry.planningItemId, "planned", write(item)) != 1)
       throw new BusinessException(409, "策划明细回执未保存");
     return receipt.outcome.name().toLowerCase(Locale.ROOT);
+  }
+
+  private static final class Candidate {
+    final ContentFlowEntry entry;
+    final String outcome;
+    Candidate(ContentFlowEntry entry, String outcome) { this.entry = entry; this.outcome = outcome; }
+    static Candidate skip(String outcome) { return new Candidate(null, outcome); }
   }
 
   private static void validateReceipt(ContentFlowEntry entry, ContentFlowReceipt receipt) {

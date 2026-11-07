@@ -99,8 +99,11 @@ public class AutoScheduleService {
                     pipelineId,
                     ((Number) task.get("business_config_version")).intValue(),
                     Json.read(String.valueOf(task.get("business_config_json"))));
-            return confirm(
-                commit.commit(((Number) task.get("id")).longValue(), proposal, instant), instant);
+            Map<String, Object> saved = commit.commit(((Number) task.get("id")).longValue(), proposal, instant);
+            // One bounded write page per host invocation. Only a fully published
+            // batch can be acknowledged to Python.
+            return "待确认".equals(saved.get("status"))
+                ? confirm(saved, instant) : response("persisting", saved);
           }
           if ("succeeded".equals(phase)) throw new IllegalStateException("算法已确认但Java业务提交凭证缺失");
         }

@@ -1,9 +1,12 @@
 <script lang="ts">
+import DateRangeFields from '../DateRangeFields.vue';
+import QueryActions from '../QueryActions.vue';
 import { defineComponent, type PropType } from '../../compat/composition';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../../compat/composition';
 import ManualTaskTable from '../ManualTaskTable.vue';
 import ListPagination from '../ListPagination.vue';
 import { api } from '../../api';
+import { useActivePage } from '../../composables/useActivePage';
 import { usePlanningStore } from '../../store';
 import { useAsyncPage } from '../../composables/useAsyncPage';
 import { manualContentLabel, type ManualTaskFilters } from '../../ui/manualTask';
@@ -123,13 +126,13 @@ export default defineComponent({
         }, {
             immediate: true
         });
-        onMounted(() => {
+        useActivePage(() => {
+            manualDisposed = false;
             refreshTimer = window.setInterval(() => {
                 if (store.databaseReady && tasks.value.some(task => /执行中|进行中|策划中|生成中/.test(task.planning_status || task.status) || (task.batch_id || task.content_mode === 'marketing') && /待分配|待生产|待生成|未生成|生成中|生产中|上传中/.test(task.content_status || '')))
                     void loadTasks();
             }, 3000);
-        });
-        onBeforeUnmount(() => {
+        }, () => {
             rememberTaskList();
             manualDisposed = true;
             if (refreshTimer !== undefined)
@@ -152,7 +155,7 @@ export default defineComponent({
             selectTask
         };
     },
-    components: {ManualTaskTable, ListPagination}
+    components: {DateRangeFields, QueryActions, ManualTaskTable, ListPagination}
 });
 </script>
 <template>
@@ -162,11 +165,11 @@ export default defineComponent({
     <div class="card-head"><div><h2>策划任务列表</h2></div></div>
     <form class="card-body manual-task-filter-panel" aria-label="策划任务筛选" novalidate @submit.prevent="applyTaskFilters">
       <div class="manual-task-filters query-filter-grid" data-query-filters="standard">
-        <label class="field"><span>批次</span><input v-model="taskFilters.batch" type="search" placeholder="输入批次名称或批次号" /></label>
-        <label class="field manual-task-date-field"><span>投放起止日期</span><div class="manual-task-date-range"><input v-model="taskFilters.dateStart" type="date" aria-label="投放开始日期" :max="taskFilters.dateEnd || undefined" :aria-invalid="!!taskDateError" :aria-describedby="taskDateError ? 'manual-task-date-error' : undefined" /><span>至</span><input v-model="taskFilters.dateEnd" type="date" aria-label="投放结束日期" :min="taskFilters.dateStart || undefined" :aria-invalid="!!taskDateError" :aria-describedby="taskDateError ? 'manual-task-date-error' : undefined" /></div></label>
-        <label class="field"><span>创建人</span><input v-model="taskFilters.creator" type="search" placeholder="输入创建人" /></label>
+        <label class="field"><span>批次</span><input v-model="taskFilters.batch" type="search" placeholder="请输入" /></label>
+        <DateRangeFields :start.sync="taskFilters.dateStart" :end.sync="taskFilters.dateEnd" @query="applyTaskFilters" />
+        <label class="field"><span>创建人</span><input v-model="taskFilters.creator" type="search" placeholder="请输入" /></label>
         <label class="field"><span>内容状态</span><select v-model="taskFilters.contentStatus" aria-label="内容状态"><option value="">全部</option><option v-for="status in taskContentStatuses" :key="status" :value="status">{{ status === '—' ? '暂无状态' : status }}</option></select></label>
-        <div class="query-filter-actions"><button class="btn primary" type="submit">查询</button></div>
+        <QueryActions @query="applyTaskFilters" @clear="taskFilters.batch=''; taskFilters.dateStart=''; taskFilters.dateEnd=''; taskFilters.creator=''; taskFilters.contentStatus=''" />
       </div>
       <p v-if="taskDateError" id="manual-task-date-error" class="inline-error" role="alert">{{ taskDateError }}</p>
     </form>

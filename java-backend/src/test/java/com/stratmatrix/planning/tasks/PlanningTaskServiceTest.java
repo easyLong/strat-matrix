@@ -54,4 +54,18 @@ class PlanningTaskServiceTest {
     assertEquals("processed", tasks.run(PlanningTaskService.Kind.CONTENT_FLOW, now, 100, 42).get("status"));
     verify(flow).scan(now, 100, 42);
   }
+
+  @Test
+  void stagedAutomaticWritesAskHostForAnotherTickWithoutReportingFailure() {
+    AutoScheduleService auto = mock(AutoScheduleService.class);
+    Instant now = Instant.parse("2026-11-07T08:00:00Z");
+    when(auto.advanceOpen(now)).thenReturn(Collections.emptyList());
+    when(auto.tick(now)).thenReturn(map("status", "persisting", "task", map("status", "计算中")));
+    PlanningTaskService tasks = new PlanningTaskService(null, null, auto, null, null, null, null, null);
+    Map<String, Object> report = tasks.run(PlanningTaskService.Kind.AUTOMATIC, now, 100, 0);
+    assertEquals("processed", report.get("status"));
+    assertEquals(true, report.get("needs_next_tick"));
+    when(auto.tick(now)).thenReturn(map("status", "completed", "task", map("status", "已完成")));
+    assertEquals(false, tasks.run(PlanningTaskService.Kind.AUTOMATIC, now, 100, 0).get("needs_next_tick"));
+  }
 }

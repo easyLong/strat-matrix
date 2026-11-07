@@ -10,9 +10,9 @@
         <relativePath/>
     </parent>
     <groupId>com.stratmatrix</groupId>
-    <artifactId>planning-business</artifactId>
+    <artifactId>godp-strat-matrix</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>Strat Matrix Java Business</name>
+    <name>GODP Strat Matrix Business</name>
     <properties>
         <java.version>1.8</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -43,6 +43,7 @@
         </dependency>
     </dependencies>
     <build>
+        <!-- Keep the outside launcher filename stable; the Maven module is godp-strat-matrix. -->
         <finalName>planning-business</finalName>
         <plugins>
             <plugin>

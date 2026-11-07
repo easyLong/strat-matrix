@@ -1,4 +1,6 @@
 <script lang="ts">
+import DateRangeFields from '../components/DateRangeFields.vue';
+import QueryActions from '../components/QueryActions.vue';
 import { defineComponent, type PropType } from '../compat/composition';
 import { computed, onBeforeUnmount, ref, watch } from '../compat/composition';
 import AccountTypeBadge from '../components/AccountTypeBadge.vue';
@@ -10,6 +12,7 @@ import PlanningWeekCalendar from '../components/planning/PlanningWeekCalendar.vu
 import { weekStart, weekEnd, cyclePeriodLabel, type PlanningWeek } from '../ui/planningCalendar';
 import PlanDetailDrawer from '../components/planning/PlanDetailDrawer.vue';
 import { api } from '../api';
+import { useActivePage } from '../composables/useActivePage';
 import type { AccountOption, AccountPlanRecord, BatchSummary } from '../types';
 import { statusTone } from '../ui/status';
 import { productionStatusLabel } from '../ui/slotContentStatus';
@@ -241,14 +244,19 @@ export default defineComponent({
         watch(historyPageSize, () => {
             historyPage.value = 1;
         });
-        const productionTimer = window.setInterval(() => {
-            if (!loading.value && productionItems.value.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item))))
-                void load(true);
-        }, 3000);
-        onBeforeUnmount(() => {
+        let productionTimer: number | undefined;
+        let visited = false;
+        useActivePage(() => {
+            if (visited) void load(true);
+            visited = true;
+            productionTimer = window.setInterval(() => {
+                if (!loading.value && productionItems.value.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item))))
+                    void load(true);
+            }, 3000);
+        }, () => {
             loadRequest++;
             detailRequest?.abort();
-            window.clearInterval(productionTimer);
+            if (productionTimer !== undefined) window.clearInterval(productionTimer);
         });
         return {
             cyclePeriodLabel,
@@ -295,7 +303,7 @@ export default defineComponent({
             applyFilters
         };
     },
-    components: {HoverHint, LoadingSkeleton, PlanningResultStats, ListPagination, PlanningWeekCalendar, AccountTypeBadge, PlanDetailDrawer}
+    components: {DateRangeFields, QueryActions, HoverHint, LoadingSkeleton, PlanningResultStats, ListPagination, PlanningWeekCalendar, AccountTypeBadge, PlanDetailDrawer}
 });
 </script>
 
@@ -326,17 +334,13 @@ export default defineComponent({
     <div v-else-if="error" class="banner error-banner" role="alert">{{ error }}</div>
     <template v-else>
       <div class="detail-filter-shell">
-        <button class="filter-collapse-toggle" type="button" :aria-expanded="filtersExpanded" @click="filtersExpanded = !filtersExpanded">
-          <span>筛选条件</span>
-          <svg :class="{ expanded: filtersExpanded }" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
-        </button>
-        <div v-show="filtersExpanded" class="detail-filter-fields query-filter-grid" data-query-filters="compact">
+
+        <div  class="detail-filter-fields query-filter-grid" data-query-filters="compact">
           <label v-if="!isAccountMode"><span>账号 ID 或昵称</span><input v-model="accountKeyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
-          <label v-if="isAccountMode"><span>开始日期</span><input v-model="dateStart" type="date" :max="dateEnd || undefined" /></label>
-          <label v-if="isAccountMode"><span>结束日期</span><input v-model="dateEnd" type="date" :min="dateStart || undefined" /></label>
+          <DateRangeFields v-if="isAccountMode" :start.sync="dateStart" :end.sync="dateEnd" @query="applyFilters" />
           <div class="query-filter-tail">
             <label><span>选题二级分类</span><select v-model="contentType"><option value="all">全部选题二级分类</option><option v-for="value in contentTypes" :key="value" :value="value">{{ value }}</option></select></label>
-            <div class="query-filter-actions"><button class="btn primary detail-query-btn" type="button" @click="applyFilters">查询</button></div>
+            <QueryActions @query="applyFilters" @clear="accountKeyword=''; dateStart=''; dateEnd=''; contentType='all'" />
           </div>
         </div>
         <p v-if="dateFilterError" class="inline-error" role="alert">{{ dateFilterError }}</p>

@@ -10,6 +10,7 @@ export default defineComponent({
     selectable: { type: Boolean, default: false },
     selectedIds: { type: Array as PropType<string[]>, default: () => [] },
     readonly: { type: Boolean, default: false },
+    validityHint: { type:String,default:'' },
   },
   setup(props, { emit }) {
     function select(topic: TopicOption, event: Event) {
@@ -23,7 +24,7 @@ export default defineComponent({
 </script>
 <template>
   <table class="marketing-topic-table">
-    <thead><tr><th v-if="selectable">选择</th><th>选题 ID</th><th>选题二级分类</th><th>关联活动 ID</th><th>关联活动名称</th><th>所属组织</th><th>关联产品</th><th>产品 ID</th><th>有效期</th></tr></thead>
+    <thead><tr><th v-if="selectable">选择</th><th>选题 ID</th><th>选题二级分类</th><th>关联活动 ID</th><th>关联活动名称</th><th>所属组织</th><th>关联产品</th><th>产品 ID</th><th><HoverHint v-if="validityHint" :text="validityHint">有效期</HoverHint><template v-else>有效期</template></th></tr></thead>
     <tbody>
       <tr v-for="topic in topics" :key="topic.topic_id" :class="{ selected: selectedIds.includes(topic.topic_id), 'selection-row': selectable }" :tabindex="selectable ? 0 : undefined" :aria-disabled="selectable && readonly || undefined" @click="select(topic, $event)" @keydown.enter.self.prevent="select(topic, $event)" @keydown.space.self.prevent="select(topic, $event)">
         <td v-if="selectable"><input type="radio" name="marketing-topic" :checked="selectedIds.includes(topic.topic_id)" :disabled="readonly" :aria-label="`选择选题 ${marketingTopicName(topic)}`" @change="emit('select', topic.topic_id)" /></td>

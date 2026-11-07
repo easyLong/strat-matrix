@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS godp_planning_batch (
     created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     week_start VARCHAR(10) NULL COMMENT '批次所属自然周的周一，用于时间列表数据库分页',
+    write_state VARCHAR(16) NOT NULL DEFAULT 'ready' COMMENT '结果发布状态：staging分批写入不可见、ready完整发布',
+    write_cursor INT NOT NULL DEFAULT 0 COMMENT '自动结果已提交的明细游标，分批恢复使用',
     payload LONGTEXT NOT NULL COMMENT '正式批次基本信息快照',
     created_at BIGINT NOT NULL COMMENT '创建时间毫秒戳'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Java普通人工策划正式批次';

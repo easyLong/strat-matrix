@@ -1,11 +1,12 @@
 <script lang="ts">
+import DialogTitle from '../DialogTitle.vue';
 import { defineComponent, type PropType } from '../../compat/composition';
 import { onBeforeUnmount, ref, watch } from '../../compat/composition';
-import PageBreadcrumbs from '../PageBreadcrumbs.vue';
 import { api } from '../../api';
 import type { PeriodSummary } from '../../api/queries';
 import type { AutoFailure } from '../../types';
 import { downloadCsv } from '../../ui/csv';
+import { canPlanning, requirePlanning } from '../../host/runtime';
 export default defineComponent({
     props: { failurePeriod: { required: true, type: null as unknown as PropType<PeriodSummary> } },
     setup(props, context) {
@@ -51,12 +52,14 @@ export default defineComponent({
             controller?.abort();
         });
         function downloadFailureUms() {
+            requirePlanning('results.export');
             const rows = failureDetails.value.filter(row => row.um_no);
             if (!rows.length)
                 return;
             downloadCsv(`失败账号UM号_${props.failurePeriod.cycleStart}_${props.failurePeriod.cycleEnd}.csv`, [['属主UM号', '账号名称', '账号ID', '批次号', '失败原因'], ...rows.map(row => [row.um_no, row.account_name, row.account_id, row.batch_code, row.reason])]);
         }
         return {
+            canPlanning,
             emit,
             failureDetails,
             failureLoading,
@@ -64,21 +67,20 @@ export default defineComponent({
             downloadFailureUms
         };
     },
-    components: {PageBreadcrumbs}
+    components: {DialogTitle}
 });
 </script>
 <template>
   <div class="drawer-mask" @click.self="emit('close')">
     <aside class="drawer failure-drawer" role="dialog" aria-modal="true" aria-labelledby="failure-detail-title">
       <div class="drawer-head">
-        <div><small>失败详情</small><h2 id="failure-detail-title">{{ failurePeriod.cycleStart }} 至 {{ failurePeriod.cycleEnd }}</h2></div>
+        <DialogTitle id="failure-detail-title" :title="`失败详情（${failureDetails.length}）`" :context="`${failurePeriod.cycleStart} 至 ${failurePeriod.cycleEnd}`" />
         <button class="icon-btn" type="button" aria-label="关闭失败详情" @click="emit('close')">×</button>
       </div>
       <div class="drawer-body">
-        <PageBreadcrumbs compact />
+
         <div class="failure-detail-toolbar">
           <div><b>失败账号</b><span>{{ failureDetails.length }} 个</span></div>
-          <button class="btn" type="button" :disabled="failureLoading || !failureDetails.some(item => item.um_no)" @click="downloadFailureUms">导出失败 UM 号</button>
         </div>
         <p class="failure-guidance">以下账号未完成本周期策划，可转人工策划补充。</p>
         <div v-if="failureLoading" class="empty-state">正在读取失败详情…</div>
@@ -96,6 +98,7 @@ export default defineComponent({
           </table>
         </div>
       </div>
+      <div class="drawer-foot failure-footer"><button class="btn" type="button" @click="emit('close')">关闭</button><button v-if="canPlanning('results.export')" class="btn primary" type="button" :disabled="failureLoading || !failureDetails.some(item => item.um_no)" @click="downloadFailureUms">导出失败账号</button></div>
     </aside>
   </div>
 </template>

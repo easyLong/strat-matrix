@@ -2,7 +2,11 @@
 
 本目录用于将业务模块合入现有Java工程，不另建一套行内Java应用。公共装配入口为`PlanningHostConfiguration`；它没有私有SDK、数据源创建、自动建表或定时器。部署参数示例见[inside-sample.properties](inside-sample.properties)。
 
+模块名已统一为`godp-strat-matrix`。现场在宿主目录下建立同名模块、在父POM的`modules`中注册，并由实际启动的业务服务模块声明该模块依赖。当前行外groupId为`com.stratmatrix`，父POM、groupId、Java包名前缀和依赖管理仍须按宿主实际值调整；不要直接把当前独立启动POM作为行内最终POM。本地`planning-business.jar`是固定的开发启动文件名，与Maven模块名分别管理。
+
 2026-11-05更新：业务库14张表统一六公共字段。迁入时包含`context/AuditFields`，可信UM须为1至50字符；存量表先发布[表结构V6及查询视图](../../docs/表结构公共字段规范与升级_2026-11-05.md)，再部署新版Mapper。原业务编号和唯一约束保留，宿主不必改前端接口对象。
+
+2026-11-07更新：新增[DBA发布包V9](../src/main/resources/db/release/20261107-v9/README.md)，包含独立DDL、初始数据核查、发布前后检查、兼容回退、表/索引和容量清单及源码校验和。当前源码要求批次`write_state/write_cursor`两列；V8存量库须先由DBA发布V9及三个视图，再部署新版。实际开发库尚未执行本轮DDL，运行中的旧服务不受源码变更影响。
 
 ## 1. 保留和迁入
 
@@ -91,6 +95,10 @@ Map<String, Object> result = tasks.run(
 
 外部不可用会抛出异常或返回明确的`retry_required`，宿主Job需据此记录失败/待重试。`processed`、HTTP202及唤醒回执不能当作整个业务完成。生产与审核状态仍以内容侧实际结果为准。
 
+自动正式结果每次提交推进最多500条明细，事务内另有少量游标/状态写入；`write_cursor`与该页明细一起提交，失败只回滚当前页。批次在`staging`期间对页面、导出、换题、使用次数和内容扫描不可见；最后一页校验数量后只更新一条批次为`ready`，与Java提交凭证一起提交，然后才能向Python确认。`needs_next_tick=true`表示仍需宿主后续推进，无忙循环或新定时器。相同提案指纹可在进程重启后恢复，变化指纹明确拒绝；不自动删除未完成批次。宿主自行查询策划表时也必须使用read视图或显式过滤批次`write_state='ready'`。
+
+`ContentFlowWriter.transactionMode()`明确选择事务边界：默认`INDEPENDENT`适用于远程或独立提交，调用时不持有策划事务/行锁；写后重新锁定并核对策划版本和待生产状态，回执丢失依靠目标唯一键及原始回执恢复。`SAME_TRANSACTION`仅用于同一DataSource/事务管理器且加入当前REQUIRED事务的写入；流水和策划回执共同提交或回滚，禁止在该模式发HTTP或开启独立事务。目标端仍须实现幂等、版本单调和已生产内容不可更新，方法名upsert本身不代表这些约束已实现。
+
 ## 5. 驻场前验收入口
 
 ```bash
@@ -98,7 +106,9 @@ Map<String, Object> result = tasks.run(
 mvn test -Dtest=InsideThreePagesAcceptanceTest,PythonClientTest,PlanningTaskServiceTest
 ```
 
-验收加载真实宿主装配、Controller、Service、Repository、六套Mapper和查询视图。覆盖配置保存/恢复、标签版本冲突与操作人、防重人工任务、正式结果、换题、列表、导出、全部任务阶段、内部鉴权和依赖故障；断言不存在旧代理、模拟资料和本地调度Bean。
+验收加载真实宿主装配、Controller、Service、Repository、六套Mapper和查询视图。测试夹具先以DBA身份建库，再以仅SELECT/INSERT/UPDATE/DELETE权限的非管理员账号装配应用，明确断言CREATE/ALTER被拒绝。覆盖配置保存/恢复、标签版本冲突与操作人、防重人工任务、正式结果、换题、列表、导出、全部任务阶段、内部鉴权和依赖故障；断言不存在旧代理、模拟资料和本地调度Bean。此为隔离H2权限验证，真实Venus/MySQL的授权和视图访问仍由现场验证。
+
+新增结果发布/流水事务/DBA SQL演练入口：`mvn test -Dtest=AutoScheduleServiceTest,ContentFlowDispatchServiceTest,DatabaseReleaseTest,PlanningTaskServiceTest`。DBA脚本在H2做新库、V8升级和回退演练，JSON函数及MySQL多列ALTER使用明确的方言兼容；不能代替现场MySQL执行评审。使用`python tools/build_db_release.py --output src/main/resources/db/release/20261107-v9 --check`核对发布包和权威源码，工具不连接数据库。
 
 可选实际Vue浏览器验收：先`frontend/npm run build`，安装Playwright与Chrome后设置`PLANNING_BROWSER_ACCEPTANCE=1`，再运行`InsideThreePagesAcceptanceTest`。`PLANNING_PLAYWRIGHT_MODULE`可指定已有Playwright模块位置，`PLANNING_CHROME_PATH`指定浏览器。浏览器只连接测试JVM的回环MVC桥及临时静态代理；这两个桥不进入正式工程。证据保存在忽略的`run/inside-host-browser/`。
 

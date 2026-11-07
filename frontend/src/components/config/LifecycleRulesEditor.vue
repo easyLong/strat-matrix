@@ -1,84 +1,74 @@
 <script lang="ts">
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed, watch } from '../../compat/composition';
-import type { LifecycleRule } from '../../types';
-import { lifecycleRuleSummary, lifecycleGroups, lifecycleMetricOptions, lifecycleOperatorOptions, metricUnit, addLifecycleCondition, addLifecycleGroup, removeLifecycleCondition, normalizeLifecycleRule } from '../../ui/lifecycleRules';
+import { computed, defineComponent, ref, watch, type PropType } from '../../compat/composition'
+import type { LifecycleCondition, LifecycleRule } from '../../types'
+import LifecycleRuleSummary from './LifecycleRuleSummary.vue'
+import { lifecycleGroups, lifecycleMetricOptions, metricUnit, addLifecycleCondition, addLifecycleGroup, normalizeLifecycleRule } from '../../ui/lifecycleRules'
+import { lifecycleRangeRows, lifecycleRangeValid, updateLifecycleBound, updateLifecycleRangeField, removeLifecycleRange } from '../../ui/lifecycleRanges'
+
 export default defineComponent({
-    props: { value: { required: true, type: Array as PropType<LifecycleRule[]> } },
-    setup(props, context) {
-        const emit = context.emit;
-        const lifecycleRules = computed({
-            get: () => props.value,
-            set: value => emit('input', value)
-        });
-        watch(lifecycleRules, rules => {
-            for (const rule of rules)
-                if (!rule.catchAll)
-                    normalizeLifecycleRule(rule);
-        }, {
-            immediate: true
-        });
-        return {
-            lifecycleRuleSummary,
-            lifecycleGroups,
-            lifecycleMetricOptions,
-            lifecycleOperatorOptions,
-            metricUnit,
-            addLifecycleCondition,
-            addLifecycleGroup,
-            removeLifecycleCondition,
-            lifecycleRules
-        };
+  props: { value: { type: Array as PropType<LifecycleRule[]>, required: true } },
+  setup(props) {
+    const active = ref(props.value[0]?.name || '')
+    const expanded = ref(true)
+    watch(() => props.value, rules => {
+      rules.filter(rule => !rule.catchAll).forEach(normalizeLifecycleRule)
+      if (!rules.some(rule => rule.name === active.value)) active.value = rules[0]?.name || ''
+    }, { immediate: true })
+    const current = computed(() => props.value.find(rule => rule.name === active.value))
+    function moveTab(event: KeyboardEvent) {
+      const index = props.value.findIndex(rule => rule.name === active.value)
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? props.value.length - 1 : event.key === 'ArrowRight' ? (index + 1) % props.value.length : event.key === 'ArrowLeft' ? (index + props.value.length - 1) % props.value.length : -1
+      if (next < 0) return
+      event.preventDefault()
+      active.value = props.value[next]!.name
+      ;(event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
     }
-});
+    const boundValue = (condition?: LifecycleCondition) => condition && Number.isFinite(condition.value) ? condition.value : ''
+    return { active, expanded, current, moveTab, boundValue, lifecycleGroups, lifecycleMetricOptions, metricUnit, lifecycleRangeRows, lifecycleRangeValid, updateLifecycleBound, updateLifecycleRangeField, removeLifecycleRange, addLifecycleCondition, addLifecycleGroup }
+  },
+  components: { LifecycleRuleSummary },
+})
 </script>
 <template>
-<div class="lifecycle-editor">
-        <div class="lifecycle-definition-head"><div><b>生命周期阶段判定</b></div></div>
-        <div class="lifecycle-definition-list">
-          <div v-for="rule in lifecycleRules" :key="rule.name" class="lifecycle-definition lifecycle-grouped-rule">
-            <div class="lifecycle-rule-heading"><b>{{ rule.name }}</b><span class="lifecycle-rule-summary">{{ lifecycleRuleSummary(rule,lifecycleRules) }}</span></div>
-            <template v-if="!rule.catchAll">
-              <template v-for="(group, groupIndex) in lifecycleGroups(rule)" >
-                <div :key="(groupIndex) + '-0'" v-if="groupIndex" class="lifecycle-or">或</div>
-                <div :key="(groupIndex) + '-1'" class="lifecycle-condition-group">
-                  <div v-for="(condition, conditionIndex) in group" :key="conditionIndex" class="lifecycle-group-row">
-                    <span v-if="conditionIndex" class="lifecycle-and">且</span><span v-else class="lifecycle-and-placeholder"></span>
-                    <select v-model="condition.field" aria-label="指标"><option v-for="option in lifecycleMetricOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
-                    <select v-model="condition.operator" aria-label="运算符"><option v-for="option in lifecycleOperatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select>
-                    <input v-model.number="condition.value" type="number" min="0" step="1" aria-label="阈值" /><span>{{ metricUnit(condition.field) }}</span>
-                    <button v-if="rule.conditions.length > 1" class="icon-btn" type="button" aria-label="删除条件" @click="removeLifecycleCondition(rule, groupIndex, conditionIndex)">×</button>
-                  </div>
-                  <button class="text-btn" type="button" @click="addLifecycleCondition(rule, groupIndex)">＋ 添加且条件</button>
-                </div>
-              </template>
-              <button class="text-btn lifecycle-add-group" type="button" @click="addLifecycleGroup(rule)">＋ 添加或条件组</button>
-            </template>
-          </div>
-        </div>
-
-</div>
+  <div class="lifecycle-editor">
+    <div class="lifecycle-global-head"><h3>生命周期阶段判定</h3><button class="text-btn" type="button" :aria-expanded="expanded" @click="expanded=!expanded">{{ expanded ? '收起' : '展开' }} <span aria-hidden="true">{{ expanded ? '⌃' : '⌄' }}</span></button></div>
+    <div v-show="expanded">
+      <div class="lifecycle-stage-tabs" role="tablist" aria-label="生命周期阶段">
+        <button v-for="(rule, index) in value" :id="`lifecycle-tab-${index}`" :key="rule.name" type="button" role="tab" :class="{ active:active===rule.name }" :aria-selected="active===rule.name" aria-controls="lifecycle-stage-panel" :tabindex="active===rule.name ? 0 : -1" @click="active=rule.name" @keydown="moveTab">{{ rule.name }}</button>
+      </div>
+      <section v-if="current" id="lifecycle-stage-panel" role="tabpanel" :aria-labelledby="`lifecycle-tab-${value.indexOf(current)}`" class="lifecycle-stage-panel">
+        <LifecycleRuleSummary class="lifecycle-summary-preview" :rule="current" :rules="value" />
+        <template v-if="!current.catchAll">
+          <template v-for="(group, groupIndex) in lifecycleGroups(current)">
+            <div v-if="groupIndex" :key="`or-${groupIndex}`" class="lifecycle-or">或满足下一组</div>
+            <div :key="`group-${groupIndex}`" class="lifecycle-condition-group">
+              <div class="lifecycle-group-caption"><span>条件组 {{ groupIndex+1 }} · 全部满足</span><button class="text-btn" type="button" @click="addLifecycleCondition(current,groupIndex)">＋ 添加条件</button></div>
+              <div v-for="(row,rowIndex) in lifecycleRangeRows(group)" :key="rowIndex" class="lifecycle-range-row">
+                <label class="field lifecycle-metric"><span>指标</span><select :value="row.field" aria-label="指标" @change="updateLifecycleRangeField(current,groupIndex,row,$event.target.value)"><option v-for="metric in lifecycleMetricOptions" :key="metric.value" :value="metric.value">{{ metric.label }}</option></select></label>
+                <template v-if="row.exact===undefined">
+                  <label class="field"><span>起始值{{ row.lower!==undefined && group[row.lower].operator==='gt' ? '（不含）' : '（含）' }}</span><input :value="row.lower===undefined ? '' : boundValue(group[row.lower])" type="number" min="0" step="1" placeholder="不限" :aria-label="`${metricUnit(row.field)}起始值`" @input="updateLifecycleBound(current,groupIndex,row,'lower',$event.target.value)" /></label>
+                  <span class="lifecycle-range-separator" aria-hidden="true">～</span>
+                  <label class="field"><span>截止值{{ row.upper!==undefined && group[row.upper].operator==='lt' ? '（不含）' : '（含）' }}</span><input :value="row.upper===undefined ? '' : boundValue(group[row.upper])" type="number" min="0" step="1" placeholder="不限" :aria-label="`${metricUnit(row.field)}截止值`" @input="updateLifecycleBound(current,groupIndex,row,'upper',$event.target.value)" /></label>
+                </template>
+                <label v-else class="field"><span>等于</span><input :value="boundValue(group[row.exact])" type="number" min="0" step="1" aria-label="精确值" @input="updateLifecycleBound(current,groupIndex,row,'exact',$event.target.value)" /></label>
+                <span class="lifecycle-range-unit">{{ metricUnit(row.field) }}</span>
+                <button class="icon-btn" type="button" aria-label="删除条件" :disabled="current.conditions.length===[row.lower,row.upper,row.exact].filter(i=>i!==undefined).length" @click="removeLifecycleRange(current,groupIndex,row)">×</button>
+                <span v-if="!lifecycleRangeValid(group,row)" class="lifecycle-range-error" role="alert">请填写有效范围，起始值不能大于截止值</span>
+              </div>
+            </div>
+          </template>
+          <button class="text-btn lifecycle-add-group" type="button" @click="addLifecycleGroup(current)">＋ 添加条件组</button>
+        </template>
+      </section>
+    </div>
+  </div>
 </template>
 <style scoped>
-
-.config-overview-body .lifecycle-summary-table th:first-child { width: 160px; }
-.config-overview-body .lifecycle-summary-table th:nth-child(2), .config-overview-body .lifecycle-summary-table td:nth-child(2) { width: auto; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.lifecycle-grouped-rule{display:block;padding:12px 14px}
-.lifecycle-rule-heading{display:flex;align-items:center;gap:14px;min-height:32px}.lifecycle-rule-heading>b{flex:0 0 90px}.lifecycle-rule-heading>.text-btn{display:none}.lifecycle-rule-summary{flex:1;padding:7px 10px;border-radius:6px;background:var(--neutral-50);color:var(--neutral-600);font-size:12px;line-height:20px}
-.lifecycle-condition-group{margin:10px 0;padding:12px;border:1px solid var(--neutral-200);border-radius:7px}.lifecycle-group-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--neutral-500);font-size:12px}.lifecycle-group-row select,.lifecycle-group-row input{height:32px;padding:0 8px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface)}.lifecycle-group-row select:first-of-type{width:155px}.lifecycle-group-row select:nth-of-type(2){width:64px}.lifecycle-group-row input{width:86px}.lifecycle-and,.lifecycle-or{color:var(--primary-600);background:var(--primary-50);border-radius:12px;padding:3px 8px;font-size:12px}.lifecycle-and-placeholder{width:28px}.lifecycle-or{display:inline-block}.lifecycle-add-group{margin-top:4px}@media(max-width:600px){.lifecycle-rule-heading{flex-wrap:wrap}.lifecycle-rule-summary{flex-basis:100%;order:3}.lifecycle-group-row{flex-wrap:wrap}}
-.lifecycle-definition-head{margin:14px 0 10px;padding-top:12px;font-size:13px}
-.lifecycle-definition-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
-.lifecycle-definition{min-width:0;grid-template-columns:minmax(0,1fr);gap:8px;padding:11px 12px;background:var(--neutral-50);border-color:var(--neutral-200)}
-.lifecycle-stage-name{padding:0}
-.lifecycle-stage-name b{font-size:14px;line-height:22px;font-weight:600}
-.lifecycle-condition-list{gap:6px}
-.lifecycle-condition-row{display:grid;grid-template-columns:minmax(110px,1fr) 48px 68px 40px 44px 22px;gap:6px;max-width:560px}
-.lifecycle-condition-row select,.lifecycle-condition-row input{width:100%;min-width:0;height:32px;padding:0 6px;border-radius:6px;font-size:13px}
-.lifecycle-condition-row input{text-align:center}
-.lifecycle-definition.is-catch-all{grid-column:1/-1;grid-template-columns:100px minmax(0,1fr);align-items:center;background:var(--neutral-50)}
-.lifecycle-catch-all{font-size:12px;line-height:1.6;color:var(--neutral-500)}
-@media(max-width:1100px){.lifecycle-definition-list{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:780px){.lifecycle-definition.is-catch-all{grid-template-columns:minmax(0,1fr);gap:5px}}
-@media(max-width:580px){.lifecycle-condition-row{grid-template-columns:48px 64px minmax(0,1fr) 44px 22px}.lifecycle-condition-row select:first-child{grid-column:1/-1;grid-row:1;min-width:0}.lifecycle-condition-row select:nth-child(2){grid-column:1;grid-row:2}.lifecycle-condition-row input{grid-column:2;grid-row:2}.lifecycle-definition{padding:10px}}
-
+.lifecycle-global-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.lifecycle-global-head h3{margin:0;font-size:14px}
+.lifecycle-stage-tabs{display:flex;gap:24px;overflow:auto;border-bottom:1px solid var(--neutral-200)}.lifecycle-stage-tabs button{flex:none;padding:10px 0;border:0;border-bottom:2px solid transparent;background:transparent;font:inherit;font-size:14px;color:var(--neutral-500)}.lifecycle-stage-tabs button.active{border-bottom-color:var(--primary-600);color:var(--primary-600);font-weight:600}
+.lifecycle-stage-panel{padding-top:16px}.lifecycle-summary-preview{margin:0 0 16px}
+.lifecycle-condition-group{margin:12px 0;padding:14px 16px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--neutral-50)}.lifecycle-group-caption{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;font-size:12px;color:var(--text-secondary)}
+.lifecycle-range-row{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-top:10px}.lifecycle-range-row .field{flex:0 1 132px;min-width:0;font-size:13px}.lifecycle-range-row .lifecycle-metric{flex-basis:190px}.lifecycle-range-row input,.lifecycle-range-row select{box-sizing:border-box;width:100%;height:32px;min-height:32px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:12px;background:var(--surface);font:inherit}.lifecycle-range-row input{text-align:left}.lifecycle-range-unit,.lifecycle-range-separator{flex:none;line-height:32px;font-size:13px;color:var(--text-secondary)}.lifecycle-range-row .icon-btn{height:32px;width:32px;padding:0;font-size:22px}.lifecycle-range-row .icon-btn:disabled{opacity:.3;cursor:default}.lifecycle-range-error{flex-basis:100%;font-size:12px;color:var(--danger)}
+.lifecycle-or{display:inline-flex;align-items:center;padding:4px 10px;border-radius:12px;color:var(--primary-700);background:var(--primary-50);font-size:12px}.lifecycle-add-group{margin-top:4px;border:1px dashed var(--primary-200);border-radius:12px;padding:7px 12px}
+@media(max-width:580px){.lifecycle-range-row .lifecycle-metric{flex-basis:100%}.lifecycle-range-row .field{flex:1 1 90px}.lifecycle-stage-tabs{gap:16px}}
 </style>

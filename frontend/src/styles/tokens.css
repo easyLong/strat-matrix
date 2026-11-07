@@ -1,16 +1,22 @@
-:root {
-  --primary-50: #f5f1ff;
-  --primary-100: #ede7ff;
-  --primary-200: #dbd0ff;
-  --primary-300: #c1b3ff;
-  --primary-400: #a896ff;
-  --primary-500: #9684ff;
-  --primary-600: #7860fe;
-  --primary-700: #6648e8;
-  --primary-800: #4e1aa5;
-  --neutral-50: #f5f5f5;
-  --neutral-100: #f2f2f2;
-  --neutral-200: #e5e5e5;
+.planning-ui {
+  --text-primary: rgba(0,0,0,.9);
+  --text-secondary: rgba(0,0,0,.6);
+  --text-muted: rgba(0,0,0,.4);
+  --information: #909399;
+  --table-border: #dfe6ec;
+  --divider: #e9e9e9;
+  --primary-50: #f0f6ff;
+  --primary-100: #e8f0ff;
+  --primary-200: #c8dcff;
+  --primary-300: #a7c7ff;
+  --primary-400: #8bb5ff;
+  --primary-500: #4584ff;
+  --primary-600: #3177ff;
+  --primary-700: #2767e8;
+  --primary-800: #2055c6;
+  --neutral-50: #fafafa;
+  --neutral-100: #f1f3f5;
+  --neutral-200: #dfe6ec;
   --neutral-300: #cccccc;
   --neutral-400: #999999;
   --neutral-500: #666666;
@@ -22,16 +28,16 @@
   --surface: #fff;
   --success: #00a870;
   --success-bg: #e2f4ee;
-  --processing: #ffb20d;
+  --processing: #ff810d;
   --processing-bg: #fff3e0;
   --processing-row: rgb(217 119 6 / 4%);
   --danger: #e34d59;
   --danger-hover: #cd353b;
   --danger-bg: #fde9ea;
   --danger-border: #fac9cb;
-  --focus-color: rgb(120 96 254 / 14%);
+  --focus-color: rgb(49 119 255 / 14%);
   --focus-ring: 0 0 0 3px var(--focus-color);
-  --selected-bg: rgb(120 96 254 / 6%);
+  --selected-bg: rgb(49 119 255 / 6%);
   --hover-bg: #f9fafc;
   --mask: rgb(11 16 32 / 45%);
   --shadow-1: 0 1px 2px rgb(16 24 40 / 4%);
@@ -39,11 +45,11 @@
   --shadow-3: 0 8px 24px rgb(16 24 40 / 10%);
   --shadow-4: 0 24px 64px rgb(16 24 40 / 18%);
   --radius-sm: 4px;
-  --radius-control: 4px;
+  --radius-control: 12px;
   --radius-button: 12px;
-  --radius-panel: 8px;
+  --radius-panel: 12px;
   --radius-card: 12px;
-  --radius-overlay: 16px;
+  --radius-overlay: 12px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -57,5 +63,5 @@
   --control-lg: 40px;
   --sidebar-width: 224px;
   --toolbar-height: 56px;
-  --font-family: 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  --font-family: system-ui, Helvetica, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
 }

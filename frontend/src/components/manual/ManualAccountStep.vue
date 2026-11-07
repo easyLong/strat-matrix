@@ -1,6 +1,7 @@
 <script lang="ts">
+import QueryActions from '../QueryActions.vue';
 import { defineComponent, type PropType } from '../../compat/composition';
-import { toRef } from '../../compat/composition';
+import { computed, toRef } from '../../compat/composition';
 import AccountTypeBadge from '../AccountTypeBadge.vue';
 import ListPagination from '../ListPagination.vue';
 import LoadingSkeleton from '../LoadingSkeleton.vue';
@@ -17,6 +18,11 @@ export default defineComponent({
         const emit = context.emit;
         const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode, accountPage, availabilityReady, availabilityLoading, isAccountPlanned, targetCount, targetCountError, lifecycleFilter, lifecycleOptions, followersMin, followersMax, accountTypeFilter, organizationFilter, organizationOptions, platformFilter, platformOptions, keyword, umNoFilter, applyAccountFilters, accountSelectionPool, matchingAccounts, downloadAccountTemplate, importFileInput, importAccountsByIdentifier, importDataRowCount, importMatchedCount, importDuplicateRows, importUnmatchedRows, importPlannedRows, hasImportIssues, importErrorCount, showImportIssues, importIssueDialogOpen, importDialogClose, importTrigger, availableMatchingCount, plannedMatchingCount, accountListRef, plannedAccountTooltip, allAccountsSelected, someAccountsSelected, selectAllAccounts, pagedAccounts, visibleAccounts, accountPageSize, toggleAccountRow, showPlannedAccountTooltip, toggleAccount, closeImportIssueDialog, importRowLabel, downloadImportIssues } = props.selection;
         return {
+            importIssueRows: computed(() => [
+                ...importUnmatchedRows.value.map(row => ({ ...row, tone:'error', kind:'未能识别账号' })),
+                ...importPlannedRows.value.map(row => ({ ...row, tone:'warning', kind:'已投放账号' })),
+                ...importDuplicateRows.value.map(row => ({ ...row, tone:'warning', kind:'账号重复' })),
+            ].sort((a,b) => a.rowNumber-b.rowNumber)),
             isMarketing,
             emit,
             sampledIds,
@@ -75,13 +81,13 @@ export default defineComponent({
             downloadImportIssues
         };
     },
-    components: {LoadingSkeleton, AccountTypeBadge, ListPagination}
+    components: {QueryActions, LoadingSkeleton, AccountTypeBadge, ListPagination}
 });
 </script>
 <template>
 <div class="manual-account-step">
     <section key="manual-step-accounts" class="card">
-      <div class="card-head"><div><h2>选择账号</h2></div><span class="manual-selected-count">已选 {{ sampledIds.length }} 个</span></div>
+      <div class="card-head"><div><h2>选择账号</h2></div></div>
       <div class="card-body manual-step-body">
         <fieldset class="manual-selection-lock" :disabled="accountReview">
         <div class="manual-account-selection-row">
@@ -91,33 +97,33 @@ export default defineComponent({
             <button :class="['manual-mode-tab', { active: accountSelectionMode === 'upload' }]" type="button" role="tab" :aria-selected="accountSelectionMode === 'upload'" @click="setAccountSelectionMode('upload')">模板导入</button>
           </div>
         </div>
-        <label v-if="accountSelectionMode === 'filter'" class="field manual-plan-account-count"><span>计划账号数量 <em>*</em></span><div class="manual-plan-account-input-wrap"><input v-model.number="targetCount" type="number" inputmode="numeric" min="1" max="1000" placeholder="请输入计划账号数量" :aria-invalid="Boolean(targetCountError)" :aria-describedby="targetCountError ? 'manual-target-count-error' : undefined" required /><small v-if="targetCountError" id="manual-target-count-error" class="field-error" role="alert">{{ targetCountError }}</small></div></label>
+        <label v-if="accountSelectionMode === 'filter'" class="field manual-plan-account-count"><span>计划账号数量 <em class="required-mark">✳</em></span><div class="manual-plan-account-input-wrap"><input v-model.number="targetCount" aria-label="计划账号数量" type="number" inputmode="numeric" min="1" max="1000" placeholder="请输入" :aria-invalid="Boolean(targetCountError)" :aria-describedby="targetCountError ? 'manual-target-count-error' : undefined" required /><small v-if="targetCountError" id="manual-target-count-error" class="field-error" role="alert">{{ targetCountError }}</small></div></label>
         <div v-if="accountSelectionMode === 'filter'" class="manual-account-filters query-filter-grid" data-query-filters="standard">
           <label class="field"><span>生命周期</span><select v-model="lifecycleFilter"><option value="">全部</option><option v-for="item in lifecycleOptions" :key="item" :value="item">{{ item }}</option></select></label>
           <label class="field manual-follower-field"><span>粉丝量</span><div class="manual-follower-range"><input v-model.number="followersMin" type="number" inputmode="numeric" min="0" placeholder="起始粉丝量" /><i>至</i><input v-model.number="followersMax" type="number" inputmode="numeric" min="0" placeholder="截止粉丝量" /></div></label>
           <label class="field"><span>账号类型</span><select v-model="accountTypeFilter" :disabled="isMarketing"><option v-if="!isMarketing" value="">全部</option><option value="认证">认证</option><option v-if="!isMarketing" value="非认证">非认证</option></select></label>
           <label class="field"><span>属主组织</span><select v-model="organizationFilter"><option value="">全部</option><option v-for="item in organizationOptions" :key="item" :value="item">{{ item }}</option></select></label>
           <label class="field"><span>平台</span><select v-model="platformFilter"><option value="">全部</option><option v-for="item in platformOptions" :key="item" :value="item">{{ item }}</option></select></label>
-          <label class="field"><span>账号 ID 或昵称</span><input v-model="keyword" type="search" placeholder="输入账号 ID 或昵称" /></label>
+          <label class="field"><span>账号 ID 或昵称</span><input v-model="keyword" type="search" placeholder="请输入" /></label>
           <div class="query-filter-tail">
-            <label class="field"><span>属主 UM 号</span><input v-model="umNoFilter" type="search" placeholder="输入属主 UM 号" /></label>
-            <div class="manual-filter-actions query-filter-actions"><button class="btn primary" type="button" @click="applyAccountFilters">查询</button></div>
+            <label class="field"><span>属主 UM 号</span><input v-model="umNoFilter" type="search" placeholder="请输入" /></label>
+            <QueryActions @query="applyAccountFilters" @clear="lifecycleFilter=''; followersMin=null; followersMax=null; accountTypeFilter=''; organizationFilter=''; platformFilter=''; keyword=''; umNoFilter=''" />
           </div>
         </div>
         <div v-else class="manual-upload-panel">
-          <b>账号模板</b>
+          <div class="manual-upload-heading"><span class="upload-template-icon" aria-hidden="true">↥</span><div><b>上传账号模板</b><small>支持属主 UM 号或账号 ID</small></div></div>
           <div class="manual-upload-actions"><button class="btn" type="button" @click="downloadAccountTemplate">下载导入模板</button><input ref="importFileInput" class="manual-file-input" type="file" accept=".csv,text/csv" @change="importAccountsByIdentifier($event.target.files?.[0])" /><button ref="importTrigger" class="btn primary" type="button" @click="importFileInput?.click()">上传并识别</button></div>
           <div v-if="importDataRowCount" class="manual-import-result">
             <span>导入 <b>{{ importDataRowCount }}</b></span><span>成功 <b>{{ importMatchedCount }}</b></span><span>重复 <b>{{ importDuplicateRows.length }}</b></span><span>异常 <b>{{ importErrorCount }}</b></span>
             <button v-if="hasImportIssues" class="text-btn" type="button" @click="showImportIssues">查看识别结果</button>
           </div>
         </div>
-        <div class="manual-account-list-meta"><div class="manual-account-counts"><b>{{ accountSelectionMode === 'filter' ? '符合条件' : '导入识别' }} {{ matchingAccounts.length }} 个</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span v-if="!isMarketing" class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span><span>已选 <strong>{{ sampledIds.length }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
+        <div class="manual-account-list-meta"><div class="manual-account-counts"><b>共 {{ matchingAccounts.length }} 个结果</b><template v-if="availabilityReady"><span>可策划 <strong>{{ availableMatchingCount }}</strong></span><span v-if="!isMarketing" class="manual-planned-count">当日已策划 <strong>{{ plannedMatchingCount }}</strong></span></template><span v-else>{{ availabilityLoading ? '查询当日策划状态中…' : '待选择投放日期并查询' }}</span></div></div>
         <LoadingSkeleton v-if="loading || !initialized" /><div v-else ref="accountListRef" class="table-wrap manual-account-table" @scroll="plannedAccountTooltip = null"><table><thead><tr><th><input type="checkbox" aria-label="全选当前筛选下的可策划账号（跨页）" :checked="allAccountsSelected" :indeterminate="someAccountsSelected" :disabled="!availabilityReady || !accountSelectionPool.length" @change="selectAllAccounts" /></th><th>账号类型</th><th>属主 UM 号</th><th>账号昵称</th><th>账号 ID</th><th>属主组织</th><th>平台</th><th>生命周期</th><th>粉丝数</th></tr></thead><tbody>
-          <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td>{{ account.account_id }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
+          <tr v-for="account in pagedAccounts" :key="account.account_id" :class="{ selected: sampledIds.includes(account.account_id), 'already-planned': isAccountPlanned(account.account_id) }" class="selection-row" tabindex="0" @click="toggleAccountRow(account.account_id, $event)" @keydown.enter.self.prevent="toggleAccountRow(account.account_id, $event)" @keydown.space.self.prevent="toggleAccountRow(account.account_id, $event)" :aria-disabled="!availabilityReady || isAccountPlanned(account.account_id) || undefined" :aria-describedby="plannedAccountTooltip?.accountId === account.account_id ? 'manual-planned-account-tooltip' : undefined" @mouseenter="showPlannedAccountTooltip(account.account_id, $event)" @mousemove="showPlannedAccountTooltip(account.account_id, $event)" @mouseleave="plannedAccountTooltip = null" @focusin="showPlannedAccountTooltip(account.account_id, $event)" @focusout="plannedAccountTooltip = null"><td><input type="checkbox" :checked="sampledIds.includes(account.account_id)" :disabled="!availabilityReady || isAccountPlanned(account.account_id)" :aria-label="`选择账号 ${account.account_name}`" @change="toggleAccount(account.account_id, $event)" /></td><td><AccountTypeBadge :type="account.account_type || (account.certified === true ? '认证' : account.certified === false ? '非认证' : '—')" /></td><td>{{ account.um_no || '—' }}</td><td><b>{{ account.account_name }}</b></td><td :title="account.account_id || undefined">{{ account.account_id || '—' }}</td><td>{{ account.organization || '—' }}</td><td>{{ account.platform || '—' }}</td><td>{{ account.lifecycle_stage || '—' }}</td><td>{{ account.followers?.toLocaleString() ?? '—' }}</td></tr>
           <tr v-if="visibleAccounts.length === 0"><td colspan="9"><div class="empty-state">{{ accountSelectionMode === 'upload' ? '请上传账号模板' : '没有符合条件的账号' }}</div></td></tr>
         </tbody></table></div>
-        <ListPagination :page.sync="accountPage" :page-size.sync="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
+        <ListPagination :show-total="false" :page.sync="accountPage" :page-size.sync="accountPageSize" :total="visibleAccounts.length" unit="个账号" :page-size-options="[20, 50, 100]" class="manual-account-pagination" />
         </fieldset>
         <div class="footer-actions manual-step-actions">
           <div v-if="accountReview" class="manual-step-review" role="status">
@@ -151,12 +157,10 @@ export default defineComponent({
           <div><small>重复</small><strong>{{ importDuplicateRows.length }}</strong></div>
           <div><small>异常</small><strong class="warning">{{ importErrorCount }}</strong></div>
         </div>
-        <div class="manual-import-details">
-          <section v-if="importUnmatchedRows.length"><h3>未能识别账号</h3><div v-for="row in importUnmatchedRows" :key="row.rowNumber" class="manual-import-detail-row"><b>{{ importRowLabel(row) }}</b><span>{{ row.reason }}</span></div></section>
-          <section v-if="importPlannedRows.length"><h3>已投放账号</h3><div v-for="row in importPlannedRows" :key="row.rowNumber" class="manual-import-detail-row"><b>{{ importRowLabel(row) }}</b><span>{{ row.reason }}</span></div></section>
-          <p v-if="importDuplicateRows.length" class="manual-import-duplicates">重复记录：第 {{ importDuplicateRows.map(row => row.rowNumber).join('、') }} 行，同一账号仅保留首次记录。</p>
+        <div class="manual-import-details table-wrap">
+          <table class="manual-import-issues-table"><thead><tr><th>属主 UM 号／账号 ID</th><th>异常原因</th><th>行数</th></tr></thead><tbody><tr v-for="row in importIssueRows" :key="`${row.rowNumber}-${row.kind}`"><td :title="row.umNo || row.accountId">{{ row.umNo || row.accountId || '—' }}</td><td><span :title="row.reason" :class="['import-issue-kind',row.tone]">{{ row.kind }}</span></td><td>第 {{ row.rowNumber }} 行</td></tr></tbody></table>
         </div>
-        <div class="manual-eligibility-actions"><button class="btn" type="button" @click="downloadImportIssues">下载异常结果 CSV</button><button ref="importDialogClose" class="btn primary" type="button" @click="closeImportIssueDialog">知道了</button></div>
+        <div class="manual-eligibility-actions"><button class="btn" type="button" @click="downloadImportIssues">下载异常结果</button><button ref="importDialogClose" class="btn primary" type="button" @click="closeImportIssueDialog">关闭</button></div>
       </section>
     </div>
   </BodyPortal>
@@ -165,7 +169,7 @@ export default defineComponent({
 </template>
 <style scoped>
 
-.manual-account-selection-row{margin-bottom:16px}.manual-account-selection-heading{margin-bottom:8px;color:var(--neutral-700);font-size:13px;font-weight:600}.manual-account-selection-row .manual-selection-modes{margin:0}.manual-plan-account-count{display:flex;flex-direction:row;align-items:center;gap:12px;margin-bottom:16px}.manual-plan-account-count>span{flex:none}.manual-plan-account-input-wrap{width:min(240px,100%)}.manual-plan-account-input-wrap input{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface);color:var(--neutral-900)}.manual-plan-account-input-wrap small{display:block;margin-top:4px}.manual-upload-panel .manual-import-result{display:flex;align-items:center;flex-wrap:wrap;gap:16px}.manual-import-result>span{color:var(--neutral-600)}.manual-import-dialog{width:min(600px,100%)}.manual-import-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.manual-import-dialog-head h2{margin:0;font-size:18px}.manual-import-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0;padding:14px;background:var(--neutral-50);border-radius:8px}.manual-import-metrics small{display:block;color:var(--neutral-500);font-size:12px}.manual-import-metrics strong{display:block;margin-top:6px;color:var(--neutral-800);font-size:22px;font-variant-numeric:tabular-nums}.manual-import-metrics .success{color:var(--success)}.manual-import-metrics .warning{color:var(--processing)}.manual-import-details{max-height: min(360px,45vh);overflow-y:auto}.manual-import-details h3{margin:16px 0 8px;color:var(--neutral-700);font-size:13px}.manual-import-details section:first-child h3{margin-top:0}.manual-import-detail-row{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid var(--neutral-100);overflow-wrap:anywhere}.manual-import-detail-row b{font-size:12px;font-weight:500;color:var(--neutral-700)}.manual-import-detail-row span{font-size:12px;color:var(--neutral-500)}.manual-import-details .manual-import-duplicates{margin-top:12px;font-size:12px;color:var(--neutral-500)}
+.manual-account-selection-row{margin-bottom:16px}.manual-account-selection-heading{margin-bottom:8px;color:var(--neutral-700);font-size:13px;font-weight:600}.manual-account-selection-row .manual-selection-modes{margin:0}.manual-plan-account-count{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:16px}.manual-plan-account-count>span{flex:none}.manual-plan-account-input-wrap{width:min(240px,100%)}.manual-plan-account-input-wrap input{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--neutral-200);border-radius:6px;background:var(--surface);color:var(--neutral-900)}.manual-plan-account-input-wrap small{display:block;margin-top:4px}.manual-upload-panel .manual-import-result{display:flex;align-items:center;flex-wrap:wrap;gap:16px}.manual-import-result>span{color:var(--neutral-600)}.manual-import-dialog{width:min(600px,100%)}.manual-import-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.manual-import-dialog-head h2{margin:0;font-size:18px}.manual-import-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0;padding:14px;background:var(--neutral-50);border-radius:8px}.manual-import-metrics small{display:block;color:var(--neutral-500);font-size:12px}.manual-import-metrics strong{display:block;margin-top:6px;color:var(--neutral-800);font-size:22px;font-variant-numeric:tabular-nums}.manual-import-metrics .success{color:var(--success)}.manual-import-metrics .warning{color:var(--processing)}.manual-import-details{max-height: min(360px,45vh);overflow-y:auto}.manual-import-details h3{margin:16px 0 8px;color:var(--neutral-700);font-size:13px}.manual-import-details section:first-child h3{margin-top:0}.manual-import-detail-row{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid var(--neutral-100);overflow-wrap:anywhere}.manual-import-detail-row b{font-size:12px;font-weight:500;color:var(--neutral-700)}.manual-import-detail-row span{font-size:12px;color:var(--neutral-500)}.manual-import-details .manual-import-duplicates{margin-top:12px;font-size:12px;color:var(--neutral-500)}
 @media(max-width:580px){.manual-plan-account-input-wrap{min-width:0;flex:1}.manual-import-metrics{gap:8px;padding:10px}.manual-import-metrics strong{font-size:20px}}
 .manual-eligibility-mask{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;background:var(--mask)}
 .manual-eligibility-dialog{width:min(440px,100%);padding:24px;border:1px solid var(--neutral-200);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-4)}

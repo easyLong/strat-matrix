@@ -1,6 +1,7 @@
 package com.stratmatrix.planning.tasks;
 
 import static com.stratmatrix.planning.manual.Json.map;
+import static com.stratmatrix.planning.manual.Json.object;
 
 import com.stratmatrix.planning.adapter.python.PythonExecutionClient;
 import com.stratmatrix.planning.auto.AutoScheduleService;
@@ -89,7 +90,7 @@ public final class PlanningTaskService {
             "has_more",
             false,
             "needs_next_tick",
-            retry,
+            retry || awaitingNext(result) || advanced.stream().anyMatch(PlanningTaskService::awaitingNext),
             "next_after_id",
             0L);
       case HOTSPOT:
@@ -133,5 +134,10 @@ public final class PlanningTaskService {
         false,
         "next_after_id",
         0L);
+  }
+
+  private static boolean awaitingNext(Map<String, Object> result) {
+    return Arrays.asList("待发起", "计算中", "待确认")
+        .contains(object(result.get("task")).get("status"));
   }
 }

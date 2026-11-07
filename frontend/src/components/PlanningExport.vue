@@ -1,11 +1,12 @@
 <script lang="ts">
+import DialogTitle from './DialogTitle.vue';
+import DateRangeFields from './DateRangeFields.vue';
 import { defineComponent, type PropType } from '../compat/composition';
+import { canPlanning } from '../host/runtime';
 import { ref } from '../compat/composition';
 import type { PlanPageQuery } from '../api/queries';
 import { requestBlob } from '../api/http';
 import type { BatchSummary } from '../types';
-import PageBreadcrumbs from './PageBreadcrumbs.vue';
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
 export default defineComponent({
     props: { accounts: { required: false, type: Array as PropType<string[]> },
         batches: { required: false, type: Array as PropType<BatchSummary[]> },
@@ -19,19 +20,10 @@ export default defineComponent({
         const end = ref('');
         const busy = ref(false);
         const error = ref('');
-        usePageBreadcrumbs(() => opened.value ? [{
-                label: '导出报表'
-            }] : [], {
-            append: true,
-            close: () => {
-                if (!busy.value)
-                    opened.value = false;
-            }
-        });
         async function download() {
             error.value = '';
             if ((props.accounts || props.accountDates) && (!start.value || !end.value || start.value > end.value)) {
-                error.value = '请选择有效的开始日期和结束日期';
+                error.value = '请选择有效的开始时间和截止时间';
                 return;
             }
             busy.value = true;
@@ -80,6 +72,7 @@ export default defineComponent({
             }
         }
         return {
+            canPlanning,
             opened,
             start,
             end,
@@ -88,19 +81,19 @@ export default defineComponent({
             download
         };
     },
-    components: {PageBreadcrumbs}
+    components: {DialogTitle, DateRangeFields}
 });
 </script>
 
 <template>
 <div class="vue2-component-root">
-  <button type="button" :class="inline ? 'text-btn' : 'btn'" @click="opened = true">导出报表</button>
+  <button v-if="canPlanning('results.export')" type="button" :class="inline ? 'text-btn' : 'btn'" @click="opened = true">导出报表</button>
   <BodyPortal>
     <div v-if="opened" class="export-mask" @click.self="!busy && (opened = false)">
       <section class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
-        <PageBreadcrumbs compact />
-        <h3 id="export-title">导出策划明细</h3>
-        <div v-if="accounts || accountDates" class="export-dates"><label>开始日期 <input v-model="start" type="date" /></label><label>结束日期 <input v-model="end" type="date" /></label></div>
+
+        <DialogTitle id="export-title" title="导出策划明细" />
+        <div v-if="accounts || accountDates" class="export-dates"><DateRangeFields :start.sync="start" :end.sync="end" /></div>
         <p v-if="error" class="export-error" role="alert">{{ error }}</p>
         <div class="export-actions"><button class="btn" type="button" :disabled="busy" @click="opened = false">取消</button><button class="btn primary" type="button" :disabled="busy" @click="download">{{ busy ? '导出中…' : '确认导出' }}</button></div>
       </section>

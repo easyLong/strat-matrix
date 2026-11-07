@@ -7,5 +7,14 @@ package com.stratmatrix.planning.content;
  * Retrying an accepted write must return the original receipt and frozen production time.
  */
 public interface ContentFlowWriter {
+  enum TransactionMode {
+    /** Same DataSource and REQUIRED transaction as the planning receipt. Never performs HTTP. */
+    SAME_TRANSACTION,
+    /** Remote/other storage: return a durable idempotent receipt; no planning row lock during I/O. */
+    INDEPENDENT
+  }
+
+  default TransactionMode transactionMode() { return TransactionMode.INDEPENDENT; }
+
   ContentFlowReceipt upsert(ContentFlowEntry entry);
 }

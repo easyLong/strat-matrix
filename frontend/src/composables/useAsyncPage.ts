@@ -1,4 +1,4 @@
-import { onBeforeUnmount, type Ref } from '../compat/composition'
+import { onBeforeUnmount, onActivated, onDeactivated, getCurrentInstance, type Ref } from '../compat/composition'
 import type { PageResult } from '../api/queries'
 
 /** Shared request ownership: only the latest query can update a list. */
@@ -10,7 +10,9 @@ export function useAsyncPage<T>(
   let requestVersion = 0
   let controller: AbortController | undefined
   let disposed = false
+  let paused = false
   async function load() {
+    if (paused || disposed) return false
     const version = ++requestVersion
     controller?.abort()
     controller = new AbortController()
@@ -30,6 +32,11 @@ export function useAsyncPage<T>(
       if (version === requestVersion) state.loading.value = false
     }
   }
-  onBeforeUnmount(() => { disposed = true; controller?.abort() })
+  const pause = () => { paused = true; requestVersion++; controller?.abort(); state.loading.value = false }
+  if (getCurrentInstance()) {
+    onDeactivated(pause)
+    onActivated(() => { const resumed = paused; paused = false; if (resumed) void load() })
+  }
+  onBeforeUnmount(() => { disposed = true; pause() })
   return { load }
 }

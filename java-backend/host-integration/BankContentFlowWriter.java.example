@@ -10,12 +10,20 @@ import com.stratmatrix.planning.content.ContentFlowWriter;
  */
 public final class BankContentFlowWriter implements ContentFlowWriter {
   @Override
+  public TransactionMode transactionMode() {
+    // Choose SAME_TRANSACTION only for the same DataSource/transaction manager
+    // and REQUIRED propagation. Remote calls or REQUIRES_NEW use INDEPENDENT.
+    return TransactionMode.INDEPENDENT;
+  }
+
+  @Override
   public ContentFlowReceipt upsert(ContentFlowEntry entry) {
     // 1. Look up the existing flow by planningItemId under the host's transaction/unique key.
     // 2. Same resultVersion: return its original receipt and original productionTime.
     // 3. Newer resultVersion: update only a waiting flow; reject producing/completed flows.
     // 4. Map entry.planningResult, accountInfo, topicInfo and productionTime to the real columns.
-    // 5. Return CREATED / UPDATED / ALREADY_PRESENT only after the write is durable.
+    // 5. INDEPENDENT returns only after its own commit; SAME_TRANSACTION joins
+    //    the planning receipt transaction, so both must succeed/rollback together.
     // Use entry.idempotencyKey() for retries whose first successful reply was lost.
     throw new IllegalStateException("请先补齐现有内容流水表字段映射与幂等写入SQL");
   }

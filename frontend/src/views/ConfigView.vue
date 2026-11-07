@@ -1,9 +1,10 @@
 <script lang="ts">
 import { defineComponent, type PropType } from '../compat/composition';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
+import { workspaceKey, workspacePages } from '../composables/useWorkspaceTabs';
 import { useRouter } from '../compat/router';
-import PageBreadcrumbs from '../components/PageBreadcrumbs.vue';
-import { usePageBreadcrumbs } from '../composables/usePageBreadcrumbs';
+import { useActivePage } from '../composables/useActivePage';
+import { canPlanning } from '../host/runtime';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
 import TaxonomyPanel from '../components/TaxonomyPanel.vue';
 import ConfigOverview from '../components/config/ConfigOverview.vue';
@@ -11,6 +12,7 @@ import ConfigHistory from '../components/config/ConfigHistory.vue';
 import LifecycleRulesEditor from '../components/config/LifecycleRulesEditor.vue';
 import ProductionTimingConfig from '../components/config/ProductionTimingConfig.vue';
 import { productionTimingValid } from '../ui/productionTiming';
+import { lifecycleRangesValid } from '../ui/lifecycleRanges';
 import { configValuesEqual } from '../ui/configHistory';
 import { recommendedTaxonomy, tagNames } from '../topicTaxonomy';
 import { formatDateTime } from '../planningTime';
@@ -18,6 +20,7 @@ import { api, type TagTaxonomyItem } from '../api';
 import { usePlanningStore } from '../store';
 import type { ConfigVersionSummary, LifecycleCondition, LifecycleRule, StrategyConfig } from '../types';
 export default defineComponent({
+    name: 'PlanningConfigPage',
     setup(props, context) {
         const store = usePlanningStore();
         const router = useRouter();
@@ -99,31 +102,21 @@ export default defineComponent({
         const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value);
         const pageDirty = computed(() => dirty.value || tagDirty.value);
         const hasUnsavedChanges = computed(() => editing.value && pageDirty.value);
-        usePageBreadcrumbs(() => {
-            const root = {
-                label: 'AI策划配置',
-                action: async () => {
-                    if (busy.value)
-                        return;
-                    if (editing.value)
-                        await cancelEditing();
-                    else
-                        closeHistory();
-                }
-            };
-            if (historyView.value)
-                return [root, {
-                        label: '历史配置',
-                        action: () => {
-                            versionDetail.value = null;
-                        }
-                    }, ...(versionDetail.value ? [{
-                            label: `V${displayVersionNumber(versionDetail.value)} 配置详情`
-                        }] : [])];
-            return editing.value ? [root, {
-                    label: '编辑配置'
-                }] : [root];
+        const workspace = inject(workspaceKey, null);
+        const unregisterCloseGuard = workspace?.registerCloseGuard('/config', {
+            dirty: () => busy.value || hasUnsavedChanges.value,
+            confirm: async () => {
+                if (busy.value) return false;
+                const confirmed = await requestConfirmation({
+                    title: '关闭AI策划配置？',
+                    message: '当前有未保存的配置修改，关闭后这些内容将被放弃。',
+                    confirmLabel: '确认关闭', cancelLabel: '继续编辑', danger: true, safePrimary: true
+                });
+                if (confirmed) confirmCancelEditing();
+                return confirmed;
+            }
         });
+        onBeforeUnmount(() => unregisterCloseGuard?.());
         function requestConfirmation(options: NonNullable<typeof confirmation.value>) {
             if (confirmationResolver)
                 confirmationResolver(false);
@@ -220,7 +213,7 @@ export default defineComponent({
             if (!document.hidden)
                 void syncSavedConfig();
         };
-        onMounted(() => {
+        const configPageActive = useActivePage(() => {
             window.addEventListener('beforeunload', beforeUnload);
             window.addEventListener('focus', syncOnFocus);
             document.addEventListener('visibilitychange', syncOnVisible);
@@ -228,6 +221,11 @@ export default defineComponent({
                 void syncSavedConfig();
             }, 10000);
             removeRouteGuard = router.beforeEach((to, from, next) => {
+                // Switching local workspace tabs caches this editor; it does not discard it.
+                if (workspace && workspacePages.some(page => page.key === to.path)) {
+                    next();
+                    return;
+                }
                 if (to.fullPath === from.fullPath || !hasUnsavedChanges.value) {
                     next();
                     return;
@@ -239,10 +237,12 @@ export default defineComponent({
                     cancelLabel: '继续编辑',
                     danger: true,
                     safePrimary: true
-                }).then(confirmed => confirmed ? next() : next(false), () => next(false));
+                }).then(confirmed => {
+                    if (confirmed) { confirmCancelEditing(); next(); }
+                    else next(false);
+                }, () => next(false));
             });
-        });
-        onBeforeUnmount(() => {
+        }, () => {
             window.removeEventListener('beforeunload', beforeUnload);
             window.removeEventListener('focus', syncOnFocus);
             document.removeEventListener('visibilitychange', syncOnVisible);
@@ -251,12 +251,12 @@ export default defineComponent({
             removeRouteGuard?.();
         });
         async function syncSavedConfig() {
-            if (!store.databaseReady || loading.value || busy.value || configSyncBusy || document.hidden)
+            if (!configPageActive.value || !store.databaseReady || loading.value || busy.value || configSyncBusy || document.hidden)
                 return;
             configSyncBusy = true;
             try {
                 const latest = await api.config();
-                if (loading.value || busy.value)
+                if (!configPageActive.value || loading.value || busy.value)
                     return;
                 const changed = latest.version !== store.configVersion || JSON.stringify(latest.config) !== JSON.stringify(store.config);
                 if (!changed) {
@@ -351,7 +351,7 @@ export default defineComponent({
             }
         }
         const marketingValid = computed(() => Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 && planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size && planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) && Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 && /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) && Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100 && productionTimingValid(draft.value.content_production_lead_days));
-        const strategyValid = computed(() => Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 && draft.value.stage_targets.length === 5 && draft.value.stage_targets.every(stage => Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) && stage.traffic >= 0 && stage.conversion >= 0 && stage.traffic + stage.conversion === 100) && lifecycleRules.value.length === 5 && lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 && rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) && lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0);
+        const strategyValid = computed(() => lifecycleRangesValid(lifecycleRules.value) && Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 && draft.value.stage_targets.length === 5 && draft.value.stage_targets.every(stage => Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) && stage.traffic >= 0 && stage.conversion >= 0 && stage.traffic + stage.conversion === 100) && lifecycleRules.value.length === 5 && lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 && rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) && lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0);
         function restore() {
             if (!editing.value)
                 return;
@@ -475,6 +475,7 @@ export default defineComponent({
             notice.value = '';
         }
         return {
+            canPlanning,
             store,
             draft,
             busy,
@@ -517,20 +518,9 @@ export default defineComponent({
 
 <template>
 <div class="vue2-component-root">
-  <div class="page-head config-page-head">
-    <div class="page-actions">
-      <template v-if="!editing && !historyView">
-        <button class="btn primary" type="button" :disabled="loading || busy || !store.databaseReady" @click="startEditing">编辑配置</button>
-        <button class="btn" type="button" :disabled="loading || busy || !store.databaseReady" @click="openHistory">历史配置</button>
-      </template>
-      <button v-else-if="historyView" class="btn" type="button" @click="closeHistory">返回配置</button>
-      <template v-else>
-        <button class="btn" type="button" :disabled="busy || !store.databaseReady" @click="restore">恢复当前配置</button>
-        <button class="btn danger-outline" type="button" :disabled="busy" @click="cancelEditing">取消编辑</button>
-        <button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !marketingValid || !strategyValid || !pageDirty" @click="saveAll"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '保存中…' : '保存配置' }}</button>
-      </template>
-    </div>
-  </div>
+  <div v-if="editing" class="page-head config-page-head"><div class="page-actions"><button class="btn" type="button" :disabled="busy" @click="cancelEditing">返回</button></div></div>
+  <div v-if="historyView" class="page-head config-page-head"><div class="page-actions"><button class="btn" type="button" @click="closeHistory">返回配置</button></div></div>
+  <div v-if="editing" class="config-edit-actions"><button class="btn primary" type="button" :disabled="busy || !store.databaseReady || !marketingValid || !strategyValid || !pageDirty" @click="saveAll"><span v-if="busy" class="loading-spinner" aria-hidden="true" />{{ busy ? '保存中…' : '保存配置' }}</button></div>
 
   <div v-if="notice" class="banner success-banner" role="status">{{ notice }}</div>
   <div v-if="error" class="banner error-banner" role="alert">{{ error }}</div>
@@ -556,7 +546,7 @@ export default defineComponent({
     </section>
 
     <section class="card">
-      <div class="card-head"><div><h2>策划规则配置</h2></div></div>
+      <div class="card-head config-rules-head"><h2>策划规则配置</h2><label class="config-window-inline"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" aria-label="滚动统计窗口" type="number" min="1" max="100" /><span>篇</span></div></label></div>
       <div class="card-body">
         <LifecycleRulesEditor v-model="draft.lifecycle_rules" />
         <div class="lifecycle-definition-head"><div><b>阶段经营目标</b></div></div>
@@ -570,16 +560,16 @@ export default defineComponent({
             </tr></tbody>
           </table>
         </div>
-        <label class="field rolling-field"><span>滚动统计窗口</span><div class="input-unit"><input v-model.number="draft.rolling_posts" type="number" min="1" max="100" /><span>篇</span></div></label>
+
         <div class="lifecycle-definition-head"><div><b>选题标签配置</b></div></div>
         <TaxonomyPanel :model-value.sync="tagItems" :editing="editing" :disabled="busy || !store.databaseReady" />
-        <p v-if="editing && !strategyValid" class="inline-error">请检查滚动窗口、生命周期进入条件；每个阶段的流量与转化目标之和必须为 100%。</p>
+        <p v-if="editing && !strategyValid" class="inline-error">请检查滚动窗口、生命周期条件范围；每个阶段的流量与转化目标之和必须为 100%。</p>
       </div>
     </section>
   </fieldset>
   </template>
   <template v-else-if="!historyView && !loading && store.initialized">
-  <ConfigOverview :config="draft" :tag-items="tagItems" />
+  <ConfigOverview :config="draft" :tag-items="tagItems"><template #actions><button v-if="canPlanning('config.edit')" class="btn primary" type="button" :disabled="loading || busy || !store.databaseReady" @click="startEditing">编辑配置</button><button class="btn" type="button" :disabled="loading || busy || !store.databaseReady" @click="openHistory">历史配置</button></template></ConfigOverview>
   </template>
   <ConfigHistory v-if="historyView && !loading && store.initialized" :detail.sync="versionDetail" :versions="versions" :disabled="busy" @restore="restoreVersion" />
   <div v-if="confirmation" class="app-confirm-mask" @click.self="dismissConfirmation">
