@@ -1,0 +1,117 @@
+{
+  "description": "S1 preserves HTTP mapping/status annotations, public input fields and SQL bytes; full behavior is covered by MVC/H2/browser tests.",
+  "http_annotations": {
+    "ManualPlanningController": [
+      "@RequestMapping(\"${planning.api-prefix:/api/plan}\")",
+      "@PostMapping(\"/manual-plans/previews\")",
+      "@ResponseStatus(HttpStatus.CREATED)",
+      "@PostMapping(\"/manual-plans/previews/{code}/submit\")",
+      "@ResponseStatus(HttpStatus.ACCEPTED)",
+      "@GetMapping(\"/manual-plans/account-availability\")",
+      "@GetMapping(\"/accounts\")",
+      "@GetMapping(\"/topics\")",
+      "@GetMapping(\"/topics/{topicId}/detail\")",
+      "@PostMapping(\"/query/manual-tasks\")",
+      "@PostMapping(\"/manual-plans/marketing-tasks\")",
+      "@ResponseStatus(HttpStatus.CREATED)",
+      "@GetMapping(\"/manual-plans/marketing-tasks\")",
+      "@GetMapping(\"/manual-plans/marketing-tasks/{code}\")",
+      "@PostMapping(\"/query/plans\")",
+      "@PostMapping(\"/query/accounts\")",
+      "@PostMapping(\"/query/periods\")",
+      "@PostMapping(\"/query/period-context\")",
+      "@PostMapping(\"/query/failures\")",
+      "@GetMapping(\"/batches\")",
+      "@GetMapping(\"/manual-plans/tasks\")",
+      "@GetMapping(\"/batches/{id}\")",
+      "@PostMapping(\"/batches/manual\")",
+      "@PostMapping(\"/items/{id}/replace-topic\")",
+      "@GetMapping(\"/items/{id}/adjustments\")",
+      "@GetMapping(\"/items/{id}/replacement-candidates\")",
+      "@PostMapping(\"/query/export\")",
+      "@PostMapping({\"/query/topic-usage\", \"/integrations/bank/op02/topic-usage/query\"})"
+    ],
+    "BusinessPlanningConfigController": [
+      "@RequestMapping(\"${planning.api-prefix:/api/plan}/business-config\")",
+      "@GetMapping",
+      "@PutMapping",
+      "@GetMapping(\"/versions\")",
+      "@PostMapping(\"/versions/{version}/restore\")"
+    ],
+    "ConfigReleaseController": [
+      "@RequestMapping(\"${planning.api-prefix:/api/plan}/config\")",
+      "@GetMapping",
+      "@PutMapping",
+      "@GetMapping(\"/versions\")",
+      "@PostMapping(\"/versions/{version}/restore\")"
+    ],
+    "TagTaxonomyController": [
+      "@RequestMapping(\"${planning.api-prefix:/api/plan}/tag-taxonomy\")",
+      "@GetMapping",
+      "@PutMapping"
+    ],
+    "SourceFactsController": [
+      "@RequestMapping(\"${planning.source.api-prefix:/api/plan/internal/source}\")",
+      "@PostMapping(\"/{capability}/query\")"
+    ],
+    "PlanningHealthController": [
+      "@RequestMapping(\"${planning.api-prefix:/api/plan}\")",
+      "@GetMapping(\"/health\")"
+    ]
+  },
+  "input_fields": {
+    "ManualPreviewRequest": [
+      "String task_name;",
+      "List<@NotBlank @Size(max = 64) String> account_ids;",
+      "List<@NotBlank @Size(max = 64) String> topic_ids;",
+      "Integer target_count;",
+      "String content_mode = \"non_marketing\";",
+      "String note = \"\";"
+    ],
+    "MarketingTaskRequest": [],
+    "BusinessPlanningConfig": [
+      "List<Integer> planning_days;",
+      "Integer schedule_day;",
+      "String schedule_time;",
+      "Integer marketing_max;",
+      "Integer hotspot_ratio;",
+      "Map<String, Integer> content_production_lead_days = new LinkedHashMap<>();"
+    ]
+  },
+  "tables": [
+    "godp_auto_planning_task",
+    "godp_business_planning_config",
+    "godp_business_planning_config_version",
+    "godp_manual_marketing_task",
+    "godp_manual_preview",
+    "godp_manual_reservation",
+    "godp_manual_task",
+    "godp_planning_adjustment",
+    "godp_planning_batch",
+    "godp_planning_config_release",
+    "godp_planning_failure",
+    "godp_planning_item",
+    "godp_planning_resource_claim",
+    "godp_planning_task_archive"
+  ],
+  "views": [
+    "godp_planning_batch_read",
+    "godp_planning_item_read",
+    "godp_planning_task_read"
+  ],
+  "sql_sha256": {
+    "auto-planning-business.sql": "c00f13c8c62162040158d040568c1670dfed80ed5cf783ba06c3879a353b4b96",
+    "business-planning-config.sql": "dcfae41af424103737d30c455926da6208a912847ef1998e3c70c822312dbf83",
+    "manual-business.sql": "3ba23cd06cc9e03cab6405c2317a44964411e1d77da676bd4809753309690c99",
+    "migrations/V2__rename_business_tables.sql": "4f6130e1291074cb1520cb6619ad0d18cc1602903c427cdfc30cae88aec79f56",
+    "migrations/V3__result_slot_identity.sql": "95af8b0a75dbd5ae668016edfa83465fa3d4e12bca441a0aca58e9a72fc5bb27",
+    "migrations/V4__auto_result_receipt.sql": "eb5a899895793678d5dd94c8caf2f639d935b07dc7b1335c8160867636a2d01b",
+    "migrations/V5__business_queries_and_marketing_dates.sql": "330ac5cef7645b3db45e70163b85dea92f029a2301deca8d3a1a0fa76c991c71",
+    "migrations/V6__standard_public_columns.sql": "46f106db3c7b9f9cfb45ad7b8c7220860ccd8c723ba7aacadf300f99f5c132dc",
+    "migrations/V7__content_production_lead_days.sql": "fb84bdccfb5ad01884c951ab9b1688eace5cd6f8b29c8c9406d559b96e364428",
+    "migrations/V8__content_flow_scan_index.sql": "68c627a4bbda09f179288dda9080849ff2a183f9437783b217eef1a6c217e3b5",
+    "migrations/V9__staged_result_publication.sql": "0bf05ca54328adc143e0c36804d6360b26c8b623e6e1cfd31ce0af3c16e4fb9e",
+    "planning-query-views.sql": "2b99abd581b89446c1f98ef1d0d592b72da0eb6c02c0c1cdb854ddd1ba5c7d9a",
+    "slot-completion.sql": "ab648683a3a77f854215dafc84282e96015dc827e5e494bc108ac786944d0119"
+  }
+}

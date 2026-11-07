@@ -1,6 +1,6 @@
 package your.host.integration;
 
-import com.stratmatrix.planning.tasks.PlanningTaskService;
+import com.pab.aitmp.aiis.godp.planning.services.tasks.PlanningTaskService;
 import java.time.Instant;
 import java.util.Map;
 

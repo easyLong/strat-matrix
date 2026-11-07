@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def samples():
     config = json.loads((ROOT/'testing/bank-source-cases.example.json').read_text(encoding='utf-8'))
-    fixture = json.loads((ROOT/'java-backend/src/test/resources/bank-source/contract-sample.json').read_text(encoding='utf-8'))
+    fixture = json.loads((ROOT/'java-backend/godp-planning-server/src/test/resources/bank-source/contract-sample.json').read_text(encoding='utf-8'))
     for capability in CAPABILITIES[:3]:
         fixture[capability]['page_size'] = 10
     return config, fixture

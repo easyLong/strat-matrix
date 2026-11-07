@@ -43,7 +43,7 @@ def run(output, apply):
         if a['database']==b['database']:raise RuntimeError('业务库与算法库不可相同')
         report={'before':{'algorithm':a,'business':b},'applied':False}
         if apply:
-            root=ROOT/'java-backend/src/main/resources/db'
+            root=ROOT/'java-backend/godp-planning-services/src/main/resources/db'
             with business.cursor() as c:
                 c.execute("SELECT GET_LOCK('strat-matrix:business-migration',5) acquired")
                 if c.fetchone()['acquired']!=1:raise RuntimeError('业务库迁移锁被占用')

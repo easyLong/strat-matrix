@@ -20,6 +20,10 @@
 | [java-backend](java-backend/README.md) | Java 8业务模块；配置发布、人工/自动任务、正式结果、热点/营销衔接与SQL分页报表 |
 | [python-backend](python-backend/README.md) | FastAPI算法服务；算法配置、画像、向量、匹配、冻结输入与计算提案 |
 
+行外结构改造在`feature/planning-v2`推进：已建立S0协议/SQL基线，并将Java拆为api、entity、client、services、server五模块。阶段结果、校准项及后续任务见[执行记录V0.1](docs/行外独立改造执行记录_V0.1_2026-11-07.md)。本轮没有执行实际数据库迁移或重启运行中的服务。
+
+后续实体、事务、请求入口、宿主端口及调度改造见[执行记录V0.2](docs/行外独立改造执行记录_V0.2_2026-11-07.md)。整体回归可使用`python -m testing --browser --packaging`；保留旧返回字段和查询兼容协议，未做真实行内SDK、SQL、权限或模型验收。
+
 最新状态见[双库业务迁移与验收](docs/双库业务迁移与验收_2026-11-03.md)。当前已切换 Vue → Java业务服务 → Python算法能力，历史结果已迁入业务库，普通自动策划通过真实双库验收。内容方事实来源、行内身份与宿主调度仍需现场适配，行外空实现不代表这些系统已接通。
 
 ## 整体流程
@@ -60,8 +64,8 @@ flowchart LR
 | 公共算法与序列化规则 | `python-backend/app/core/` |
 | 结果 SQL 投影与行内资料批量读取 | `python-backend/app/adapters/` |
 | 行内查询契约、Java HTTP资料与状态适配 | `python-backend/app/bank_bridge/` |
-| Java普通人工业务、MyBatis持久化 | `java-backend/src/main/java/com/stratmatrix/planning/manual/`、`java-backend/src/main/resources/mapper/` |
-| 本地装配及旧业务兼容适配 | `java-backend/src/main/java/com/stratmatrix/standalone/`、`planning/adapter/local/`、`planning/adapter/legacy/`；驻场不迁入 |
+| Java普通人工业务、MyBatis持久化 | `java-backend/godp-planning-services/src/main/java/com/pab/aitmp/aiis/godp/planning/services/manual/`、`java-backend/godp-planning-services/src/main/resources/mapper/` |
+| 本地装配及旧业务兼容适配 | `java-backend/godp-planning-server/src/main/java/com/pab/aitmp/aiis/godp/planning/server/dev/`、`planning/adapter/local/`、`planning/adapter/legacy/`；驻场不迁入 |
 | 旧行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
 | 行内Java驻场实现步骤与边界说明 | `docs/integration/java-host/README.md` |
 | 内容状态读取与业务库状态投影 | Java `manual/ManualContentStatusService`、`MarketingTaskService`；宿主提供内容事实 |
@@ -74,7 +78,7 @@ flowchart LR
 | 选题生产使用次数 | Java `manual/TopicUsageService`；Python `bank_bridge/official_usage.py`经HTTP读取 |
 | 配置读取与目录 | `system_config.py`、`system_config_catalog.py` |
 
-表中未标注工程的Python文件位于`python-backend/app/`，Java业务包位于`java-backend/src/main/java/com/stratmatrix/planning/`。`main.py`与`integration.py`为兼容入口。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
+表中未标注工程的Python文件位于`python-backend/app/`，Java业务包位于`java-backend/`。`main.py`与`integration.py`为兼容入口。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
 
 ## 初始化与配置
 
@@ -110,7 +114,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 6930
 
 # java-backend/，需安装JDK8及Maven
 mvn package -DskipTests
-java -jar target/planning-business.jar --spring.config.additional-location=file:../run/java-backend.properties
+java -jar godp-planning-server/target/planning-business.jar --spring.config.additional-location=file:../run/java-backend.properties
 
 # frontend/
 npm install

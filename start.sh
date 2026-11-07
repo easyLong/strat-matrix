@@ -49,7 +49,7 @@ if [[ "$PLANNING_ENV" == "outside" ]]; then
     exit 1
   fi
   if ! is_running "$java_pid"; then
-    if [[ "${BUILD_JAVA:-1}" == "1" || ! -f "$APP_ROOT/java-backend/target/planning-business.jar" ]]; then
+    if [[ "${BUILD_JAVA:-1}" == "1" || ! -f "$APP_ROOT/java-backend/godp-planning-server/target/planning-business.jar" ]]; then
       if ! command -v "$MVN_BIN" >/dev/null 2>&1; then
         echo "Maven is required to build java-backend; install it or set MVN_BIN." >&2
         exit 1
@@ -62,7 +62,7 @@ if [[ "$PLANNING_ENV" == "outside" ]]; then
     )
     (
       cd "$APP_ROOT/java-backend"
-      exec "$JAVA_BIN" -jar target/planning-business.jar \
+      exec "$JAVA_BIN" -jar godp-planning-server/target/planning-business.jar \
         "--spring.config.additional-location=file:$RUN_DIR/java-backend.properties"
     ) >"$LOG_DIR/java-backend.log" 2>&1 &
     echo $! >"$java_pid"

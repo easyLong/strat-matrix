@@ -3,6 +3,7 @@ import { authorizePlanningRequest } from '../host/runtime'
 
 export interface PlanningHttpClient { request(config: AxiosRequestConfig): Promise<any> }
 export interface PlanningHttpOptions {
+  queryContract?: 'auto' | 'legacy' | 'post-v1'
   apiPrefix?: string
   responseMode?: 'axios' | 'body'
   unwrapResponse?: (body: any) => any
@@ -27,12 +28,21 @@ export const http = new Proxy({} as AxiosInstance, {
 })
 let transport: PlanningHttpClient | undefined
 let settings: PlanningHttpOptions = {}
+let detectedQueryContract: 'legacy' | 'post-v1' = 'legacy'
+let bindingRevision = 0
+export function queryContractScope() { return bindingRevision }
+export function usePostQueryContract() { return (settings.queryContract === 'auto' || !settings.queryContract) ? detectedQueryContract === 'post-v1' : settings.queryContract === 'post-v1' }
+export function detectQueryContract(value: unknown, revision = bindingRevision) {
+  if (revision === bindingRevision) detectedQueryContract = value === 'post-v1' ? 'post-v1' : 'legacy'
+}
 export function setPlanningHttp(client?: PlanningHttpClient, options: PlanningHttpOptions = {}) {
   const prefix = options.apiPrefix
   if (prefix && (!prefix.startsWith('/') || /[?#%\\]|\/\//.test(prefix) || prefix.split('/').some(p => p === '..' || p === '.')))
     throw new Error('Java策划接口前缀无效')
   transport = client
   settings = { ...options }
+  detectedQueryContract = 'legacy'
+  bindingRevision++
 }
 
 async function requestResponse<T>(path: string, options: RequestInit, responseType?: 'blob') {

@@ -143,11 +143,11 @@ const report = { host: 'inside-isolated', node: process.version, pages: [], erro
     await page.getByLabel('人截止值',{exact:true}).fill('800')
     await shot('config-production-timing-edit')
     const [timingSave] = await Promise.all([
-      page.waitForResponse(response => response.url().includes('/api/config?') && response.request().method() === 'PUT'),
+      page.waitForResponse(response => response.url().endsWith('/api/config/save') && response.request().method() === 'POST'),
       page.getByRole('button', { name: '保存配置', exact: true }).click(),
     ])
     assert.equal(timingSave.status(), 200)
-    assert.ok(timingSave.request().postDataJSON().lifecycle_rules[0].conditions.some(item=>item.operator==='lte' && item.value===800),'range editing must serialize the existing condition contract')
+    assert.ok(timingSave.request().postDataJSON().config.lifecycle_rules[0].conditions.some(item=>item.operator==='lte' && item.value===800),'range editing must serialize the existing condition contract')
     await page.reload()
     assert.match(await page.locator('.lifecycle-summary-table').innerText(),/800/,'saved range must survive a reload')
     await page.locator('.production-timing-config').getByText('T−3（提前 3 天）', { exact: true }).waitFor()
@@ -379,9 +379,9 @@ const report = { host: 'inside-isolated', node: process.version, pages: [], erro
     }
     // Dense fixtures are injected at the browser boundary; never persist them to a business database.
     await page.setViewportSize({width:1440,height:1000})
-    await page.route(/\/api\/config(?:\?|$)/, async route => {
+    await page.route(/\/api\/config(?:\/query)?(?:\?|$)/, async route => {
       const response=await route.fetch(), body=await response.json()
-      if (route.request().method()==='GET') body.config.lifecycle_rules[0]={...body.config.lifecycle_rules[0],condition_mode:'grouped',conditions:[
+      if (route.request().method()==='GET' || route.request().url().endsWith('/query')) body.config.lifecycle_rules[0]={...body.config.lifecycle_rules[0],condition_mode:'grouped',conditions:[
         {field:'followers_count',operator:'gte',value:100,join:'AND'},
         {field:'followers_count',operator:'lt',value:500,join:'AND'},
         {field:'valid_content_count',operator:'gte',value:5,join:'AND'},
@@ -391,7 +391,7 @@ const report = { host: 'inside-isolated', node: process.version, pages: [], erro
     })
     const longGroup='金融与财富管理分类名称用于检查较长文字在窄屏时是否超出布局边界'.repeat(2)
     const longTag='长期家庭资产配置与风险保障需求场景标签'.repeat(3)
-    await page.route(/\/api\/tag-taxonomy(?:\?|$)/, async route => {
+    await page.route(/\/api\/tag-taxonomy(?:\/(?:query|save))?(?:\?|$)/, async route => {
       const response=await route.fetch(), body=await response.json()
       body.items.T3=Array.from({length:7},(_,group)=>[
         {id:`UI-G${group}`,name:group ? `内容主题分类${group}` : longGroup,node_type:'group',enabled:true,parent_id:null},
@@ -427,7 +427,7 @@ const report = { host: 'inside-isolated', node: process.version, pages: [], erro
     await page.getByRole('button',{name:'返回',exact:true}).click()
     await page.getByRole('button',{name:'确认取消',exact:true}).click()
     await page.setViewportSize({width:1440,height:1000})
-    await page.route(/\/api\/topics\?/,async route=>{
+    await page.route(/\/api\/topics(?:\/query|\?)/,async route=>{
       const response=await route.fetch(),body=await response.json(),ordinary=body.find(topic=>!topic.is_marketing)
       await route.fulfill({response,json:[...Array.from({length:60},(_,i)=>({...ordinary,topic_id:`UI-STRESS-${i}`,topic_title:`列表选题${i}：${'较长的选题标题'.repeat(10)}`,outline:'用于检查大纲截断和气泡完整信息。'.repeat(30)})),...body.filter(topic=>topic.is_marketing)]})
     })

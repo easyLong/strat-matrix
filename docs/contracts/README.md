@@ -6,6 +6,8 @@
 
 目录已统一为`frontend/`、`java-backend/`、`python-backend/`。Python原目录已重命名；`app`包名、数据库及接口地址保持不变。启动脚本和驻场代码包均使用新目录。
 
+2026-11-07：`feature/planning-v2`完成Java五模块拆分和包名迁移，现有HTTP协议保持不变。新增[S0基线](../../java-backend/contracts/README.md)、[模块并入说明](../../java-backend/host-integration/MAVEN_MODULES.md)及[执行记录](../行外独立改造执行记录_V0.1_2026-11-07.md)。DTO、全POST及响应命名调整属于后续S4，不能仅修改后端。
+
 ## 当前与目标
 
 | 链路 | 当前实现 | 宿主接入目标 |

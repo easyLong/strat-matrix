@@ -1,5 +1,9 @@
 # 项目文档目录
 
+- [行外改造执行记录V0.2](行外独立改造执行记录_V0.2_2026-11-07.md)：14表实体、六业务Mapper类型化、事务边界、POST查询、新旧协议兼容、宿主端口和四类Handler；[整体回归结果](整体回归结果_2026-11-07.md)记录证据及未完成的破坏式协议替换。
+
+- [行外独立改造执行记录V0.1（2026-11-07）](行外独立改造执行记录_V0.1_2026-11-07.md)：指南逐项校准、S0基线、Java五模块、dev/inside构建、137项Java与53种浏览器状态验收，以及S2—S6后续安排。对应分支为`feature/planning-v2`，尚未合入main。
+
 - [2026-11-07发布与交接记录](发布记录_2026-11-07.md)：本轮完整提交范围、48项前端/53个浏览器状态、Java全量测试、V9数据库发布顺序与驻场剩余适配。
 
 - [11-6设计稿逐项对齐清单（2026-11-07）](UI设计稿对齐清单_2026-11-07.md)：全部7张原图、三个独立页签、生命周期分组/范围、选题卡片、模板异常表、换题时间线、密集资料及最新效果图。
@@ -8,7 +12,7 @@
 
 - [前端统一宿主接入（2026-11-07）](../frontend/VUE2_INTEGRATION.md)：现有Axios/Vuex复用、路由及Java接口前缀、权限能力映射、样式隔离、keep-alive生命周期和模拟宿主验收。
 
-- [Java业务库DBA发布包V9](../java-backend/src/main/resources/db/release/20261107-v9/README.md) · [表与索引评审清单](../java-backend/src/main/resources/db/release/20261107-v9/TABLE_DESIGN.md)：新库/升级/回退、仅DML权限验收、分批结果发布、流水事务边界及只读检查，正式发布由DBA执行。
+- [Java业务库DBA发布包V9](../java-backend/godp-planning-services/src/main/resources/db/release/20261107-v9/README.md) · [表与索引评审清单](../java-backend/godp-planning-services/src/main/resources/db/release/20261107-v9/TABLE_DESIGN.md)：新库/升级/回退、仅DML权限验收、分批结果发布、流水事务边界及只读检查，正式发布由DBA执行。
 
 - [模型接口入口限流与任务准入（2026-11-06）](../python-backend/ONSITE.md#模型入口并发与任务准入2026-11-06)：入口429、文本/向量共享并发、持久化任务容量、MySQL配置与可选跨进程额度、限流延后及Java重试提示。
 

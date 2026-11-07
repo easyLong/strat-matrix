@@ -8,6 +8,16 @@ const { load } = require('./helpers/vue2-loader.cjs')
 const source = name => load(path.resolve(__dirname, '../src', name))
 const runtime = source('host/runtime.ts')
 
+test('explicit POST queries retain view permissions and never grant writes', () => {
+  runtime.configurePlanningRuntime({ hosted:true,routePrefix:'/planning',can:permission=>permission==='manual.view' })
+  try {
+    assert.doesNotThrow(()=>runtime.authorizePlanningRequest('/config/query','POST'))
+    assert.doesNotThrow(()=>runtime.authorizePlanningRequest('/manual-plans/tasks/query','POST'))
+    assert.throws(()=>runtime.authorizePlanningRequest('/config/save','POST'),/权限/)
+    assert.throws(()=>runtime.authorizePlanningRequest('/items/1/replacement-candidates/query','POST'),/权限/)
+  } finally { runtime.configurePlanningRuntime({ hosted:false }) }
+})
+
 test('host transport is reused without creating a development Axios instance', async () => {
   const original = axios.create
   let created = 0

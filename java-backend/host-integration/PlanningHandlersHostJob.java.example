@@ -1,0 +1,23 @@
+package your.host.integration;
+
+import com.pab.aitmp.aiis.godp.planning.api.port.PlanningJobHandler;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.req.PlanningJobRequest;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.res.PlanningJobResult;
+import java.time.Instant;
+import java.util.Map;
+
+/** Wrap with the real bank Job SDK. This template creates no timer, datasource or user identity. */
+public final class PlanningHandlersHostJob {
+  private final PlanningJobHandler handler;
+  public PlanningHandlersHostJob(PlanningJobHandler handler) { this.handler=handler; }
+
+  public PlanningJobResult runPage(Instant triggerTime,int batchSize,Map<String,Long> persistedCursors,
+      boolean contentFlowDue) {
+    PlanningJobResult result=handler.run(new PlanningJobRequest(triggerTime,batchSize,persistedCursors,contentFlowDue));
+    // Save nextCursors and phase outcomes in the host's job context.
+    // retry_required must enter the host retry/alarm path; never report business completion.
+    // has_more/needsNextTick means another bounded pass is required, not a private while-true loop.
+    // Set contentFlowDue=true only on the three approved daily content-flow triggers.
+    return result;
+  }
+}

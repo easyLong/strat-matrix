@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DB = ROOT / 'src/main/resources/db'
+DB = ROOT / 'godp-planning-services/src/main/resources/db'
 BASE = ('manual-business.sql', 'business-planning-config.sql',
         'auto-planning-business.sql', 'slot-completion.sql')
 VERSION = '20261107-v9'
@@ -183,7 +183,7 @@ TABLE_DESIGN.md为表/索引及容量评审入口；checks/04-index-review.sql�
 manifest.json记录权威源码和产物SHA256；下列命令验证发布包未偏离当前源码：
 
 ```bash
-python tools/build_db_release.py --output src/main/resources/db/release/20261107-v9 --check
+python tools/build_db_release.py --output godp-planning-services/src/main/resources/db/release/20261107-v9 --check
 ```
 '''
     source_paths = [DB / n for n in BASE] + [DB / 'planning-query-views.sql', DB / 'migrations/V9__staged_result_publication.sql', Path(__file__).resolve()]

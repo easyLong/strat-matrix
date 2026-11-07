@@ -61,16 +61,16 @@ export function authorizePlanningRequest(path: string, method: string) {
   if (!planningRuntime.hosted) return
   const url = path.split('?')[0]
   if (url === '/health') return
-  const read = method === 'GET'
+  const read = method === 'GET' || method === 'POST' && /\/query$/.test(url)
   // Shared bootstrap config is needed by manual planning too; history and
   // page navigation still require config.view, writes require their own capability.
-  if (url === '/config' && read
+  if ((url === '/config' || url === '/config/query') && read
       && (['config.view', 'manual.view', 'results.view'] as PlanningPermission[]).some(canPlanning)) return
   let permission: PlanningPermission | undefined
   if (url.startsWith('/config')) permission = /\/restore$/.test(url) ? 'config.restore' : read ? 'config.view' : 'config.edit'
-  else if (url === '/tag-taxonomy' && !read) permission = 'config.edit'
+  else if (url.startsWith('/tag-taxonomy') && !read) permission = 'config.edit'
   else if (url === '/query/export') permission = 'results.export'
-  else if (/\/replace-topic$|\/replacement-candidates$/.test(url)) permission = 'results.replace'
+  else if (/\/replace-topic$|\/replacement-candidates(?:\/query)?$/.test(url)) permission = 'results.replace'
   else if (url.startsWith('/manual-plans') || url === '/batches/manual') permission = read ? 'manual.view' : 'manual.create'
   else if (url === '/query/manual-tasks') permission = 'manual.view'
   else if (url.startsWith('/query/') || url.startsWith('/batches') || url.startsWith('/items') || url.startsWith('/planning-')) permission = 'results.view'

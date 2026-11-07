@@ -26,6 +26,9 @@ python -m pip install -r python-backend/requirements-dev.txt
 # 小集：算法回放 + Python + 工具自测 + Java + 前端测试与构建
 python -m testing
 
+# 整体验收：同时运行三页面浏览器及dev/inside交付物检查
+python -m testing --browser --packaging
+
 # 只看算法：5个账号、60个选题、15条策划
 python -m testing --suite algorithm
 

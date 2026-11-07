@@ -34,15 +34,29 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
     # Public Java source is an independent subproject; no target jars or local runtime configuration.
     for name in ('pom.xml', 'README.md'):
         files['java-backend/' + name] = (ROOT / 'java-backend' / name).read_bytes()
-    for path in (ROOT / 'java-backend/src').rglob('*'):
-        if path.is_file() and path.suffix in ('.java', '.properties', '.sql', '.xml', '.json', '.csv'):
-            files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
+    for module in ('entity', 'api', 'client', 'services', 'server'):
+        base = ROOT / 'java-backend' / ('godp-planning-' + module)
+        pom = base / 'pom.xml'
+        files[pom.relative_to(ROOT).as_posix()] = pom.read_bytes()
+        for path in (base / 'src').rglob('*'):
+            if path.is_file() and path.suffix in ('.java', '.properties', '.sql', '.xml', '.json', '.csv', '.md'):
+                files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
+    for base in ('tools', 'contracts'):
+        for path in (ROOT / 'java-backend' / base).rglob('*'):
+            if path.is_file() and path.suffix in ('.py', '.json', '.md'):
+                files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
     for path in (ROOT / 'java-backend/host-integration').rglob('*'):
         if path.is_file() and path.suffix in ('.md', '.csv', '.example', '.properties'):
             files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
     files['python-backend/README.md'] = (ROOT / 'python-backend/README.md').read_bytes()
     files['frontend/README.md'] = (ROOT / 'frontend/README.md').read_bytes()
     files['docs/contracts/README.md'] = (ROOT / 'docs/contracts/README.md').read_bytes()
+    planning_s1_doc = 'docs/行外独立改造执行记录_V0.1_2026-11-07.md'
+    files[planning_s1_doc] = (ROOT / planning_s1_doc).read_bytes()
+    planning_s2_doc = 'docs/行外独立改造执行记录_V0.2_2026-11-07.md'
+    files[planning_s2_doc] = (ROOT / planning_s2_doc).read_bytes()
+    for report in ('docs/整体回归结果_2026-11-07.md', 'docs/testing/overall-planning-v2-20261107.json'):
+        files[report] = (ROOT / report).read_bytes()
     files['docs/BACKGROUND_EXECUTION.md'] = (ROOT / 'docs/BACKGROUND_EXECUTION.md').read_bytes()
     files['docs/JAVA_MANUAL_MIGRATION.md'] = (ROOT / 'docs/JAVA_MANUAL_MIGRATION.md').read_bytes()
     for name in ('start.sh', 'stop.sh', 'status.sh', 'system-config.sh'):
@@ -101,7 +115,8 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
         if 'site_sql_private' in name or 'site_java_private' in name or name.endswith('/.env') or '/artifacts/' in name:
             raise ValueError('交接包包含不允许的文件')
     manifest = {
-        'format_version': 6, 'source_mode': 'java_http',
+        'format_version': 7, 'source_mode': 'java_http',
+        'java_module_layout': ['api', 'entity', 'services', 'server', 'client'],
         'subprojects': ['frontend', 'java-backend', 'python-backend'],
         'java_implementation': 'business_services_with_host_ports',
         'java_runtime_in_project': True,

@@ -6,7 +6,7 @@ from pydantic import TypeAdapter
 from app.bank_bridge.contracts import (Account, Topic, MarketingContent, Page,
                                       EffectivePlacement, ProductionRecord, MarketingProductionRecord)
 
-FIXTURE = Path(__file__).resolve().parents[2] / 'java-backend/src/test/resources/bank-source/contract-sample.json'
+FIXTURE = Path(__file__).resolve().parents[2] / 'java-backend/godp-planning-server/src/test/resources/bank-source/contract-sample.json'
 
 
 @pytest.mark.parametrize('capability,model', [

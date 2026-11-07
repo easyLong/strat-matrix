@@ -2,7 +2,7 @@
 
 版本：V0.2，2026-11-03。本文件对应当前代码中的7项资料查询能力；沿用现有字段，不重新编排历史IF/OP编号。面向行内开发确认，真实表名、字段名和状态编码留待驻场填写。
 
-配套文件：[字段映射表（CSV）](BANK_SOURCE_FIELD_MAPPING.csv)、[Bean装配示例](BankSourceBindings.java.example)、[只读SQL占位](../src/main/resources/bank-source/BankSourceMapper.xml)、[宿主装配说明](README.md)。CSV为UTF-8带BOM，可用Excel打开。
+配套文件：[字段映射表（CSV）](BANK_SOURCE_FIELD_MAPPING.csv)、[Bean装配示例](BankSourceBindings.java.example)、[只读SQL占位](../godp-planning-services/src/main/resources/bank-source/BankSourceMapper.xml)、[宿主装配说明](README.md)。CSV为UTF-8带BOM，可用Excel打开。
 
 2026-11-05补充：营销选题不要求标题和大纲；活动类提供关联活动ID、名称、活动所属组织，银行产品类提供关联产品名称与产品ID。新增映射字段为`related_activity_id`、`activity_organization`、`related_product_id`，已有名称字段继续使用`related_activity`、`related_product`。非营销标题仍必填，不将活动名称伪装成选题标题。详情、预选及任务快照透传这些字段，不新增数据库列。
 

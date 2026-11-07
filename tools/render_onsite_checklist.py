@@ -108,7 +108,7 @@ def load_rows():
             if dependency!='—':visit(dependency,stack+[identity])
         done.add(identity)
     for identity in ids:visit(identity,[])
-    source='\n'.join(path.read_text(encoding='utf-8') for path in (ROOT/'java-backend/src/main/resources/db').glob('*.sql'))
+    source='\n'.join(path.read_text(encoding='utf-8') for path in (ROOT/'java-backend/godp-planning-services/src/main/resources/db').glob('*.sql'))
     tables=set(re.findall(r'CREATE TABLE IF NOT EXISTS (godp_\w+)',source))
     if tables!={name for name,_,_ in JAVA_TABLES}:raise ValueError('Java table inventory differs from DDL')
     py_schema='\n'.join(path.read_text(encoding='utf-8') for path in (ROOT/'python-backend').glob('*.sql'))

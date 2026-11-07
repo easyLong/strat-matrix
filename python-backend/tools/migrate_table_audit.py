@@ -19,7 +19,7 @@ from app.table_audit import PUBLIC_COLUMNS, metadata_errors
 
 def business_definitions():
     result = {}
-    for path in (ROOT / 'java-backend/src/main/resources/db').glob('*.sql'):
+    for path in (ROOT / 'java-backend/godp-planning-services/src/main/resources/db').glob('*.sql'):
         for sql, name in re.findall(r'(CREATE TABLE IF NOT EXISTS (godp_\w+)\s*\([\s\S]*?\) ENGINE=[^;]+;)', path.read_text(encoding='utf-8')):
             result[name] = sql
     return result
@@ -197,7 +197,7 @@ def run(owner, output, apply, resume=False):
                     report['tables'][table].update(rows=len(after), original_fields_preserved=True)
                 if owner == 'business':
                     from app.init_planner_db import statements
-                    source = (ROOT / 'java-backend/src/main/resources/db/planning-query-views.sql').read_text(encoding='utf-8')
+                    source = (ROOT / 'java-backend/godp-planning-services/src/main/resources/db/planning-query-views.sql').read_text(encoding='utf-8')
                     for sql in statements(source):
                         cursor.execute(sql)
                     db.commit()

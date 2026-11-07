@@ -1,0 +1,125 @@
+{
+  "date": "2026-11-07",
+  "branch": "feature/planning-v2",
+  "status": "passed",
+  "java": {
+    "tests": 139,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 5,
+    "passed": 134
+  },
+  "python_tests": 516,
+  "python_subtests": 149,
+  "harness_tests": 43,
+  "frontend_tests": 52,
+  "browser_states": 53,
+  "page_errors": [],
+  "algorithm_replay": [
+    {
+      "accounts": 5,
+      "topics": 60,
+      "positions": 15,
+      "real_model_calls": 0,
+      "comparison": "passed"
+    },
+    {
+      "accounts": 100,
+      "topics": 600,
+      "positions": 300,
+      "real_model_calls": 0,
+      "comparison": "passed"
+    }
+  ],
+  "steps": [
+    {
+      "name": "algorithm",
+      "status": "passed",
+      "duration_seconds": 0.422,
+      "log": "report.html"
+    },
+    {
+      "name": "python",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 7.047,
+      "log": "python.log"
+    },
+    {
+      "name": "harness",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 1.234,
+      "log": "harness.log"
+    },
+    {
+      "name": "java-clean",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 1.016,
+      "log": "java-clean.log"
+    },
+    {
+      "name": "java",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 11.875,
+      "log": "java.log"
+    },
+    {
+      "name": "frontend-tests",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 1.625,
+      "log": "frontend-tests.log"
+    },
+    {
+      "name": "frontend-build",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 7.953,
+      "log": "frontend-build.log"
+    },
+    {
+      "name": "browser",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 29.375,
+      "log": "browser.log"
+    },
+    {
+      "name": "java-dev-package",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 4.297,
+      "log": "java-dev-package.log"
+    },
+    {
+      "name": "java-inside-package",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 2.25,
+      "log": "java-inside-package.log"
+    },
+    {
+      "name": "java-layout",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 0.109,
+      "log": "java-layout.log"
+    },
+    {
+      "name": "java-artifacts",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_seconds": 0.172,
+      "log": "java-artifacts.log"
+    }
+  ],
+  "business_source_sha256": "af95a9b7e5067a4fa2c36f94e62381fc61b3b46acb2b64818c009e88100a7929",
+  "production_writes": 0,
+  "real_model_calls": 0,
+  "inside_sdk_validation": "not_run",
+  "real_bank_sql_validation": "not_run",
+  "destructive_wire_migration": "not_performed"
+}

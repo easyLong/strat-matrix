@@ -1,6 +1,6 @@
 // 示例值全部为虚构，迁入宿主私有包后按现场列名/编码填写；本文件不自动编译。
-import static com.stratmatrix.planning.source.bank.BankSourceMapping.Kind.*;
-import com.stratmatrix.planning.source.bank.*;
+import static com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceMapping.Kind.*;
+import com.pab.aitmp.aiis.godp.planning.services.source.bank.*;
 import java.time.ZoneId;
 
 final class BankSourceSiteMapping {

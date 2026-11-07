@@ -1,8 +1,8 @@
 package your.host.integration;
 
-import com.stratmatrix.planning.content.ContentFlowEntry;
-import com.stratmatrix.planning.content.ContentFlowReceipt;
-import com.stratmatrix.planning.content.ContentFlowWriter;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.req.ContentFlowEntry;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.res.ContentFlowReceipt;
+import com.pab.aitmp.aiis.godp.planning.api.port.ContentFlowWriter;
 
 /**
  * Register this as a host Bean only after the existing content-flow table is mapped.

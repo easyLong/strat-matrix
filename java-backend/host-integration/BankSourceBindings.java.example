@@ -1,6 +1,6 @@
 // 迁入宿主配置包后采用其中一种方式。此文件不自动编译、不创建数据源、不含行内SQL。
-import com.stratmatrix.planning.source.SourceFacts;
-import com.stratmatrix.planning.source.bank.*;
+import com.pab.aitmp.aiis.godp.planning.api.port.SourceFacts;
+import com.pab.aitmp.aiis.godp.planning.services.source.bank.*;
 import java.time.ZoneId;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,7 +15,8 @@ class BankSourceBindings {
       @Qualifier("bankSourceSessions") SqlSessionTemplate sessions,
       @Qualifier("bankSourceTransactions") PlatformTransactionManager transactions) {
     return new BankSourceFacts(
-        new MapperBankSourceQueries(sessions.getMapper(BankSourceMapper.class), transactions),
+        new MapperBankSourceQueries(sessions.getMapper(BankSourceMapper.class), transactions)
+            .verifyWith(sessions.getSqlSessionFactory()),
         new BankSourceMapping(ZoneId.of("Asia/Shanghai"))); // 以实际DATETIME存储时区为准。
   }
 

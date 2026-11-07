@@ -14,7 +14,7 @@
 
 ## 驻场替换与开关
 
-- 业务表：`java-backend/src/main/resources/db/auto-planning-business.sql`，所有字段含中文注释，由行内数据库发布流程执行；Java 通过 `AutoScheduleMapper` 访问。
+- 业务表：`java-backend/godp-planning-services/src/main/resources/db/auto-planning-business.sql`，所有字段含中文注释，由行内数据库发布流程执行；Java 通过 `AutoScheduleMapper` 访问。
 - 业务配置：先将四项业务配置迁入 Java 业务库，并确认与当前 Python 算法配置一致，再启用 `planning.auto-schedule.enabled=true`。
 - Java 算法端口：宿主实现或绑定 `AutoSchedulePort`；行外 `AutoSchedulePythonClient` 仅提供内网 HTTP 参考。
 - 在算法库初始化 `godp_system_config.AUTO_SCHEDULE_OWNER` 后置为 `java`，旧 Python 周调度改为只返回 `delegated_to_java`。升级代码但尚未新增该配置行时保持旧 Python 调度；数据库读取失败仍报错。需要与 Java 开关同一发布窗口切换，避免重复发起或漏发。

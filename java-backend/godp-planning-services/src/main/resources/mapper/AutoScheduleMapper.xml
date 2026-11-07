@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.pab.aitmp.aiis.godp.planning.services.auto.AutoScheduleMapper">
+  <resultMap id="openTasksRow" type="com.pab.aitmp.aiis.godp.planning.entity.entity.AutoPlanningTaskEntity" autoMapping="false">
+    <result column="id" property="id"/>
+    <result column="del_flag" property="delFlag"/>
+    <result column="created_by" property="createdBy"/>
+    <result column="updated_by" property="updatedBy"/>
+    <result column="created_time" property="createdTime"/>
+    <result column="updated_time" property="updatedTime"/>
+    <result column="cycle_start" property="cycleStart"/>
+    <result column="cycle_end" property="cycleEnd"/>
+    <result column="business_config_version" property="businessConfigVersion"/>
+    <result column="business_config_json" property="businessConfigJson"/>
+    <result column="status" property="status"/>
+    <result column="pipeline_id" property="pipelineId"/>
+    <result column="legacy_batch_id" property="legacyBatchId"/>
+    <result column="business_batch_id" property="businessBatchId"/>
+    <result column="proposal_hash" property="proposalHash"/>
+    <result column="confirmation_attempts" property="confirmationAttempts"/>
+    <result column="attempts" property="attempts"/>
+    <result column="last_error" property="lastError"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+  </resultMap>
+
+  <select id="byId" resultMap="openTasksRow">SELECT * FROM godp_auto_planning_task WHERE del_flag='N' AND id=#{id}</select>
+  <select id="byCycle" resultMap="openTasksRow">SELECT * FROM godp_auto_planning_task WHERE del_flag='N' AND cycle_start=#{cycleStart}</select>
+  <select id="lockedById" resultMap="openTasksRow">SELECT * FROM godp_auto_planning_task WHERE del_flag='N' AND id=#{id} FOR UPDATE</select>
+  <select id="openTasks" resultMap="openTasksRow">SELECT * FROM godp_auto_planning_task WHERE del_flag='N' AND status IN ('待发起','计算中','待确认') ORDER BY updated_at,id LIMIT 50</select>
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, true)"/>INSERT INTO godp_auto_planning_task(cycle_start,cycle_end,business_config_version,business_config_json,status,created_at,updated_at,created_by,updated_by) VALUES(#{cycleStart},#{cycleEnd},#{configVersion},#{configJson},'待发起',#{time},#{time},#{auditActor},#{auditActor})</insert>
+  <update id="accepted"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_auto_planning_task SET status=#{status},pipeline_id=#{pipelineId},legacy_batch_id=#{legacyBatchId},attempts=attempts+1,last_error='',updated_at=#{time},updated_by=#{auditActor} WHERE del_flag='N' AND id=#{id} AND status='待发起'</update>
+  <update id="failedAttempt"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_auto_planning_task SET attempts=attempts+1,last_error=#{error},updated_at=#{time},updated_by=#{auditActor} WHERE del_flag='N' AND id=#{id} AND status='待发起'</update>
+  <update id="finish"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_auto_planning_task SET status=#{status},legacy_batch_id=#{legacyBatchId},last_error=#{error},updated_at=#{time},updated_by=#{auditActor} WHERE del_flag='N' AND id=#{id} AND status='计算中'</update>
+  <update id="committed"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_auto_planning_task SET status='待确认',business_batch_id=#{batchId},proposal_hash=#{hash},last_error='',updated_at=#{time},updated_by=#{auditActor} WHERE del_flag='N' AND id=#{id} AND status='计算中' AND business_batch_id IS NULL</update>
+  <update id="acknowledged"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_auto_planning_task SET status='已完成',confirmation_attempts=confirmation_attempts+1,last_error='',updated_at=#{time},updated_by=#{auditActor} WHERE del_flag='N' AND id=#{id} AND status='待确认' AND business_batch_id=#{batchId} AND proposal_hash=#{hash}</update>
+  <update id="resultError"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.planning.api.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_auto_planning_task SET last_error=#{error},confirmation_attempts=confirmation_attempts+CASE WHEN status='待确认' THEN 1 ELSE 0 END,updated_at=#{time},updated_by=#{auditActor} WHERE del_flag='N' AND id=#{id} AND status IN ('计算中','待确认')</update>
+</mapper>

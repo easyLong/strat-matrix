@@ -35,7 +35,7 @@ Java负责创建并维护Java业务表；Python负责创建并维护新增算法
 | godp_manual_compute | Python | 技术计算任务、输入摘要、租约及建议结果 |
 
 已有业务库从旧表名升级时，先停止业务服务，再对`strat_matrix_bus`执行
-`java-backend/src/main/resources/db/migrations/V2__rename_business_tables.sql`，随后启动新版本。
+`java-backend/godp-planning-services/src/main/resources/db/migrations/V2__rename_business_tables.sql`，随后启动新版本。
 该脚本只用于已有`godp_java_*`表的库；新库直接使用`manual-business.sql`建表。
 更名保留原数据、主键和字段注释，不能先运行新版本再改表，以免创建一组空的新表。
 
@@ -108,10 +108,10 @@ python -m app.java_development --output ../run/java-backend.properties
 
 # java-backend目录
 mvn verify
-java -jar target/planning-business.jar --spring.config.additional-location=file:../run/java-backend.properties
+java -jar godp-planning-server/target/planning-business.jar --spring.config.additional-location=file:../run/java-backend.properties
 ```
 
-Java在已存在的业务数据库中执行 `java-backend/src/main/resources/db/manual-business.sql`，使用CREATE TABLE IF NOT EXISTS创建本模块6张业务表，重复启动不会删除已有数据。开关为 `planning.manual.initialize-schema`，本地默认true；如宿主统一执行数据库发布，可置为false，由发布流程执行同一SQL。后续表结构变更需增加明确的迁移脚本，CREATE TABLE IF NOT EXISTS不负责升级已有字段。
+Java在已存在的业务数据库中执行 `java-backend/godp-planning-services/src/main/resources/db/manual-business.sql`，使用CREATE TABLE IF NOT EXISTS创建本模块6张业务表，重复启动不会删除已有数据。开关为 `planning.manual.initialize-schema`，本地默认true；如宿主统一执行数据库发布，可置为false，由发布流程执行同一SQL。后续表结构变更需增加明确的迁移脚本，CREATE TABLE IF NOT EXISTS不负责升级已有字段。
 
 已移除Python代建Java表的工具。配置生成器仅读取连接参数并写本地启动文件，不连接Java数据库；数据库连接和业务表初始化失败由Java启动直接报错，不会静默回落到Python库。数据库本身需预先创建并授权，建库权限与建表权限分开处理。此前1044表示当前账号无权访问/创建新业务库，不表示Java不能建表。
 

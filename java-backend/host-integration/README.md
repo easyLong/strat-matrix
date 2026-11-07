@@ -1,12 +1,18 @@
 # 行内宿主接入模板
 
+2026-11-07补充：当前实体、事务、请求及调度边界见[执行记录V0.2](../../docs/行外独立改造执行记录_V0.2_2026-11-07.md)。ManualDatabase已删除，宿主继续提供同名业务事务管理器；模块通过BusinessTransactions声明式代理接入。Mapper已类型化，旧页面通配代理已删除。
+
+新增可选端口为PythonRuntimeSettings（完整URL/令牌快照）和PlanningSpreadsheetWriter（宿主Excel库）。PlanningPermission把可信能力标识写到请求属性供HostAccess读取；它不是权限放行实现。BankSourceFacts会在inside启动时检查资料实现，SQL读取器需调用verifyWith绑定真实SqlSessionFactory。
+
+优先通过四类[Handler薄壳](PlanningHandlersHostJob.java.example)对接宿主调度；低层PlanningTaskService仍可用。内容流水写入须在每天三次触发时显式传dispatchContentFlow=true。
+
 本目录用于将业务模块合入现有Java工程，不另建一套行内Java应用。公共装配入口为`PlanningHostConfiguration`；它没有私有SDK、数据源创建、自动建表或定时器。部署参数示例见[inside-sample.properties](inside-sample.properties)。
 
-模块名已统一为`godp-strat-matrix`。现场在宿主目录下建立同名模块、在父POM的`modules`中注册，并由实际启动的业务服务模块声明该模块依赖。当前行外groupId为`com.stratmatrix`，父POM、groupId、Java包名前缀和依赖管理仍须按宿主实际值调整；不要直接把当前独立启动POM作为行内最终POM。本地`planning-business.jar`是固定的开发启动文件名，与Maven模块名分别管理。
+已按`godp-planning-api/entity/client/services/server`五模块拆分，包名前缀统一为`com.pab.aitmp.aiis.godp.planning`。行外聚合POM只管理公开依赖，不模拟行内Parent/BOM。现场注册模块、替换父POM并由宿主server装配，见[五模块并入说明](MAVEN_MODULES.md)。Maven `inside` profile产出不含本地启动壳的library JAR；`dev` profile产出行外可执行包，两者输出目录隔离。
 
 2026-11-05更新：业务库14张表统一六公共字段。迁入时包含`context/AuditFields`，可信UM须为1至50字符；存量表先发布[表结构V6及查询视图](../../docs/表结构公共字段规范与升级_2026-11-05.md)，再部署新版Mapper。原业务编号和唯一约束保留，宿主不必改前端接口对象。
 
-2026-11-07更新：新增[DBA发布包V9](../src/main/resources/db/release/20261107-v9/README.md)，包含独立DDL、初始数据核查、发布前后检查、兼容回退、表/索引和容量清单及源码校验和。当前源码要求批次`write_state/write_cursor`两列；V8存量库须先由DBA发布V9及三个视图，再部署新版。实际开发库尚未执行本轮DDL，运行中的旧服务不受源码变更影响。
+2026-11-07更新：新增[DBA发布包V9](../godp-planning-services/src/main/resources/db/release/20261107-v9/README.md)，包含独立DDL、初始数据核查、发布前后检查、兼容回退、表/索引和容量清单及源码校验和。当前源码要求批次`write_state/write_cursor`两列；V8存量库须先由DBA发布V9及三个视图，再部署新版。实际开发库尚未执行本轮DDL，运行中的旧服务不受源码变更影响。
 
 ## 1. 保留和迁入
 
@@ -108,7 +114,7 @@ mvn test -Dtest=InsideThreePagesAcceptanceTest,PythonClientTest,PlanningTaskServ
 
 验收加载真实宿主装配、Controller、Service、Repository、六套Mapper和查询视图。测试夹具先以DBA身份建库，再以仅SELECT/INSERT/UPDATE/DELETE权限的非管理员账号装配应用，明确断言CREATE/ALTER被拒绝。覆盖配置保存/恢复、标签版本冲突与操作人、防重人工任务、正式结果、换题、列表、导出、全部任务阶段、内部鉴权和依赖故障；断言不存在旧代理、模拟资料和本地调度Bean。此为隔离H2权限验证，真实Venus/MySQL的授权和视图访问仍由现场验证。
 
-新增结果发布/流水事务/DBA SQL演练入口：`mvn test -Dtest=AutoScheduleServiceTest,ContentFlowDispatchServiceTest,DatabaseReleaseTest,PlanningTaskServiceTest`。DBA脚本在H2做新库、V8升级和回退演练，JSON函数及MySQL多列ALTER使用明确的方言兼容；不能代替现场MySQL执行评审。使用`python tools/build_db_release.py --output src/main/resources/db/release/20261107-v9 --check`核对发布包和权威源码，工具不连接数据库。
+新增结果发布/流水事务/DBA SQL演练入口：`mvn test -Dtest=AutoScheduleServiceTest,ContentFlowDispatchServiceTest,DatabaseReleaseTest,PlanningTaskServiceTest`。DBA脚本在H2做新库、V8升级和回退演练，JSON函数及MySQL多列ALTER使用明确的方言兼容；不能代替现场MySQL执行评审。使用`python tools/build_db_release.py --output godp-planning-services/src/main/resources/db/release/20261107-v9 --check`核对发布包和权威源码，工具不连接数据库。
 
 可选实际Vue浏览器验收：先`frontend/npm run build`，安装Playwright与Chrome后设置`PLANNING_BROWSER_ACCEPTANCE=1`，再运行`InsideThreePagesAcceptanceTest`。`PLANNING_PLAYWRIGHT_MODULE`可指定已有Playwright模块位置，`PLANNING_CHROME_PATH`指定浏览器。浏览器只连接测试JVM的回环MVC桥及临时静态代理；这两个桥不进入正式工程。证据保存在忽略的`run/inside-host-browser/`。
 

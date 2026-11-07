@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 from .datasets import ROOT, load
 from .report import baseline_snapshot, compare, validate_baseline_for_recording, write_reports
@@ -58,6 +59,8 @@ def main(argv=None):
     parser.add_argument("--java-home", type=Path, help="与宿主兼容的本地JDK目录")
     parser.add_argument("--allow-dependency-network", action="store_true", help="只允许Maven解析依赖；模型和算法回归仍离线")
     parser.add_argument("--timeout", type=int, default=600, help="每条测试命令的秒数上限")
+    parser.add_argument("--browser", action="store_true", help="额外运行隔离Java/H2三页面浏览器验收，需提前准备Playwright和Chrome")
+    parser.add_argument("--packaging", action="store_true", help="额外构建dev与inside交付物并检查Java8及开发组件隔离")
     args = parser.parse_args(argv)
     if args.timeout < 1:
         parser.error("timeout必须为正数")
@@ -70,6 +73,8 @@ def main(argv=None):
         parser.error("输出目录已有文件，请换一个目录以保留历史证据")
     output.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1", GIT_TERMINAL_PROMPT="0")
+    # Real acceptance is opt-in elsewhere; inherited shell flags must not activate it here.
+    environment["PLANNING_BROWSER_ACCEPTANCE"] = "0"
     environment["PYTHONPATH"] = os.pathsep.join([str(ROOT), str(ROOT / "python-backend"), environment.get("PYTHONPATH", "")])
     java_home = args.java_home or (Path(environment["JAVA_HOME"]) if environment.get("JAVA_HOME") else None)
     if java_home is None:
@@ -115,9 +120,12 @@ def main(argv=None):
     if "java" in suites:
         try:
             maven = executable("mvn", args.maven)
+            # Clean only the five new modules. Root target may still hold a running pre-migration jar.
+            modules = ','.join('godp-planning-' + name for name in ('entity', 'api', 'client', 'services', 'server'))
+            jobs.append(("java-clean", [maven, *([] if args.allow_dependency_network else ["-o"]), "-q", "-pl", modules, "clean"], ROOT / "java-backend"))
             jobs.append(("java", [maven, *([] if args.allow_dependency_network else ["-o"]), "-q",
                                  "-Dplanning.real-acceptance-properties=", "-Dplanning.full-chain-properties=",
-                                 "-Dplanning.content-acceptance-properties=", "-Dmanual.live=false", "test"], ROOT / "java-backend"))
+                                 "-Dplanning.content-acceptance-properties=", "-Dmanual.live=false", "-DforkCount=0", "test"], ROOT / "java-backend"))
         except ValueError as exc:
             steps.append(dict(name="java", status="unavailable", reason=str(exc)))
     if "frontend" in suites:
@@ -132,10 +140,49 @@ def main(argv=None):
         step = command_step(name, command, cwd, output, environment, args.timeout)
         steps.append(step)
         print(f"[{name}] {step['status']}", flush=True)
+    if args.browser:
+        try:
+            maven = executable("mvn", args.maven)
+            browser_environment = dict(environment, PLANNING_BROWSER_ACCEPTANCE="1")
+            step = command_step("browser", [maven, *([] if args.allow_dependency_network else ["-o"]), "-q",
+                "-DforkCount=0", "-Dtest=InsideThreePagesAcceptanceTest", "test"],
+                ROOT / "java-backend", output, browser_environment, args.timeout)
+            steps.append(step)
+            print(f"[browser] {step['status']}", flush=True)
+        except ValueError as exc:
+            steps.append(dict(name="browser", status="unavailable", reason=str(exc)))
+    if args.packaging:
+        try:
+            maven = executable("mvn", args.maven)
+            commands = [
+                ('java-dev-package', [maven, *([] if args.allow_dependency_network else ['-o']), '-q', '-Pdev', '-DskipTests', 'package']),
+                ('java-inside-package', [maven, *([] if args.allow_dependency_network else ['-o']), '-q', '-Pinside', 'package']),
+                ('java-layout', [sys.executable, 'tools/verify_s1_layout.py']),
+                ('java-artifacts', [sys.executable, 'tools/verify_artifacts.py']),
+            ]
+            for name, command in commands:
+                step = command_step(name, command, ROOT / 'java-backend', output, environment, args.timeout)
+                steps.append(step)
+                print(f"[{name}] {step['status']}", flush=True)
+                if step['status'] != 'passed':
+                    break
+        except ValueError as exc:
+            steps.append(dict(name='java-packaging', status='unavailable', reason=str(exc)))
     ok = all(s["status"] == "passed" for s in steps)
+    java_results = None
+    if 'java' in suites and any(s['name']=='java' and s['status']=='passed' for s in steps):
+        java_results = dict(tests=0, failures=0, errors=0, skipped=0)
+        for path in (ROOT/'java-backend/godp-planning-server/target/surefire-reports').glob('TEST-*.xml'):
+            attributes = ET.parse(path).getroot().attrib
+            for key in java_results:
+                java_results[key] += int(attributes.get(key, 0))
+        java_results['passed'] = java_results['tests'] - java_results['failures'] - java_results['errors'] - java_results['skipped']
+        if java_results['tests'] == 0 or java_results['failures'] or java_results['errors']:
+            ok = False
     summary = dict(schema_version=1, status="passed" if ok else "not_passed", suite=args.suite, dataset=args.dataset,
                    created_at=datetime.now(timezone.utc).isoformat(), steps=steps,
                    real_model_evaluation="not_run", production_writes=0,
+                   java_test_results=java_results,
                    note="不包含行内真实适配、真实模型质量或生产环境验收")
     (output / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"结果：{summary['status']}\n报告目录：{output}", flush=True)

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceMapper">
+  <!--
+    驻场专用只读查询占位，未提供真实行内表名。不自动装配、不建表、不写库。
+    在资料所属数据源的SqlSessionFactory加载此XML，事务管理器必须指向同一资料数据源。
+    每个语句替换bind占位后填写真实SELECT；不要仅删除占位后返回假数据。
+    私有SQL不应提交公共仓库，提交前以本模板替换或采用内网专属文件。
+
+    count和列表必须使用相同条件、权限及一致性读取。分页在SQL中完成。
+    query.pageSize、query.offset为绑定参数；ID列表用foreach绑定，不拼接SQL字符串。
+    例：foreach collection="query.accountIds" item="id" 使用 #{id}。
+    更新时间范围：updatedFrom包含、updatedTo不包含；存储时区按现场表定义转换。
+    一行一个账号，互动明细可按本页账号批量补齐，避免联表重复导致页数错误。
+    列别名与字段清单见host-integration/BANK_SOURCE_CONTRACT.md和映射CSV。
+  -->
+  <select id="countAccounts" resultType="long">
+    <!-- 条件：可参与策划、accountIds、updatedFrom/updatedTo、宿主数据权限。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('账号总数')"/>
+  </select>
+  <select id="accounts" resultType="map">
+    <!-- 同countAccounts条件；按account_id稳定排序，分页后组装interactions。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('账号列表')"/>
+  </select>
+  <select id="countTopics" resultType="long">
+    <!-- 条件：topicIds、source、topicType、availableOnly、validAt、更新时间及权限。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('选题总数')"/>
+  </select>
+  <select id="topics" resultType="map">
+    <!-- 同countTopics条件；按topic_id稳定排序。source区分普通/热点。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('选题列表')"/>
+  </select>
+  <select id="countMarketingContents" resultType="long">
+    <!-- 条件：绑定query.accountId、审核通过且可供引用、宿主权限。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('营销内容总数')"/>
+  </select>
+  <select id="marketingContents" resultType="map">
+    <!-- 同count条件；按approved_at、content_id升序，再执行分页。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('营销内容列表')"/>
+  </select>
+  <select id="effectiveMarketing" resultType="map">
+    <!-- query.accountId及query.publishDate，当天真实有效营销投放；不是内容生产完成。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('有效营销投放')"/>
+  </select>
+  <select id="productionStatus" resultType="map">
+    <!-- query.slotIds，按slot_id及version返回各版本最新状态；未知记录可以无结果。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('内容生产状态')"/>
+  </select>
+  <select id="marketingStatus" resultType="map">
+    <!-- query.taskCodes，每个任务一条最新事实；生产完成与过审可排期分开。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('营销需求进度')"/>
+  </select>
+  <select id="approvedDemandContents" resultType="map">
+    <!-- query.taskCode，必须已过审且分配账号；按approved_at、content_id升序。 -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceSqlRequired@missing('营销过审分配')"/>
+  </select>
+</mapper>
