@@ -29,8 +29,9 @@ class AutoSchedulePythonClientTest {
         .andRespond(
             withSuccess("{\"status\":\"created\",\"pipeline_id\":88}", MediaType.APPLICATION_JSON));
     server
-        .expect(requestTo("http://127.0.0.1:6930/api/internal/planning-pipelines/88"))
-        .andExpect(method(HttpMethod.GET))
+        .expect(requestTo("http://127.0.0.1:6930/api/internal/planning-pipelines/88/query"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(content().json("{}"))
         .andExpect(header("X-Integration-Token", "server-token"))
         .andRespond(
             withSuccess(

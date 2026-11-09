@@ -37,6 +37,11 @@ const report = { host: 'inside-isolated', node: process.version, pages: [], erro
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     page.setDefaultTimeout(10000)
     page.on('pageerror', error => report.errors.push(error.message))
+    page.on('request', request => {
+      const url = new URL(request.url())
+      if (url.pathname.startsWith('/api/') && url.pathname !== '/api/health' && request.method() !== 'POST')
+        report.errors.push(`业务接口仍使用${request.method()}: ${url.pathname}`)
+    })
     page.on('console', message => {
       if (message.type() === 'error') report.consoleErrors.push(message.text())
       if (message.text().includes('[Vue warn]')) report.errors.push(message.text())

@@ -21,7 +21,7 @@ class JavaContractBundleTests(unittest.TestCase):
                 self.assertIn('java-backend/pom.xml', names)
                 for module in ('entity', 'api', 'client', 'services', 'server'):
                     self.assertIn('java-backend/godp-planning-' + module + '/pom.xml', names)
-                self.assertIn('java-backend/contracts/s0-baseline.json', names)
+                self.assertIn('java-backend/contracts/api-contract.json', names)
                 self.assertIn('java-backend/tools/verify_s1_layout.py', names)
                 self.assertIn('docs/行外独立改造执行记录_V0.1_2026-11-07.md', names)
                 self.assertIn('java-backend/godp-planning-server/src/main/java/com/pab/aitmp/aiis/godp/planning/server/dev/PlanningDevelopmentApplication.java', names)

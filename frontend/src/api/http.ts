@@ -3,7 +3,6 @@ import { authorizePlanningRequest } from '../host/runtime'
 
 export interface PlanningHttpClient { request(config: AxiosRequestConfig): Promise<any> }
 export interface PlanningHttpOptions {
-  queryContract?: 'auto' | 'legacy' | 'post-v1'
   apiPrefix?: string
   responseMode?: 'axios' | 'body'
   unwrapResponse?: (body: any) => any
@@ -18,35 +17,20 @@ export class PlanningRequestError extends Error {
 }
 let development: AxiosInstance | undefined
 const developmentHttp = () => development || (development = axios.create({ baseURL: '/api', timeout: 30000 }))
-/** Backward-compatible local client, initialized only when actually used. */
-export const http = new Proxy({} as AxiosInstance, {
-  get: (_target, key) => {
-    const client = developmentHttp()
-    const value = Reflect.get(client, key)
-    return typeof value === 'function' ? value.bind(client) : value
-  },
-})
 let transport: PlanningHttpClient | undefined
 let settings: PlanningHttpOptions = {}
-let detectedQueryContract: 'legacy' | 'post-v1' = 'legacy'
-let bindingRevision = 0
-export function queryContractScope() { return bindingRevision }
-export function usePostQueryContract() { return (settings.queryContract === 'auto' || !settings.queryContract) ? detectedQueryContract === 'post-v1' : settings.queryContract === 'post-v1' }
-export function detectQueryContract(value: unknown, revision = bindingRevision) {
-  if (revision === bindingRevision) detectedQueryContract = value === 'post-v1' ? 'post-v1' : 'legacy'
-}
 export function setPlanningHttp(client?: PlanningHttpClient, options: PlanningHttpOptions = {}) {
   const prefix = options.apiPrefix
   if (prefix && (!prefix.startsWith('/') || /[?#%\\]|\/\//.test(prefix) || prefix.split('/').some(p => p === '..' || p === '.')))
     throw new Error('Java策划接口前缀无效')
   transport = client
   settings = { ...options }
-  detectedQueryContract = 'legacy'
-  bindingRevision++
 }
 
 async function requestResponse<T>(path: string, options: RequestInit, responseType?: 'blob') {
-  const method = (options.method || 'GET').toUpperCase()
+  const method = (options.method || 'POST').toUpperCase()
+  if (method !== 'POST' && !(method === 'GET' && path === '/health'))
+    throw new PlanningRequestError('策划业务接口仅支持POST请求')
   authorizePlanningRequest(path, method)
   const policy = settings
   try {
@@ -63,7 +47,7 @@ async function requestResponse<T>(path: string, options: RequestInit, responseTy
       responseType,
       headers: {
         'Content-Type': 'application/json',
-        ...(!options.method || options.method.toUpperCase() === 'GET' ? { 'Cache-Control': 'no-cache, no-store' } : {}),
+        ...(method === 'GET' ? { 'Cache-Control': 'no-cache, no-store' } : {}),
         ...headers,
       },
     })

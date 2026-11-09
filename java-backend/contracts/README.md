@@ -1,16 +1,14 @@
-# S0兼容基线
+# 当前业务接口与SQL契约
 
-`s0-baseline.json`来自重构前已发布的`e8ec62f`。它记录6个正式Controller的Mapping/状态码声明、3个输入对象的公开字段、14张业务表、3个视图及13份权威SQL的SHA-256。
-
-S4增加的16个POST映射单独记录在`s4-post-additions.json`，工具核对“原基线＋显式增量”，不会覆盖或放宽原有路由、输入字段及SQL检查。新增请求对象字段和校验另外由Java/浏览器测试覆盖。
+`api-contract.json`是唯一有效清单，记录六个正式Controller的路由/HTTP状态声明、输入字段、14张业务表、3个视图和13份SQL的SHA-256。Java业务只使用POST，GET仅限健康检查。旧S0基线与POST增量叠加清单已删除，历史内容可通过Git查阅。
 
 从仓库根运行：
 
 ```bash
-python java-backend/tools/check_s0_baseline.py
+python java-backend/tools/check_contract.py
 python java-backend/tools/verify_s1_layout.py
 ```
 
-两个工具均不读运行配置、不联网、不连接数据库。前者检测声明和SQL漂移，后者同时检查五模块目录与依赖方向。它们不是完整语义解析器；必须配合Java MVC/H2/JSON测试和浏览器验收。
+工具只读取源码，不连接数据库、网络或运行配置。检查器明确拒绝正式Controller出现健康以外GET及PUT/PATCH/DELETE，并比较完整路由清单和SQL校验和。接口变更必须同时更新调用方、清单及行为测试；脚本不会自动覆盖现有清单。
 
-S4需要调整协议时，逐接口同时修改消费者及契约测试，再人工评审基线差异。不得通过日常脚本自动覆盖基线掩盖变化。`--capture`仅允许首次创建，不会覆盖现有文件。
+本次因用户明确取消兼容而更新HTTP清单，原输入字段、表/视图及13份SQL校验和逐项确认未变。所有旧页面GET/PUT和对应Python算法读取别名均有实际HTTP拒绝测试；健康检查继续GET。

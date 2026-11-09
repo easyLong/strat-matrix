@@ -41,7 +41,7 @@ public class AutoSchedulePythonClient implements AutoSchedulePort {
   }
 
   public Map<String, Object> status(long id) {
-    return python.call(HttpMethod.GET, pipeline(id), null);
+    return python.call(HttpMethod.POST, pipeline(id) + "/query", map());
   }
 
   public Map<String, Object> proposal(long id, int version, Map<String, Object> config) {

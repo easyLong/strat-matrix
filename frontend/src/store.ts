@@ -1,7 +1,7 @@
 import Vue from 'vue'
 import Vuex, { type Module, type Store } from 'vuex'
 import { api } from './api'
-import type { BatchSummary, ConfigResponse, ManualPlanInput, StrategyConfig } from './types'
+import type { BatchSummary, ConfigResponse, StrategyConfig } from './types'
 import type { ManualTaskListState } from './ui/manualTask'
 
 export const defaultConfig: StrategyConfig = {
@@ -79,22 +79,11 @@ export const planningModule: Module<PlanningState, unknown> = {
     async saveConfig({ state, commit }, config: StrategyConfig) {
       commit('applyConfig', await api.saveConfig(config, state.configVersion))
     },
-    async saveConfigModule({ state, commit }, payload: { module: 'marketing' | 'strategy'; config: StrategyConfig }) {
-      commit('applyConfig', await api.saveConfigModule(payload.module, payload.config, state.configVersion))
-    },
-    async restoreConfigModule({ state, commit }, payload: { module: 'marketing' | 'strategy'; version: number }) {
-      commit('applyConfig', await api.restoreConfigModule(payload.module, payload.version, state.configVersion))
-    },
     async restoreConfig({ state, commit }, version: number) {
       commit('applyConfig', await api.restoreConfig(version, state.configVersion))
     },
     async refreshBatches({ commit }) {
       commit('set', { key: 'batches', value: await api.batches() })
-    },
-    async createManual({ dispatch }, input: ManualPlanInput) {
-      const result = await api.createManual(input)
-      await dispatch('refreshBatches')
-      return result
     },
   },
 }
@@ -114,11 +103,8 @@ const facade = {
   refreshConfig: (): Promise<void> => dispatch('refreshConfig'),
   applyConfig: (result: ConfigResponse) => activeStore.commit(`${namespace}/applyConfig`, result),
   saveConfig: (config: StrategyConfig): Promise<void> => dispatch('saveConfig', config),
-  saveConfigModule: (module: 'marketing' | 'strategy', config: StrategyConfig): Promise<void> => dispatch('saveConfigModule', { module, config }),
-  restoreConfigModule: (module: 'marketing' | 'strategy', version: number): Promise<void> => dispatch('restoreConfigModule', { module, version }),
   restoreConfig: (version: number): Promise<void> => dispatch('restoreConfig', version),
   refreshBatches: (): Promise<void> => dispatch('refreshBatches'),
-  createManual: (input: ManualPlanInput): ReturnType<typeof api.createManual> => dispatch('createManual', input),
 }
 for (const key of Object.keys(createState())) Object.defineProperty(facade, key, {
   enumerable: true,

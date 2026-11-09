@@ -61,10 +61,10 @@ export function authorizePlanningRequest(path: string, method: string) {
   if (!planningRuntime.hosted) return
   const url = path.split('?')[0]
   if (url === '/health') return
-  const read = method === 'GET' || method === 'POST' && /\/query$/.test(url)
+  const read = method === 'POST' && /\/query$/.test(url)
   // Shared bootstrap config is needed by manual planning too; history and
   // page navigation still require config.view, writes require their own capability.
-  if ((url === '/config' || url === '/config/query') && read
+  if (url === '/config/query' && read
       && (['config.view', 'manual.view', 'results.view'] as PlanningPermission[]).some(canPlanning)) return
   let permission: PlanningPermission | undefined
   if (url.startsWith('/config')) permission = /\/restore$/.test(url) ? 'config.restore' : read ? 'config.view' : 'config.edit'

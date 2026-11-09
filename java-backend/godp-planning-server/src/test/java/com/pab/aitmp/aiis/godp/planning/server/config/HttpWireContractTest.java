@@ -22,10 +22,10 @@ class HttpWireContractTest {
     Class<com.pab.aitmp.aiis.godp.planning.api.host.PlanningPermission> annotation=
         com.pab.aitmp.aiis.godp.planning.api.host.PlanningPermission.class;
     assertArrayEquals(new String[]{"manual.view","results.view"},ManualPlanningController.class
-        .getMethod("queryAccounts",com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest.class)
+        .getMethod("accountsCatalog",com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest.class)
         .getAnnotation(annotation).value());
     assertArrayEquals(new String[]{"manual.view"},ManualPlanningController.class
-        .getMethod("queryAvailability",com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest.class)
+        .getMethod("availability",com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest.class)
         .getAnnotation(annotation).value());
   }
 

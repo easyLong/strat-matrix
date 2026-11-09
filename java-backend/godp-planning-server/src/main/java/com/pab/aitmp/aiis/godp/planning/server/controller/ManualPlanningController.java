@@ -28,7 +28,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
-/** Explicit migrated endpoints take precedence over the transitional wildcard. */
+/** Business page endpoints; queries and commands use one explicit POST contract. */
 @RestController
 @RequestMapping("${planning.api-prefix:/api/plan}")
 @ConditionalOnProperty(name = "planning.manual.enabled", havingValue = "true")
@@ -74,9 +74,10 @@ public class ManualPlanningController {
     return service.submit(code);
   }
 
-  @GetMapping("/manual-plans/account-availability")
+  @PostMapping("/manual-plans/account-availability/query")
   @PlanningPermission("manual.view")
-  public Object availability(@RequestParam String publish_date) {
+  public Object availability(@Valid @RequestBody CatalogQueryRequest request) {
+    String publish_date = request.publishDate;
     try {
       LocalDate.parse(publish_date);
     } catch (RuntimeException e) {
@@ -86,27 +87,28 @@ public class ManualPlanningController {
         "publish_date", publish_date, "planned_account_ids", service.unavailable(publish_date));
   }
 
-  @GetMapping("/accounts")
+  @PostMapping("/accounts/query")
   @PlanningPermission({"manual.view","results.view"})
-  public Object accountsCatalog(
-      @RequestParam(defaultValue = "200") int limit,
-      @RequestParam(defaultValue = "false") boolean include_disabled) {
+  public Object accountsCatalog(@Valid @RequestBody CatalogQueryRequest request) {
+    int limit = request.limitOr(200);
     if (limit < 1 || limit > 1000) throw new BusinessException(422, "账号查询数量无效");
-    return source.accountOptions(limit, include_disabled);
+    return source.accountOptions(limit, request.includeDisabled);
   }
 
-  @GetMapping("/topics")
+  @PostMapping("/topics/query")
   @PlanningPermission({"manual.view","results.view"})
-  public Object topicsCatalog(@RequestParam(defaultValue = "200") int limit) {
+  public Object topicsCatalog(@Valid @RequestBody CatalogQueryRequest request) {
+    int limit = request.limitOr(200);
     if (limit < 1 || limit > 1000) throw new BusinessException(422, "选题查询数量无效");
     return source.topicCandidates(limit);
   }
 
-  @GetMapping("/topics/{topicId}/detail")
+  @PostMapping("/topics/{topicId}/detail/query")
   @PlanningPermission({"manual.view","results.view"})
   public Object topicDetail(
       @PathVariable String topicId,
-      @RequestParam(name = "topic_type", required = false) String topicType) {
+      @Valid @RequestBody CatalogQueryRequest request) {
+    String topicType = request.topicType;
     if (topicId == null
         || topicId.trim().isEmpty()
         || topicId.length() > 64
@@ -128,10 +130,10 @@ public class ManualPlanningController {
     return marketing.create(input);
   }
 
-  @GetMapping("/manual-plans/marketing-tasks")
+  @PostMapping("/manual-plans/marketing-tasks/query")
   @PlanningPermission("manual.view")
-  public Object marketingTasks(
-      @RequestParam(defaultValue = "20") int limit, @RequestParam(defaultValue = "0") int offset) {
+  public Object marketingTasks(@Valid @RequestBody CatalogQueryRequest request) {
+    int limit = request.limitOr(20), offset = request.offset;
     if (limit < 1 || limit > 100 || offset < 0) throw new BusinessException(422, "分页参数无效");
     List<Map<String, Object>> all = new ArrayList<>(marketing.all());
     for (int previous = 0; ; previous += 100) {
@@ -149,7 +151,7 @@ public class ManualPlanningController {
         Math.min(offset, all.size()), (int) Math.min((long) offset + limit, all.size()));
   }
 
-  @GetMapping("/manual-plans/marketing-tasks/{code}")
+  @PostMapping("/manual-plans/marketing-tasks/{code}/query")
   @PlanningPermission("manual.view")
   public Object marketingDetails(@PathVariable String code) {
     if (!code.matches("[A-Za-z0-9_-]{1,64}")) throw new BusinessException(422, "营销任务编号无效");
@@ -185,20 +187,20 @@ public class ManualPlanningController {
     return queries.failures(q.values());
   }
 
-  @GetMapping("/batches")
-  public Object batches(
-      @RequestParam(defaultValue = "200") int limit,
-      @RequestParam(required = false) String plan_type) {
+  @PostMapping("/batches/query")
+  public Object batches(@Valid @RequestBody CatalogQueryRequest request) {
+    int limit = request.limitOr(200);
+    String plan_type = request.planType;
     int size = Math.max(1, Math.min(limit, 1000));
     if (plan_type != null && !Arrays.asList("auto", "manual").contains(plan_type))
       throw new BusinessException(422, "策划方式无效");
     return queries.batches(size, plan_type);
   }
 
-  @GetMapping("/manual-plans/tasks")
+  @PostMapping("/manual-plans/tasks/query")
   @PlanningPermission("manual.view")
-  public Object taskList(
-      @RequestParam(defaultValue = "20") int limit, @RequestParam(defaultValue = "0") int offset) {
+  public Object taskList(@Valid @RequestBody CatalogQueryRequest request) {
+    int limit = request.limitOr(20), offset = request.offset;
     int count = Math.max(1, Math.min(limit, 100));
     if (offset < 0) throw new BusinessException(422, "分页起点无效");
     List<Map<String, Object>> all = new ArrayList<>();
@@ -212,14 +214,9 @@ public class ManualPlanningController {
         Math.min(offset, all.size()), (int) Math.min((long) offset + count, all.size()));
   }
 
-  @GetMapping("/batches/{id}")
+  @PostMapping("/batches/{id}/query")
   public Object batch(@PathVariable long id) {
     return queries.ownsBatch(id) ? queries.batch(id) : transition.batch(id);
-  }
-
-  @PostMapping("/batches/manual")
-  public Object oldCreate() {
-    throw new BusinessException(410, "请通过人工策划预览和提交创建任务");
   }
 
   @PostMapping("/items/{id}/replace-topic")
@@ -230,12 +227,12 @@ public class ManualPlanningController {
         : transition.replaceTopic(id, r.values());
   }
 
-  @GetMapping("/items/{id}/adjustments")
+  @PostMapping("/items/{id}/adjustments/query")
   public Object adjustments(@PathVariable long id) {
     return queries.ownsItem(id) ? items.adjustments(id) : transition.adjustments(id);
   }
 
-  @GetMapping("/items/{id}/replacement-candidates")
+  @PostMapping("/items/{id}/replacement-candidates/query")
   @PlanningPermission("results.replace")
   public Object candidates(@PathVariable long id) {
     if (!queries.ownsItem(id)) return transition.replacementCandidates(id);
@@ -273,34 +270,4 @@ public class ManualPlanningController {
     return queries.topicUsage(input.values());
   }
 
-  @PostMapping("/accounts/query")
-  @PlanningPermission({"manual.view","results.view"})
-  public Object queryAccounts(@Valid @RequestBody CatalogQueryRequest q) { return accountsCatalog(q.limitOr(200),q.includeDisabled); }
-  @PostMapping("/topics/query")
-  @PlanningPermission({"manual.view","results.view"})
-  public Object queryTopics(@Valid @RequestBody CatalogQueryRequest q) { return topicsCatalog(q.limitOr(200)); }
-  @PostMapping("/topics/{topicId}/detail/query")
-  @PlanningPermission({"manual.view","results.view"})
-  public Object queryTopic(@PathVariable String topicId,@Valid @RequestBody CatalogQueryRequest q) { return topicDetail(topicId,q.topicType); }
-  @PostMapping("/manual-plans/account-availability/query")
-  @PlanningPermission("manual.view")
-  public Object queryAvailability(@Valid @RequestBody CatalogQueryRequest q) { return availability(q.publishDate); }
-  @PostMapping("/batches/query")
-  public Object queryBatches(@Valid @RequestBody CatalogQueryRequest q) { return batches(q.limitOr(200),q.planType); }
-  @PostMapping("/batches/{id}/query")
-  public Object queryBatch(@PathVariable long id) { return batch(id); }
-  @PostMapping("/items/{id}/adjustments/query")
-  public Object queryAdjustments(@PathVariable long id) { return adjustments(id); }
-  @PostMapping("/items/{id}/replacement-candidates/query")
-  @PlanningPermission("results.replace")
-  public Object queryCandidates(@PathVariable long id) { return candidates(id); }
-  @PostMapping("/manual-plans/tasks/query")
-  @PlanningPermission("manual.view")
-  public Object queryTaskList(@Valid @RequestBody CatalogQueryRequest q) { return taskList(q.limitOr(20),q.offset); }
-  @PostMapping("/manual-plans/marketing-tasks/query")
-  @PlanningPermission("manual.view")
-  public Object queryMarketingTasks(@Valid @RequestBody CatalogQueryRequest q) { return marketingTasks(q.limitOr(20),q.offset); }
-  @PostMapping("/manual-plans/marketing-tasks/{code}/query")
-  @PlanningPermission("manual.view")
-  public Object queryMarketingTask(@PathVariable String code) { return marketingDetails(code); }
 }

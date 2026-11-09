@@ -2,8 +2,8 @@ package com.pab.aitmp.aiis.godp.planning.server.controller;
 
 import com.pab.aitmp.aiis.godp.planning.api.host.PlanningPermission;
 
-import com.pab.aitmp.aiis.godp.planning.entity.vo.req.ConfigurationDocument;
 import com.pab.aitmp.aiis.godp.planning.entity.vo.req.ConfigSaveRequest;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.req.ConfigRestoreRequest;
 import com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest;
 import javax.validation.Valid;
 
@@ -28,30 +28,26 @@ public class ConfigReleaseController {
     this.actor = RequestContexts.actor(actor);
   }
 
-  @GetMapping
+  @PostMapping("/query")
   @PlanningPermission({"config.view","manual.view","results.view"})
   public Object current() {
     return service.current();
   }
 
-  @PutMapping
+  @PostMapping("/save")
   @PlanningPermission("config.edit")
-  public Object save(@RequestBody ConfigurationDocument config, @RequestParam int expected_version) {
-    return service.save(config.values(), expected_version, actor.current());
+  public Object save(@Valid @RequestBody ConfigSaveRequest request) {
+    return service.save(request.config.values(), request.expectedVersion, actor.current());
   }
 
-  @GetMapping("/versions")
-  public Object versions(@RequestParam(defaultValue = "30") int limit) {
-    return service.versions(limit);
+  @PostMapping("/versions/query")
+  public Object versions(@Valid @RequestBody CatalogQueryRequest request) {
+    return service.versions(request.limitOr(30));
   }
 
   @PostMapping("/versions/{version}/restore")
   @PlanningPermission("config.restore")
-  public Object restore(@PathVariable int version, @RequestParam int expected_version) {
-    return service.restore(version, expected_version, actor.current());
+  public Object restore(@PathVariable int version, @Valid @RequestBody ConfigRestoreRequest request) {
+    return service.restore(version, request.expectedVersion, actor.current());
   }
-
-  @PostMapping("/query") @PlanningPermission({"config.view","manual.view","results.view"}) public Object queryCurrent() { return current(); }
-  @PostMapping("/versions/query") public Object queryVersions(@Valid @RequestBody CatalogQueryRequest q) { return versions(q.limitOr(30)); }
-  @PostMapping("/save") @PlanningPermission("config.edit") public Object saveDocument(@Valid @RequestBody ConfigSaveRequest q) { return save(q.config,q.expectedVersion); }
 }

@@ -115,7 +115,7 @@ class ManualHttpAcceptanceTest {
     assertEquals(200, tasks.getStatusCodeValue(), write(tasks.getBody()));
     assertEquals(1L, number(tasks.getBody(), "total"));
     assertEquals(id, number(rows(tasks.getBody().get("items")).get(0), "batch_id"));
-    assertEquals(200, http.getForEntity("/api/plan/batches/" + id, Map.class).getStatusCodeValue());
+    assertEquals(200, http.postForEntity("/api/plan/batches/" + id + "/query", map(), Map.class).getStatusCodeValue());
     assertEquals(
         200,
         http.postForEntity("/api/plan/query/period-context", map("batch_id", id), List.class)

@@ -18,27 +18,28 @@ test('the runtime and matching compiler use the required Vue 2.6 dependency vers
 
 test('Axios keeps the Java API prefix and returns the server payload', async () => {
   let captured
-  requests.http.defaults.adapter = async config => {
+  const create = axios.create
+  axios.create = options => create({ ...options, adapter: async config => {
     captured = config
     return { data: { items: [1] }, status: 200, statusText: 'OK', headers: {}, config }
-  }
+  } })
   try {
     assert.deepEqual(await requests.request('/query/accounts', { method: 'POST', body: JSON.stringify({ page: 2 }) }), { items: [1] })
     assert.equal(captured.baseURL, '/api')
     assert.equal(captured.url, '/query/accounts')
     assert.equal(captured.data, '{"page":2}')
-  } finally { delete requests.http.defaults.adapter }
+  } finally { axios.create = create }
 })
 
 test('Axios preserves Chinese validation failures and represents cancellation as AbortError', async () => {
-  requests.http.defaults.adapter = async config => {
+  requests.setPlanningHttp(axios.create({ adapter: async config => {
     throw new axios.AxiosError('status failure', 'ERR_BAD_REQUEST', config, {}, { status: 422, data: { detail: '账号不可参与策划' }, headers: {}, config })
-  }
+  } }))
   try {
     await assert.rejects(requests.request('/query/accounts'), /账号不可参与策划/)
     const controller = new AbortController(); controller.abort()
     await assert.rejects(requests.request('/query/accounts', { signal: controller.signal }), error => error.name === 'AbortError')
-  } finally { delete requests.http.defaults.adapter }
+  } finally { requests.setPlanningHttp() }
 })
 
 test('the host Axios client can be injected without editing business calls', async () => {

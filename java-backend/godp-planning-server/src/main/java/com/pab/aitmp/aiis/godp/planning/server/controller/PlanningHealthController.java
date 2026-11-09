@@ -40,7 +40,6 @@ public class PlanningHealthController {
     return ResponseEntity.status(ready ? 200 : 503)
         .body(
             map(
-                "apiContract", "post-v1",
                 "service",
                 ready ? "ok" : "degraded",
                 "database",

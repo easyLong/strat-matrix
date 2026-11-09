@@ -7,11 +7,11 @@ from ..services.labels import TagTaxonomyItemInput, TagTaxonomyInput, TopicTagsI
 
 router = APIRouter()
 
-@router.get("/api/tag-taxonomy")
+@router.post("/api/tag-taxonomy/query", dependencies=[Depends(require_integration_token)])
 def get_tag_taxonomy() -> dict:
     return invoke(service.get_tag_taxonomy)
 
-@router.put("/api/tag-taxonomy", dependencies=[Depends(require_integration_token)])
+@router.post("/api/tag-taxonomy/save", dependencies=[Depends(require_integration_token)])
 def put_tag_taxonomy(payload: TagTaxonomyInput, request: Request = None) -> dict:
     # Only the authenticated Java service may supply the trusted operator header.
     operator = request.headers.get('x-operator-id', '运营人员') if request else '运营人员'

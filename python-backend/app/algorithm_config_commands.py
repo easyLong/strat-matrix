@@ -20,7 +20,7 @@ class ConfigCommand(BaseModel):
     actor: str = Field(min_length=1, max_length=50)
 
 
-@router.get('')
+@router.post('/query')
 def read_algorithm_config():
     from .services.configuration import get_config
     return get_config()

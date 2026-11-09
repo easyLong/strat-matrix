@@ -34,9 +34,9 @@ def test_taxonomy_write_authenticates_java_before_using_operator_header():
     with patch('app.api.security.get_setting', return_value='test-token'), \
             patch.object(labels, 'put_tag_taxonomy', return_value={'version': 2}) as save:
         client = TestClient(app)
-        assert client.put('/api/tag-taxonomy', json=body, headers={'X-Operator-Id': 'FORGED'}).status_code == 401
+        assert client.post('/api/tag-taxonomy/save', json=body, headers={'X-Operator-Id': 'FORGED'}).status_code == 401
         save.assert_not_called()
-        response = client.put('/api/tag-taxonomy', json=body, headers={
+        response = client.post('/api/tag-taxonomy/save', json=body, headers={
             'X-Integration-Token': 'test-token', 'X-Operator-Id': 'HOST-UM'})
         assert response.status_code == 200
         assert save.call_args.kwargs['operator'] == 'HOST-UM'

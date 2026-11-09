@@ -2,7 +2,10 @@ package com.pab.aitmp.aiis.godp.planning.server.controller;
 
 import com.pab.aitmp.aiis.godp.planning.api.host.PlanningPermission;
 
-import com.pab.aitmp.aiis.godp.planning.entity.vo.req.BusinessPlanningConfig;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.req.BusinessConfigSaveRequest;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest;
+import com.pab.aitmp.aiis.godp.planning.entity.vo.req.ConfigRestoreRequest;
+import javax.validation.Valid;
 import com.pab.aitmp.aiis.godp.planning.services.config.BusinessPlanningConfigService;
 
 import com.pab.aitmp.aiis.godp.planning.api.context.RequestContexts;
@@ -29,29 +32,28 @@ public class BusinessPlanningConfigController {
     this.actor = RequestContexts.actor(actor);
   }
 
-  @GetMapping
+  @PostMapping("/query")
   public Object current() {
     return service.current();
   }
 
-  @PutMapping
+  @PostMapping("/save")
   @PlanningPermission("config.edit")
-  public Object save(
-      @RequestBody BusinessPlanningConfig config, @RequestParam int expected_version) {
+  public Object save(@Valid @RequestBody BusinessConfigSaveRequest request) {
     requireStandaloneWrite();
-    return service.save(config, expected_version, actor.current());
+    return service.save(request.config, request.expectedVersion, actor.current());
   }
 
-  @GetMapping("/versions")
-  public Object versions(@RequestParam(defaultValue = "30") int limit) {
-    return service.versions(limit);
+  @PostMapping("/versions/query")
+  public Object versions(@Valid @RequestBody CatalogQueryRequest request) {
+    return service.versions(request.limitOr(30));
   }
 
   @PostMapping("/versions/{version}/restore")
   @PlanningPermission("config.restore")
-  public Object restore(@PathVariable int version, @RequestParam int expected_version) {
+  public Object restore(@PathVariable int version, @Valid @RequestBody ConfigRestoreRequest request) {
     requireStandaloneWrite();
-    return service.restore(version, expected_version, actor.current());
+    return service.restore(version, request.expectedVersion, actor.current());
   }
 
   private void requireStandaloneWrite() {

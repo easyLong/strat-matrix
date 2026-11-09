@@ -100,6 +100,6 @@ def submit(payload: ComputeInput, request: Request):
     return receipt
 
 
-@router.get('/{request_id}')
+@router.post('/{request_id}/query')
 def status(request_id: str):
     return read(request_id)

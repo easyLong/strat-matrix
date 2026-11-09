@@ -28,21 +28,19 @@ public class TagTaxonomyController {
     this.actor = RequestContexts.actor(actor);
   }
 
-  @GetMapping
+  @PostMapping("/query")
   @PlanningPermission({"config.view","manual.view","results.view"})
   public Object read() {
-    return python.call(HttpMethod.GET, "/api/tag-taxonomy", null);
+    return python.call(HttpMethod.POST, "/api/tag-taxonomy/query", java.util.Collections.emptyMap());
   }
 
-  @PutMapping
+  @PostMapping("/save")
   @PlanningPermission("config.edit")
   public Object save(@RequestBody ConfigurationDocument body) {
     String operator = actor.current();
     if (operator == null || operator.trim().isEmpty())
       throw new com.pab.aitmp.aiis.godp.planning.entity.error.BusinessException(401, "当前操作人未登录");
-    return python.call(HttpMethod.PUT, "/api/tag-taxonomy", body.values(), operator, 200);
+    return python.call(HttpMethod.POST, "/api/tag-taxonomy/save", body.values(), operator, 200);
   }
 
-  @PostMapping("/query") @PlanningPermission({"config.view","manual.view","results.view"}) public Object query() { return read(); }
-  @PostMapping("/save") @PlanningPermission("config.edit") public Object saveDocument(@RequestBody ConfigurationDocument body) { return save(body); }
 }

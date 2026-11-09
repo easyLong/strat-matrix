@@ -1,5 +1,7 @@
 # 行内宿主接入模板
 
+2026-11-09：正式页面业务与Java→Python算法配置、标签、流水线状态使用单套POST。旧页面GET/PUT、重复包装入口和前端协议协商已删除，健康检查保持GET。配置恢复版本通过JSON提交；综合发布开启时不能从单独业务配置绕过统一保存。接口与验收见[POST最终契约](../../docs/业务接口POST收口_2026-11-09.md)。
+
 2026-11-07补充：当前实体、事务、请求及调度边界见[执行记录V0.2](../../docs/行外独立改造执行记录_V0.2_2026-11-07.md)。ManualDatabase已删除，宿主继续提供同名业务事务管理器；模块通过BusinessTransactions声明式代理接入。Mapper已类型化，旧页面通配代理已删除。
 
 新增可选端口为PythonRuntimeSettings（完整URL/令牌快照）和PlanningSpreadsheetWriter（宿主Excel库）。PlanningPermission把可信能力标识写到请求属性供HostAccess读取；它不是权限放行实现。BankSourceFacts会在inside启动时检查资料实现，SQL读取器需调用verifyWith绑定真实SqlSessionFactory。

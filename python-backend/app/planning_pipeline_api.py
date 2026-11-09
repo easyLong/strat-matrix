@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 import pymysql
 
@@ -35,6 +35,11 @@ class PipelineCreate(BaseModel):
 
 class PipelineAction(BaseModel):
     expected_version: int = Field(ge=1)
+
+
+class PipelineQuery(BaseModel):
+    after_id: int = Field(default=0, ge=0)
+    limit: int = Field(default=100, ge=1, le=200)
 
 
 class AutoStart(BaseModel):
@@ -78,8 +83,7 @@ def create_planning_pipeline(payload: PipelineCreate) -> dict:
                    payload.planning_scope, payload.production_provider)
 
 
-@router.get("/api/internal/planning-pipelines")
-def list_planning_pipelines(after_id: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200)) -> dict:
+def list_planning_pipelines(after_id: int, limit: int) -> dict:
     try:
         with connection() as db, db.cursor() as cursor:
             cursor.execute("SELECT * FROM godp_planning_pipeline_run WHERE del_flag='N' AND id>%s "
@@ -93,7 +97,12 @@ def list_planning_pipelines(after_id: int = Query(0, ge=0), limit: int = Query(1
         raise db_error(exc) from exc
 
 
-@router.get("/api/internal/planning-pipelines/{pipeline_id}")
+@router.post("/api/internal/planning-pipelines/query")
+def query_planning_pipelines(payload: PipelineQuery) -> dict:
+    return list_planning_pipelines(after_id=payload.after_id, limit=payload.limit)
+
+
+@router.post("/api/internal/planning-pipelines/{pipeline_id}/query")
 def planning_pipeline_detail(pipeline_id: int) -> dict:
     return guarded(read_pipeline, pipeline_id)
 

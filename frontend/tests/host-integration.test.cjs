@@ -74,16 +74,16 @@ test('host capabilities deny writes and exports before making any HTTP request',
   runtime.configurePlanningRuntime({ hosted: true, routePrefix: '/operations/planning', can: p => p.endsWith('.view') })
   requests.setPlanningHttp({ request: async () => { calls++; return { data: {} } } })
   try {
-    for (const [url, method] of [['/config','PUT'], ['/config/versions/1/restore','POST'],
-      ['/tag-taxonomy','PUT'], ['/manual-plans/previews','POST'], ['/query/export','POST'], ['/items/1/replace-topic','POST']]) {
+    for (const [url, method] of [['/config/save','POST'], ['/config/versions/1/restore','POST'],
+      ['/tag-taxonomy/save','POST'], ['/manual-plans/previews','POST'], ['/query/export','POST'], ['/items/1/replace-topic','POST']]) {
       await assert.rejects(requests.request(url, { method }), error => error.name === 'PlanningPermissionError')
     }
     assert.equal(calls, 0)
     await requests.request('/query/accounts', { method: 'POST' })
     assert.equal(calls, 1)
     runtime.configurePlanningRuntime({ hosted: true, routePrefix: '/operations/planning', can: p => p === 'manual.view' })
-    await requests.request('/config') // shared bootstrap for manual planning
-    await assert.rejects(requests.request('/config/versions'), error => error.name === 'PlanningPermissionError')
+    await requests.request('/config/query') // shared bootstrap for manual planning
+    await assert.rejects(requests.request('/config/versions/query'), error => error.name === 'PlanningPermissionError')
     assert.equal(calls, 2)
   } finally { runtime.configurePlanningRuntime(); requests.setPlanningHttp() }
 })

@@ -299,6 +299,8 @@ class InsideThreePagesAcceptanceTest {
           .andRespond(
               request -> {
                 String path = request.getURI().getPath();
+                assertEquals(path.equals("/api/health") ? HttpMethod.GET : HttpMethod.POST,
+                    request.getMethod(), "正式Java到Python业务调用必须使用POST");
                 String raw = ((MockClientHttpRequest) request).getBodyAsString();
                 Map<String, Object> body = raw.isEmpty() ? map() : read(raw);
                 if (down.get())
@@ -308,15 +310,15 @@ class InsideThreePagesAcceptanceTest {
                 Map<String, Object> result;
                 HttpStatus status = HttpStatus.OK;
                 if (path.equals("/api/health")) result = map("service", "ok", "database", "ok");
-                else if (path.equals("/api/internal/algorithm-config"))
+                else if (path.equals("/api/internal/algorithm-config/query"))
                   result = map("version", version, "config", config);
                 else if (path.equals("/api/internal/algorithm-config/commands")) {
                   assertEquals(version, number(body, "expected_version"));
                   config.putAll(object(body.get("algorithm_config")));
                   version++;
                   result = map("version", version, "config", config);
-                } else if (path.equals("/api/tag-taxonomy")) {
-                  if (request.getMethod() == HttpMethod.PUT) {
+                } else if (path.equals("/api/tag-taxonomy/query") || path.equals("/api/tag-taxonomy/save")) {
+                  if (path.endsWith("/save")) {
                     taxonomyActor = request.getHeaders().getFirst("X-Operator-Id");
                     if (number(body, "expected_version") != tags)
                       return MockRestResponseCreators.withStatus(HttpStatus.CONFLICT)
@@ -456,42 +458,41 @@ class InsideThreePagesAcceptanceTest {
       mvc.perform(get("/api/plan/health"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.database").value("ok"));
-      mvc.perform(get("/api/plan/config"))
+      mvc.perform(post("/api/plan/config/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.version").value(1));
       Map<String, Object> changed = config();
       changed.put("marketing_max", 4);
       mvc.perform(
-              put("/api/plan/config")
-                  .param("expected_version", "1")
+              post("/api/plan/config/save")
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content(write(changed)))
+                  .content(write(map("config", changed, "expectedVersion", 1))))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.version").value(2));
-      mvc.perform(get("/api/plan/config/versions"))
+      mvc.perform(post("/api/plan/config/versions/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$[0].version").value(2));
-      mvc.perform(post("/api/plan/config/versions/1/restore").param("expected_version", "2"))
+      mvc.perform(post("/api/plan/config/versions/1/restore").contentType(MediaType.APPLICATION_JSON).content("{\"expectedVersion\":2}"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.version").value(3));
-      mvc.perform(get("/api/plan/tag-taxonomy")).andExpect(status().isOk());
+      mvc.perform(post("/api/plan/tag-taxonomy/query").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
       mvc.perform(
-              put("/api/plan/tag-taxonomy")
+              post("/api/plan/tag-taxonomy/save")
                   .header("X-Operator-Id", "FORGED")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(write(map("expected_version", 1, "items", taxonomy()))))
           .andExpect(status().isOk());
       assertEquals("HOST-UM", algorithm.taxonomyActor);
       mvc.perform(
-              put("/api/plan/tag-taxonomy")
+              post("/api/plan/tag-taxonomy/save")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"expected_version\":1,\"items\":{}}"))
           .andExpect(status().isConflict());
-      mvc.perform(get("/api/plan/accounts"))
+      mvc.perform(post("/api/plan/accounts/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$[0].account_id").value("A1"));
-      mvc.perform(get("/api/plan/topics")).andExpect(status().isOk());
-      mvc.perform(get("/api/plan/topics/T1/detail")).andExpect(status().isOk());
+      mvc.perform(post("/api/plan/topics/query").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
+      mvc.perform(post("/api/plan/topics/T1/detail/query").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
       Map<String, Object> input =
           map(
               "content_mode",
@@ -585,7 +586,7 @@ class InsideThreePagesAcceptanceTest {
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"new_topic_id\":\"T2\",\"expected_version\":1,\"reason\":\"验收替换\"}"))
           .andExpect(status().isOk());
-      mvc.perform(get("/api/plan/items/" + item + "/adjustments"))
+      mvc.perform(post("/api/plan/items/" + item + "/adjustments/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$[0].new_topic_id").value("T2"));
       mvc.perform(
@@ -614,7 +615,7 @@ class InsideThreePagesAcceptanceTest {
           assertEquals(503, assertThrows(BusinessException.class, () -> tasks.run(kind, now, 100, 0)).status);
         } else assertNotNull(tasks.run(kind, now, 100, 0));
       }
-      mvc.perform(get("/api/plan/config").header("X-Deny", "yes"))
+      mvc.perform(post("/api/plan/config/query").contentType(MediaType.APPLICATION_JSON).content("{}").header("X-Deny", "yes"))
           .andExpect(status().isForbidden());
       mvc.perform(
               post("/api/plan/internal/source/accounts/query")
@@ -628,6 +629,22 @@ class InsideThreePagesAcceptanceTest {
                   .content("{}"))
           .andExpect(status().isOk());
       mvc.perform(post("/api/plan/internal/wakeup")).andExpect(status().isNotFound());
+      for (String removed : Arrays.asList(
+          "/config", "/config/versions", "/tag-taxonomy", "/accounts", "/topics",
+          "/topics/T1/detail", "/manual-plans/account-availability", "/manual-plans/tasks",
+          "/manual-plans/marketing-tasks", "/manual-plans/marketing-tasks/OLD-TASK",
+          "/batches", "/batches/1", "/items/1/adjustments", "/items/1/replacement-candidates",
+          "/business-config", "/business-config/versions")) {
+        mvc.perform(get("/api/plan" + removed)).andExpect(result ->
+            assertTrue(Arrays.asList(404, 405).contains(result.getResponse().getStatus()), removed));
+      }
+      for (String removed : Arrays.asList("/config", "/tag-taxonomy", "/business-config")) {
+        mvc.perform(put("/api/plan" + removed).contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(result -> assertTrue(Arrays.asList(404, 405).contains(result.getResponse().getStatus()), removed));
+      }
+      mvc.perform(post("/api/plan/batches/manual")).andExpect(status().isNotFound());
+      mvc.perform(post("/api/plan/config/versions/1/restore").param("expected_version", "3"))
+          .andExpect(status().isUnprocessableEntity());
       InsideBrowserBridge.run(mvc);
       algorithm.down.set(true);
       mvc.perform(get("/api/plan/health")).andExpect(status().isServiceUnavailable());

@@ -22,7 +22,7 @@ public final class AlgorithmConfigPythonClient implements AlgorithmConfigPort {
   }
 
   public Map<String, Object> current() {
-    return python.call(HttpMethod.GET, "/api/internal/algorithm-config", null);
+    return python.call(HttpMethod.POST, "/api/internal/algorithm-config/query", map());
   }
 
   public Map<String, Object> apply(

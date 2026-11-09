@@ -1,14 +1,6 @@
-import { request, usePostQueryContract, detectQueryContract, queryContractScope } from './api/http'
+import { request } from './api/http'
 import { queryManualTasks, queryPlanPage, queryAccountPage, queryPeriodPage, queryPeriodContext, queryResultFailures } from './api/queries'
-import type { AccountOption, AccountPlanRecord, AdjustmentRecord, AutoCycleSummary, AutoFailure, BatchDetail, BatchSummary, ConfigResponse, ConfigVersionSummary, ManualPlanInput, ManualPreviewInput, ManualPreviewResponse, ManualTaskSummary, PlanningAccountSummary, PlanningCycleSummary, StrategyConfig, TopicOption } from './types'
-
-export interface ContentProductionTask {
-  production_task_id: string; slot_id: string; topic_id: string; provider: string
-  status: string; content_id: string | null; last_error: string
-  accepted_at: string; completed_at: string | null
-  request: { planning: { publish_date: string }; account: { account_name: string }; topic: { title: string } }
-  response: { title?: string; body?: string }
-}
+import type { AccountOption, AccountPlanRecord, AdjustmentRecord, BatchDetail, BatchSummary, ConfigResponse, ConfigVersionSummary, ManualPreviewInput, ManualPreviewResponse, ManualTaskSummary, StrategyConfig, TopicOption } from './types'
 
 export interface TagTaxonomyItem {
   id: string | null; name: string; enabled: boolean
@@ -62,19 +54,8 @@ function normalizeTagTaxonomy(value: unknown): TagTaxonomyResponse {
   }
 }
 
-/** Select the wire contract before sending. Never retry a write after an HTTP failure. */
-const post = <T>(path: string, body: Record<string, unknown> = {}) => {
-  if (usePostQueryContract()) return request<T>(path, { method: 'POST', body: JSON.stringify(body) })
-  if (path.endsWith('/query')) {
-    const names: Record<string,string> = { includeDisabled:'include_disabled', publishDate:'publish_date', topicType:'topic_type', planType:'plan_type' }
-    const params = new URLSearchParams()
-    for (const [key,value] of Object.entries(body)) if (value !== null && value !== undefined) params.set(names[key] || key,String(value))
-    return request<T>(path.slice(0,-6) + (params.toString() ? `?${params}` : ''))
-  }
-  if (path === '/config/save') return request<T>(`/config?expected_version=${body.expectedVersion}`, {method:'PUT',body:JSON.stringify(body.config)})
-  if (path === '/tag-taxonomy/save') return request<T>('/tag-taxonomy',{method:'PUT',body:JSON.stringify(body)})
-  throw new Error('未定义的策划接口契约')
-}
+const post = <T>(path: string, body: Record<string, unknown> = {}) =>
+  request<T>(path, { method: 'POST', body: JSON.stringify(body) })
 
 async function allManualTasks(path: string): Promise<ManualTaskSummary[]> {
   const tasks = new Map<string, ManualTaskSummary>()
@@ -89,24 +70,13 @@ async function allManualTasks(path: string): Promise<ManualTaskSummary[]> {
 }
 
 export const api = {
-  health: async () => {
-    const revision = queryContractScope()
-    const health = await request<{ service: string; database: string; apiContract?: string }>('/health')
-    detectQueryContract(health.apiContract, revision)
-    return health
-  },
+  health: () => request<{ service: string; database: string }>('/health', { method: 'GET' }),
   config: () => post<ConfigResponse>('/config/query'),
   saveConfig: (config: StrategyConfig, expectedVersion: number) =>
     post<ConfigResponse>('/config/save', { config, expectedVersion }),
   configVersions: () => post<ConfigVersionSummary[]>('/config/versions/query'),
   restoreConfig: (version: number, expectedVersion: number) =>
-    request<ConfigResponse>(`/config/versions/${version}/restore?expected_version=${expectedVersion}`, { method: 'POST' }),
-  configModuleVersions: (module: 'marketing' | 'strategy') =>
-    request<ConfigVersionSummary[]>(`/config/modules/${module}/versions`),
-  saveConfigModule: (module: 'marketing' | 'strategy', config: StrategyConfig, expectedVersion: number) =>
-    request<ConfigResponse>(`/config/modules/${module}?expected_version=${expectedVersion}`, { method: 'PUT', body: JSON.stringify(config) }),
-  restoreConfigModule: (module: 'marketing' | 'strategy', version: number, expectedVersion: number) =>
-    request<ConfigResponse>(`/config/modules/${module}/versions/${version}/restore?expected_version=${expectedVersion}`, { method: 'POST' }),
+    post<ConfigResponse>(`/config/versions/${version}/restore`, { expectedVersion }),
   tagTaxonomy: async () => normalizeTagTaxonomy(await post<unknown>('/tag-taxonomy/query')),
   saveTagTaxonomy: async (items: Record<string, TagTaxonomyItem[]>, expectedVersion: number) =>
     normalizeTagTaxonomy(await post<unknown>('/tag-taxonomy/save', { items, expected_version: expectedVersion })),
@@ -117,15 +87,10 @@ export const api = {
   batches: (type?: 'manual' | 'auto', limit = 200) =>
     post<BatchSummary[]>('/batches/query', { limit, planType: type }),
   batch: (id: number) => post<BatchDetail>(`/batches/${id}/query`),
-  contentProductionFlow: (id: number) => request<{ batch_id: number; tasks: ContentProductionTask[] }>(`/batches/${id}/content-production`),
-  accountItems: (account: string, limit = 5000) => request<AccountPlanRecord[]>(`/items?account=${encodeURIComponent(account)}&limit=${limit}`),
-  planningAccounts: () => request<PlanningAccountSummary[]>('/planning-accounts'),
   replacementCandidates: (itemId: number) => post<TopicOption[]>(`/items/${itemId}/replacement-candidates/query`),
   replaceTopic: (itemId: number, newTopicId: string, expectedVersion: number, reason: string) =>
     request<{ item: AccountPlanRecord; adjustment: AdjustmentRecord }>(`/items/${itemId}/replace-topic`, { method: 'POST', body: JSON.stringify({ new_topic_id: newTopicId, expected_version: expectedVersion, reason }) }),
   adjustments: (itemId: number) => post<AdjustmentRecord[]>(`/items/${itemId}/adjustments/query`),
-  createManual: (input: ManualPlanInput) =>
-    request<BatchDetail>('/batches/manual', { method: 'POST', body: JSON.stringify(input) }),
   previewManual: (input: ManualPreviewInput) =>
     request<ManualPreviewResponse>('/manual-plans/previews', { method: 'POST', body: JSON.stringify(input) }),
   submitManualPreview: (previewId: string) =>
@@ -141,13 +106,5 @@ export const api = {
   createMarketingTask: (input: { request_id: string; task_name: string; topic_id: string; allocation_count: number }) =>
     request<ManualTaskSummary>('/manual-plans/marketing-tasks', { method: 'POST', body: JSON.stringify(input) }),
   marketingTaskDetails: (code: string) => post<{ task: ManualTaskSummary; accounts: AccountOption[]; topics: TopicOption[] }>(`/manual-plans/marketing-tasks/${encodeURIComponent(code)}/query`),
-  planningCycles: () => request<PlanningCycleSummary[]>('/planning-cycles'),
-  planningCycleItems: (cycleId: string, limit = 5000) =>
-    request<AccountPlanRecord[]>(`/planning-cycles/${encodeURIComponent(cycleId)}/items?limit=${limit}`),
-  planningFailures: (cycleId: string) =>
-    request<AutoFailure[]>(`/planning-cycles/${encodeURIComponent(cycleId)}/failures`),
-  autoCycles: () => request<AutoCycleSummary[]>('/auto-planning/cycles'),
-  autoFailures: (cycleId: string) =>
-    request<AutoFailure[]>(`/auto-planning/cycles/${encodeURIComponent(cycleId)}/failures`),
 }
 

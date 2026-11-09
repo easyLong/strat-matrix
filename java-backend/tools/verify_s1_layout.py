@@ -4,7 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from check_s0_baseline import inventory, expected_inventory
+from check_contract import inventory, expected_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'com.pab.aitmp.aiis.godp.planning'
@@ -49,7 +49,7 @@ def check():
                 assert dependency == module or dependency in ancestors(module), (path.name, module, 'depends on', dependency)
         if module != 'server':
             assert not list((folder / 'src/main').rglob('application*.properties')), ('runtime config leaked', module)
-    assert inventory() == expected_inventory(), 'S0 protocol/SQL drift'
+    assert inventory() == expected_inventory(), 'API/SQL contract drift'
     return {'ok': True, 'classes': counts, 'tables': 14, 'views': 3}
 
 

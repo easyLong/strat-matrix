@@ -83,13 +83,13 @@ class PlanningApiBoundaryTest {
     BusinessPlanningConfigController controller =
         new BusinessPlanningConfigController(service, () -> "FALLBACK");
     mvc(new PlanningResponseAdapter() {}, controller)
-        .perform(get("/api/plan/business-config"))
+        .perform(post("/api/plan/business-config/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.version").value(2))
         .andExpect(jsonPath("$.data").doesNotExist());
     MockMvc custom = mvc(envelope(), controller);
     custom
-        .perform(get("/api/plan/business-config"))
+        .perform(post("/api/plan/business-config/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("OK"))
         .andExpect(jsonPath("$.data.version").value(2));
@@ -103,16 +103,16 @@ class PlanningApiBoundaryTest {
                 "trace-test"))) {
       custom
           .perform(
-              put("/api/plan/business-config?expected_version=2")
+              post("/api/plan/business-config/save")
                   .header("X-User-UM", "FORGED")
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content("{}"))
+                  .content("{\"config\":{},\"expectedVersion\":2}"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.version").value(3));
       verify(service).save(any(BusinessPlanningConfig.class), eq(2), eq("TRUSTED"));
       when(service.current()).thenThrow(new BusinessException(409, "版本冲突"));
       custom
-          .perform(get("/api/plan/business-config"))
+          .perform(post("/api/plan/business-config/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
           .andExpect(status().isConflict())
           .andExpect(jsonPath("$.code").value("BUSINESS_ERROR"))
           .andExpect(jsonPath("$.data").doesNotExist())
@@ -139,7 +139,7 @@ class PlanningApiBoundaryTest {
     for (int i = 0; i < failures.length; i++) {
       doThrow(failures[i]).when(service).current();
       MvcResult result =
-          mvc.perform(get("/api/plan/business-config"))
+          mvc.perform(post("/api/plan/business-config/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
               .andExpect(status().is(statuses[i]))
               .andExpect(header().exists("X-Request-Id"))
               .andReturn();
@@ -147,14 +147,41 @@ class PlanningApiBoundaryTest {
           result.getResponse().getContentAsString(StandardCharsets.UTF_8).contains("private"));
     }
     mvc.perform(
-            put("/api/plan/business-config?expected_version=2")
+            post("/api/plan/business-config/save")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{"))
         .andExpect(status().isUnprocessableEntity());
     mvc.perform(
-            put("/api/plan/business-config").contentType(MediaType.APPLICATION_JSON).content("{}"))
+            post("/api/plan/business-config/save").contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isUnprocessableEntity());
-    mvc.perform(post("/api/plan/business-config")).andExpect(status().isMethodNotAllowed());
+    mvc.perform(post("/api/plan/business-config")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void standaloneBusinessPostValidatesBodyAndRetainsUnifiedReleaseGuard() throws Exception {
+    BusinessPlanningConfigService.Result current = result(2), saved = result(3);
+    BusinessPlanningConfigService service = mock(BusinessPlanningConfigService.class);
+    when(service.current()).thenReturn(current);
+    when(service.save(any(BusinessPlanningConfig.class), eq(2), eq("HOST-UM"))).thenReturn(saved);
+    BusinessPlanningConfigController controller = new BusinessPlanningConfigController(service, () -> "HOST-UM");
+    MockMvc http = mvc(envelope(), controller);
+    http.perform(post("/api/plan/business-config/query").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.version").value(2));
+    http.perform(post("/api/plan/business-config/versions/query").contentType(MediaType.APPLICATION_JSON).content("{\"limit\":0}"))
+        .andExpect(status().isUnprocessableEntity());
+    verify(service, never()).versions(anyInt());
+    for (String invalid : Arrays.asList("{}", "{\"config\":{},\"expectedVersion\":-1}"))
+      http.perform(post("/api/plan/business-config/save").contentType(MediaType.APPLICATION_JSON).content(invalid))
+          .andExpect(status().isUnprocessableEntity());
+    verify(service, never()).save(any(), anyInt(), anyString());
+    String input = "{\"config\":{},\"expectedVersion\":2}";
+    http.perform(post("/api/plan/business-config/save").contentType(MediaType.APPLICATION_JSON).content(input))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.data.version").value(3));
+    verify(service).save(any(BusinessPlanningConfig.class), eq(2), eq("HOST-UM"));
+    org.springframework.test.util.ReflectionTestUtils.setField(controller, "combinedRelease", true);
+    http.perform(post("/api/plan/business-config/save").contentType(MediaType.APPLICATION_JSON).content(input))
+        .andExpect(status().isConflict());
+    verify(service, times(1)).save(any(), anyInt(), anyString());
   }
 
   @Test

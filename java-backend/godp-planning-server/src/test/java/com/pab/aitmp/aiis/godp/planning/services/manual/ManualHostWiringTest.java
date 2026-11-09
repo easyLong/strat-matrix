@@ -74,10 +74,14 @@ class ManualHostWiringTest {
       assertNotNull(context.getBean(ManualExportService.class));
       assertEquals("host-user", context.getBean(ManualPorts.Actor.class).current());
       ManualPlanningController page = context.getBean(ManualPlanningController.class);
-      assertEquals(Collections.emptyList(), page.accountsCatalog(20, false));
-      assertEquals(Collections.emptyList(), page.topicsCatalog(20));
-      assertEquals("T1", ((Map<?, ?>) page.topicDetail("T1", "\u666e\u901a")).get("topic_id"));
-      assertThrows(BusinessException.class, () -> page.topicsCatalog(1001));
+      com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest query = new com.pab.aitmp.aiis.godp.planning.entity.vo.req.CatalogQueryRequest();
+      query.limit = 20;
+      query.topicType = "普通";
+      assertEquals(Collections.emptyList(), page.accountsCatalog(query));
+      assertEquals(Collections.emptyList(), page.topicsCatalog(query));
+      assertEquals("T1", ((Map<?, ?>) page.topicDetail("T1", query)).get("topic_id"));
+      query.limit = 1001;
+      assertThrows(BusinessException.class, () -> page.topicsCatalog(query));
     }
   }
 }
