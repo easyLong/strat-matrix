@@ -1,8 +1,8 @@
 # Java 业务后端子项目
 
-已在`feature/planning-v2`完成S0基线与S1五模块拆分。聚合坐标为`com.pab.aitmp.aiis:godp-planning-parent:0.1.0-SNAPSHOT`，包名前缀为`com.pab.aitmp.aiis.godp.planning`。行外使用公开依赖构建，行内Parent/BOM及SDK仍由宿主提供，未在行外伪造。阶段范围、校准项和后续顺序见[行外改造执行记录](../docs/行外独立改造执行记录_V0.1_2026-11-07.md)。
+已完成五模块拆分和`xiangliang`供应商隔离。聚合坐标为`com.pab.aitmp.aiis:godp-planning-parent:0.1.0-SNAPSHOT`；生产包位于`com.pab.aitmp.aiis.godp.digital.marketing`下各层的`xiangliang`目录。行外使用公开依赖构建，行内Parent/BOM及SDK由宿主提供。具体目录、Bean绑定及源码导出见[供应商并入说明](host-integration/MAVEN_MODULES.md)。
 
-后续已补齐14表实体、业务Mapper类型化、声明式事务边界、页面请求对象、16个POST增量入口、运行配置端口、四类Handler及人工任务持久化领取，见[执行记录V0.2](../docs/行外独立改造执行记录_V0.2_2026-11-07.md)。原响应字段、显式旧读路由、SQL视图分页及POI默认实现仍保留兼容，并非宣称已完成全部破坏式协议替换。
+已补齐14表实体、业务Mapper类型化、声明式事务边界、页面请求对象、运行配置端口、四类Handler及人工任务持久化领取。页面业务已统一POST，旧GET/PUT兼容路由删除；健康检查保留GET。响应字段、SQL视图分页及POI默认实现保持现有业务契约。
 
 | 模块 | 职责 | 直接项目依赖 |
 | --- | --- | --- |
@@ -61,18 +61,23 @@ java -jar godp-planning-server/target/planning-business.jar --spring.config.addi
 ## 代码边界
 
 ```text
-com.pab.aitmp.aiis.godp.planning/
-  entity/{entity,vo/req,vo/res,context,error,support}/
-  api/{port,host,context,response}/
-  client/{python,config}/
-  services/{manual,auto,config,content,query,source,tasks}/
-  server/{controller,web,config}/
-  server/dev/{local,legacy}/    行外启动壳及模拟组件，inside Maven产物排除整个server/dev
+com.pab.aitmp.aiis.godp.digital.marketing/
+  entity/xiangliang/{vo/req,vo/res,context,error,support,...}/
+  api/xiangliang/{port,host,context,response}/
+  client/xiangliang/{python,config}/
+  services/service/xiangliang/{manual,auto,config,content,query,source,tasks,...}/
+  services/mapper/xiangliang/       7个独立Mapper接口
+  server/xiangliang/{controller,web,config}/
+  server/xiangliang/dev/           仅行外，inside构建与源码导出均排除
+
+godp-planning-services/src/main/resources/mapper/xiangliang/
+  *Mapper.xml                     6份业务SQL
+  source/BankSourceMapper.xml      行内资料只读SQL占位
 ```
 
 `planning.manual.enabled=true`启用人工及结果业务。通配符页面转发已删除，只保留显式Controller。默认独立空壳不启用数据库模块；本地配置生成器开启业务模块、综合配置、自动策划和业务库SQL查询。历史真实开发库验收不代表本轮代码已经部署；V9仍需按DBA步骤核对发布。
 
-`ManualModuleConfiguration`统一装配业务服务，直接接收ManualMapper与BusinessTransactions；ManualDatabase包装类已删除。宿主已有`planningBusinessTransactions`管理器通过独立声明式代理承接事务。原始资料接SourceFacts/BankSourceQueries，计算、身份和内容状态分别接现有端口；不再使用页面通配代理。完整装配见[宿主说明](host-integration/README.md)。
+`ManualModuleConfiguration`统一装配业务服务，直接接收ManualMapper与BusinessTransactions；ManualDatabase包装类已删除。宿主已有`xiangliangBusinessTransactions`管理器通过独立声明式代理承接事务。原始资料接SourceFacts/BankSourceQueries，计算、身份和内容状态分别接现有端口；不再使用页面通配代理。完整装配见[宿主说明](host-integration/README.md)。
 
 普通人工策划的内容状态由`ManualContentStatusService`读取投影。宿主实现`ManualPorts.ContentStatusSource`查询内容方，Job按游标调用`reconcile(limit, afterId)`；服务校验明细版本和状态时间，更新策划明细与批次进度。行外无内容方接口，不自动模拟生产成功。字段和调用方式见[迁移说明](../docs/JAVA_MANUAL_MIGRATION.md)。
 
@@ -96,6 +101,6 @@ com.pab.aitmp.aiis.godp.planning/
 
 五模块已按包名和目录落位。`mvn -Pinside package`生成`godp-planning-server/target/inside/planning-business.jar`普通library JAR，排除本地启动壳、模拟数据、旧代理和application配置，不执行Boot repackage。该Maven profile仅校验模块交付边界，不代表真实Halo工程已编译验收。现场复用宿主Parent/BOM、启动类、配置、MyBatis工厂和业务数据源，按[五模块并入说明](host-integration/MAVEN_MODULES.md)接入；不要同时激活Maven的dev和inside profile。
 
-`server.dev.LocalExecutionConfiguration`和`LocalJobPulse`只用于行外模拟，驻场不复制；由客户Job调用`client.python.PythonExecutionClient.wakeup`。Python内部唤醒受理返回202，业务是否完成仍查询业务任务；受理完整性、网络失败重试和角色执行间隔不能通过浏览器转发处理。详见[后台执行说明](../docs/BACKGROUND_EXECUTION.md)。
+`server.xiangliang.dev.LocalExecutionConfiguration`和`LocalJobPulse`只用于行外模拟，驻场不复制；由客户Job调用`client.xiangliang.python.PythonExecutionClient.wakeup`。Python内部唤醒受理返回202，业务是否完成仍查询业务任务；受理完整性、网络失败重试和角色执行间隔不能通过浏览器转发处理。详见[后台执行说明](../docs/BACKGROUND_EXECUTION.md)。
 
 共用约定及迁移顺序见[三工程契约](../docs/contracts/README.md)。工程侧技术栈、需替换的接入点与不应迁入的本地代码见[驻场替换点清单](../docs/JAVA_HOST_REPLACEMENT_POINTS.md)。

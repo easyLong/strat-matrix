@@ -1,0 +1,11 @@
+package com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.command;
+
+public final class PlanningItemInsert extends InsertCommand {
+  public String slotId;
+  public String accountId;
+  public String publishDate;
+  public String publishWeek;
+  public String payload;
+  public String contentStatus;
+  public Long batchId;
+}

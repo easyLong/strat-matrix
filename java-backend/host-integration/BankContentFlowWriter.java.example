@@ -1,8 +1,8 @@
-package your.host.integration;
+package com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.content;
 
-import com.pab.aitmp.aiis.godp.planning.entity.vo.req.ContentFlowEntry;
-import com.pab.aitmp.aiis.godp.planning.entity.vo.res.ContentFlowReceipt;
-import com.pab.aitmp.aiis.godp.planning.api.port.ContentFlowWriter;
+import com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.vo.req.ContentFlowEntry;
+import com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.vo.res.ContentFlowReceipt;
+import com.pab.aitmp.aiis.godp.digital.marketing.api.xiangliang.port.ContentFlowWriter;
 
 /**
  * Register this as a host Bean only after the existing content-flow table is mapped.

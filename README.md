@@ -1,5 +1,7 @@
 # 多账号智能策划
 
+2026-11-09供应商隔离：Java生产包已按行内现有五层模块迁入各层`xiangliang`目录，业务服务位于`services.service.xiangliang`，Mapper接口和XML独立。现场可[导出按宿主模块落位的源码](java-backend/host-integration/MAVEN_MODULES.md)，无需复制本地POM及启动壳；[本轮验证记录](docs/xiangliang供应商隔离与验收_2026-11-09.md)。
+
 2026-11-09接口最终口径：前端与Java业务入口使用单套POST；Java到Python已改造的算法配置、标签和任务状态同样只使用POST，健康检查使用GET。旧GET/PUT别名、前端协议识别及请求回退已删除，部署需三工程使用相同版本。详见[POST最终契约及验收](docs/业务接口POST收口_2026-11-09.md)。
 
 本项目作为整体业务页面嵌入客户系统，包含 **AI策划配置、人工策划、策划结果** 三个入口。宿主系统负责登录和操作人身份；本项目负责策划、结果查询及与内容生产的衔接。
@@ -66,8 +68,8 @@ flowchart LR
 | 公共算法与序列化规则 | `python-backend/app/core/` |
 | 结果 SQL 投影与行内资料批量读取 | `python-backend/app/adapters/` |
 | 行内查询契约、Java HTTP资料与状态适配 | `python-backend/app/bank_bridge/` |
-| Java普通人工业务、MyBatis持久化 | `java-backend/godp-planning-services/src/main/java/com/pab/aitmp/aiis/godp/planning/services/manual/`、`java-backend/godp-planning-services/src/main/resources/mapper/` |
-| 本地装配及旧业务兼容适配 | `java-backend/godp-planning-server/src/main/java/com/pab/aitmp/aiis/godp/planning/server/dev/`、`planning/adapter/local/`、`planning/adapter/legacy/`；驻场不迁入 |
+| Java普通人工业务、MyBatis持久化 | `java-backend/godp-planning-services/src/main/java/com/pab/aitmp/aiis/godp/digital/marketing/services/service/xiangliang/manual/`、`java-backend/godp-planning-services/src/main/resources/mapper/xiangliang/` |
+| 本地装配及模拟资料 | `java-backend/godp-planning-server/src/main/java/com/pab/aitmp/aiis/godp/digital/marketing/server/xiangliang/dev/`；驻场不迁入 |
 | 旧行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
 | 行内Java驻场实现步骤与边界说明 | `docs/integration/java-host/README.md` |
 | 内容状态读取与业务库状态投影 | Java `manual/ManualContentStatusService`、`MarketingTaskService`；宿主提供内容事实 |

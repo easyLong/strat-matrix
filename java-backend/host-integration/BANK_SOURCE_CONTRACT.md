@@ -2,7 +2,7 @@
 
 版本：V0.2，2026-11-03。本文件对应当前代码中的7项资料查询能力；沿用现有字段，不重新编排历史IF/OP编号。面向行内开发确认，真实表名、字段名和状态编码留待驻场填写。
 
-配套文件：[字段映射表（CSV）](BANK_SOURCE_FIELD_MAPPING.csv)、[Bean装配示例](BankSourceBindings.java.example)、[只读SQL占位](../godp-planning-services/src/main/resources/bank-source/BankSourceMapper.xml)、[宿主装配说明](README.md)。CSV为UTF-8带BOM，可用Excel打开。
+配套文件：[字段映射表（CSV）](BANK_SOURCE_FIELD_MAPPING.csv)、[Bean装配示例](BankSourceBindings.java.example)、[只读SQL占位](../godp-planning-services/src/main/resources/mapper/xiangliang/source/BankSourceMapper.xml)、[宿主装配说明](README.md)。CSV为UTF-8带BOM，可用Excel打开。
 
 2026-11-05补充：营销选题不要求标题和大纲；活动类提供关联活动ID、名称、活动所属组织，银行产品类提供关联产品名称与产品ID。新增映射字段为`related_activity_id`、`activity_organization`、`related_product_id`，已有名称字段继续使用`related_activity`、`related_product`。非营销标题仍必填，不将活动名称伪装成选题标题。详情、预选及任务快照透传这些字段，不新增数据库列。
 
@@ -30,7 +30,7 @@
 | 直接查询原始表 | `BankSourceMapper.xml`的10条SELECT：3组count/列表和4条列表查询；注册到资料所属MyBatis会话 | 请求对象、字段映射、结果校验、业务适配器、Python契约 |
 | 调用已有Service/RPC | 宿主新建一个`BankSourceQueries`实现，覆盖7个方法；返回`PageRows`或记录列表 | 同上，无需强行改成SQL |
 
-SQL方式使用`MapperBankSourceQueries`，count与列表在同一只读事务中执行。`bankSourceSessions`和`bankSourceTransactions`必须指向同一资料数据源；它们与`planningBusinessSessions`/业务事务可以不同。一个能力涉及多个既有服务或数据源时，优先在宿主的查询实现中组合，不能给一个MyBatis事务随意混用数据源。
+SQL方式使用`MapperBankSourceQueries`，count与列表在同一只读事务中执行。`xiangliangSourceSessions`和`xiangliangSourceTransactions`必须指向同一资料数据源；它们与`xiangliangBusinessSessions`/业务事务可以不同。一个能力涉及多个既有服务或数据源时，优先在宿主的查询实现中组合，不能给一个MyBatis事务随意混用数据源。
 
 只读标记不是数据库权限控制。原始资料连接使用行内认可的只读权限；一致性隔离级别由宿主按数据库类型确定。需要跨页稳定快照时，由宿主提供相应读取保障，目前不声称OFFSET分页已具备快照能力。
 
@@ -149,7 +149,7 @@ mvn test -Dtest=BankSourceFactsTest,BankSourceSqlTest,BankSourceIntegrationTest,
 python -m testing
 ```
 
-覆盖7能力字段转换、分页/半开更新时间、真实H2 MyBatis参数绑定与资格过滤、10个SQL占位拒绝执行、只读事务、内部鉴权、错误隔离、Java→Python投影和Java/Python共用JSON结构。响应样例在[test fixture](../src/test/resources/bank-source/contract-sample.json)，全为合成资料。
+覆盖7能力字段转换、分页/半开更新时间、真实H2 MyBatis参数绑定与资格过滤、10个SQL占位拒绝执行、只读事务、内部鉴权、错误隔离、Java→Python投影和Java/Python共用JSON结构。响应样例在[test fixture](../godp-planning-server/src/test/resources/bank-source/contract-sample.json)，全为合成资料。
 
 ### V0.2：减少现场重复代码
 

@@ -1,19 +1,28 @@
+package com.pab.aitmp.aiis.godp.digital.marketing.server.xiangliang.config;
+
+import com.pab.aitmp.aiis.godp.digital.marketing.services.mapper.xiangliang.BankSourceMapper;
 // 迁入宿主配置包后采用其中一种方式。此文件不自动编译、不创建数据源、不含行内SQL。
-import com.pab.aitmp.aiis.godp.planning.api.port.SourceFacts;
-import com.pab.aitmp.aiis.godp.planning.services.source.bank.*;
+import com.pab.aitmp.aiis.godp.digital.marketing.api.xiangliang.port.SourceFacts;
+import com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.source.bank.*;
 import java.time.ZoneId;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.transaction.PlatformTransactionManager;
 
-class BankSourceBindings {
+@Configuration("xiangliangBankSourceBindings")
+@Profile("inside")
+@ConditionalOnProperty(name = "planning.host.enabled", havingValue = "true")
+public class BankSourceBindings {
   // SQL方式：两个Bean应来自原始资料所属数据源，不必等同于策划业务库数据源。
-  // 该会话须加载bank-source/BankSourceMapper.xml，现场填写真实SQL。
-  @Bean
-  SourceFacts bankSourceFacts(
-      @Qualifier("bankSourceSessions") SqlSessionTemplate sessions,
-      @Qualifier("bankSourceTransactions") PlatformTransactionManager transactions) {
+  // 该会话须加载mapper/xiangliang/source/BankSourceMapper.xml，现场填写真实SQL。
+  @Bean(name="xiangliangBankSourceFacts")
+  public SourceFacts bankSourceFacts(
+      @Qualifier("xiangliangSourceSessions") SqlSessionTemplate sessions,
+      @Qualifier("xiangliangSourceTransactions") PlatformTransactionManager transactions) {
     return new BankSourceFacts(
         new MapperBankSourceQueries(sessions.getMapper(BankSourceMapper.class), transactions)
             .verifyWith(sessions.getSqlSessionFactory()),

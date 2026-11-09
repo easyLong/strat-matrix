@@ -35,7 +35,7 @@ Java业务库增加`godp_business_planning_config`和`godp_business_planning_con
 
 ## 现场替换点和风险
 
-- Java配置模块可迁入：`planning/config/**`、`mapper/BusinessPlanningConfigMapper.xml`、`db/business-planning-config.sql`。宿主MyBatis工厂将Mapper与同库事务管理器显式封装为`BusinessConfigDatabase`；登录人沿用可信UM上下文。
+- Java配置模块可迁入：`planning/config/**`、`mapper/xiangliang/BusinessPlanningConfigMapper.xml`、`db/business-planning-config.sql`。宿主MyBatis工厂将Mapper与同库事务管理器显式封装为`BusinessConfigDatabase`；登录人沿用可信UM上下文。
 - 行外`standalone/LocalManualBusinessSchema`和`LocalManualBusinessConfiguration`不迁入。当前本地独立Java服务将配置Mapper绑定到`strat_matrix_bus`。
 - 跨Java/Python数据库没有分布式事务；统一保存必须用持久化命令、幂等请求和重试收敛。简单的“先存Java再存Python”会制造半成功配置。
 - 当前页面“历史配置”属于综合配置历史。两张新Java表只覆盖四项业务字段，不代表页面历史已完成迁移。

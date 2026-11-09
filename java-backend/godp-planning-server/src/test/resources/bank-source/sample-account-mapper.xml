@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- Synthetic H2 schema only. No real bank tables or SQL. -->
-<mapper namespace="com.pab.aitmp.aiis.godp.planning.services.source.bank.BankSourceMapper">
+<mapper namespace="com.pab.aitmp.aiis.godp.digital.marketing.services.mapper.xiangliang.BankSourceMapper">
   <sql id="accountFilter">
     WHERE eligible=TRUE
     <if test="query.accountIds != null">

@@ -17,7 +17,7 @@
 现场可在宿主配置中注册：
 
 ```java
-@Bean
+@Bean("xiangliangContextProvider")
 HostContextProvider planningContextProvider() {
     return request -> {
         // 以下currentUser为宿主可信会话对象的示意，按实际SDK取得，不取浏览器自报头。
@@ -70,7 +70,7 @@ HostContextProvider planningContextProvider() {
 错误码目前提供给可选适配器，默认不会额外加入前端现有响应体。页面若要求行内统一格式，只注册一个`PlanningResponseAdapter`，例如：
 
 ```java
-@Bean
+@Bean("xiangliangResponses")
 PlanningResponseAdapter planningResponses() {
     return new PlanningResponseAdapter() {
         public Object success(Object body) {

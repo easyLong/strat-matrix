@@ -4,7 +4,7 @@
 
 当前新增的[上下文、响应及分页扩展](../java-backend/host-integration/REQUEST_CONTEXT_RESPONSES_PAGING.md)将宿主差异进一步集中：可选`HostContextProvider`接可信会话及机构范围，可选`PlanningResponseAdapter`接统一页面返回格式。未提供则保持原Actor和响应，范围未指定不代表ALL。资料分页和营销账号批量关联直接复用；迁入时包含`planning/context`、`PlanningApiErrors`和`PlanningApiResponseAdvice`。内部资料及文件下载排除成功包装；真实机构权限SQL、宿主Advice优先级及Vue拆包约定仍需现场确认。
 
-资料接入已有[BankSourceFacts骨架与查询契约](../java-backend/host-integration/BANK_SOURCE_CONTRACT.md)，[字段映射CSV](../java-backend/host-integration/BANK_SOURCE_FIELD_MAPPING.csv)留空行内表/字段。驻场集中替换`BankSourceQueries`的7个读取方法，或填`bank-source/BankSourceMapper.xml`的10条只读SQL，再注册唯一`SourceFacts`。分页、字段转换、关联和错误校验可直接复用；原始资料会话/事务与策划业务会话/事务分别绑定。没有真实源表时不得启用占位SQL冒充已接入。
+资料接入已有[BankSourceFacts骨架与查询契约](../java-backend/host-integration/BANK_SOURCE_CONTRACT.md)，[字段映射CSV](../java-backend/host-integration/BANK_SOURCE_FIELD_MAPPING.csv)留空行内表/字段。驻场集中替换`BankSourceQueries`的7个读取方法，或填`mapper/xiangliang/source/BankSourceMapper.xml`的10条只读SQL，再注册唯一`SourceFacts`。分页、字段转换、关联和错误校验可直接复用；原始资料会话/事务与策划业务会话/事务分别绑定。没有真实源表时不得启用占位SQL冒充已接入。
 
 现场字段名和编码差异可以只改[映射配置示例](../java-backend/host-integration/BankSourceSiteMapping.java.example)，不用散改业务Service。互动明细可注入`MapperBankSourceQueries`四参数构造器的批量函数，复用分组、归属检查和只读事务。接通后运行[资料只读验收](../testing/README.md#资料适配只读验收)快速发现缺字段、关联错误和分页问题；不新增生产诊断接口。
 
@@ -28,7 +28,7 @@ AI策划配置由`planning/config`管理综合页面发布，Python维护算法�
 
 ## 1. 可以直接保留的业务代码
 
-`com.pab.aitmp.aiis.godp.planning.services.manual` 包内是普通人工策划的业务规则、任务状态、结果读写、换题、内容状态投影和页面接口。代码按 Java 8 编译，不引用行内私有 SDK。`ManualModuleConfiguration` 统一装配业务服务；宿主提供一个 `ManualDatabase` 和 `ManualPorts` 中的资料、计算、身份、过渡业务、普通内容状态、营销状态六类接口实现。业务服务的构造代码不应在客户工程重写。普通人工核心规则可迁入；查询和详情中的历史兼容逻辑需随过渡数据方案一起迁入或替换，不能把整个包当作已完全脱离旧业务。
+`com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.manual` 包内是普通人工策划的业务规则、任务状态、结果读写、换题、内容状态投影和页面接口。代码按 Java 8 编译，不引用行内私有 SDK。`ManualModuleConfiguration` 统一装配业务服务；宿主提供一个 `ManualDatabase` 和 `ManualPorts` 中的资料、计算、身份、过渡业务、普通内容状态、营销状态六类接口实现。业务服务的构造代码不应在客户工程重写。普通人工核心规则可迁入；查询和详情中的历史兼容逻辑需随过渡数据方案一起迁入或替换，不能把整个包当作已完全脱离旧业务。
 
 当前正式业务表位于独立的 `strat_matrix_bus`；Python 计算库为 `strat_matrix`。两个库的同名表由数据库连接隔离，不需要在业务表名上添加语言前缀。
 
@@ -51,12 +51,12 @@ AI策划配置由`planning/config`管理综合页面发布，Python维护算法�
 
 ## 3. 不应复制到客户业务模块的文件
 
-- `com.pab.aitmp.aiis.godp.planning.server.dev/**`：独立启动类、本地 Hikari 装配、本地调度和开发健康检查。
-- `com.pab.aitmp.aiis.godp.planning.server.dev.local/**`：模拟文件读取、行外装配及旧业务代理；不迁入宿主。
-- `com.pab.aitmp.aiis.godp.planning.server.dev.legacy/**`：旧页面的本地通配转发及配置。
+- `com.pab.aitmp.aiis.godp.digital.marketing.server.xiangliang.dev/**`：独立启动类、本地 Hikari 装配、本地调度和开发健康检查。
+- `com.pab.aitmp.aiis.godp.digital.marketing.server.xiangliang.dev.local/**`：模拟文件读取、行外装配及旧业务代理；不迁入宿主。
+- `com.pab.aitmp.aiis.godp.digital.marketing.server.xiangliang.dev.legacy/**`：旧页面的本地通配转发及配置。
 - `src/main/resources/application*.properties`、本地 `pom.xml` 的 Parent／打包配置、`run/`、`logs/`、`.tmp-tools/`。
 
-`com.pab.aitmp.aiis.godp.planning.client.python.PythonExecutionClient` 可以作为内网 HTTP 契约参考；若客户统一要求 ESA、内部 HTTP 客户端或特定链路追踪，替换这一适配器，不改策划业务规则。
+`com.pab.aitmp.aiis.godp.digital.marketing.client.xiangliang.python.PythonExecutionClient` 可以作为内网 HTTP 契约参考；若客户统一要求 ESA、内部 HTTP 客户端或特定链路追踪，替换这一适配器，不改策划业务规则。
 
 ## 4. 最小迁入方式
 
@@ -64,7 +64,7 @@ AI策划配置由`planning/config`管理综合页面发布，Python维护算法�
 
 **只在宿主新写一份接入配置**：声明以下 Bean，并由各自的行内服务实现方法。缺少任何必需 Bean 时应启动失败，不静默回落到本地 Python 或错误数据库。
 
-MyBatis持久化是**单独的迁移项**，本地已经完成到`ManualMapper`接口、`mapper/ManualMapper.xml`和`ManualRepository`。驻场需要先把XML纳入宿主业务库`SqlSessionFactory`的mapperLocations，再绑定Mapper与同库事务管理器。例如在宿主接入配置中：
+MyBatis持久化是**单独的迁移项**，本地已经完成到`ManualMapper`接口、`mapper/xiangliang/ManualMapper.xml`和`ManualRepository`。驻场需要先把XML纳入宿主业务库`SqlSessionFactory`的mapperLocations，再绑定Mapper与同库事务管理器。例如在宿主接入配置中：
 
 ```java
 @Bean
@@ -116,7 +116,7 @@ ManualDatabase manualDatabase(SqlSessionTemplate businessSessions,
 ## 7. 当前已做的代码收口
 
 - 本地 Hikari 装配移到 `standalone/LocalManualBusinessConfiguration`，开发健康检查移到 `standalone/ServiceHealthController`，旧 Python 资料代理移到 `adapter/local/LocalPythonAdapter`；迁入普通人工业务包时不会误带本地基础设施。
-- `ManualRepository`已从Spring JDBC迁至MyBatis；接收宿主`ManualMapper`与`PlatformTransactionManager`，所有业务SQL位于`mapper/ManualMapper.xml`。
+- `ManualRepository`已从Spring JDBC迁至MyBatis；接收宿主`ManualMapper`与`PlatformTransactionManager`，所有业务SQL位于`mapper/xiangliang/ManualMapper.xml`。
 - `ManualPlanningController` 类级路径支持 `planning.api-prefix` 配置，默认仍为 `/api/plan`，页面接口契约不变。
 - `ManualModuleConfiguration` 统一装配 Repository 与六个业务 Service；本地和宿主提供七个输入 Bean，模块内部不重复写装配逻辑。
 - 旧业务HTTP路径已从普通人工业务包移至本地`LocalPythonAdapter`；新明细所需账号补全和换题候选已归入`ManualPorts.Source`，`Transition`只保留历史策划兼容语义，驻场无需在业务服务里逐个搜索和修改旧URL。
@@ -124,6 +124,6 @@ ManualDatabase manualDatabase(SqlSessionTemplate businessSessions,
 
 ## 8. AI策划业务配置接入
 
-将`planning/config/**`、`mapper/BusinessPlanningConfigMapper.xml`和`db/business-planning-config.sql`迁入宿主；使用业务库MyBatis工厂注册Mapper，并把该Mapper与同库事务管理器封装为`BusinessConfigDatabase` Bean。操作人取宿主可信UM上下文。行外`LocalManualBusinessSchema`和本地配置类不迁入。
+将`planning/config/**`、`mapper/xiangliang/BusinessPlanningConfigMapper.xml`和`db/business-planning-config.sql`迁入宿主；使用业务库MyBatis工厂注册Mapper，并把该Mapper与同库事务管理器封装为`BusinessConfigDatabase` Bean。操作人取宿主可信UM上下文。行外`LocalManualBusinessSchema`和本地配置类不迁入。
 
 四项业务字段的API已实现，综合页面仍需Java统一保存命令、Python算法配置幂等更新及两库版本对应关系后才能切换。当前不可把`/api/plan/business-config`直接替换前端`/config`，其返回不含生命周期、经营目标和滚动窗口。

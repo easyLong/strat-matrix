@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.pab.aitmp.aiis.godp.digital.marketing.services.mapper.xiangliang.ConfigReleaseMapper">
+  <resultMap id="versionsRow" type="com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.PlanningConfigReleaseEntity" autoMapping="false">
+    <result column="id" property="id"/>
+    <result column="del_flag" property="delFlag"/>
+    <result column="created_by" property="createdBy"/>
+    <result column="updated_by" property="updatedBy"/>
+    <result column="created_time" property="createdTime"/>
+    <result column="updated_time" property="updatedTime"/>
+    <result column="command_id" property="commandId"/>
+    <result column="version" property="version"/>
+    <result column="active_version" property="activeVersion"/>
+    <result column="status" property="status"/>
+    <result column="request_hash" property="requestHash"/>
+    <result column="config_json" property="configJson"/>
+    <result column="business_expected_version" property="businessExpectedVersion"/>
+    <result column="algorithm_version" property="algorithmVersion"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="action" property="action"/>
+    <result column="source_version" property="sourceVersion"/>
+    <result column="last_error" property="lastError"/>
+  </resultMap>
+
+ <select id="current" resultMap="versionsRow">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND status='completed' ORDER BY version DESC LIMIT 1</select>
+ <select id="pending" resultMap="versionsRow">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND status='pending' ORDER BY version LIMIT 1</select>
+ <select id="locked" resultMap="versionsRow">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND command_id=#{id} FOR UPDATE</select>
+ <select id="version" resultMap="versionsRow">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND version=#{version} AND status='completed'</select>
+ <select id="versions" resultMap="versionsRow">SELECT * FROM godp_planning_config_release WHERE del_flag='N' AND status='completed' ORDER BY version DESC LIMIT #{limit}</select>
+ <insert id="insert"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.digital.marketing.api.xiangliang.context.AuditFields@actor(_parameter, true)"/>INSERT INTO godp_planning_config_release(command_id,version,active_version,status,request_hash,config_json,business_expected_version,algorithm_version,created_by,created_at,action,source_version,updated_by) VALUES(#{id},#{version},#{version},#{status},#{hash},#{config},#{businessVersion},#{algorithmVersion},#{actor},#{time},#{action},#{sourceVersion},#{auditActor})</insert>
+ <update id="complete"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.digital.marketing.api.xiangliang.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_planning_config_release SET status='completed',algorithm_version=#{algorithmVersion},config_json=#{configJson},last_error='',updated_by=#{auditActor} WHERE del_flag='N' AND command_id=#{id} AND status='pending'</update>
+ <update id="reject"><bind name="auditActor" value="@com.pab.aitmp.aiis.godp.digital.marketing.api.xiangliang.context.AuditFields@actor(_parameter, false)"/>UPDATE godp_planning_config_release SET status='rejected',active_version=NULL,last_error=#{error},updated_by=#{auditActor} WHERE del_flag='N' AND command_id=#{id} AND status='pending'</update>
+</mapper>

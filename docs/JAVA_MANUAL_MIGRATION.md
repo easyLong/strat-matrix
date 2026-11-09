@@ -41,7 +41,7 @@ Java负责创建并维护Java业务表；Python负责创建并维护新增算法
 
 新Java任务及明细ID从10^12起步，避免迁移期与旧Python数字ID冲突，并保持JavaScript安全整数兼容。驻场须保留该范围或统一改造外部ID协议，不能重置为1。所有新表及字段均有中文注释。
 
-展示扩展字段保存在JSON快照中；任务状态、账号日期唯一键和结果版本使用独立字段。业务读写已迁至MyBatis `ManualMapper` 和 `mapper/ManualMapper.xml`，Repository只封装有业务含义的操作和事务；未引入行内私有SDK。
+展示扩展字段保存在JSON快照中；任务状态、账号日期唯一键和结果版本使用独立字段。业务读写已迁至MyBatis `ManualMapper` 和 `mapper/xiangliang/ManualMapper.xml`，Repository只封装有业务含义的操作和事务；未引入行内私有SDK。
 
 报表导出由`ManualExportService`构造同一套选题级字段：默认CSV兼容旧调用，`format=xlsx`由宿主已有的Apache POI输出Excel。前端优先请求XLSX；若迁移期旧接口返回CSV，按响应媒体类型保存为CSV。XLSX使用POI流式工作簿并清理临时文件，驻场要确认容器临时目录权限。
 
@@ -142,7 +142,7 @@ ON strat_matrix_bus.* TO '实际Java数据库账号'@'实际来源主机';
 
 按客户工程技术栈逐项替换的代码位置、版本差异和需确认信息见[Java 驻场替换点清单](JAVA_HOST_REPLACEMENT_POINTS.md)。
 
-1. 由宿主数据库发布流程执行业务schema；在宿主MyBatis配置中加载`ManualMapper`和`mapper/ManualMapper.xml`，用绑定业务库的Mapper与同库事务管理器构造`ManualDatabase` Bean。不复制本地Hikari装配或运行期建表配置。Repository迁移是独立完成的工作，不能归为仅修改连接配置。
+1. 由宿主数据库发布流程执行业务schema；在宿主MyBatis配置中加载`ManualMapper`和`mapper/xiangliang/ManualMapper.xml`，用绑定业务库的Mapper与同库事务管理器构造`ManualDatabase` Bean。不复制本地Hikari装配或运行期建表配置。Repository迁移是独立完成的工作，不能归为仅修改连接配置。
 2. 实现`ManualPorts.Source`，调用客户账号、选题和历史参与资格查询。
 3. 实现`ManualPorts.Actor`，从可信会话取得创建人，并在Controller外接入权限和数据范围。
 4. 实现`ManualPorts.Computer`，用宿主HTTP客户端适配Python计算契约；内部令牌由宿主注入。

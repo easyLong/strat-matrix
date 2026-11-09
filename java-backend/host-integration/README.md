@@ -10,7 +10,7 @@
 
 本目录用于将业务模块合入现有Java工程，不另建一套行内Java应用。公共装配入口为`PlanningHostConfiguration`；它没有私有SDK、数据源创建、自动建表或定时器。部署参数示例见[inside-sample.properties](inside-sample.properties)。
 
-已按`godp-planning-api/entity/client/services/server`五模块拆分，包名前缀统一为`com.pab.aitmp.aiis.godp.planning`。行外聚合POM只管理公开依赖，不模拟行内Parent/BOM。现场注册模块、替换父POM并由宿主server装配，见[五模块并入说明](MAVEN_MODULES.md)。Maven `inside` profile产出不含本地启动壳的library JAR；`dev` profile产出行外可执行包，两者输出目录隔离。
+本地保留`godp-planning-api/entity/client/services/server`五模块公开依赖构建；生产包已按行内`com.pab.aitmp.aiis.godp.digital.marketing`分层，业务服务落在`services.service.xiangliang`，Mapper接口落在`services.mapper.xiangliang`，其余各层均有独立`xiangliang`目录。通过[五模块并入说明](MAVEN_MODULES.md)的导出命令，直接按宿主现有`godp-digital-marketing-*`目录合并源码，不复制本地POM或启动壳。Maven `inside`产出library JAR；`dev`产出行外可执行包，输出目录隔离。
 
 2026-11-05更新：业务库14张表统一六公共字段。迁入时包含`context/AuditFields`，可信UM须为1至50字符；存量表先发布[表结构V6及查询视图](../../docs/表结构公共字段规范与升级_2026-11-05.md)，再部署新版Mapper。原业务编号和唯一约束保留，宿主不必改前端接口对象。
 
@@ -18,7 +18,7 @@
 
 ## 1. 保留和迁入
 
-迁入`planning/{manual,config,auto,content,query,source,tasks,context,api,host}`和`planning/adapter/python`、`resources/mapper/*.xml`、经过发布审核的`resources/db`脚本。使用宿主父POM、依赖管理、启动类和配置来源。
+按各层`xiangliang`路径迁入生产源码，以及services的`resources/mapper/xiangliang`下7份XML。业务库DBA脚本仍独立审核发布。复用宿主父POM、依赖管理、启动类和配置来源。
 
 不要迁入`standalone`、`adapter/local`、`adapter/legacy`、本地`application-local.properties`、`run`或启动配置桥。旧算法库业务历史若需要保留，先按迁移脚本导入业务表；模板的`ManualNewInstallTransition`关闭旧接口回退，不能指望它读取尚未迁移的数据。
 
@@ -34,14 +34,20 @@
 
 | 必需Bean或接口 | 宿主提供什么 |
 | --- | --- |
-| `planningBusinessSessions`：`SqlSessionTemplate` | 宿主业务库的MyBatis会话；加载六个Mapper XML。可用别名绑定已有Bean，不新建数据源 |
-| `planningBusinessTransactions`：`PlatformTransactionManager` | 上述同一业务库的事务管理器 |
-| `planningPythonHttp`：`RestTemplate` | 宿主认可的内网HTTP客户端，设置连接/读取超时并禁止自动重定向；其余鉴权和错误转换交公共`PythonClient` |
+| `xiangliangBusinessSessions`：`SqlSessionTemplate` | 宿主业务库的MyBatis会话；加载`classpath*:mapper/xiangliang/*Mapper.xml`的六份业务XML。可用别名绑定已有Bean，不新建数据源 |
+| `xiangliangBusinessTransactions`：`PlatformTransactionManager` | 上述同一业务库的事务管理器 |
+| `xiangliangPythonHttp`：`RestTemplate` | 宿主认可的内网HTTP客户端，设置连接/读取超时并禁止自动重定向；其余鉴权和错误转换交公共`PythonClient` |
 | `SourceFacts` | 行内账号、选题、营销内容、有效投放、生产进度、营销进度、过审账号分配等查询。真实SQL/服务实现在此处填写 |
 | `ManualPorts.Actor` | 从宿主可信用户上下文返回当前UM号，不能取浏览器自报的操作人请求头 |
 | `HostAccess` | 宿主认证、功能授权及数据范围上下文；对所有页面路径生效。无默认放行实现，缺失即装配失败 |
 
 另有两个可选扩展：`HostContextProvider`统一提供可信UM、机构范围和追踪号；`PlanningResponseAdapter`集中适配页面成功/错误响应。未提供时沿用原Actor和前端格式，数据范围标记为UNSPECIFIED，绝不默认ALL。内部资料协议及文件下载保持原样。详细说明和代码示例见[请求上下文、响应与分页](REQUEST_CONTEXT_RESPONSES_PAGING.md)。
+
+内部服务、Controller、配置类和Advice的Bean名称统一带`xiangliang`前缀。事务边界服务名为`xiangliangBusinessTransactionBoundary`，与宿主事务管理器`xiangliangBusinessTransactions`分开。异常Advice仅作用于本供应商server包，不接管宿主其他供应商的异常。
+
+六个业务Mapper装配前先执行元数据校验：缺XML/语句、BATCH执行器、非Spring事务工厂或标准JDBC绑定错库会阻止启动。自定义事务管理器未暴露JDBC资源时明确记录需由宿主验证。检查不连接数据库；宿主复用资源的别名示例见[HostBusinessBindings](HostBusinessBindings.java.example)，[只读合并预检](MAVEN_MODULES.md#合并前只读预检)用于识别现场差异，避免覆盖私有SQL。
+
+资料SQL使用独立的`mapper/xiangliang/source/BankSourceMapper.xml`。只有资料会话所属数据源具备相应读取权限时才加载，通过`xiangliangSourceSessions`、`xiangliangSourceTransactions`绑定；不默认把它加载进策划业务库会话。六个业务Mapper由`PlanningHostConfiguration`显式注册，宿主不要再对该包重复`MapperScan`。
 
 `SourceFacts`现有可复用的[BankSourceFacts骨架与查询契约](BANK_SOURCE_CONTRACT.md)、[67项字段映射表](BANK_SOURCE_FIELD_MAPPING.csv)和[装配示例](BankSourceBindings.java.example)。宿主可填MyBatis SQL，也可接已有Service，两种方式共用字段、分页、状态及关联校验。真实表名和状态编码尚待驻场填写；默认SQL及未实现方法明确返回503。它没有自动注册，不会替换当前outside模拟资料。
 
@@ -54,8 +60,8 @@
 HTTP客户端的公开实现参考：
 
 ```java
-@Bean("planningPythonHttp")
-RestTemplate planningPythonHttp() {
+@Bean("xiangliangPythonHttp")
+RestTemplate xiangliangPythonHttp() {
     return PythonClient.boundedHttp(1000, 3000);
 }
 ```

@@ -1,15 +1,22 @@
-package your.host.integration;
+package com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.tasks;
 
-import com.pab.aitmp.aiis.godp.planning.api.port.PlanningJobHandler;
-import com.pab.aitmp.aiis.godp.planning.entity.vo.req.PlanningJobRequest;
-import com.pab.aitmp.aiis.godp.planning.entity.vo.res.PlanningJobResult;
+import com.pab.aitmp.aiis.godp.digital.marketing.api.xiangliang.port.PlanningJobHandler;
+import com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.vo.req.PlanningJobRequest;
+import com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.vo.res.PlanningJobResult;
 import java.time.Instant;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 /** Wrap with the real bank Job SDK. This template creates no timer, datasource or user identity. */
 public final class PlanningHandlersHostJob {
   private final PlanningJobHandler handler;
-  public PlanningHandlersHostJob(PlanningJobHandler handler) { this.handler=handler; }
+  // Four handlers implement the same interface: choose the named handler explicitly.
+  // Alternatives: xiangliangManualTaskAdvanceHandler, xiangliangHotspotCheckHandler,
+  // xiangliangContentCompletionHandler. Register one corresponding host Job per handler.
+  public PlanningHandlersHostJob(
+      @Qualifier("xiangliangAutoScheduleHandler") PlanningJobHandler handler) {
+    this.handler = handler;
+  }
 
   public PlanningJobResult runPage(Instant triggerTime,int batchSize,Map<String,Long> persistedCursors,
       boolean contentFlowDue) {

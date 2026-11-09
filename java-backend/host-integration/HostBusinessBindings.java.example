@@ -1,0 +1,39 @@
+package com.pab.aitmp.aiis.godp.digital.marketing.server.xiangliang.config;
+
+import com.pab.aitmp.aiis.godp.digital.marketing.client.xiangliang.python.PythonClient;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.web.client.RestTemplate;
+
+/** Adapt the two host Bean names here; keep the real datasource, MyBatis plugins and transactions. */
+@Configuration("xiangliangHostBusinessBindings")
+@Profile("inside")
+@ConditionalOnProperty(name = "planning.host.enabled", havingValue = "true")
+public class HostBusinessBindings {
+  // Before importing this configuration, add the vendor XML to the existing host factory:
+  // hostFactory.setMapperLocations(BusinessMapperSupport.appendBusinessXml(existingHostResources));
+  // Do this where the host factory is configured, before initialization; do not create a new factory
+  // without the host's data-permission/interceptor settings, and do not drop other vendors' XML.
+
+  @Bean(name = "xiangliangBusinessSessions")
+  public SqlSessionTemplate sessions(@Qualifier("sqlSessionTemplate") SqlSessionTemplate hostSessions) {
+    return hostSessions; // Replace only this qualifier if the real host uses another Bean name.
+  }
+
+  @Bean(name = "xiangliangBusinessTransactions")
+  public PlatformTransactionManager transactions(
+      @Qualifier("transactionManager") PlatformTransactionManager hostTransactions) {
+    return hostTransactions; // Must own the same datasource as the session above.
+  }
+
+  @Bean(name = "xiangliangPythonHttp")
+  public RestTemplate pythonHttp() {
+    // Or return the host's approved internal RestTemplate. Do not enable automatic redirects.
+    return PythonClient.boundedHttp(1000, 3000);
+  }
+}
