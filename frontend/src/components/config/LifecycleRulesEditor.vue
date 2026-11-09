@@ -1,33 +1,81 @@
-<script lang="ts">
-import { computed, defineComponent, ref, watch, type PropType } from '../../compat/composition'
-import type { LifecycleCondition, LifecycleRule } from '../../types'
-import LifecycleRuleSummary from './LifecycleRuleSummary.vue'
-import { lifecycleGroups, lifecycleMetricOptions, metricUnit, addLifecycleCondition, addLifecycleGroup, normalizeLifecycleRule } from '../../ui/lifecycleRules'
-import { lifecycleRangeRows, lifecycleRangeValid, updateLifecycleBound, updateLifecycleRangeField, removeLifecycleRange } from '../../ui/lifecycleRanges'
-
-export default defineComponent({
-  props: { value: { type: Array as PropType<LifecycleRule[]>, required: true } },
-  setup(props) {
-    const active = ref(props.value[0]?.name || '')
-    const expanded = ref(true)
-    watch(() => props.value, rules => {
-      rules.filter(rule => !rule.catchAll).forEach(normalizeLifecycleRule)
-      if (!rules.some(rule => rule.name === active.value)) active.value = rules[0]?.name || ''
-    }, { immediate: true })
-    const current = computed(() => props.value.find(rule => rule.name === active.value))
-    function moveTab(event: KeyboardEvent) {
-      const index = props.value.findIndex(rule => rule.name === active.value)
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? props.value.length - 1 : event.key === 'ArrowRight' ? (index + 1) % props.value.length : event.key === 'ArrowLeft' ? (index + props.value.length - 1) % props.value.length : -1
-      if (next < 0) return
-      event.preventDefault()
-      active.value = props.value[next]!.name
-      ;(event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+<script>
+import LifecycleRuleSummary from './LifecycleRuleSummary.vue';
+import { lifecycleGroups, lifecycleMetricOptions, metricUnit, addLifecycleCondition, addLifecycleGroup, normalizeLifecycleRule } from '../../ui/lifecycleRules';
+import { lifecycleRangeRows, lifecycleRangeValid, updateLifecycleBound, updateLifecycleRangeField, removeLifecycleRange } from '../../ui/lifecycleRanges';
+export default {
+  props: {
+    value: {
+      type: Array,
+      required: true
     }
-    const boundValue = (condition?: LifecycleCondition) => condition && Number.isFinite(condition.value) ? condition.value : ''
-    return { active, expanded, current, moveTab, boundValue, lifecycleGroups, lifecycleMetricOptions, metricUnit, lifecycleRangeRows, lifecycleRangeValid, updateLifecycleBound, updateLifecycleRangeField, removeLifecycleRange, addLifecycleCondition, addLifecycleGroup }
   },
-  components: { LifecycleRuleSummary },
-})
+  components: {
+    LifecycleRuleSummary
+  },
+  data() {
+    return {
+      active: null,
+      expanded: true
+    };
+  },
+  computed: {
+    current() {
+      return this.value.find(rule => rule.name === this.active);
+    },
+    lifecycleGroups() {
+      return lifecycleGroups;
+    },
+    lifecycleMetricOptions() {
+      return lifecycleMetricOptions;
+    },
+    metricUnit() {
+      return metricUnit;
+    },
+    lifecycleRangeRows() {
+      return lifecycleRangeRows;
+    },
+    lifecycleRangeValid() {
+      return lifecycleRangeValid;
+    },
+    updateLifecycleBound() {
+      return updateLifecycleBound;
+    },
+    updateLifecycleRangeField() {
+      return updateLifecycleRangeField;
+    },
+    removeLifecycleRange() {
+      return removeLifecycleRange;
+    },
+    addLifecycleCondition() {
+      return addLifecycleCondition;
+    },
+    addLifecycleGroup() {
+      return addLifecycleGroup;
+    }
+  },
+  methods: {
+    moveTab(event) {
+      const index = this.value.findIndex(rule => rule.name === this.active);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? this.value.length - 1 : event.key === 'ArrowRight' ? (index + 1) % this.value.length : event.key === 'ArrowLeft' ? (index + this.value.length - 1) % this.value.length : -1;
+      if (next < 0) return;
+      event.preventDefault();
+      this.active = this.value[next].name;
+      event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
+    },
+    boundValue(condition) {
+      return condition && Number.isFinite(condition.value) ? condition.value : '';
+    }
+  },
+  created() {
+    this.active = this.value[0]?.name || '';
+    this.$watch(() => this.value, rules => {
+      rules.filter(rule => !rule.catchAll).forEach(normalizeLifecycleRule);
+      if (!rules.some(rule => rule.name === this.active)) this.active = rules[0]?.name || '';
+    }, {
+      immediate: true
+    });
+  }
+};
 </script>
 <template>
   <div class="lifecycle-editor">

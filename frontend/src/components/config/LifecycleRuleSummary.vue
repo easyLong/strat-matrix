@@ -1,37 +1,59 @@
-<script lang="ts">
-import { computed, defineComponent, type PropType } from '../../compat/composition'
-import type { LifecycleCondition, LifecycleRule } from '../../types'
-import { coldStartSummary, lifecycleGroups, lifecycleMetricOptions, normalizeLifecycleRule } from '../../ui/lifecycleRules'
-import { lifecycleRangeRows } from '../../ui/lifecycleRanges'
-
-export default defineComponent({
-  props: { rule: { type: Object as PropType<LifecycleRule>, required: true },
-    rules: { type: Array as PropType<LifecycleRule[]>, required: true }, compact: Boolean },
-  setup(props) {
-    const groups = computed(() => {
-      if (props.rule.catchAll) return []
-      // Presentation normalizes a copy; reading a rule must never mutate saved configuration.
-      const rule = { ...props.rule, conditions: props.rule.conditions.map(item => ({ ...item })) }
-      normalizeLifecycleRule(rule)
-      const value = (condition: LifecycleCondition) => Number.isFinite(condition.value) ? String(condition.value) : '待填写'
-      return lifecycleGroups(rule).map(group => lifecycleRangeRows(group).map(row => {
-        const metric = lifecycleMetricOptions.find(metric => metric.value === row.field)
-        let range = ''
-        if (row.exact !== undefined) range = `= ${value(group[row.exact])}`
-        else if (row.lower !== undefined && row.upper !== undefined) {
-          const lower = group[row.lower], upper = group[row.upper]
-          range = `${value(lower)}（${lower.operator === 'gt' ? '不含' : '含'}）～${value(upper)}（${upper.operator === 'lt' ? '不含' : '含'}）`
-        } else {
-          const bound = group[row.lower ?? row.upper ?? 0]
-          const operator = { gt: '>', gte: '≥', lt: '<', lte: '≤', eq: '=' }[bound.operator]
-          range = `${operator} ${value(bound)}`
-        }
-        return { label: metric?.label || row.field, range: `${range} ${metric?.unit || ''}`.trim() }
-      }))
-    })
-    return { groups, fallback: computed(() => coldStartSummary(props.rules)) }
+<script>
+import { coldStartSummary, lifecycleGroups, lifecycleMetricOptions, normalizeLifecycleRule } from '../../ui/lifecycleRules';
+import { lifecycleRangeRows } from '../../ui/lifecycleRanges';
+export default {
+  props: {
+    rule: {
+      type: Object,
+      required: true
+    },
+    rules: {
+      type: Array,
+      required: true
+    },
+    compact: Boolean
   },
-})
+  computed: {
+    groups() {
+      if (this.rule.catchAll) return [];
+      // Presentation normalizes a copy; reading a rule must never mutate saved configuration.
+      const rule = {
+        ...this.rule,
+        conditions: this.rule.conditions.map(item => ({
+          ...item
+        }))
+      };
+      normalizeLifecycleRule(rule);
+      const value = condition => Number.isFinite(condition.value) ? String(condition.value) : '待填写';
+      return lifecycleGroups(rule).map(group => lifecycleRangeRows(group).map(row => {
+        const metric = lifecycleMetricOptions.find(metric => metric.value === row.field);
+        let range = '';
+        if (row.exact !== undefined) range = `= ${value(group[row.exact])}`;else if (row.lower !== undefined && row.upper !== undefined) {
+          const lower = group[row.lower],
+            upper = group[row.upper];
+          range = `${value(lower)}（${lower.operator === 'gt' ? '不含' : '含'}）～${value(upper)}（${upper.operator === 'lt' ? '不含' : '含'}）`;
+        } else {
+          const bound = group[row.lower ?? row.upper ?? 0];
+          const operator = {
+            gt: '>',
+            gte: '≥',
+            lt: '<',
+            lte: '≤',
+            eq: '='
+          }[bound.operator];
+          range = `${operator} ${value(bound)}`;
+        }
+        return {
+          label: metric?.label || row.field,
+          range: `${range} ${metric?.unit || ''}`.trim()
+        };
+      }));
+    },
+    fallback() {
+      return coldStartSummary(this.rules);
+    }
+  }
+};
 </script>
 <template>
   <div class="lifecycle-rule-summary" :class="{ compact }" :aria-label="`${rule.name}条件摘要`">

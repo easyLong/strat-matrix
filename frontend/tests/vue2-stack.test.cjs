@@ -1,11 +1,11 @@
 const { it: test } = require('mocha')
 const assert = require('node:assert/strict')
 const path = require('node:path')
-const { load, Vue, composition } = require('./helpers/vue2-loader.cjs')
+const { load, Vue } = require('./helpers/vue2-loader.cjs')
 const axios = require('axios')
 const Vuex = require('vuex')
 const source = name => load(path.resolve(__dirname, '../src', name))
-const requests = source('api/http.ts')
+const requests = source('api/http.js')
 
 test('the runtime and matching compiler use the required Vue 2.6 dependency versions', () => {
   assert.equal(process.versions.node, '16.13.0')
@@ -83,7 +83,7 @@ test('download errors decode JSON blobs and handle non-JSON gateway failures', a
 })
 
 test('Vuex owns page state and can attach the same module to a host store', async () => {
-  const { usePlanningStore, attachPlanningStore, planningStore } = source('store.ts')
+  const { usePlanningStore, attachPlanningStore, planningStore } = source('store.js')
   const facade = usePlanningStore()
   facade.manualCreating = true
   assert.equal(planningStore.state.stratMatrix.manualCreating, true)
@@ -102,13 +102,13 @@ test('Vuex owns page state and can attach the same module to a host store', asyn
 test('marketing quantity and review emit updates rather than mutating Vue 2 props', () => {
   const TopicStep = source('components/manual/ManualTopicStep.vue').default
   const events = []
-  const props = Vue.observable({ marketing: true, allocationCount: '', review: false, selection: {} })
-  const scope = composition.effectScope()
+  const vm = new Vue({ ...TopicStep, propsData:{marketing:true, allocationCount:'', review:false, selection:{}, loading:false, initialized:true} })
+  vm.$on('update:allocationCount', value => events.push(['update:allocationCount',value]))
+  vm.$on('update:review', value => events.push(['update:review',value]))
   try {
-    const setup = scope.run(() => TopicStep.setup(props, { emit: (...args) => events.push(args) }))
-    setup.allocationCountModel.value = 12
-    setup.topicReview.value = true
-    assert.equal(props.allocationCount, '')
+    vm.allocationCountModel = 12
+    vm.topicReview = true
+    assert.equal(vm.allocationCount, '')
     assert.deepEqual(events, [['update:allocationCount', 12], ['update:review', true]])
-  } finally { scope.stop() }
+  } finally { vm.$destroy() }
 })

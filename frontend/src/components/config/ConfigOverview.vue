@@ -1,32 +1,46 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed, ref } from '../../compat/composition';
+<script>
 import TaxonomyPanel from '../TaxonomyPanel.vue';
 import ProductionTimingConfig from './ProductionTimingConfig.vue';
 import LifecycleRuleSummary from './LifecycleRuleSummary.vue';
-import type { StrategyConfig } from '../../types';
-import type { TagTaxonomyItem } from '../../api';
-export default defineComponent({
-    props: { config: { required: true, type: null as unknown as PropType<StrategyConfig> },
-        tagItems: { required: true, type: Object as PropType<Record<string, TagTaxonomyItem[]>> } },
-    setup(props, context) {
-        const planningDays = computed(() => props.config.planning_days);
-        const scheduleDay = computed(() => props.config.schedule_day);
-        const scheduleTime = computed(() => props.config.schedule_time);
-        const lifecycleRules = computed(() => props.config.lifecycle_rules);
-        const rulesExpanded = ref(true);
-        const targets = computed(() => Object.fromEntries(props.config.stage_targets.map(stage => [stage.name, stage])));
-        return {
-            targets,
-            rulesExpanded,
-            planningDays,
-            scheduleDay,
-            scheduleTime,
-            lifecycleRules
-        };
+export default {
+  props: {
+    config: {
+      required: true,
+      type: null
     },
-    components: {TaxonomyPanel, ProductionTimingConfig, LifecycleRuleSummary}
-});
+    tagItems: {
+      required: true,
+      type: Object
+    }
+  },
+  components: {
+    TaxonomyPanel,
+    ProductionTimingConfig,
+    LifecycleRuleSummary
+  },
+  data() {
+    return {
+      rulesExpanded: true
+    };
+  },
+  computed: {
+    planningDays() {
+      return this.config.planning_days;
+    },
+    scheduleDay() {
+      return this.config.schedule_day;
+    },
+    scheduleTime() {
+      return this.config.schedule_time;
+    },
+    lifecycleRules() {
+      return this.config.lifecycle_rules;
+    },
+    targets() {
+      return Object.fromEntries(this.config.stage_targets.map(stage => [stage.name, stage]));
+    }
+  }
+};
 </script>
 <template>
 <div class="vue2-component-root">

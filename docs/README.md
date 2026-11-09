@@ -1,5 +1,7 @@
 # 项目文档目录
 
+- [前端JavaScript与Vue2选项式API迁移（2026-11-09）](前端JS与选项式API迁移_2026-11-09.md)：当前语言、组件与宿主接入方式，58项测试及53个浏览器状态验收；旧章节的TS/组合式API说明仅保留历史记录。
+
 - [xiangliang供应商隔离与验收（2026-11-09）](xiangliang供应商隔离与验收_2026-11-09.md)：五层包与Bean隔离、7份独立Mapper XML、宿主源码导出和回归；[行内模块落点与命令](../java-backend/host-integration/MAVEN_MODULES.md)。
 - [页面POST接口404修复（2026-11-09）](页面POST接口404修复_2026-11-09.md)：旧Java运行包切换、共享库V8/V9补齐、数据指纹及真实页面验收；[阿里云查看部署](ALIYUN_DEPLOYMENT.md)。
 - [业务接口POST收口（2026-11-09）](业务接口POST收口_2026-11-09.md)：单套POST契约、旧GET/PUT删除、前端协议协商清理及整体验收。

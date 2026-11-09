@@ -1,9 +1,7 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
-import { workspaceKey, workspacePages } from '../composables/useWorkspaceTabs';
-import { useRouter } from '../compat/router';
-import { useActivePage } from '../composables/useActivePage';
+<script>
+import { workspaceKey, workspacePages } from "../models/workspaceTabs";
+import { planningRouter } from '../compat/router';
+import { bindPageActivity } from "../services/pageActivity";
 import { canPlanning } from '../host/runtime';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
 import TaxonomyPanel from '../components/TaxonomyPanel.vue';
@@ -15,505 +13,494 @@ import { productionTimingValid } from '../ui/productionTiming';
 import { lifecycleRangesValid } from '../ui/lifecycleRanges';
 import { configValuesEqual } from '../ui/configHistory';
 import { recommendedTaxonomy, tagNames } from '../topicTaxonomy';
-import { formatDateTime } from '../planningTime';
-import { api, type TagTaxonomyItem } from '../api';
+import { api } from '../api';
 import { usePlanningStore } from '../store';
-import type { ConfigVersionSummary, LifecycleCondition, LifecycleRule, StrategyConfig } from '../types';
-export default defineComponent({
-    name: 'PlanningConfigPage',
-    setup(props, context) {
-        const store = usePlanningStore();
-        const router = useRouter();
-        function cloneConfig(value: StrategyConfig): StrategyConfig {
-            return {
-                marketing_max: value.marketing_max,
-                planning_days: [...value.planning_days],
-                schedule_day: value.schedule_day,
-                schedule_time: value.schedule_time,
-                hotspot_ratio: value.hotspot_ratio,
-                ...(value.content_production_lead_days !== undefined ? { content_production_lead_days: value.content_production_lead_days === null ? null : { ...value.content_production_lead_days } } : {}),
-                rolling_posts: value.rolling_posts,
-                stage_targets: value.stage_targets.map(stage => ({
-                    ...stage
-                })),
-                lifecycle_rules: value.lifecycle_rules.map(rule => ({
-                    ...rule,
-                    conditions: rule.conditions.map(condition => ({
-                        ...condition
-                    }))
-                }))
-            };
-        }
-        const draft = ref<StrategyConfig>(cloneConfig(store.config));
-        const busy = ref(false);
-        const loading = ref(false);
-        const notice = ref('');
-        const error = ref('');
-        const versions = ref<ConfigVersionSummary[]>([]);
-        const versionDetail = ref<ConfigVersionSummary | null>(null);
-        const dirty = computed(() => !configValuesEqual(draft.value, store.config));
-        let removeRouteGuard: (() => void) | undefined;
-        const tagVersion = ref(0);
-        const tagItems = ref<Record<string, TagTaxonomyItem[]>>({
-            T1: [],
-            T2: [],
-            T3: [],
-            T4: [],
-            T5: []
-        });
-        const tagBaseline = ref('');
-        const editing = ref(false);
-        const historyView = ref(false);
-        const confirmation = ref<{
-            title: string;
-            message: string;
-            confirmLabel: string;
-            cancelLabel: string;
-            danger?: boolean;
-            safePrimary?: boolean;
-        } | null>(null);
-        const confirmationPanel = ref<HTMLElement | null>(null);
-        const confirmationSafeAction = ref<HTMLButtonElement | null>(null);
-        let confirmationReturnFocus: HTMLElement | null = null;
-        let confirmationResolver: ((confirmed: boolean) => void) | undefined;
-        const planningDays = computed(() => draft.value.planning_days);
-        const scheduleDay = computed({
-            get: () => draft.value.schedule_day,
-            set: value => {
-                draft.value.schedule_day = value;
-            }
-        });
-        const scheduleTime = computed({
-            get: () => draft.value.schedule_time,
-            set: value => {
-                draft.value.schedule_time = value;
-            }
-        });
-        const hotspotRatio = computed({
-            get: () => draft.value.hotspot_ratio,
-            set: value => {
-                draft.value.hotspot_ratio = value;
-            }
-        });
-        const remoteConfigPending = ref(false);
-        let configSyncTimer: number | undefined;
-        let configSyncBusy = false;
-        const lifecycleRules = computed(() => draft.value.lifecycle_rules);
-        const tagDirty = computed(() => Boolean(tagBaseline.value) && JSON.stringify(tagItems.value) !== tagBaseline.value);
-        const pageDirty = computed(() => dirty.value || tagDirty.value);
-        const hasUnsavedChanges = computed(() => editing.value && pageDirty.value);
-        const workspace = inject(workspaceKey, null);
-        const unregisterCloseGuard = workspace?.registerCloseGuard('/config', {
-            dirty: () => busy.value || hasUnsavedChanges.value,
-            confirm: async () => {
-                if (busy.value) return false;
-                const confirmed = await requestConfirmation({
-                    title: '关闭AI策划配置？',
-                    message: '当前有未保存的配置修改，关闭后这些内容将被放弃。',
-                    confirmLabel: '确认关闭', cancelLabel: '继续编辑', danger: true, safePrimary: true
-                });
-                if (confirmed) confirmCancelEditing();
-                return confirmed;
-            }
-        });
-        onBeforeUnmount(() => unregisterCloseGuard?.());
-        function requestConfirmation(options: NonNullable<typeof confirmation.value>) {
-            if (confirmationResolver)
-                confirmationResolver(false);
-            confirmationReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-            confirmation.value = options;
-            void nextTick(() => {
-                confirmationSafeAction.value?.focus();
-            });
-            return new Promise<boolean>(resolve => {
-                confirmationResolver = resolve;
-            });
-        }
-        function closeConfirmation(confirmed: boolean) {
-            const resolve = confirmationResolver;
-            confirmationResolver = undefined;
-            confirmation.value = null;
-            resolve?.(confirmed);
-            const previous = confirmationReturnFocus;
-            void nextTick(() => {
-                previous?.focus({
-                    preventScroll: true
-                });
-            });
-        }
-        function dismissConfirmation() {
-            closeConfirmation(false);
-        }
-        function handleConfirmationKeys(event: KeyboardEvent) {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                dismissConfirmation();
-                return;
-            }
-            if (event.key !== 'Tab')
-                return;
-            const buttons = confirmationPanel.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
-            if (!buttons?.length)
-                return;
-            const first = buttons[0], last = buttons[buttons.length - 1];
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            }
-            else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
-        }
-        function movePlanningDay(event: KeyboardEvent, index: number) {
-            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
-                return;
-            event.preventDefault();
-            const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('button');
-            const next = event.key === 'Home' ? 0 : event.key === 'End' ? 6 : (index + (event.key === 'ArrowRight' ? 1 : -1) + 7) % 7;
-            buttons?.[next]?.focus();
-        }
-        function displayVersionNumber(version: ConfigVersionSummary) {
-            const index = versions.value.findIndex(item => item.version === version.version);
-            return index < 0 ? version.version : versions.value.length - index;
-        }
-        function togglePlanningDay(day: number) {
-            const days = new Set(planningDays.value);
-            if (days.has(day)) {
-                if (days.size === 1)
-                    return;
-                days.delete(day);
-            }
-            else
-                days.add(day);
-            draft.value.planning_days = [...days].sort((a, b) => a - b);
-        }
-        watch(() => store.config, value => {
-            draft.value = cloneConfig(value);
-        }, {
-            deep: true
-        });
-        watch(() => store.databaseReady, ready => {
-            if (ready) {
-                void loadConfigData();
-            }
-        }, {
-            immediate: true
-        });
-        const beforeUnload = (event: BeforeUnloadEvent) => {
-            if (!hasUnsavedChanges.value)
-                return;
-            event.preventDefault();
-            event.returnValue = '当前存在未保存修改，离开后修改内容将丢失。';
-        };
-        const syncOnFocus = () => {
-            void syncSavedConfig();
-        };
-        const syncOnVisible = () => {
-            if (!document.hidden)
-                void syncSavedConfig();
-        };
-        const configPageActive = useActivePage(() => {
-            window.addEventListener('beforeunload', beforeUnload);
-            window.addEventListener('focus', syncOnFocus);
-            document.addEventListener('visibilitychange', syncOnVisible);
-            configSyncTimer = window.setInterval(() => {
-                void syncSavedConfig();
-            }, 10000);
-            removeRouteGuard = router.beforeEach((to, from, next) => {
-                // Switching local workspace tabs caches this editor; it does not discard it.
-                if (workspace && workspacePages.some(page => page.key === to.path)) {
-                    next();
-                    return;
-                }
-                if (to.fullPath === from.fullPath || !hasUnsavedChanges.value) {
-                    next();
-                    return;
-                }
-                void requestConfirmation({
-                    title: '离开策划配置？',
-                    message: '当前有未保存的配置修改，离开后这些内容将被放弃。',
-                    confirmLabel: '放弃修改并离开',
-                    cancelLabel: '继续编辑',
-                    danger: true,
-                    safePrimary: true
-                }).then(confirmed => {
-                    if (confirmed) { confirmCancelEditing(); next(); }
-                    else next(false);
-                }, () => next(false));
-            });
-        }, () => {
-            window.removeEventListener('beforeunload', beforeUnload);
-            window.removeEventListener('focus', syncOnFocus);
-            document.removeEventListener('visibilitychange', syncOnVisible);
-            if (configSyncTimer !== undefined)
-                window.clearInterval(configSyncTimer);
-            removeRouteGuard?.();
-        });
-        async function syncSavedConfig() {
-            if (!configPageActive.value || !store.databaseReady || loading.value || busy.value || configSyncBusy || document.hidden)
-                return;
-            configSyncBusy = true;
-            try {
-                const latest = await api.config();
-                if (!configPageActive.value || loading.value || busy.value)
-                    return;
-                const changed = latest.version !== store.configVersion || JSON.stringify(latest.config) !== JSON.stringify(store.config);
-                if (!changed) {
-                    remoteConfigPending.value = false;
-                    return;
-                }
-                if (pageDirty.value || editing.value) {
-                    remoteConfigPending.value = true;
-                    return;
-                }
-                store.applyConfig(latest);
-                remoteConfigPending.value = false;
-                await loadVersions();
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '同步策划配置失败';
-            }
-            finally {
-                configSyncBusy = false;
-            }
-        }
-        async function loadVersions() {
-            try {
-                versions.value = await api.configVersions();
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '读取配置历史失败';
-            }
-        }
-        async function loadConfigData() {
-            if (hasUnsavedChanges.value && !(await requestConfirmation({
-                title: '加载最新配置？',
-                message: '当前有未保存的配置修改，加载最新配置后这些修改将被放弃。',
-                confirmLabel: '加载最新配置',
-                cancelLabel: '继续编辑',
-                danger: true
-            })))
-                return;
-            editing.value = false;
-            loading.value = true;
-            error.value = '';
-            try {
-                await Promise.all([store.refreshConfig(), loadVersions(), loadTagTaxonomy()]);
-                remoteConfigPending.value = false;
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '读取策划配置失败';
-            }
-            finally {
-                loading.value = false;
-            }
-        }
-        async function loadTagTaxonomy() {
-            try {
-                const loaded = await api.tagTaxonomy();
-                tagVersion.value = loaded.version;
-                const normalizedItems: Record<string, TagTaxonomyItem[]> = {};
-                for (const code of Object.keys(tagNames)) {
-                    normalizedItems[code] = loaded.items[code]?.length ? loaded.items[code].map(item => ({
-                        ...item
-                    })) : recommendedTaxonomy()[code];
-                    tagItems.value[code] = normalizedItems[code];
-                }
-                // Compare against what the page actually displays. When the server has no
-                // taxonomy rows yet, prototype defaults are read-only display fallbacks,
-                // not unsaved user edits.
-                tagBaseline.value = JSON.stringify(normalizedItems);
-                // The previous page saved disabled names only in this browser. Offer them as
-                // an unsaved draft when the server has no disabled labels yet.
-                if (!Object.values(loaded.items).some(items => items.some(item => !item.enabled))) {
-                    try {
-                        const legacy = JSON.parse(localStorage.getItem('strat-matrix.config-ui') ?? '{}');
-                        const oldDisabled = legacy.disabledTags as Record<string, string[]> | undefined;
-                        let restored = false;
-                        for (const code of Object.keys(tagNames)) {
-                            const items = tagItems.value[code];
-                            for (const item of items) {
-                                if (oldDisabled?.[code]?.includes(item.name) && items.filter(tag => tag.enabled).length > 1) {
-                                    item.enabled = false;
-                                    restored = true;
-                                }
-                            }
-                        }
-                        if (restored)
-                            notice.value = '已读取此浏览器旧的停用标签，请核对并保存到服务端';
-                    }
-                    catch { /* Invalid old browser settings do not affect server data. */ }
-                }
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '读取标签配置失败';
-            }
-        }
-        const marketingValid = computed(() => Number.isInteger(draft.value.marketing_max) && draft.value.marketing_max >= 0 && planningDays.value.length > 0 && planningDays.value.length === new Set(planningDays.value).size && planningDays.value.every(day => Number.isInteger(day) && day >= 1 && day <= 7) && Number.isInteger(scheduleDay.value) && scheduleDay.value >= 1 && scheduleDay.value <= 7 && /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime.value) && Number.isInteger(hotspotRatio.value) && hotspotRatio.value >= 0 && hotspotRatio.value <= 100 && productionTimingValid(draft.value.content_production_lead_days));
-        const strategyValid = computed(() => lifecycleRangesValid(lifecycleRules.value) && Number.isInteger(draft.value.rolling_posts) && draft.value.rolling_posts >= 1 && draft.value.rolling_posts <= 100 && draft.value.stage_targets.length === 5 && draft.value.stage_targets.every(stage => Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) && stage.traffic >= 0 && stage.conversion >= 0 && stage.traffic + stage.conversion === 100) && lifecycleRules.value.length === 5 && lifecycleRules.value.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 && rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) && lifecycleRules.value[4]?.catchAll === true && lifecycleRules.value[4]?.conditions.length === 0);
-        function restore() {
-            if (!editing.value)
-                return;
-            draft.value = cloneConfig(store.config);
-            notice.value = '已恢复到当前保存的配置';
-            error.value = '';
-        }
-        async function saveAll() {
-            if (!editing.value || !store.databaseReady || busy.value || !marketingValid.value || !strategyValid.value || !pageDirty.value)
-                return;
-            const editedConfig = cloneConfig(draft.value);
-            let latestSavedConfig: Awaited<ReturnType<typeof api.saveConfig>> | undefined;
-            busy.value = true;
-            notice.value = '';
-            error.value = '';
-            try {
-                if (dirty.value)
-                    latestSavedConfig = await api.saveConfig(editedConfig, store.configVersion);
-                if (latestSavedConfig)
-                    store.applyConfig(latestSavedConfig);
-                if (tagDirty.value) {
-                    const savedTags = await api.saveTagTaxonomy(tagItems.value, tagVersion.value);
-                    tagVersion.value = savedTags.version;
-                    tagItems.value = savedTags.items;
-                    tagBaseline.value = JSON.stringify(tagItems.value);
-                    localStorage.removeItem('strat-matrix.config-ui');
-                }
-                await loadVersions();
-                draft.value = cloneConfig(store.config);
-                editing.value = false;
-                notice.value = '策划配置已保存';
-            }
-            catch (exc) {
-                if (latestSavedConfig) {
-                    store.applyConfig(latestSavedConfig);
-                    draft.value = editedConfig;
-                    void loadVersions();
-                }
-                error.value = exc instanceof Error ? exc.message : '保存失败';
-            }
-            finally {
-                busy.value = false;
-            }
-        }
-        async function restoreVersion(version: ConfigVersionSummary) {
-            if (busy.value || version.version === versions.value[0]?.version)
-                return;
-            const visibleVersion = displayVersionNumber(version);
-            if (!(await requestConfirmation({
-                title: `恢复总配置 V${visibleVersion}？`,
-                message: '恢复后将以该快照创建新的总配置版本，并覆盖当前账号配置与经营策略。',
-                confirmLabel: '确认恢复',
-                cancelLabel: '返回查看',
-                danger: true
-            })))
-                return;
-            busy.value = true;
-            error.value = '';
-            notice.value = '';
-            try {
-                await store.restoreConfig(version.version);
-                await loadVersions();
-                notice.value = `总配置已基于 V${visibleVersion} 创建新版本`;
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '恢复失败';
-            }
-            finally {
-                busy.value = false;
-            }
-        }
-        function startEditing() {
-            if (!store.databaseReady || busy.value || loading.value)
-                return;
-            editing.value = true;
-            error.value = '';
-            notice.value = '';
-        }
-        async function openHistory() {
-            if (loading.value || busy.value || !store.databaseReady)
-                return;
-            historyView.value = true;
-            versionDetail.value = null;
-            error.value = '';
-            await loadVersions();
-        }
-        function closeHistory() {
-            historyView.value = false;
-            versionDetail.value = null;
-            error.value = '';
-        }
-        async function cancelEditing() {
-            if (!editing.value)
-                return;
-            if (!(await requestConfirmation({
-                title: '取消编辑',
-                message: '当前配置修改尚未保存。取消后，本次修改内容将被放弃。',
-                confirmLabel: '确认取消',
-                cancelLabel: '继续编辑',
-                danger: true,
-                safePrimary: true
-            })))
-                return;
-            confirmCancelEditing();
-        }
-        function confirmCancelEditing() {
-            if (!editing.value)
-                return;
-            draft.value = cloneConfig(store.config);
-            try {
-                const baseline = JSON.parse(tagBaseline.value || '{}') as Record<string, TagTaxonomyItem[]>;
-                for (const code of Object.keys(tagNames))
-                    tagItems.value[code] = (baseline[code] ?? []).map(item => ({
-                        ...item
-                    }));
-            }
-            catch { /* Keep the current tag values if the baseline is unavailable. */ }
-            editing.value = false;
-            remoteConfigPending.value = false;
-            error.value = '';
-            notice.value = '';
-        }
-        return {
-            canPlanning,
-            store,
-            draft,
-            busy,
-            loading,
-            notice,
-            error,
-            versions,
-            versionDetail,
-            tagItems,
-            editing,
-            historyView,
-            confirmation,
-            confirmationPanel,
-            confirmationSafeAction,
-            planningDays,
-            scheduleDay,
-            scheduleTime,
-            hotspotRatio,
-            remoteConfigPending,
-            pageDirty,
-            closeConfirmation,
-            dismissConfirmation,
-            handleConfirmationKeys,
-            movePlanningDay,
-            togglePlanningDay,
-            marketingValid,
-            strategyValid,
-            restore,
-            saveAll,
-            restoreVersion,
-            startEditing,
-            openHistory,
-            closeHistory,
-            cancelEditing
-        };
+export default {
+  name: 'PlanningConfigPage',
+  components: {
+    LoadingSkeleton,
+    LifecycleRulesEditor,
+    TaxonomyPanel,
+    ConfigOverview,
+    ConfigHistory,
+    ProductionTimingConfig
+  },
+  data() {
+    return {
+      draft: null,
+      busy: false,
+      loading: false,
+      notice: '',
+      error: '',
+      versions: [],
+      versionDetail: null,
+      removeRouteGuard: undefined,
+      tagVersion: 0,
+      tagItems: {
+        T1: [],
+        T2: [],
+        T3: [],
+        T4: [],
+        T5: []
+      },
+      tagBaseline: '',
+      editing: false,
+      historyView: false,
+      confirmation: null,
+      confirmationReturnFocus: null,
+      confirmationResolver: undefined,
+      remoteConfigPending: false,
+      configSyncTimer: undefined,
+      configSyncBusy: false,
+      unregisterCloseGuard: null,
+      configPageActive: null
+    };
+  },
+  inject: {
+    workspace: {
+      from: workspaceKey,
+      default: null
+    }
+  },
+  computed: {
+    store() {
+      return usePlanningStore();
     },
-    components: {LoadingSkeleton, LifecycleRulesEditor, TaxonomyPanel, ConfigOverview, ConfigHistory, ProductionTimingConfig}
-});
+    router() {
+      return planningRouter(this);
+    },
+    dirty() {
+      return !configValuesEqual(this.draft, this.store.config);
+    },
+    confirmationPanel: {
+      cache: false,
+      get() {
+        return this.$refs.confirmationPanel || null;
+      }
+    },
+    confirmationSafeAction: {
+      cache: false,
+      get() {
+        return this.$refs.confirmationSafeAction || null;
+      }
+    },
+    planningDays() {
+      return this.draft.planning_days;
+    },
+    scheduleDay: {
+      get() {
+        return this.draft.schedule_day;
+      },
+      set(value) {
+        this.draft.schedule_day = value;
+      }
+    },
+    scheduleTime: {
+      get() {
+        return this.draft.schedule_time;
+      },
+      set(value) {
+        this.draft.schedule_time = value;
+      }
+    },
+    hotspotRatio: {
+      get() {
+        return this.draft.hotspot_ratio;
+      },
+      set(value) {
+        this.draft.hotspot_ratio = value;
+      }
+    },
+    lifecycleRules() {
+      return this.draft.lifecycle_rules;
+    },
+    tagDirty() {
+      return Boolean(this.tagBaseline) && JSON.stringify(this.tagItems) !== this.tagBaseline;
+    },
+    pageDirty() {
+      return this.dirty || this.tagDirty;
+    },
+    hasUnsavedChanges() {
+      return this.editing && this.pageDirty;
+    },
+    marketingValid() {
+      return Number.isInteger(this.draft.marketing_max) && this.draft.marketing_max >= 0 && this.planningDays.length > 0 && this.planningDays.length === new Set(this.planningDays).size && this.planningDays.every(day => Number.isInteger(day) && day >= 1 && day <= 7) && Number.isInteger(this.scheduleDay) && this.scheduleDay >= 1 && this.scheduleDay <= 7 && /^([01]\d|2[0-3]):[0-5]\d$/.test(this.scheduleTime) && Number.isInteger(this.hotspotRatio) && this.hotspotRatio >= 0 && this.hotspotRatio <= 100 && productionTimingValid(this.draft.content_production_lead_days);
+    },
+    strategyValid() {
+      return lifecycleRangesValid(this.lifecycleRules) && Number.isInteger(this.draft.rolling_posts) && this.draft.rolling_posts >= 1 && this.draft.rolling_posts <= 100 && this.draft.stage_targets.length === 5 && this.draft.stage_targets.every(stage => Number.isInteger(stage.traffic) && Number.isInteger(stage.conversion) && stage.traffic >= 0 && stage.conversion >= 0 && stage.traffic + stage.conversion === 100) && this.lifecycleRules.length === 5 && this.lifecycleRules.slice(0, 4).every(rule => !rule.catchAll && rule.conditions.length > 0 && rule.conditions.every(condition => Number.isInteger(condition.value) && condition.value >= 0)) && this.lifecycleRules[4]?.catchAll === true && this.lifecycleRules[4]?.conditions.length === 0;
+    },
+    canPlanning() {
+      return canPlanning;
+    }
+  },
+  methods: {
+    cloneConfig(value) {
+      return {
+        marketing_max: value.marketing_max,
+        planning_days: [...value.planning_days],
+        schedule_day: value.schedule_day,
+        schedule_time: value.schedule_time,
+        hotspot_ratio: value.hotspot_ratio,
+        ...(value.content_production_lead_days !== undefined ? {
+          content_production_lead_days: value.content_production_lead_days === null ? null : {
+            ...value.content_production_lead_days
+          }
+        } : {}),
+        rolling_posts: value.rolling_posts,
+        stage_targets: value.stage_targets.map(stage => ({
+          ...stage
+        })),
+        lifecycle_rules: value.lifecycle_rules.map(rule => ({
+          ...rule,
+          conditions: rule.conditions.map(condition => ({
+            ...condition
+          }))
+        }))
+      };
+    },
+    requestConfirmation(options) {
+      if (this.confirmationResolver) this.confirmationResolver(false);
+      this.confirmationReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this.confirmation = options;
+      void this.$nextTick(() => {
+        this.confirmationSafeAction?.focus();
+      });
+      return new Promise(resolve => {
+        this.confirmationResolver = resolve;
+      });
+    },
+    closeConfirmation(confirmed) {
+      const resolve = this.confirmationResolver;
+      this.confirmationResolver = undefined;
+      this.confirmation = null;
+      resolve?.(confirmed);
+      const previous = this.confirmationReturnFocus;
+      void this.$nextTick(() => {
+        previous?.focus({
+          preventScroll: true
+        });
+      });
+    },
+    dismissConfirmation() {
+      this.closeConfirmation(false);
+    },
+    handleConfirmationKeys(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.dismissConfirmation();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const buttons = this.confirmationPanel?.querySelectorAll('button:not(:disabled)');
+      if (!buttons?.length) return;
+      const first = buttons[0],
+        last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    movePlanningDay(event, index) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const buttons = event.currentTarget.parentElement?.querySelectorAll('button');
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? 6 : (index + (event.key === 'ArrowRight' ? 1 : -1) + 7) % 7;
+      buttons?.[next]?.focus();
+    },
+    displayVersionNumber(version) {
+      const index = this.versions.findIndex(item => item.version === version.version);
+      return index < 0 ? version.version : this.versions.length - index;
+    },
+    togglePlanningDay(day) {
+      const days = new Set(this.planningDays);
+      if (days.has(day)) {
+        if (days.size === 1) return;
+        days.delete(day);
+      } else days.add(day);
+      this.draft.planning_days = [...days].sort((a, b) => a - b);
+    },
+    beforeUnload(event) {
+      if (!this.hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = '当前存在未保存修改，离开后修改内容将丢失。';
+    },
+    syncOnFocus() {
+      void this.syncSavedConfig();
+    },
+    syncOnVisible() {
+      if (!document.hidden) void this.syncSavedConfig();
+    },
+    async syncSavedConfig() {
+      if (!this.configPageActive.active || !this.store.databaseReady || this.loading || this.busy || this.configSyncBusy || document.hidden) return;
+      this.configSyncBusy = true;
+      try {
+        const latest = await api.config();
+        if (!this.configPageActive.active || this.loading || this.busy) return;
+        const changed = latest.version !== this.store.configVersion || JSON.stringify(latest.config) !== JSON.stringify(this.store.config);
+        if (!changed) {
+          this.remoteConfigPending = false;
+          return;
+        }
+        if (this.pageDirty || this.editing) {
+          this.remoteConfigPending = true;
+          return;
+        }
+        this.store.applyConfig(latest);
+        this.remoteConfigPending = false;
+        await this.loadVersions();
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '同步策划配置失败';
+      } finally {
+        this.configSyncBusy = false;
+      }
+    },
+    async loadVersions() {
+      try {
+        this.versions = await api.configVersions();
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '读取配置历史失败';
+      }
+    },
+    async loadConfigData() {
+      if (this.hasUnsavedChanges && !(await this.requestConfirmation({
+        title: '加载最新配置？',
+        message: '当前有未保存的配置修改，加载最新配置后这些修改将被放弃。',
+        confirmLabel: '加载最新配置',
+        cancelLabel: '继续编辑',
+        danger: true
+      }))) return;
+      this.editing = false;
+      this.loading = true;
+      this.error = '';
+      try {
+        await Promise.all([this.store.refreshConfig(), this.loadVersions(), this.loadTagTaxonomy()]);
+        this.remoteConfigPending = false;
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '读取策划配置失败';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async loadTagTaxonomy() {
+      try {
+        const loaded = await api.tagTaxonomy();
+        this.tagVersion = loaded.version;
+        const normalizedItems = {};
+        for (const code of Object.keys(tagNames)) {
+          normalizedItems[code] = loaded.items[code]?.length ? loaded.items[code].map(item => ({
+            ...item
+          })) : recommendedTaxonomy()[code];
+          this.tagItems[code] = normalizedItems[code];
+        }
+        // Compare against what the page actually displays. When the server has no
+        // taxonomy rows yet, prototype defaults are read-only display fallbacks,
+        // not unsaved user edits.
+        this.tagBaseline = JSON.stringify(normalizedItems);
+        // The previous page saved disabled names only in this browser. Offer them as
+        // an unsaved draft when the server has no disabled labels yet.
+        if (!Object.values(loaded.items).some(items => items.some(item => !item.enabled))) {
+          try {
+            const legacy = JSON.parse(localStorage.getItem('strat-matrix.config-ui') ?? '{}');
+            const oldDisabled = legacy.disabledTags;
+            let restored = false;
+            for (const code of Object.keys(tagNames)) {
+              const items = this.tagItems[code];
+              for (const item of items) {
+                if (oldDisabled?.[code]?.includes(item.name) && items.filter(tag => tag.enabled).length > 1) {
+                  item.enabled = false;
+                  restored = true;
+                }
+              }
+            }
+            if (restored) this.notice = '已读取此浏览器旧的停用标签，请核对并保存到服务端';
+          } catch {/* Invalid old browser settings do not affect server data. */}
+        }
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '读取标签配置失败';
+      }
+    },
+    restore() {
+      if (!this.editing) return;
+      this.draft = this.cloneConfig(this.store.config);
+      this.notice = '已恢复到当前保存的配置';
+      this.error = '';
+    },
+    async saveAll() {
+      if (!this.editing || !this.store.databaseReady || this.busy || !this.marketingValid || !this.strategyValid || !this.pageDirty) return;
+      const editedConfig = this.cloneConfig(this.draft);
+      let latestSavedConfig;
+      this.busy = true;
+      this.notice = '';
+      this.error = '';
+      try {
+        if (this.dirty) latestSavedConfig = await api.saveConfig(editedConfig, this.store.configVersion);
+        if (latestSavedConfig) this.store.applyConfig(latestSavedConfig);
+        if (this.tagDirty) {
+          const savedTags = await api.saveTagTaxonomy(this.tagItems, this.tagVersion);
+          this.tagVersion = savedTags.version;
+          this.tagItems = savedTags.items;
+          this.tagBaseline = JSON.stringify(this.tagItems);
+          localStorage.removeItem('strat-matrix.config-ui');
+        }
+        await this.loadVersions();
+        this.draft = this.cloneConfig(this.store.config);
+        this.editing = false;
+        this.notice = '策划配置已保存';
+      } catch (exc) {
+        if (latestSavedConfig) {
+          this.store.applyConfig(latestSavedConfig);
+          this.draft = editedConfig;
+          void this.loadVersions();
+        }
+        this.error = exc instanceof Error ? exc.message : '保存失败';
+      } finally {
+        this.busy = false;
+      }
+    },
+    async restoreVersion(version) {
+      if (this.busy || version.version === this.versions[0]?.version) return;
+      const visibleVersion = this.displayVersionNumber(version);
+      if (!(await this.requestConfirmation({
+        title: `恢复总配置 V${visibleVersion}？`,
+        message: '恢复后将以该快照创建新的总配置版本，并覆盖当前账号配置与经营策略。',
+        confirmLabel: '确认恢复',
+        cancelLabel: '返回查看',
+        danger: true
+      }))) return;
+      this.busy = true;
+      this.error = '';
+      this.notice = '';
+      try {
+        await this.store.restoreConfig(version.version);
+        await this.loadVersions();
+        this.notice = `总配置已基于 V${visibleVersion} 创建新版本`;
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '恢复失败';
+      } finally {
+        this.busy = false;
+      }
+    },
+    startEditing() {
+      if (!this.store.databaseReady || this.busy || this.loading) return;
+      this.editing = true;
+      this.error = '';
+      this.notice = '';
+    },
+    async openHistory() {
+      if (this.loading || this.busy || !this.store.databaseReady) return;
+      this.historyView = true;
+      this.versionDetail = null;
+      this.error = '';
+      await this.loadVersions();
+    },
+    closeHistory() {
+      this.historyView = false;
+      this.versionDetail = null;
+      this.error = '';
+    },
+    async cancelEditing() {
+      if (!this.editing) return;
+      if (!(await this.requestConfirmation({
+        title: '取消编辑',
+        message: '当前配置修改尚未保存。取消后，本次修改内容将被放弃。',
+        confirmLabel: '确认取消',
+        cancelLabel: '继续编辑',
+        danger: true,
+        safePrimary: true
+      }))) return;
+      this.confirmCancelEditing();
+    },
+    confirmCancelEditing() {
+      if (!this.editing) return;
+      this.draft = this.cloneConfig(this.store.config);
+      try {
+        const baseline = JSON.parse(this.tagBaseline || '{}');
+        for (const code of Object.keys(tagNames)) this.tagItems[code] = (baseline[code] ?? []).map(item => ({
+          ...item
+        }));
+      } catch {/* Keep the current tag values if the baseline is unavailable. */}
+      this.editing = false;
+      this.remoteConfigPending = false;
+      this.error = '';
+      this.notice = '';
+    }
+  },
+  created() {
+    this.draft = this.cloneConfig(this.store.config);
+    this.unregisterCloseGuard = this.workspace?.registerCloseGuard('/config', {
+      dirty: () => this.busy || this.hasUnsavedChanges,
+      confirm: async () => {
+        if (this.busy) return false;
+        const confirmed = await this.requestConfirmation({
+          title: '关闭AI策划配置？',
+          message: '当前有未保存的配置修改，关闭后这些内容将被放弃。',
+          confirmLabel: '确认关闭',
+          cancelLabel: '继续编辑',
+          danger: true,
+          safePrimary: true
+        });
+        if (confirmed) this.confirmCancelEditing();
+        return confirmed;
+      }
+    });
+    this.$watch(() => this.store.config, value => {
+      this.draft = this.cloneConfig(value);
+    }, {
+      deep: true
+    });
+    this.$watch(() => this.store.databaseReady, ready => {
+      if (ready) {
+        void this.loadConfigData();
+      }
+    }, {
+      immediate: true
+    });
+    this.configPageActive = bindPageActivity(this, () => {
+      window.addEventListener('beforeunload', this.beforeUnload);
+      window.addEventListener('focus', this.syncOnFocus);
+      document.addEventListener('visibilitychange', this.syncOnVisible);
+      this.configSyncTimer = window.setInterval(() => {
+        void this.syncSavedConfig();
+      }, 10000);
+      this.removeRouteGuard = this.router.beforeEach((to, from, next) => {
+        // Switching local workspace tabs caches this editor; it does not discard it.
+        if (this.workspace && workspacePages.some(page => page.key === to.path)) {
+          next();
+          return;
+        }
+        if (to.fullPath === from.fullPath || !this.hasUnsavedChanges) {
+          next();
+          return;
+        }
+        void this.requestConfirmation({
+          title: '离开策划配置？',
+          message: '当前有未保存的配置修改，离开后这些内容将被放弃。',
+          confirmLabel: '放弃修改并离开',
+          cancelLabel: '继续编辑',
+          danger: true,
+          safePrimary: true
+        }).then(confirmed => {
+          if (confirmed) {
+            this.confirmCancelEditing();
+            next();
+          } else next(false);
+        }, () => next(false));
+      });
+    }, () => {
+      window.removeEventListener('beforeunload', this.beforeUnload);
+      window.removeEventListener('focus', this.syncOnFocus);
+      document.removeEventListener('visibilitychange', this.syncOnVisible);
+      if (this.configSyncTimer !== undefined) window.clearInterval(this.configSyncTimer);
+      this.removeRouteGuard?.();
+    });
+  },
+  beforeDestroy() {
+    this.unregisterCloseGuard?.();
+  }
+};
 </script>
 
 <template>

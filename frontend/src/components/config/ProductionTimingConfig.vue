@@ -1,25 +1,45 @@
-<script lang="ts">
-import { computed, defineComponent, type PropType } from '../../compat/composition';
+<script>
 import HoverHint from '../HoverHint.vue';
-import type { ProductionLeadDays, ProductionTopicType } from '../../types';
 import { productionLeadLabel, productionTopicTypes } from '../../ui/productionTiming';
-export default defineComponent({
-  components: { HoverHint },
+export default {
+  components: {
+    HoverHint
+  },
   props: {
-    value: { type: Object as PropType<ProductionLeadDays | null>, required: false },
-    readonly: { type: Boolean, default: false },
-  },
-  setup(props, { emit }) {
-    function change(key: ProductionTopicType, event: Event) {
-      if (props.readonly) return;
-      const raw = (event.target as HTMLInputElement).value;
-      emit('input', { ...props.value, [key]: raw === '' ? null : Number(raw) });
+    value: {
+      type: Object,
+      required: false
+    },
+    readonly: {
+      type: Boolean,
+      default: false
     }
-    const isInvalid = (days?: number | null) => days != null && (!Number.isInteger(days) || days < 0 || days > 365);
-    return { change, isInvalid, productionLeadLabel, productionTopicTypes,
-      leadDays: computed(() => props.value || {}) };
   },
-});
+  computed: {
+    productionLeadLabel() {
+      return productionLeadLabel;
+    },
+    productionTopicTypes() {
+      return productionTopicTypes;
+    },
+    leadDays() {
+      return this.value || {};
+    }
+  },
+  methods: {
+    change(key, event) {
+      if (this.readonly) return;
+      const raw = event.target.value;
+      this.$emit('input', {
+        ...this.value,
+        [key]: raw === '' ? null : Number(raw)
+      });
+    },
+    isInvalid(days) {
+      return days != null && (!Number.isInteger(days) || days < 0 || days > 365);
+    }
+  }
+};
 </script>
 <template>
   <section class="production-timing-config" aria-label="内容生产时间">

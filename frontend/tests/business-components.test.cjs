@@ -2,38 +2,15 @@ const assert = require('node:assert/strict')
 const { it: test } = require('mocha')
 const fs = require('node:fs')
 const path = require('node:path')
-const { createRequire } = require('node:module')
-const requireFrontend = createRequire(path.resolve(__dirname, '../package.json'))
-const ts = requireFrontend('typescript')
-const Vue = requireFrontend('vue')
-const composition = requireFrontend('@vue/composition-api')
-Vue.use(composition.default)
-const { ref, effectScope, nextTick } = composition
-
-// Exercise the real TypeScript business modules without adding a test framework.
-const cache = new Map()
-function loadTs(filename) {
-  const file = path.resolve(__dirname, filename)
-  if (cache.has(file)) return cache.get(file).exports
-  const module = { exports: {} }
-  cache.set(file, module)
-  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
-  }).outputText
-  const requireLocal = name => name.startsWith('@/')
-    ? loadTs(path.relative(__dirname, path.resolve(__dirname, '../src', `${name.slice(2)}.ts`)))
-    : name.startsWith('.')
-    ? loadTs(path.relative(__dirname, path.resolve(path.dirname(file), `${name}.ts`)))
-    : requireFrontend(name)
-  new Function('require', 'module', 'exports', code)(requireLocal, module, module.exports)
-  return module.exports
-}
-const rules = loadTs('../src/ui/lifecycleRules.ts')
-const calendar = loadTs('../src/ui/planningCalendar.ts')
-const { configDetailRows, configVersionNumber } = loadTs('../src/ui/configHistory.ts')
-const { useManualTopicSelection } = loadTs('../src/composables/useManualTopicSelection.ts')
-const { useManualAccountSelection } = loadTs('../src/composables/useManualAccountSelection.ts')
-const { csvCell } = loadTs('../src/ui/csv.ts')
+const { load, Vue } = require('./helpers/vue2-loader.cjs')
+const nextTick = Vue.nextTick
+const loadJs = filename => load(path.resolve(__dirname, filename))
+const rules = loadJs('../src/ui/lifecycleRules.js')
+const calendar = loadJs('../src/ui/planningCalendar.js')
+const { configDetailRows, configVersionNumber } = loadJs('../src/ui/configHistory.js')
+const { createTopicSelection } = loadJs('../src/models/topicSelection.js')
+const { createAccountSelection } = loadJs('../src/models/accountSelection.js')
+const { csvCell } = loadJs('../src/ui/csv.js')
 
 test('legacy mixed AND/OR conditions preserve every truth-table result after grouping', () => {
   const condition = (field, join) => ({ field, join, operator: 'gte', value: 1 })
@@ -71,14 +48,12 @@ test('week calendars span year boundaries Monday to Sunday and keep same-day man
 })
 
 function selectionFixture(marketing = false) {
-  const scope = effectScope()
-  const topics = ref([
+  const owner = new Vue({ data: () => ({ topics: [
     { topic_id: 'N1', topic_title: 'Alpha', outline: 'Outline A', is_marketing: false, content_type: 'type-a' },
     { topic_id: 'N2', topic_title: 'Beta', is_marketing: false, content_type: 'type-b' },
     { topic_id: 'M1', topic_title: 'Marketing', is_marketing: true, content_type: 'type-a' },
-  ])
-  const options = { topics, isMarketing: ref(marketing), publishDate: ref('2026-11-06'), topicReview: ref(false), error: ref('') }
-  return { ...options, scope, selection: scope.run(() => useManualTopicSelection(options)) }
+  ], isMarketing: marketing, publishDate: '2026-11-06', today:'2026-11-06', topicReview: false, error: '' }) })
+  return { owner, selection: createTopicSelection(owner) }
 }
 
 test('topic query is explicit, cumulative selection survives filter changes and return to a saved step', async () => {
@@ -86,17 +61,17 @@ test('topic query is explicit, cumulative selection survives filter changes and 
   try {
     const s = fixture.selection
     s.setTopicSelected('N1', true)
-    s.topicQuery.value = 'Beta'
-    assert.equal(s.filteredTopics.value.length, 2)
+    s.topicQuery = 'Beta'
+    assert.equal(s.filteredTopics.length, 2)
     s.applyTopicFilters()
-    assert.deepEqual(s.filteredTopics.value.map(t => t.topic_id), ['N2'])
+    assert.deepEqual(s.filteredTopics.map(t => t.topic_id), ['N2'])
     s.setTopicSelected('N2', true)
-    s.topicQuery.value = ''
+    s.topicQuery = ''
     s.applyTopicFilters()
     await nextTick()
-    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['N1', 'N2'])
-    assert.deepEqual(s.selectedTopics.value.map(t => t.topic_id), ['N1', 'N2'])
-  } finally { fixture.scope.stop() }
+    assert.deepEqual(Array.from(s.selectedTopicIds), ['N1', 'N2'])
+    assert.deepEqual(s.selectedTopics.map(t => t.topic_id), ['N1', 'N2'])
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })
 
 test('saved topic selection freezes both query application and checkbox changes', () => {
@@ -104,34 +79,34 @@ test('saved topic selection freezes both query application and checkbox changes'
   try {
     const s = fixture.selection
     s.setTopicSelected('N1', true)
-    fixture.topicReview.value = true
-    s.topicQuery.value = 'Beta'
+    fixture.owner.topicReview = true
+    s.topicQuery = 'Beta'
     s.applyTopicFilters()
     s.setTopicSelected('N2', true)
     s.removeTopic(0)
-    assert.equal(s.filteredTopics.value.length, 2)
-    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['N1'])
-  } finally { fixture.scope.stop() }
+    assert.equal(s.filteredTopics.length, 2)
+    assert.deepEqual(Array.from(s.selectedTopicIds), ['N1'])
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })
 
 test('marketing type is fixed and rejects nonmarketing topics even if filter state is tampered with', () => {
   const fixture = selectionFixture(true)
   try {
     const s = fixture.selection
-    assert.deepEqual(s.filteredTopics.value.map(t => t.topic_id), ['M1'])
+    assert.deepEqual(s.filteredTopics.map(t => t.topic_id), ['M1'])
     s.setTopicSelected('M1', true)
-    s.topicTypeFilter.value = 'non_marketing'
+    s.topicTypeFilter = 'non_marketing'
     s.applyTopicFilters()
     s.setTopicSelected('N2', true)
-    assert.deepEqual(s.filteredTopics.value.map(t => t.topic_id), ['M1'])
-    assert.deepEqual(Array.from(s.selectedTopicIds.value), ['M1'])
-    assert.equal(s.selectedTopics.value[0].topic_id, 'M1')
-    assert.match(fixture.error.value, /类型或有效期/)
-  } finally { fixture.scope.stop() }
+    assert.deepEqual(s.filteredTopics.map(t => t.topic_id), ['M1'])
+    assert.deepEqual(Array.from(s.selectedTopicIds), ['M1'])
+    assert.equal(s.selectedTopics[0].topic_id, 'M1')
+    assert.match(fixture.owner.error, /类型或有效期/)
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })
 
 test('manual topics use publish day for nonmarketing, current Beijing day for marketing, with inclusive boundaries', async () => {
-  const { topicValidOn, beijingDate, manualTopicTooltip } = loadTs('../src/ui/manualTopics.ts')
+  const { topicValidOn, beijingDate, manualTopicTooltip } = loadJs('../src/ui/manualTopics.js')
   assert.equal(beijingDate(new Date('2026-11-05T16:05:00Z')), '2026-11-06')
   const topic = { topic_id: 'FUTURE', topic_title: 'Future', is_marketing: false, valid_from: '2026-11-05T16:00:00Z', valid_to: '2026-11-07T15:59:59Z' }
   assert.equal(topicValidOn(topic, '2026-11-05'), false)
@@ -141,42 +116,42 @@ test('manual topics use publish day for nonmarketing, current Beijing day for ma
   assert.equal(topicValidOn({ ...topic, valid_from: 'bad-date' }, '2026-11-06'), false)
   const fixture = selectionFixture()
   try {
-    fixture.topics.value = [topic]
-    assert.deepEqual(fixture.selection.filteredTopics.value.map(t => t.topic_id), ['FUTURE'])
+    fixture.owner.topics = [topic]
+    assert.deepEqual(fixture.selection.filteredTopics.map(t => t.topic_id), ['FUTURE'])
     fixture.selection.setTopicSelected('FUTURE', true)
-    fixture.topicReview.value = true
-    fixture.publishDate.value = '2026-11-08'
+    fixture.owner.topicReview = true
+    fixture.owner.publishDate = '2026-11-08'
     await nextTick()
-    assert.equal(fixture.selection.filteredTopics.value.length, 0)
-    assert.equal(fixture.selection.selectedTopicIds.value.length, 0)
-    assert.equal(fixture.topicReview.value, false)
-    assert.match(fixture.error.value, /已移除/)
-  } finally { fixture.scope.stop() }
-  const scope = effectScope()
+    assert.equal(fixture.selection.filteredTopics.length, 0)
+    assert.equal(fixture.selection.selectedTopicIds.length, 0)
+    assert.equal(fixture.owner.topicReview, false)
+    assert.match(fixture.owner.error, /已移除/)
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
+  let marketingOwner, marketingSelection
   try {
     const marketing = { ...topic, is_marketing: true, topic_title: '', related_activity_id: 'ACT-1', related_activity: '活动名称', activity_organization: '测试分行' }
-    const options = { topics: ref([marketing]), isMarketing: ref(true), publishDate: ref('2026-11-09'), today: ref('2026-11-06'), topicReview: ref(false), error: ref('') }
-    const s = scope.run(() => useManualTopicSelection(options))
-    assert.equal(s.filteredTopics.value.length, 1)
-    options.today.value = '2026-11-08'
-    assert.equal(s.filteredTopics.value.length, 0)
+    const options = marketingOwner = new Vue({ data: () => ({ topics: [marketing], isMarketing: true, publishDate: '2026-11-09', today:'2026-11-06', topicReview:false, error:'' }) })
+    const s = marketingSelection = createTopicSelection(options)
+    assert.equal(s.filteredTopics.length, 1)
+    options.today = '2026-11-08'
+    assert.equal(s.filteredTopics.length, 0)
     assert.match(manualTopicTooltip(marketing), /ACT-1/)
     assert.doesNotMatch(manualTopicTooltip(marketing), /选题标题|选题大纲/)
-  } finally { scope.stop() }
+  } finally { marketingSelection?.$destroy(); marketingOwner?.$destroy() }
 })
 
 test('nonmarketing selection stays bounded while filters and pagination change', async () => {
   const fixture = selectionFixture()
   try {
-    fixture.topics.value = Array.from({ length: 120 }, (_, index) => ({ topic_id: String(index), topic_title: String(index), is_marketing: false }))
+    fixture.owner.topics = Array.from({ length: 120 }, (_, index) => ({ topic_id: String(index), topic_title: String(index), is_marketing: false }))
     for (let i = 0; i < 120; i++) fixture.selection.setTopicSelected(String(i), true)
-    assert.equal(fixture.selection.selectedTopicIds.value.length, 100)
-    fixture.selection.topicPage.value = 6
-    fixture.selection.topicPageSize.value = 100
+    assert.equal(fixture.selection.selectedTopicIds.length, 100)
+    fixture.selection.topicPage = 6
+    fixture.selection.topicPageSize = 100
     await nextTick()
-    assert.equal(fixture.selection.topicPage.value, 1)
-    assert.equal(fixture.selection.selectedTopicIds.value.length, 100)
-  } finally { fixture.scope.stop() }
+    assert.equal(fixture.selection.topicPage, 1)
+    assert.equal(fixture.selection.selectedTopicIds.length, 100)
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })
 
 test('configuration history compares complete stage targets and lifecycle definitions', () => {
@@ -198,63 +173,59 @@ test('failure CSV escapes multiline fields, quotes and spreadsheet formulas', ()
 })
 
 function accountFixture(fetchAvailability) {
-  const scope = effectScope()
-  const options = {
-    accounts: ref([
-      { account_id: 'A', account_name: 'Alpha', um_no: 'UM-A', followers: 100 },
-      { account_id: 'B', account_name: 'Beta', um_no: 'UM-B', followers: 500 },
-      { account_id: 'C', account_name: 'Gamma', um_no: 'UM-C', followers: 300 },
-    ]),
-    publishDate: ref(''), isMarketing: ref(false), databaseReady: ref(true), error: ref(''), notice: ref(''), fetchAvailability,
-  }
-  return { ...options, scope, selection: scope.run(() => useManualAccountSelection(options)) }
+  const owner = new Vue({ data: () => ({ accounts: [
+    { account_id: 'A', account_name: 'Alpha', um_no: 'UM-A', followers: 100 },
+    { account_id: 'B', account_name: 'Beta', um_no: 'UM-B', followers: 500 },
+    { account_id: 'C', account_name: 'Gamma', um_no: 'UM-C', followers: 300 },
+  ], publishDate: '', isMarketing:false, store:{databaseReady:true}, error:'', notice:'', fetchAvailability }) })
+  return { owner, selection: createAccountSelection(owner) }
 }
 
 test('account quantity only selects after query and excludes accounts planned for the selected date', async () => {
   const fixture = accountFixture(async date => ({ publish_date: date, planned_account_ids: ['B'] }))
   try {
-    fixture.publishDate.value = '2026-11-20'
+    fixture.owner.publishDate = '2026-11-20'
     await fixture.selection.loadAccountAvailability()
     const s = fixture.selection
-    s.targetCount.value = 2
-    assert.deepEqual(Array.from(s.sampledIds.value), [])
+    s.targetCount = 2
+    assert.deepEqual(Array.from(s.sampledIds), [])
     await s.applyAccountFilters()
-    assert.deepEqual(Array.from(s.sampledIds.value), ['C', 'A'])
-    s.accountReview.value = true
+    assert.deepEqual(Array.from(s.sampledIds), ['C', 'A'])
+    s.accountReview = true
     s.setAccountSelected('A', false)
-    assert.deepEqual(Array.from(s.sampledIds.value), ['C', 'A'])
-  } finally { fixture.scope.stop() }
+    assert.deepEqual(Array.from(s.sampledIds), ['C', 'A'])
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })
 
 test('late account availability responses cannot overwrite a newer publication date', async () => {
   const pending = new Map()
   const fixture = accountFixture(date => new Promise(resolve => pending.set(date, resolve)))
   try {
-    fixture.publishDate.value = '2026-11-20'
-    fixture.publishDate.value = '2026-11-21'
+    fixture.owner.publishDate = '2026-11-20'
+    fixture.owner.publishDate = '2026-11-21'
     pending.get('2026-11-21')({ publish_date: '2026-11-21', planned_account_ids: ['C'] })
     await nextTick()
     pending.get('2026-11-20')({ publish_date: '2026-11-20', planned_account_ids: ['A'] })
     await nextTick()
-    assert.equal(fixture.selection.availabilityReady.value, true)
-    assert.deepEqual(Array.from(fixture.selection.plannedAccountIds.value), ['C'])
-  } finally { fixture.scope.stop() }
+    assert.equal(fixture.selection.availabilityReady, true)
+    assert.deepEqual(Array.from(fixture.selection.plannedAccountIds), ['C'])
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })
 
 test('UM/account-ID import counts data rows and keeps recognized accounts when some rows fail', async () => {
   const fixture = accountFixture(async date => ({ publish_date: date, planned_account_ids: ['B'] }))
   try {
-    fixture.publishDate.value = '2026-11-20'
+    fixture.owner.publishDate = '2026-11-20'
     await fixture.selection.loadAccountAvailability()
     const csv = 'UM号,账号ID\r\nUM-A,\r\n,C\r\nUM-B,\r\nMISSING,\r\nUM-A,\r\n'
     await fixture.selection.importAccountsByIdentifier(new Blob([csv]))
     const s = fixture.selection
-    assert.equal(s.targetCount.value, 5)
-    assert.deepEqual(Array.from(s.sampledIds.value), ['A', 'C'])
-    assert.equal(s.importMatchedCount.value, 2)
-    assert.equal(s.importDuplicateRows.value.length, 1)
-    assert.equal(s.importUnmatchedRows.value.length, 1)
-    assert.equal(s.importPlannedRows.value.length, 1)
-    assert.equal(s.importIssueDialogOpen.value, true)
-  } finally { fixture.scope.stop() }
+    assert.equal(s.targetCount, 5)
+    assert.deepEqual(Array.from(s.sampledIds), ['A', 'C'])
+    assert.equal(s.importMatchedCount, 2)
+    assert.equal(s.importDuplicateRows.length, 1)
+    assert.equal(s.importUnmatchedRows.length, 1)
+    assert.equal(s.importPlannedRows.length, 1)
+    assert.equal(s.importIssueDialogOpen, true)
+  } finally { fixture.selection.$destroy(); fixture.owner.$destroy() }
 })

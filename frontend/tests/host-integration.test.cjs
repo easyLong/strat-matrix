@@ -6,7 +6,7 @@ const axios = require('axios')
 const postcss = require('postcss')
 const { load } = require('./helpers/vue2-loader.cjs')
 const source = name => load(path.resolve(__dirname, '../src', name))
-const runtime = source('host/runtime.ts')
+const runtime = source('host/runtime.js')
 
 test('explicit POST queries retain view permissions and never grant writes', () => {
   runtime.configurePlanningRuntime({ hosted:true,routePrefix:'/planning',can:permission=>permission==='manual.view' })
@@ -22,7 +22,7 @@ test('host transport is reused without creating a development Axios instance', a
   const original = axios.create
   let created = 0
   axios.create = (...args) => { created++; return original(...args) }
-  const requests = source('api/http.ts')
+  const requests = source('api/http.js')
   const calls = []
   try {
     requests.setPlanningHttp({ request: async config => {
@@ -36,7 +36,7 @@ test('host transport is reused without creating a development Axios instance', a
 })
 
 test('body-mode host clients preserve downloads and expose bounded 429 retry metadata without retrying', async () => {
-  const requests = source('api/http.ts')
+  const requests = source('api/http.js')
   let calls = 0
   const blob = new Blob(['xlsx'])
   requests.setPlanningHttp({ request: async () => blob }, { responseMode: 'body' })
@@ -54,7 +54,7 @@ test('body-mode host clients preserve downloads and expose bounded 429 retry met
 })
 
 test('one response keeps its original host binding when another binding is installed', async () => {
-  const requests = source('api/http.ts')
+  const requests = source('api/http.js')
   let resolve
   requests.setPlanningHttp({ request: () => new Promise(done => { resolve = done }) },
     { responseMode: 'body', unwrapResponse: body => body.first })
@@ -69,7 +69,7 @@ test('one response keeps its original host binding when another binding is insta
 })
 
 test('host capabilities deny writes and exports before making any HTTP request', async () => {
-  const requests = source('api/http.ts')
+  const requests = source('api/http.js')
   let calls = 0
   runtime.configurePlanningRuntime({ hosted: true, routePrefix: '/operations/planning', can: p => p.endsWith('.view') })
   requests.setPlanningHttp({ request: async () => { calls++; return { data: {} } } })

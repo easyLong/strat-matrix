@@ -66,7 +66,7 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
     files['docs/行内整合架构改造备忘_V0.1.md'] = (ROOT / 'docs/行内整合架构改造备忘_V0.1.md').read_bytes()
     files['docs/行内整合架构改造备忘_V0.2.md'] = (ROOT / 'docs/行内整合架构改造备忘_V0.2.md').read_bytes()
     frontend = ROOT / 'frontend'
-    for name in ('package.json', 'package-lock.json', 'index.html', 'tsconfig.json', 'vite.config.ts'):
+    for name in ('package.json', 'package-lock.json', 'index.html', 'vite.config.js'):
         files['frontend/' + name] = (frontend / name).read_bytes()
     for name in ('src', 'tooling', 'tests', 'public'):
         for path in (frontend / name).rglob('*'):

@@ -1,238 +1,290 @@
-<script lang="ts">
-import { defineComponent, type PropType } from './compat/composition';
-import { computed, onBeforeUnmount, onMounted } from './compat/composition';
-import { RouterLink, RouterView, useRoute } from './compat/router';
+<script>
+import { RouterLink, RouterView, planningRoute } from './compat/router';
 import { api } from './api';
 import { usePlanningStore } from './store';
-import type { AccountOption } from './types';
 import WorkspaceTabs from './components/WorkspaceTabs.vue';
-import { useWorkspaceTabs } from './composables/useWorkspaceTabs';
-import { useActivePage } from './composables/useActivePage';
-import { ref } from './compat/composition';
+import { createWorkspaceTabs, workspaceKey } from "./models/workspaceTabs";
+import { bindPageActivity } from "./services/pageActivity";
 import { canPlanning } from './host/runtime';
-export default defineComponent({
-    props: { embedded: { type: Boolean, default: false } },
-    setup(props, context) {
-        const store = usePlanningStore();
-        const appRoot = ref<HTMLElement | null>(null);
-        function withinApp<T extends HTMLElement>(selector: string) {
-            return appRoot.value?.querySelectorAll<T>(selector) || [];
-        }
-        const route = useRoute();
-        const workspace = useWorkspaceTabs(!props.embedded);
-        const activeNav = computed(() => route.path);
-        let resultsUiObserver: MutationObserver | undefined;
-        let profileRequest: Promise<void> | undefined;
-        let profileAttempted = false;
-        const accountProfiles = new Map<string, AccountOption>();
-        function compactPlanningSourceBadges() {
-            withinApp<HTMLElement>('.account-week-plan-tags .tag.gray').forEach(badge => {
-                const label = badge.textContent?.trim();
-                let compactLabel = '';
-                let hint = '';
-                if (label === '手动策划' || label === '人工策划') {
-                    compactLabel = '人';
-                    hint = '人：手动策划';
-                }
-                else if (label === '自动策划' || label === 'AI 自动策划') {
-                    compactLabel = 'AI';
-                    hint = 'AI：自动策划';
-                }
-                else
-                    return;
-                badge.textContent = compactLabel;
-                badge.dataset.sourceHint = hint;
-                badge.tabIndex = 0;
-                badge.setAttribute('aria-label', hint);
-            });
-        }
-        function compactAccountHistoryPeriodLabels() {
-            withinApp<HTMLElement>('.account-history-batch-head b').forEach(label => {
-                if (label.dataset.periodRange)
-                    return;
-                const value = label.textContent?.trim() || '';
-                const match = value.match(/^(.*?周)\s*·\s*(\d{4}-\d{2}-\d{2})\s*至\s*(\d{4}-\d{2}-\d{2})$/);
-                if (!match)
-                    return;
-                const [, periodLabel, start, end] = match;
-                const range = `${start} 至 ${end}`;
-                label.textContent = periodLabel;
-                label.dataset.periodRange = range;
-                label.classList.add('ux-account-period-label');
-                label.tabIndex = 0;
-                label.setAttribute('aria-label', `${periodLabel}，${range}`);
-            });
-        }
-        function enhancePlanTopicDetailTriggers() {
-            withinApp<HTMLElement>('.account-week-plan-card').forEach(card => {
-                const title = card.querySelector<HTMLElement>('h3');
-                if (!title)
-                    return;
-                const topicTitle = title.textContent?.trim() || '未命名选题';
-                card.setAttribute('aria-label', `查看单条策划：${topicTitle}`);
-                title.classList.add('ux-topic-detail-trigger');
-                if (title.dataset.planDetailTrigger === 'true')
-                    return;
-                title.dataset.planDetailTrigger = 'true';
-                title.addEventListener('click', event => {
-                    event.stopPropagation();
-                    card.click();
-                });
-            });
-        }
-        function accountTypeLabel(profile?: AccountOption) {
-            return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—');
-        }
-        function ensureAccountProfiles() {
-            profileAttempted = true;
-            if (profileRequest)
-                return profileRequest;
-            profileRequest = api.accounts(1000, true).then(accounts => {
-                accountProfiles.clear();
-                accounts.forEach(account => accountProfiles.set(account.account_id, account));
-            }).catch(() => {
-                profileRequest = undefined;
-            });
-            return profileRequest;
-        }
-        function createMetaSpan(text: string, className?: string) {
-            const span = document.createElement('span');
-            if (className)
-                span.className = className;
-            span.textContent = text;
-            return span;
-        }
-        function enhanceBatchAccountCards() {
-            const cards = withinApp<HTMLElement>('.planning-account-groups .planning-account-group');
-            if (!cards.length)
-                return;
-            cards.forEach(card => {
-                card.classList.add('ux-account-card');
-                const head = card.querySelector<HTMLElement>('.planning-account-group-head');
-                const nameRow = head?.querySelector<HTMLElement>('.batch-account-name');
-                const titleButton = nameRow?.querySelector<HTMLButtonElement>('.account-detail-link');
-                const idTag = nameRow?.querySelector<HTMLElement>('.tag.gray');
-                const actions = head?.querySelector<HTMLElement>('.batch-account-head-actions');
-                const expandButton = actions?.querySelector<HTMLButtonElement>('.batch-account-expand');
-                if (!head || !nameRow || !titleButton || !idTag || !actions || !expandButton)
-                    return;
-                const accountId = idTag.textContent?.trim() || '';
-                const accountName = titleButton.textContent?.trim() || accountId;
-                const profile = accountProfiles.get(accountId);
-                const identityWrap = nameRow.parentElement as HTMLElement;
-                const profileSignature = [accountId, accountName, accountTypeLabel(profile), profile?.organization || '', profile?.um_no || '', profile?.platform || '', profile?.persona || ''].join('|');
-                identityWrap.classList.add('ux-account-identity');
-                nameRow.classList.add('ux-account-title-row');
-                idTag.classList.add('ux-original-account-id');
-                identityWrap.parentElement?.classList.add('ux-account-main');
-                if (card.dataset.profileSignature !== profileSignature) {
-                    let avatar = head.querySelector<HTMLElement>('.ux-account-avatar');
-                    if (!avatar) {
-                        avatar = document.createElement('div');
-                        avatar.className = 'ux-account-avatar';
-                        avatar.setAttribute('aria-hidden', 'true');
-                        identityWrap.parentElement?.insertBefore(avatar, identityWrap);
-                    }
-                    avatar.textContent = (accountName || '账').slice(0, 1).toLocaleUpperCase();
-                    let typeTag = nameRow.querySelector<HTMLElement>('.ux-account-type');
-                    if (!typeTag) {
-                        typeTag = document.createElement('span');
-                        typeTag.className = 'ux-account-type';
-                        titleButton.insertAdjacentElement('afterend', typeTag);
-                    }
-                    typeTag.textContent = accountTypeLabel(profile);
-                    let meta = identityWrap.querySelector<HTMLElement>('.ux-account-meta');
-                    if (!meta) {
-                        meta = document.createElement('div');
-                        meta.className = 'ux-account-meta';
-                        nameRow.insertAdjacentElement('afterend', meta);
-                    }
-                    meta.replaceChildren(createMetaSpan(accountId, 'ux-account-id'));
-                    if (profile?.organization)
-                        meta.append(createMetaSpan(profile.organization));
-                    if (profile?.um_no)
-                        meta.append(createMetaSpan(`UM ${profile.um_no}`));
-                    if (profile?.platform)
-                        meta.append(createMetaSpan(profile.platform));
-                    let persona = identityWrap.querySelector<HTMLElement>('.ux-account-persona');
-                    if (!persona) {
-                        persona = document.createElement('div');
-                        persona.className = 'ux-account-persona';
-                        persona.innerHTML = '<small>人设</small><span></span>';
-                        meta.insertAdjacentElement('afterend', persona);
-                    }
-                    const personaValue = persona.querySelector<HTMLElement>('span');
-                    if (personaValue)
-                        personaValue.textContent = profile?.persona || '未配置';
-                    card.dataset.profileSignature = profileSignature;
-                }
-                const countTag = actions.querySelector<HTMLElement>('.tag.blue');
-                if (countTag) {
-                    countTag.classList.add('ux-plan-count');
-                    const count = countTag.textContent?.match(/\d+/)?.[0];
-                    const nextCountLabel = count ? `${count} 条策划` : countTag.textContent?.trim() || '';
-                    if (countTag.textContent?.trim() !== nextCountLabel)
-                        countTag.textContent = nextCountLabel;
-                }
-                let buttonLabel = expandButton.querySelector<HTMLElement>('.ux-expand-label');
-                if (!buttonLabel) {
-                    buttonLabel = document.createElement('span');
-                    buttonLabel.className = 'ux-expand-label';
-                    expandButton.insertBefore(buttonLabel, expandButton.firstChild);
-                }
-                const nextButtonLabel = expandButton.getAttribute('aria-expanded') === 'true' ? '收起计划' : '查看计划';
-                if (buttonLabel.textContent !== nextButtonLabel)
-                    buttonLabel.textContent = nextButtonLabel;
-            });
-            if (!profileAttempted)
-                void ensureAccountProfiles().then(() => enhanceBatchAccountCards());
-        }
-        function enhanceResultsUi() {
-            compactPlanningSourceBadges();
-            compactAccountHistoryPeriodLabels();
-            enhancePlanTopicDetailTriggers();
-            enhanceBatchAccountCards();
-        }
-        useActivePage(() => {
-            if (!store.initialized) void store.initialize();
-            enhanceResultsUi();
-            resultsUiObserver = new MutationObserver(() => enhanceResultsUi());
-            if (appRoot.value) resultsUiObserver.observe(appRoot.value, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['aria-expanded']
-            });
-        }, () => resultsUiObserver?.disconnect());
-        const nav = [{
-                to: '/config',
-                icon: 'M4 6h16M4 12h16M4 18h16M9 3v6m6 0v6m-7 0v6',
-                label: 'AI策划配置'
-            }, {
-                to: '/manual',
-                icon: 'm15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z',
-                label: '人工策划'
-            }, {
-                to: '/results',
-                icon: 'M4 4h16v16H4zM9 4v16M4 10h16M13 14h3m-3 3h3',
-                label: '策划结果'
-            }];
-        return {
-            store,
-            appRoot,
-            canPlanning,
-            activeNav,
-            workspaceTabs: workspace.tabs,
-            workspaceClosing: workspace.closing,
-            workspaceCacheNames: workspace.cacheNames,
-            selectWorkspace: workspace.select,
-            closeWorkspace: workspace.close,
-            workspaceLocation: workspace.locationFor,
-            nav
-        };
+export default {
+  props: {
+    embedded: {
+      type: Boolean,
+      default: false
+    }
+  },
+  components: {
+    RouterLink,
+    WorkspaceTabs,
+    RouterView
+  },
+  data() {
+    return {
+      workspace: null,
+      resultsUiObserver: undefined,
+      profileRequest: undefined,
+      profileAttempted: false,
+      accountProfiles: new Map(),
+      nav: [{
+        to: '/config',
+        icon: 'M4 6h16M4 12h16M4 18h16M9 3v6m6 0v6m-7 0v6',
+        label: 'AI策划配置'
+      }, {
+        to: '/manual',
+        icon: 'm15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z',
+        label: '人工策划'
+      }, {
+        to: '/results',
+        icon: 'M4 4h16v16H4zM9 4v16M4 10h16M13 14h3m-3 3h3',
+        label: '策划结果'
+      }]
+    };
+  },
+  computed: {
+    store() {
+      return usePlanningStore();
     },
-    components: {RouterLink, WorkspaceTabs, RouterView}
-});
+    appRoot: {
+      cache: false,
+      get() {
+        return this.$refs.appRoot || null;
+      }
+    },
+    route() {
+      return planningRoute(this);
+    },
+    activeNav() {
+      return this.route.path;
+    },
+    canPlanning() {
+      return canPlanning;
+    },
+    workspaceTabs: {
+      get() {
+        return this.workspace.tabs;
+      },
+      set(value) {
+        this.workspace.tabs = value;
+      }
+    },
+    workspaceClosing: {
+      get() {
+        return this.workspace.closing;
+      },
+      set(value) {
+        this.workspace.closing = value;
+      }
+    },
+    workspaceCacheNames: {
+      get() {
+        return this.workspace.cacheNames;
+      },
+      set(value) {
+        this.workspace.cacheNames = value;
+      }
+    },
+    selectWorkspace: {
+      get() {
+        return this.workspace.select;
+      },
+      set(value) {
+        this.workspace.select = value;
+      }
+    },
+    closeWorkspace: {
+      get() {
+        return this.workspace.close;
+      },
+      set(value) {
+        this.workspace.close = value;
+      }
+    },
+    workspaceLocation: {
+      get() {
+        return this.workspace.locationFor;
+      },
+      set(value) {
+        this.workspace.locationFor = value;
+      }
+    }
+  },
+  methods: {
+    withinApp(selector) {
+      return this.appRoot?.querySelectorAll(selector) || [];
+    },
+    compactPlanningSourceBadges() {
+      this.withinApp('.account-week-plan-tags .tag.gray').forEach(badge => {
+        const label = badge.textContent?.trim();
+        let compactLabel = '';
+        let hint = '';
+        if (label === '手动策划' || label === '人工策划') {
+          compactLabel = '人';
+          hint = '人：手动策划';
+        } else if (label === '自动策划' || label === 'AI 自动策划') {
+          compactLabel = 'AI';
+          hint = 'AI：自动策划';
+        } else return;
+        badge.textContent = compactLabel;
+        badge.dataset.sourceHint = hint;
+        badge.tabIndex = 0;
+        badge.setAttribute('aria-label', hint);
+      });
+    },
+    compactAccountHistoryPeriodLabels() {
+      this.withinApp('.account-history-batch-head b').forEach(label => {
+        if (label.dataset.periodRange) return;
+        const value = label.textContent?.trim() || '';
+        const match = value.match(/^(.*?周)\s*·\s*(\d{4}-\d{2}-\d{2})\s*至\s*(\d{4}-\d{2}-\d{2})$/);
+        if (!match) return;
+        const [, periodLabel, start, end] = match;
+        const range = `${start} 至 ${end}`;
+        label.textContent = periodLabel;
+        label.dataset.periodRange = range;
+        label.classList.add('ux-account-period-label');
+        label.tabIndex = 0;
+        label.setAttribute('aria-label', `${periodLabel}，${range}`);
+      });
+    },
+    enhancePlanTopicDetailTriggers() {
+      this.withinApp('.account-week-plan-card').forEach(card => {
+        const title = card.querySelector('h3');
+        if (!title) return;
+        const topicTitle = title.textContent?.trim() || '未命名选题';
+        card.setAttribute('aria-label', `查看单条策划：${topicTitle}`);
+        title.classList.add('ux-topic-detail-trigger');
+        if (title.dataset.planDetailTrigger === 'true') return;
+        title.dataset.planDetailTrigger = 'true';
+        title.addEventListener('click', event => {
+          event.stopPropagation();
+          card.click();
+        });
+      });
+    },
+    accountTypeLabel(profile) {
+      return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—');
+    },
+    ensureAccountProfiles() {
+      this.profileAttempted = true;
+      if (this.profileRequest) return this.profileRequest;
+      this.profileRequest = api.accounts(1000, true).then(accounts => {
+        this.accountProfiles.clear();
+        accounts.forEach(account => this.accountProfiles.set(account.account_id, account));
+      }).catch(() => {
+        this.profileRequest = undefined;
+      });
+      return this.profileRequest;
+    },
+    createMetaSpan(text, className) {
+      const span = document.createElement('span');
+      if (className) span.className = className;
+      span.textContent = text;
+      return span;
+    },
+    enhanceBatchAccountCards() {
+      const cards = this.withinApp('.planning-account-groups .planning-account-group');
+      if (!cards.length) return;
+      cards.forEach(card => {
+        card.classList.add('ux-account-card');
+        const head = card.querySelector('.planning-account-group-head');
+        const nameRow = head?.querySelector('.batch-account-name');
+        const titleButton = nameRow?.querySelector('.account-detail-link');
+        const idTag = nameRow?.querySelector('.tag.gray');
+        const actions = head?.querySelector('.batch-account-head-actions');
+        const expandButton = actions?.querySelector('.batch-account-expand');
+        if (!head || !nameRow || !titleButton || !idTag || !actions || !expandButton) return;
+        const accountId = idTag.textContent?.trim() || '';
+        const accountName = titleButton.textContent?.trim() || accountId;
+        const profile = this.accountProfiles.get(accountId);
+        const identityWrap = nameRow.parentElement;
+        const profileSignature = [accountId, accountName, this.accountTypeLabel(profile), profile?.organization || '', profile?.um_no || '', profile?.platform || '', profile?.persona || ''].join('|');
+        identityWrap.classList.add('ux-account-identity');
+        nameRow.classList.add('ux-account-title-row');
+        idTag.classList.add('ux-original-account-id');
+        identityWrap.parentElement?.classList.add('ux-account-main');
+        if (card.dataset.profileSignature !== profileSignature) {
+          let avatar = head.querySelector('.ux-account-avatar');
+          if (!avatar) {
+            avatar = document.createElement('div');
+            avatar.className = 'ux-account-avatar';
+            avatar.setAttribute('aria-hidden', 'true');
+            identityWrap.parentElement?.insertBefore(avatar, identityWrap);
+          }
+          avatar.textContent = (accountName || '账').slice(0, 1).toLocaleUpperCase();
+          let typeTag = nameRow.querySelector('.ux-account-type');
+          if (!typeTag) {
+            typeTag = document.createElement('span');
+            typeTag.className = 'ux-account-type';
+            titleButton.insertAdjacentElement('afterend', typeTag);
+          }
+          typeTag.textContent = this.accountTypeLabel(profile);
+          let meta = identityWrap.querySelector('.ux-account-meta');
+          if (!meta) {
+            meta = document.createElement('div');
+            meta.className = 'ux-account-meta';
+            nameRow.insertAdjacentElement('afterend', meta);
+          }
+          meta.replaceChildren(this.createMetaSpan(accountId, 'ux-account-id'));
+          if (profile?.organization) meta.append(this.createMetaSpan(profile.organization));
+          if (profile?.um_no) meta.append(this.createMetaSpan(`UM ${profile.um_no}`));
+          if (profile?.platform) meta.append(this.createMetaSpan(profile.platform));
+          let persona = identityWrap.querySelector('.ux-account-persona');
+          if (!persona) {
+            persona = document.createElement('div');
+            persona.className = 'ux-account-persona';
+            persona.innerHTML = '<small>人设</small><span></span>';
+            meta.insertAdjacentElement('afterend', persona);
+          }
+          const personaValue = persona.querySelector('span');
+          if (personaValue) personaValue.textContent = profile?.persona || '未配置';
+          card.dataset.profileSignature = profileSignature;
+        }
+        const countTag = actions.querySelector('.tag.blue');
+        if (countTag) {
+          countTag.classList.add('ux-plan-count');
+          const count = countTag.textContent?.match(/\d+/)?.[0];
+          const nextCountLabel = count ? `${count} 条策划` : countTag.textContent?.trim() || '';
+          if (countTag.textContent?.trim() !== nextCountLabel) countTag.textContent = nextCountLabel;
+        }
+        let buttonLabel = expandButton.querySelector('.ux-expand-label');
+        if (!buttonLabel) {
+          buttonLabel = document.createElement('span');
+          buttonLabel.className = 'ux-expand-label';
+          expandButton.insertBefore(buttonLabel, expandButton.firstChild);
+        }
+        const nextButtonLabel = expandButton.getAttribute('aria-expanded') === 'true' ? '收起计划' : '查看计划';
+        if (buttonLabel.textContent !== nextButtonLabel) buttonLabel.textContent = nextButtonLabel;
+      });
+      if (!this.profileAttempted) void this.ensureAccountProfiles().then(() => this.enhanceBatchAccountCards());
+    },
+    enhanceResultsUi() {
+      this.compactPlanningSourceBadges();
+      this.compactAccountHistoryPeriodLabels();
+      this.enhancePlanTopicDetailTriggers();
+      this.enhanceBatchAccountCards();
+    }
+  },
+  created() {
+    this.workspace = createWorkspaceTabs(this, !this.embedded);
+    bindPageActivity(this, () => {
+      if (!this.store.initialized) void this.store.initialize();
+      this.enhanceResultsUi();
+      this.resultsUiObserver = new MutationObserver(() => this.enhanceResultsUi());
+      if (this.appRoot) this.resultsUiObserver.observe(this.appRoot, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['aria-expanded']
+      });
+    }, () => this.resultsUiObserver?.disconnect());
+  },
+  provide() {
+    return {
+      [workspaceKey]: this.embedded ? null : {
+        registerCloseGuard: (...args) => this.workspace.registerCloseGuard(...args)
+      }
+    };
+  }
+};
 </script>
 
 <template>

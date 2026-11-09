@@ -1,31 +1,34 @@
 const fs = require('node:fs')
 const path = require('node:path')
-const ts = require('typescript')
+const babel = require('@babel/core')
 const Vue = require('vue')
-const composition = require('@vue/composition-api')
 const compiler = require('vue-template-compiler')
 const templateCompiler = require('vue-template-babel-compiler')
-Vue.use(composition.default)
 Vue.config.productionTip = false
 Vue.config.devtools = false
 const root = path.resolve(__dirname, '../../src')
 const cache = new Map()
 
 function load(file) {
-  if (!path.extname(file)) file += '.ts'
+  if (!path.extname(file)) file += '.js'
   file = path.resolve(file)
   if (cache.has(file)) return cache.get(file).exports
   const module = { exports: {} }
   cache.set(file, module)
+  if (file.endsWith('.json')) {
+    module.exports = JSON.parse(fs.readFileSync(file, 'utf8'))
+    return module.exports
+  }
   let source = fs.readFileSync(file, 'utf8')
   let descriptor
   if (file.endsWith('.vue')) {
     descriptor = compiler.parseComponent(source)
     source = descriptor.script.content
   }
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
-  }).outputText
+  const compiled = babel.transformSync(source, {
+    configFile: false, babelrc: false,
+    plugins: [require('@babel/plugin-transform-modules-commonjs')],
+  }).code
   const localRequire = name => {
     if (name.startsWith('@/')) return load(path.join(root, name.slice(2)))
     if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name))
@@ -42,4 +45,4 @@ function load(file) {
 }
 
 Vue.component('BodyPortal', load(path.join(root, 'components/BodyPortal.vue')).default)
-module.exports = { load, Vue, composition }
+module.exports = { load, Vue }

@@ -1,310 +1,320 @@
-<script lang="ts">
+<script>
 import DateRangeFields from '../components/DateRangeFields.vue';
 import QueryActions from '../components/QueryActions.vue';
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, onBeforeUnmount, ref, watch } from '../compat/composition';
 import AccountTypeBadge from '../components/AccountTypeBadge.vue';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
 import ListPagination from '../components/ListPagination.vue';
 import HoverHint from '../components/HoverHint.vue';
 import PlanningResultStats from '../components/planning/PlanningResultStats.vue';
 import PlanningWeekCalendar from '../components/planning/PlanningWeekCalendar.vue';
-import { weekStart, weekEnd, cyclePeriodLabel, type PlanningWeek } from '../ui/planningCalendar';
+import { weekStart, weekEnd, cyclePeriodLabel } from '../ui/planningCalendar';
 import PlanDetailDrawer from '../components/planning/PlanDetailDrawer.vue';
 import { api } from '../api';
-import { useActivePage } from '../composables/useActivePage';
-import type { AccountOption, AccountPlanRecord, BatchSummary } from '../types';
-import { statusTone } from '../ui/status';
+import { bindPageActivity } from "../services/pageActivity";
 import { productionStatusLabel } from '../ui/slotContentStatus';
-import type { ContentTypeCount } from '../ui/contentTypeStats';
 import { formatDateTime } from '../planningTime';
-type DetailMode = 'batch' | 'cycle' | 'account';
-type AccountGroup = {
-    account_id: string;
-    account_name: string;
-    lifecycle_stage: string;
-    profile?: AccountOption;
-    items: AccountPlanRecord[];
-};
-export default defineComponent({
-    props: { mode: { required: false, type: null as unknown as PropType<DetailMode>, default: 'cycle' },
-        cycleStart: { required: true, type: String as PropType<string> },
-        cycleEnd: { required: true, type: String as PropType<string> },
-        batches: { required: true, type: Array as PropType<BatchSummary[]> },
-        accountId: { required: false, type: String as PropType<string>, default: '' },
-        returnLabel: { required: false, type: String as PropType<string>, default: '' },
-        initialBatchesExpanded: { required: false, type: Boolean as PropType<boolean>, default: false },
-        showCycleLink: { required: false, type: Boolean as PropType<boolean>, default: false } },
-    setup(props, context) {
-        const emit = context.emit;
-        const loading = ref(false);
-        const error = ref('');
-        const pageItems = ref<AccountPlanRecord[]>([]);
-        const resultTotal = ref(0);
-        const resultSummary = ref({
-            accounts: 0,
-            batches: 0,
-            topics: 0
-        });
-        const resultDistribution = ref<ContentTypeCount[]>([]);
-        const resultContentTypes = ref<string[]>([]);
-        const accountCatalog = ref<AccountOption[]>([]);
-        const expandedAccounts = ref(new Set<string>());
-        const filtersExpanded = ref(true);
-        const batchesExpanded = ref(props.initialBatchesExpanded);
-        const batchPage = ref(1);
-        const batchPageSize = ref(10);
-        const pagedCycleBatches = computed(() => props.batches.slice((batchPage.value - 1) * batchPageSize.value, batchPage.value * batchPageSize.value));
-        const accountKeyword = ref('');
-        const contentType = ref('all');
-        const selectedPlan = ref<AccountPlanRecord | null>(null);
-        const dateStart = ref('');
-        const dateEnd = ref('');
-        const dateFilterError = ref('');
-        const appliedFilters = ref({
-            account: '',
-            start: '',
-            end: '',
-            batch: 'all',
-            planType: 'all',
-            contentType: 'all'
-        });
-        const page = ref(1);
-        const pageSize = ref(20);
-        const historyPage = ref(1);
-        const historyPageSize = ref(20);
-        let loadRequest = 0;
-        const isBatchMode = computed(() => props.mode === 'batch');
-        const isAccountMode = computed(() => props.mode === 'account');
-        const detailTitle = computed(() => isAccountMode.value ? '账号策划详情' : isBatchMode.value ? '批次策划详情' : '周期策划详情');
-        const currentBatch = computed(() => isBatchMode.value ? props.batches[0] ?? null : null);
-        const batchById = computed(() => new Map(props.batches.map(batch => [batch.id, batch])));
-        watch(() => [props.mode, props.accountId, props.cycleStart, props.batches.map(batch => batch.id).join(',')], () => {
-            selectedPlan.value = null;
-        });
-        const productionItems = computed(() => pageItems.value);
-        const backLabel = computed(() => props.returnLabel || (isAccountMode.value ? '返回账号列表' : '返回时间列表'));
-        const fixedPlanType = computed<'auto' | 'manual' | null>(() => isBatchMode.value ? currentBatch.value?.plan_type ?? null : null);
-        const scopeLabel = computed(() => {
-            if (isAccountMode.value)
-                return `${accountProfile(props.accountId)?.account_name || pageItems.value[0]?.account_name || props.accountId} · ${props.accountId}`;
-            if (currentBatch.value)
-                return [currentBatch.value.task_name, currentBatch.value.batch_code].filter(Boolean).join(' · ');
-            return cyclePeriodLabel(props.cycleStart);
-        });
-        const scopePlanType = computed(() => {
-            return fixedPlanType.value === 'manual' ? '人工策划' : 'AI 自动策划';
-        });
-        function accountProfile(accountId: string) {
-            return accountCatalog.value.find(account => account.account_id === accountId);
-        }
-        function accountTypeLabel(profile?: AccountOption) {
-            return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—');
-        }
-        const contentTypes = computed(() => resultContentTypes.value);
-        const filteredItems = computed(() => pageItems.value);
-        const accountGroups = computed<AccountGroup[]>(() => {
-            const groups = new Map<string, AccountGroup>();
-            for (const item of filteredItems.value) {
-                const existing = groups.get(item.account_id);
-                if (existing)
-                    existing.items.push(item);
-                else
-                    groups.set(item.account_id, {
-                        account_id: item.account_id,
-                        account_name: item.account_name,
-                        lifecycle_stage: item.lifecycle_stage || '—',
-                        profile: accountProfile(item.account_id),
-                        items: [item]
-                    });
-            }
-            return [...groups.values()].map(group => ({
-                ...group,
-                items: group.items.sort((a, b) => a.publish_date.localeCompare(b.publish_date) || a.id - b.id)
-            }));
-        });
-        const pagedAccountGroups = computed(() => accountGroups.value);
-        const accountWeeks = computed(() => accountGroups.value.length ? weeksFor(accountGroups.value[0]!) : []);
-        const pagedAccountWeeks = computed(() => accountWeeks.value);
-        function weeksFor(group: AccountGroup): PlanningWeek[] {
-            const weeks = new Map<string, AccountPlanRecord[]>();
-            for (const item of group.items) {
-                const key = weekStart(item.publish_date);
-                const items = weeks.get(key);
-                if (items)
-                    items.push(item);
-                else
-                    weeks.set(key, [item]);
-            }
-            return [...weeks].map(([start, items]) => ({
-                start,
-                end: weekEnd(start),
-                items
-            })).sort((a, b) => b.start.localeCompare(a.start));
-        }
-        function toggleAccount(accountId: string) {
-            const next = new Set(expandedAccounts.value);
-            if (next.has(accountId))
-                next.delete(accountId);
-            else
-                next.add(accountId);
-            expandedAccounts.value = next;
-        }
-        function updatePlan(item: AccountPlanRecord) {
-            pageItems.value = pageItems.value.map(record => record.id === item.id ? {
-                ...record,
-                ...item
-            } : record);
-            void load(true);
-        }
-        let detailRequest: AbortController | undefined;
-        async function load(silent = false) {
-            const request = ++loadRequest;
-            detailRequest?.abort();
-            detailRequest = new AbortController();
-            if (!silent)
-                loading.value = true;
-            error.value = '';
-            try {
-                const response = await api.planPage({
-                    mode: props.mode,
-                    batch_ids: props.mode === 'cycle' ? props.batches.map(batch => batch.id) : undefined,
-                    account_id: isAccountMode.value ? props.accountId : undefined,
-                    batch_id: isBatchMode.value ? currentBatch.value?.id : undefined,
-                    cycle_start: props.mode === 'cycle' ? props.cycleStart : undefined,
-                    cycle_end: props.mode === 'cycle' ? props.cycleEnd : undefined,
-                    page: isAccountMode.value ? historyPage.value : page.value,
-                    page_size: isAccountMode.value ? historyPageSize.value : pageSize.value,
-                    filters: appliedFilters.value
-                }, detailRequest.signal);
-                if (request !== loadRequest)
-                    return;
-                const currentPage = isAccountMode.value ? historyPage : page;
-                const currentSize = isAccountMode.value ? historyPageSize.value : pageSize.value;
-                const maximum = Math.max(1, Math.ceil(response.total / currentSize));
-                if (currentPage.value > maximum) {
-                    currentPage.value = maximum;
-                    return;
-                }
-                pageItems.value = response.items;
-                resultTotal.value = response.total;
-                resultSummary.value = response.summary;
-                resultDistribution.value = response.distribution;
-                resultContentTypes.value = response.content_types;
-                accountCatalog.value = response.accounts;
-                if (isAccountMode.value)
-                    expandedAccounts.value = new Set([props.accountId]);
-            }
-            catch (exc) {
-                if (request === loadRequest)
-                    error.value = exc instanceof Error ? exc.message : '读取策划明细失败';
-            }
-            finally {
-                if (request === loadRequest)
-                    loading.value = false;
-            }
-        }
-        function applyFilters() {
-            if (isAccountMode.value && dateStart.value && dateEnd.value && dateStart.value > dateEnd.value) {
-                dateFilterError.value = '开始日期不能晚于结束日期';
-                return;
-            }
-            dateFilterError.value = '';
-            appliedFilters.value = {
-                account: isAccountMode.value ? '' : accountKeyword.value,
-                start: isAccountMode.value ? dateStart.value : '',
-                end: isAccountMode.value ? dateEnd.value : '',
-                batch: isBatchMode.value ? String(currentBatch.value?.id) : 'all',
-                planType: fixedPlanType.value ?? 'all',
-                contentType: contentType.value
-            };
-            page.value = 1;
-            historyPage.value = 1;
-        }
-        watch([() => props.mode, () => props.accountId, () => props.cycleStart, () => props.batches.map(batch => batch.id).join(',')], () => {
-            accountKeyword.value = '';
-            contentType.value = 'all';
-            dateStart.value = isAccountMode.value ? props.cycleStart : '';
-            dateEnd.value = isAccountMode.value && props.cycleStart ? weekEnd(props.cycleStart) : '';
-            dateFilterError.value = '';
-            filtersExpanded.value = true;
-            applyFilters();
-            expandedAccounts.value = new Set();
-            selectedPlan.value = null;
-            void load();
-        }, {
-            immediate: true
-        });
-        watch(pageSize, () => {
-            page.value = 1;
-        });
-        watch([page, pageSize, historyPage, historyPageSize, appliedFilters], () => {
-            void load();
-        });
-        watch(historyPageSize, () => {
-            historyPage.value = 1;
-        });
-        let productionTimer: number | undefined;
-        let visited = false;
-        useActivePage(() => {
-            if (visited) void load(true);
-            visited = true;
-            productionTimer = window.setInterval(() => {
-                if (!loading.value && productionItems.value.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item))))
-                    void load(true);
-            }, 3000);
-        }, () => {
-            loadRequest++;
-            detailRequest?.abort();
-            if (productionTimer !== undefined) window.clearInterval(productionTimer);
-        });
-        return {
-            cyclePeriodLabel,
-            formatDateTime,
-            emit,
-            loading,
-            error,
-            resultTotal,
-            resultSummary,
-            resultDistribution,
-            expandedAccounts,
-            filtersExpanded,
-            batchesExpanded,
-            batchPage,
-            batchPageSize,
-            pagedCycleBatches,
-            accountKeyword,
-            contentType,
-            selectedPlan,
-            dateStart,
-            dateEnd,
-            dateFilterError,
-            appliedFilters,
-            page,
-            pageSize,
-            historyPage,
-            historyPageSize,
-            isBatchMode,
-            isAccountMode,
-            detailTitle,
-            currentBatch,
-            backLabel,
-            fixedPlanType,
-            scopeLabel,
-            scopePlanType,
-            accountTypeLabel,
-            contentTypes,
-            accountGroups,
-            pagedAccountGroups,
-            pagedAccountWeeks,
-            weeksFor,
-            toggleAccount,
-            updatePlan,
-            applyFilters
-        };
+export default {
+  props: {
+    mode: {
+      required: false,
+      type: null,
+      default: 'cycle'
     },
-    components: {DateRangeFields, QueryActions, HoverHint, LoadingSkeleton, PlanningResultStats, ListPagination, PlanningWeekCalendar, AccountTypeBadge, PlanDetailDrawer}
-});
+    cycleStart: {
+      required: true,
+      type: String
+    },
+    cycleEnd: {
+      required: true,
+      type: String
+    },
+    batches: {
+      required: true,
+      type: Array
+    },
+    accountId: {
+      required: false,
+      type: String,
+      default: ''
+    },
+    returnLabel: {
+      required: false,
+      type: String,
+      default: ''
+    },
+    initialBatchesExpanded: {
+      required: false,
+      type: Boolean,
+      default: false
+    },
+    showCycleLink: {
+      required: false,
+      type: Boolean,
+      default: false
+    }
+  },
+  components: {
+    DateRangeFields,
+    QueryActions,
+    HoverHint,
+    LoadingSkeleton,
+    PlanningResultStats,
+    ListPagination,
+    PlanningWeekCalendar,
+    AccountTypeBadge,
+    PlanDetailDrawer
+  },
+  data() {
+    return {
+      loading: false,
+      error: '',
+      pageItems: [],
+      resultTotal: 0,
+      resultSummary: {
+        accounts: 0,
+        batches: 0,
+        topics: 0
+      },
+      resultDistribution: [],
+      resultContentTypes: [],
+      accountCatalog: [],
+      expandedAccounts: new Set(),
+      filtersExpanded: true,
+      batchesExpanded: null,
+      batchPage: 1,
+      batchPageSize: 10,
+      accountKeyword: '',
+      contentType: 'all',
+      selectedPlan: null,
+      dateStart: '',
+      dateEnd: '',
+      dateFilterError: '',
+      appliedFilters: {
+        account: '',
+        start: '',
+        end: '',
+        batch: 'all',
+        planType: 'all',
+        contentType: 'all'
+      },
+      page: 1,
+      pageSize: 20,
+      historyPage: 1,
+      historyPageSize: 20,
+      loadRequest: 0,
+      detailRequest: undefined,
+      productionTimer: undefined,
+      visited: false
+    };
+  },
+  computed: {
+    pagedCycleBatches() {
+      return this.batches.slice((this.batchPage - 1) * this.batchPageSize, this.batchPage * this.batchPageSize);
+    },
+    isBatchMode() {
+      return this.mode === 'batch';
+    },
+    isAccountMode() {
+      return this.mode === 'account';
+    },
+    detailTitle() {
+      return this.isAccountMode ? '账号策划详情' : this.isBatchMode ? '批次策划详情' : '周期策划详情';
+    },
+    currentBatch() {
+      return this.isBatchMode ? this.batches[0] ?? null : null;
+    },
+    batchById() {
+      return new Map(this.batches.map(batch => [batch.id, batch]));
+    },
+    productionItems() {
+      return this.pageItems;
+    },
+    backLabel() {
+      return this.returnLabel || (this.isAccountMode ? '返回账号列表' : '返回时间列表');
+    },
+    fixedPlanType() {
+      return this.isBatchMode ? this.currentBatch?.plan_type ?? null : null;
+    },
+    scopeLabel() {
+      if (this.isAccountMode) return `${this.accountProfile(this.accountId)?.account_name || this.pageItems[0]?.account_name || this.accountId} · ${this.accountId}`;
+      if (this.currentBatch) return [this.currentBatch.task_name, this.currentBatch.batch_code].filter(Boolean).join(' · ');
+      return cyclePeriodLabel(this.cycleStart);
+    },
+    scopePlanType() {
+      return this.fixedPlanType === 'manual' ? '人工策划' : 'AI 自动策划';
+    },
+    contentTypes() {
+      return this.resultContentTypes;
+    },
+    filteredItems() {
+      return this.pageItems;
+    },
+    accountGroups() {
+      const groups = new Map();
+      for (const item of this.filteredItems) {
+        const existing = groups.get(item.account_id);
+        if (existing) existing.items.push(item);else groups.set(item.account_id, {
+          account_id: item.account_id,
+          account_name: item.account_name,
+          lifecycle_stage: item.lifecycle_stage || '—',
+          profile: this.accountProfile(item.account_id),
+          items: [item]
+        });
+      }
+      return [...groups.values()].map(group => ({
+        ...group,
+        items: group.items.sort((a, b) => a.publish_date.localeCompare(b.publish_date) || a.id - b.id)
+      }));
+    },
+    pagedAccountGroups() {
+      return this.accountGroups;
+    },
+    accountWeeks() {
+      return this.accountGroups.length ? this.weeksFor(this.accountGroups[0]) : [];
+    },
+    pagedAccountWeeks() {
+      return this.accountWeeks;
+    },
+    cyclePeriodLabel() {
+      return cyclePeriodLabel;
+    },
+    formatDateTime() {
+      return formatDateTime;
+    }
+  },
+  methods: {
+    accountProfile(accountId) {
+      return this.accountCatalog.find(account => account.account_id === accountId);
+    },
+    accountTypeLabel(profile) {
+      return profile?.account_type || (profile?.certified === true ? '认证' : profile?.certified === false ? '非认证' : '—');
+    },
+    weeksFor(group) {
+      const weeks = new Map();
+      for (const item of group.items) {
+        const key = weekStart(item.publish_date);
+        const items = weeks.get(key);
+        if (items) items.push(item);else weeks.set(key, [item]);
+      }
+      return [...weeks].map(([start, items]) => ({
+        start,
+        end: weekEnd(start),
+        items
+      })).sort((a, b) => b.start.localeCompare(a.start));
+    },
+    toggleAccount(accountId) {
+      const next = new Set(this.expandedAccounts);
+      if (next.has(accountId)) next.delete(accountId);else next.add(accountId);
+      this.expandedAccounts = next;
+    },
+    updatePlan(item) {
+      this.pageItems = this.pageItems.map(record => record.id === item.id ? {
+        ...record,
+        ...item
+      } : record);
+      void this.load(true);
+    },
+    async load(silent = false) {
+      const request = ++this.loadRequest;
+      this.detailRequest?.abort();
+      this.detailRequest = new AbortController();
+      if (!silent) this.loading = true;
+      this.error = '';
+      try {
+        const response = await api.planPage({
+          mode: this.mode,
+          batch_ids: this.mode === 'cycle' ? this.batches.map(batch => batch.id) : undefined,
+          account_id: this.isAccountMode ? this.accountId : undefined,
+          batch_id: this.isBatchMode ? this.currentBatch?.id : undefined,
+          cycle_start: this.mode === 'cycle' ? this.cycleStart : undefined,
+          cycle_end: this.mode === 'cycle' ? this.cycleEnd : undefined,
+          page: this.isAccountMode ? this.historyPage : this.page,
+          page_size: this.isAccountMode ? this.historyPageSize : this.pageSize,
+          filters: this.appliedFilters
+        }, this.detailRequest.signal);
+        if (request !== this.loadRequest) return;
+        const currentPage = this.isAccountMode ? this.historyPage : this.page;
+        const currentSize = this.isAccountMode ? this.historyPageSize : this.pageSize;
+        const maximum = Math.max(1, Math.ceil(response.total / currentSize));
+        if (currentPage.value > maximum) {
+          currentPage.value = maximum;
+          return;
+        }
+        this.pageItems = response.items;
+        this.resultTotal = response.total;
+        this.resultSummary = response.summary;
+        this.resultDistribution = response.distribution;
+        this.resultContentTypes = response.content_types;
+        this.accountCatalog = response.accounts;
+        if (this.isAccountMode) this.expandedAccounts = new Set([this.accountId]);
+      } catch (exc) {
+        if (request === this.loadRequest) this.error = exc instanceof Error ? exc.message : '读取策划明细失败';
+      } finally {
+        if (request === this.loadRequest) this.loading = false;
+      }
+    },
+    applyFilters() {
+      if (this.isAccountMode && this.dateStart && this.dateEnd && this.dateStart > this.dateEnd) {
+        this.dateFilterError = '开始日期不能晚于结束日期';
+        return;
+      }
+      this.dateFilterError = '';
+      this.appliedFilters = {
+        account: this.isAccountMode ? '' : this.accountKeyword,
+        start: this.isAccountMode ? this.dateStart : '',
+        end: this.isAccountMode ? this.dateEnd : '',
+        batch: this.isBatchMode ? String(this.currentBatch?.id) : 'all',
+        planType: this.fixedPlanType ?? 'all',
+        contentType: this.contentType
+      };
+      this.page = 1;
+      this.historyPage = 1;
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  },
+  created() {
+    this.batchesExpanded = this.initialBatchesExpanded;
+    this.$watch(() => [this.mode, this.accountId, this.cycleStart, this.batches.map(batch => batch.id).join(',')], () => {
+      this.selectedPlan = null;
+    });
+    this.$watch(() => [this.mode, this.accountId, this.cycleStart, this.batches.map(batch => batch.id).join(',')], () => {
+      this.accountKeyword = '';
+      this.contentType = 'all';
+      this.dateStart = this.isAccountMode ? this.cycleStart : '';
+      this.dateEnd = this.isAccountMode && this.cycleStart ? weekEnd(this.cycleStart) : '';
+      this.dateFilterError = '';
+      this.filtersExpanded = true;
+      this.applyFilters();
+      this.expandedAccounts = new Set();
+      this.selectedPlan = null;
+      void this.load();
+    }, {
+      immediate: true
+    });
+    this.$watch(() => this.pageSize, () => {
+      this.page = 1;
+    });
+    this.$watch(() => [this.page, this.pageSize, this.historyPage, this.historyPageSize, this.appliedFilters], () => {
+      void this.load();
+    });
+    this.$watch(() => this.historyPageSize, () => {
+      this.historyPage = 1;
+    });
+    bindPageActivity(this, () => {
+      if (this.visited) void this.load(true);
+      this.visited = true;
+      this.productionTimer = window.setInterval(() => {
+        if (!this.loading && this.productionItems.some(item => item.topic_id && ['待生产', '生产中'].includes(productionStatusLabel(item)))) void this.load(true);
+      }, 3000);
+    }, () => {
+      this.loadRequest++;
+      this.detailRequest?.abort();
+      if (this.productionTimer !== undefined) window.clearInterval(this.productionTimer);
+    });
+  }
+};
 </script>
 
 <template>

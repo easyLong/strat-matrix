@@ -1,74 +1,76 @@
-<script lang="ts">
+<script>
 import DialogTitle from '../DialogTitle.vue';
-import { defineComponent, type PropType } from '../../compat/composition';
-import { onBeforeUnmount, ref, watch } from '../../compat/composition';
 import { api } from '../../api';
-import type { PeriodSummary } from '../../api/queries';
-import type { AutoFailure } from '../../types';
 import { downloadCsv } from '../../ui/csv';
 import { canPlanning, requirePlanning } from '../../host/runtime';
-export default defineComponent({
-    props: { failurePeriod: { required: true, type: null as unknown as PropType<PeriodSummary> } },
-    setup(props, context) {
-        const emit = context.emit;
-        const failureDetails = ref<AutoFailure[]>([]);
-        const failureLoading = ref(false);
-        const failureError = ref('');
-        let request = 0;
-        let controller: AbortController | undefined;
-        watch(() => props.failurePeriod, async (period) => {
-            const current = ++request;
-            controller?.abort();
-            controller = new AbortController();
-            failureDetails.value = [];
-            failureError.value = '';
-            failureLoading.value = true;
-            try {
-                const rows = await api.resultFailures({
-                    mode: 'cycle',
-                    cycle_start: period.cycleStart,
-                    cycle_end: period.cycleEnd,
-                    batch_ids: period.batches.map(b => b.id),
-                    page: 1,
-                    page_size: 200,
-                    filters: {}
-                }, controller.signal);
-                if (current === request)
-                    failureDetails.value = rows;
-            }
-            catch (error) {
-                if (current === request)
-                    failureError.value = error instanceof Error ? error.message : '读取失败详情失败';
-            }
-            finally {
-                if (current === request)
-                    failureLoading.value = false;
-            }
-        }, {
-            immediate: true
-        });
-        onBeforeUnmount(() => {
-            ++request;
-            controller?.abort();
-        });
-        function downloadFailureUms() {
-            requirePlanning('results.export');
-            const rows = failureDetails.value.filter(row => row.um_no);
-            if (!rows.length)
-                return;
-            downloadCsv(`失败账号UM号_${props.failurePeriod.cycleStart}_${props.failurePeriod.cycleEnd}.csv`, [['属主UM号', '账号名称', '账号ID', '批次号', '失败原因'], ...rows.map(row => [row.um_no, row.account_name, row.account_id, row.batch_code, row.reason])]);
-        }
-        return {
-            canPlanning,
-            emit,
-            failureDetails,
-            failureLoading,
-            failureError,
-            downloadFailureUms
-        };
+export default {
+  props: {
+    failurePeriod: {
+      required: true,
+      type: null
+    }
+  },
+  components: {
+    DialogTitle
+  },
+  data() {
+    return {
+      failureDetails: [],
+      failureLoading: false,
+      failureError: '',
+      request: 0,
+      controller: undefined
+    };
+  },
+  computed: {
+    canPlanning() {
+      return canPlanning;
+    }
+  },
+  methods: {
+    downloadFailureUms() {
+      requirePlanning('results.export');
+      const rows = this.failureDetails.filter(row => row.um_no);
+      if (!rows.length) return;
+      downloadCsv(`失败账号UM号_${this.failurePeriod.cycleStart}_${this.failurePeriod.cycleEnd}.csv`, [['属主UM号', '账号名称', '账号ID', '批次号', '失败原因'], ...rows.map(row => [row.um_no, row.account_name, row.account_id, row.batch_code, row.reason])]);
     },
-    components: {DialogTitle}
-});
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  },
+  created() {
+    this.$watch(() => this.failurePeriod, async period => {
+      const current = ++this.request;
+      this.controller?.abort();
+      this.controller = new AbortController();
+      this.failureDetails = [];
+      this.failureError = '';
+      this.failureLoading = true;
+      try {
+        const rows = await api.resultFailures({
+          mode: 'cycle',
+          cycle_start: period.cycleStart,
+          cycle_end: period.cycleEnd,
+          batch_ids: period.batches.map(b => b.id),
+          page: 1,
+          page_size: 200,
+          filters: {}
+        }, this.controller.signal);
+        if (current === this.request) this.failureDetails = rows;
+      } catch (error) {
+        if (current === this.request) this.failureError = error instanceof Error ? error.message : '读取失败详情失败';
+      } finally {
+        if (current === this.request) this.failureLoading = false;
+      }
+    }, {
+      immediate: true
+    });
+  },
+  beforeDestroy() {
+    ++this.request;
+    this.controller?.abort();
+  }
+};
 </script>
 <template>
   <div class="drawer-mask" @click.self="emit('close')">

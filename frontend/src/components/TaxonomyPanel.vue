@@ -1,242 +1,256 @@
-<script lang="ts">
-import { useActivePage } from '../composables/useActivePage';
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
+<script>
+import { bindPageActivity } from "../services/pageActivity";
 import HoverHint from './HoverHint.vue';
-import type { TagTaxonomyItem } from '../api';
-import { isLeaf, newTaxonomyItem, tagGroups, tagKey, tagNames, type TaxonomyItems } from '../topicTaxonomy';
-export default defineComponent({
-    props: { modelValue: { required: true, type: null as unknown as PropType<TaxonomyItems> },
-        editing: { required: false, type: Boolean as PropType<boolean>, default: false },
-        disabled: { required: false, type: Boolean as PropType<boolean>, default: false } },
-    setup(props, context) {
-        const emit = context.emit;
-        const active = ref('T3');
-        const collapsed = ref<string[]>([]);
-        const groupInput = ref('');
-        const leafInputs = ref<Record<string, string>>({});
-        const selected = ref<string | null>(null);
-        const renameValue = ref('');
-        const error = ref('');
-        const action = ref<'menu' | 'rename'>('menu');
-        const popover = ref<HTMLElement | null>(null);
-        const renameInput = ref<HTMLInputElement | null>(null);
-        const position = ref({
-            left: '0px',
-            top: '0px'
-        });
-        let anchor: HTMLElement | null = null;
-        const allGroups = computed(() => tagGroups(props.modelValue, active.value, true));
-        const groups = computed(() => allGroups.value.filter(group => group.enabled).map(group => ({
-            ...group,
-            tags: group.tags.filter(tag => tag.enabled)
-        })));
-        const inactiveGroups = computed(() => allGroups.value.map(group => ({
-            ...group,
-            tags: group.enabled ? group.tags.filter(tag => !tag.enabled) : group.tags
-        })).filter(group => !group.enabled || group.tags.length));
-        const selectedItem = computed(() => (props.modelValue[active.value] ?? []).find(item => tagKey(item) === selected.value));
-        function commit(items: TagTaxonomyItem[]) {
-            emit('update:modelValue', {
-                ...props.modelValue,
-                [active.value]: items
-            });
-        }
-        function validateName(value: string, type: 'tag' | 'group', excluded?: string) {
-            if (!value || value.length > 80) {
-                error.value = '名称需为1至80字';
-                return false;
-            }
-            if ((props.modelValue[active.value] ?? []).some(item => tagKey(item) !== excluded && (item.node_type ?? 'tag') === type && item.name === value)) {
-                error.value = type === 'group' ? '分类名称已存在' : '标签名称已存在';
-                return false;
-            }
-            error.value = '';
-            return true;
-        }
-        function addGroup() {
-            if (!props.editing || props.disabled)
-                return;
-            const name = groupInput.value.trim();
-            if (!validateName(name, 'group'))
-                return;
-            commit([...(props.modelValue[active.value] ?? []), newTaxonomyItem(name, 'group')]);
-            groupInput.value = '';
-        }
-        function addLeaf(groupId: string) {
-            if (!props.editing || props.disabled)
-                return;
-            const name = (leafInputs.value[groupId] ?? '').trim();
-            if (!validateName(name, 'tag'))
-                return;
-            commit([...(props.modelValue[active.value] ?? []), newTaxonomyItem(name, 'tag', groupId === 'unassigned' ? null : groupId)]);
-            leafInputs.value = { ...leafInputs.value, [groupId]: '' };
-        }
-        function closeActions(restoreFocus = false) {
-            const previousAnchor = anchor;
-            selected.value = null;
-            anchor = null;
-            error.value = '';
-            if (restoreFocus && previousAnchor?.isConnected)
-                previousAnchor.focus({
-                    preventScroll: true
-                });
-        }
-        function positionActions() {
-            if (!anchor?.isConnected || !popover.value)
-                return;
-            const rect = anchor.getBoundingClientRect();
-            if (rect.bottom < 0 || rect.top > window.innerHeight) {
-                closeActions();
-                return;
-            }
-            const width = popover.value.offsetWidth;
-            const height = popover.value.offsetHeight;
-            const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-            const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6);
-            position.value = {
-                left: `${left}px`,
-                top: `${top}px`
-            };
-        }
-        async function select(item: TagTaxonomyItem | undefined, event: MouseEvent) {
-            if (!item) return;
-            if (!props.editing || props.disabled)
-                return;
-            if (selected.value === tagKey(item)) {
-                closeActions();
-                return;
-            }
-            anchor = event.currentTarget as HTMLElement;
-            selected.value = tagKey(item);
-            action.value = 'menu';
-            renameValue.value = item.name;
-            error.value = '';
-            await nextTick();
-            positionActions();
-            popover.value?.querySelector<HTMLButtonElement>('.taxonomy-menu-item')?.focus({
-                preventScroll: true
-            });
-        }
-        async function editAction(value: 'menu' | 'rename') {
-            action.value = value;
-            error.value = '';
-            await nextTick();
-            positionActions();
-            if (value === 'rename') {
-                renameInput.value?.focus({
-                    preventScroll: true
-                });
-                renameInput.value?.select();
-            }
-            else
-                popover.value?.querySelector<HTMLButtonElement>('.taxonomy-menu-item')?.focus({
-                    preventScroll: true
-                });
-        }
-        function saveName() {
-            const item = selectedItem.value;
-            if (!item || !props.editing || props.disabled)
-                return;
-            if (!validateName(renameValue.value.trim(), item.node_type ?? 'tag', tagKey(item)))
-                return;
-            commit(props.modelValue[active.value].map(candidate => tagKey(candidate) === tagKey(item) ? {
-                ...candidate,
-                name: renameValue.value.trim()
-            } : candidate));
-            closeActions(true);
-        }
-        function toggleEnabled() {
-            const item = selectedItem.value;
-            if (!item || !props.editing || props.disabled)
-                return;
-            const next = props.modelValue[active.value].map(candidate => tagKey(candidate) === tagKey(item) ? {
-                ...candidate,
-                enabled: !candidate.enabled
-            } : candidate);
-            if (!tagGroups({
-                [active.value]: next
-            }, active.value).some(group => group.tags.some(tag => tag.enabled))) {
-                error.value = '请至少保留一个启用分类及标签';
-                return;
-            }
-            commit(next);
-            closeActions(true);
-        }
-        function toggleGroup(id: string) {
-            closeActions();
-            collapsed.value = collapsed.value.includes(id) ? collapsed.value.filter(value => value !== id) : [...collapsed.value, id];
-        }
-        function outsideActions(event: Event) {
-            if (!selected.value || !(event.target instanceof Node))
-                return;
-            if (!popover.value?.contains(event.target) && !anchor?.contains(event.target))
-                closeActions();
-        }
-        function escapeActions(event: KeyboardEvent) {
-            if (selected.value && event.key === 'Escape') {
-                event.preventDefault();
-                closeActions(true);
-            }
-        }
-        watch([active, () => props.editing, () => props.disabled], () => {
-            closeActions();
-            groupInput.value = '';
-            leafInputs.value = {};
-        });
-        watch(selectedItem, item => {
-            if (!item && selected.value)
-                closeActions();
-        });
-        watch(error, async () => {
-            await nextTick();
-            positionActions();
-        });
-        useActivePage(() => {
-            document.addEventListener('pointerdown', outsideActions);
-            document.addEventListener('keydown', escapeActions);
-            window.addEventListener('resize', positionActions);
-            window.addEventListener('scroll', positionActions, true);
-        }, () => {
-            closeActions();
-            document.removeEventListener('pointerdown', outsideActions);
-            document.removeEventListener('keydown', escapeActions);
-            window.removeEventListener('resize', positionActions);
-            window.removeEventListener('scroll', positionActions, true);
-        });
-        const allCollapsed = computed(() => groups.value.length > 0 && groups.value.every(group => collapsed.value.includes(group.id)));
-        function toggleAllGroups() { collapsed.value = allCollapsed.value ? [] : groups.value.map(group => group.id); }
-        return {
-            allCollapsed, toggleAllGroups,
-            isLeaf,
-            tagKey,
-            tagNames,
-            active,
-            collapsed,
-            groupInput,
-            leafInputs,
-            selected,
-            renameValue,
-            error,
-            action,
-            popover,
-            renameInput,
-            position,
-            groups,
-            inactiveGroups,
-            selectedItem,
-            addGroup,
-            addLeaf,
-            select,
-            editAction,
-            saveName,
-            toggleEnabled,
-            toggleGroup
-        };
+import { isLeaf, newTaxonomyItem, tagGroups, tagKey, tagNames } from '../topicTaxonomy';
+export default {
+  props: {
+    modelValue: {
+      required: true,
+      type: null
     },
-    components: {HoverHint},
-    model: { prop: 'modelValue', event: 'update:modelValue' }
-});
+    editing: {
+      required: false,
+      type: Boolean,
+      default: false
+    },
+    disabled: {
+      required: false,
+      type: Boolean,
+      default: false
+    }
+  },
+  components: {
+    HoverHint
+  },
+  model: {
+    prop: 'modelValue',
+    event: 'update:modelValue'
+  },
+  data() {
+    return {
+      active: 'T3',
+      collapsed: [],
+      groupInput: '',
+      leafInputs: {},
+      selected: null,
+      renameValue: '',
+      error: '',
+      action: 'menu',
+      position: {
+        left: '0px',
+        top: '0px'
+      },
+      anchor: null
+    };
+  },
+  computed: {
+    popover: {
+      cache: false,
+      get() {
+        return this.$refs.popover || null;
+      }
+    },
+    renameInput: {
+      cache: false,
+      get() {
+        return this.$refs.renameInput || null;
+      }
+    },
+    allGroups() {
+      return tagGroups(this.modelValue, this.active, true);
+    },
+    groups() {
+      return this.allGroups.filter(group => group.enabled).map(group => ({
+        ...group,
+        tags: group.tags.filter(tag => tag.enabled)
+      }));
+    },
+    inactiveGroups() {
+      return this.allGroups.map(group => ({
+        ...group,
+        tags: group.enabled ? group.tags.filter(tag => !tag.enabled) : group.tags
+      })).filter(group => !group.enabled || group.tags.length);
+    },
+    selectedItem() {
+      return (this.modelValue[this.active] ?? []).find(item => tagKey(item) === this.selected);
+    },
+    allCollapsed() {
+      return this.groups.length > 0 && this.groups.every(group => this.collapsed.includes(group.id));
+    },
+    isLeaf() {
+      return isLeaf;
+    },
+    tagKey() {
+      return tagKey;
+    },
+    tagNames() {
+      return tagNames;
+    }
+  },
+  methods: {
+    commit(items) {
+      this.$emit('update:modelValue', {
+        ...this.modelValue,
+        [this.active]: items
+      });
+    },
+    validateName(value, type, excluded) {
+      if (!value || value.length > 80) {
+        this.error = '名称需为1至80字';
+        return false;
+      }
+      if ((this.modelValue[this.active] ?? []).some(item => tagKey(item) !== excluded && (item.node_type ?? 'tag') === type && item.name === value)) {
+        this.error = type === 'group' ? '分类名称已存在' : '标签名称已存在';
+        return false;
+      }
+      this.error = '';
+      return true;
+    },
+    addGroup() {
+      if (!this.editing || this.disabled) return;
+      const name = this.groupInput.trim();
+      if (!this.validateName(name, 'group')) return;
+      this.commit([...(this.modelValue[this.active] ?? []), newTaxonomyItem(name, 'group')]);
+      this.groupInput = '';
+    },
+    addLeaf(groupId) {
+      if (!this.editing || this.disabled) return;
+      const name = (this.leafInputs[groupId] ?? '').trim();
+      if (!this.validateName(name, 'tag')) return;
+      this.commit([...(this.modelValue[this.active] ?? []), newTaxonomyItem(name, 'tag', groupId === 'unassigned' ? null : groupId)]);
+      this.leafInputs = {
+        ...this.leafInputs,
+        [groupId]: ''
+      };
+    },
+    closeActions(restoreFocus = false) {
+      const previousAnchor = this.anchor;
+      this.selected = null;
+      this.anchor = null;
+      this.error = '';
+      if (restoreFocus && previousAnchor?.isConnected) previousAnchor.focus({
+        preventScroll: true
+      });
+    },
+    positionActions() {
+      if (!this.anchor?.isConnected || !this.popover) return;
+      const rect = this.anchor.getBoundingClientRect();
+      if (rect.bottom < 0 || rect.top > window.innerHeight) {
+        this.closeActions();
+        return;
+      }
+      const width = this.popover.offsetWidth;
+      const height = this.popover.offsetHeight;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6);
+      this.position = {
+        left: `${left}px`,
+        top: `${top}px`
+      };
+    },
+    async select(item, event) {
+      if (!item) return;
+      if (!this.editing || this.disabled) return;
+      if (this.selected === tagKey(item)) {
+        this.closeActions();
+        return;
+      }
+      this.anchor = event.currentTarget;
+      this.selected = tagKey(item);
+      this.action = 'menu';
+      this.renameValue = item.name;
+      this.error = '';
+      await this.$nextTick();
+      this.positionActions();
+      this.popover?.querySelector('.taxonomy-menu-item')?.focus({
+        preventScroll: true
+      });
+    },
+    async editAction(value) {
+      this.action = value;
+      this.error = '';
+      await this.$nextTick();
+      this.positionActions();
+      if (value === 'rename') {
+        this.renameInput?.focus({
+          preventScroll: true
+        });
+        this.renameInput?.select();
+      } else this.popover?.querySelector('.taxonomy-menu-item')?.focus({
+        preventScroll: true
+      });
+    },
+    saveName() {
+      const item = this.selectedItem;
+      if (!item || !this.editing || this.disabled) return;
+      if (!this.validateName(this.renameValue.trim(), item.node_type ?? 'tag', tagKey(item))) return;
+      this.commit(this.modelValue[this.active].map(candidate => tagKey(candidate) === tagKey(item) ? {
+        ...candidate,
+        name: this.renameValue.trim()
+      } : candidate));
+      this.closeActions(true);
+    },
+    toggleEnabled() {
+      const item = this.selectedItem;
+      if (!item || !this.editing || this.disabled) return;
+      const next = this.modelValue[this.active].map(candidate => tagKey(candidate) === tagKey(item) ? {
+        ...candidate,
+        enabled: !candidate.enabled
+      } : candidate);
+      if (!tagGroups({
+        [this.active]: next
+      }, this.active).some(group => group.tags.some(tag => tag.enabled))) {
+        this.error = '请至少保留一个启用分类及标签';
+        return;
+      }
+      this.commit(next);
+      this.closeActions(true);
+    },
+    toggleGroup(id) {
+      this.closeActions();
+      this.collapsed = this.collapsed.includes(id) ? this.collapsed.filter(value => value !== id) : [...this.collapsed, id];
+    },
+    outsideActions(event) {
+      if (!this.selected || !(event.target instanceof Node)) return;
+      if (!this.popover?.contains(event.target) && !this.anchor?.contains(event.target)) this.closeActions();
+    },
+    escapeActions(event) {
+      if (this.selected && event.key === 'Escape') {
+        event.preventDefault();
+        this.closeActions(true);
+      }
+    },
+    toggleAllGroups() {
+      this.collapsed = this.allCollapsed ? [] : this.groups.map(group => group.id);
+    }
+  },
+  created() {
+    this.$watch(() => [this.active, this.editing, this.disabled], () => {
+      this.closeActions();
+      this.groupInput = '';
+      this.leafInputs = {};
+    });
+    this.$watch(() => this.selectedItem, item => {
+      if (!item && this.selected) this.closeActions();
+    });
+    this.$watch(() => this.error, async () => {
+      await this.$nextTick();
+      this.positionActions();
+    });
+    bindPageActivity(this, () => {
+      document.addEventListener('pointerdown', this.outsideActions);
+      document.addEventListener('keydown', this.escapeActions);
+      window.addEventListener('resize', this.positionActions);
+      window.addEventListener('scroll', this.positionActions, true);
+    }, () => {
+      this.closeActions();
+      document.removeEventListener('pointerdown', this.outsideActions);
+      document.removeEventListener('keydown', this.escapeActions);
+      window.removeEventListener('resize', this.positionActions);
+      window.removeEventListener('scroll', this.positionActions, true);
+    });
+  }
+};
 </script>
 <template>
 <div class="vue2-component-root">

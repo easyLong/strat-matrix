@@ -1,65 +1,85 @@
-<script lang="ts">
+<script>
 import DialogTitle from '../../components/DialogTitle.vue';
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed, toRef } from '../../compat/composition';
 import { canPlanning } from '../../host/runtime';
 import { formatDateTime } from '../../planningTime';
 import { lifecycleRuleSummary } from '../../ui/lifecycleRules';
 import { canRestoreConfig, configDetailRows, configHistorySummary, configVersionNumber } from '../../ui/configHistory';
-import type { ConfigVersionSummary } from '../../types';
-export default defineComponent({
-    props: { versions: { required: true, type: Array as PropType<ConfigVersionSummary[]> },
-        disabled: { required: true, type: Boolean as PropType<boolean> },
-        detail: { required: true, type: null as unknown as PropType<ConfigVersionSummary | null> } },
-    setup(props, context) {
-        const versions = toRef(props, 'versions');
-        const versionDetail = computed({
-            get: () => props.detail,
-            set: value => emit('update:detail', value)
-        });
-        const emit = context.emit;
-        const displayVersionNumber = (version: ConfigVersionSummary) => configVersionNumber(version, versions.value);
-        function showVersionDetail(version: ConfigVersionSummary) {
-            versionDetail.value = version;
-        }
-        const versionDetailRows = computed(() => versionDetail.value ? configDetailRows(versionDetail.value.config) : []);
-        const versionPrevious = computed(() => {
-            if (!versionDetail.value)
-                return null;
-            const index = versions.value.findIndex(item => item.version === versionDetail.value?.version);
-            return index >= 0 ? versions.value[index + 1] ?? null : null;
-        });
-        const versionChanges = computed(() => {
-            if (!versionDetail.value || !versionPrevious.value)
-                return [];
-            const current = configDetailRows(versionDetail.value.config);
-            const previous = new Map(configDetailRows(versionPrevious.value.config).map(row => [row.key, row.value]));
-            return current.flatMap(row => {
-                const oldValue = previous.get(row.key);
-                return oldValue === row.value ? [] : [{
-                        ...row,
-                        oldValue: oldValue ?? '无',
-                        newValue: row.value
-                    }];
-            });
-        });
-        return {
-            canPlanning,
-            formatDateTime,
-            lifecycleRuleSummary,
-            canRestoreConfig,
-            configHistorySummary,
-            versionDetail,
-            emit,
-            displayVersionNumber,
-            showVersionDetail,
-            versionDetailRows,
-            versionPrevious,
-            versionChanges
-        };
+export default {
+  props: {
+    versions: {
+      required: true,
+      type: Array
     },
-    components: {DialogTitle}
-});
+    disabled: {
+      required: true,
+      type: Boolean
+    },
+    detail: {
+      required: true,
+      type: null
+    }
+  },
+  components: {
+    DialogTitle
+  },
+  computed: {
+    versionDetail: {
+      get() {
+        return this.detail;
+      },
+      set(value) {
+        return this.$emit('update:detail', value);
+      }
+    },
+    versionDetailRows() {
+      return this.versionDetail ? configDetailRows(this.versionDetail.config) : [];
+    },
+    versionPrevious() {
+      if (!this.versionDetail) return null;
+      const index = this.versions.findIndex(item => item.version === this.versionDetail?.version);
+      return index >= 0 ? this.versions[index + 1] ?? null : null;
+    },
+    versionChanges() {
+      if (!this.versionDetail || !this.versionPrevious) return [];
+      const current = configDetailRows(this.versionDetail.config);
+      const previous = new Map(configDetailRows(this.versionPrevious.config).map(row => [row.key, row.value]));
+      return current.flatMap(row => {
+        const oldValue = previous.get(row.key);
+        return oldValue === row.value ? [] : [{
+          ...row,
+          oldValue: oldValue ?? '无',
+          newValue: row.value
+        }];
+      });
+    },
+    canPlanning() {
+      return canPlanning;
+    },
+    formatDateTime() {
+      return formatDateTime;
+    },
+    lifecycleRuleSummary() {
+      return lifecycleRuleSummary;
+    },
+    canRestoreConfig() {
+      return canRestoreConfig;
+    },
+    configHistorySummary() {
+      return configHistorySummary;
+    }
+  },
+  methods: {
+    displayVersionNumber(version) {
+      return configVersionNumber(version, this.versions);
+    },
+    showVersionDetail(version) {
+      this.versionDetail = version;
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  }
+};
 </script>
 <template>
 <div class="vue2-component-root">

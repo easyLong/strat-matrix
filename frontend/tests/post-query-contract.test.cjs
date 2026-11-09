@@ -2,8 +2,8 @@ const { it: test } = require('mocha')
 const assert = require('node:assert/strict')
 const path = require('node:path')
 const { load } = require('./helpers/vue2-loader.cjs')
-const transport = load(path.resolve(__dirname,'../src/api/http.ts'))
-const { api } = load(path.resolve(__dirname,'../src/api.ts'))
+const transport = load(path.resolve(__dirname,'../src/api/http.js'))
+const { api } = load(path.resolve(__dirname,'../src/api.js'))
 
 test('business POST requests do not depend on health or protocol negotiation', async () => {
   const calls=[]

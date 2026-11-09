@@ -1,30 +1,38 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed } from '../../compat/composition';
+<script>
 import HoverHint from '../HoverHint.vue';
-import type { ContentTypeCount } from '../../ui/contentTypeStats';
-export default defineComponent({
-    props: { mode: { required: true, type: String as PropType<'account' | 'cycle' | 'batch'> },
-        summary: { required: true, type: Object as PropType<{
-                accounts: number;
-                batches: number;
-                topics: number;
-            }> },
-        distribution: { required: true, type: Array as PropType<ContentTypeCount[]> } },
-    setup(props, context) {
-        const isAccountMode = computed(() => props.mode === 'account');
-        const isBatchMode = computed(() => props.mode === 'batch');
-        const dashboard = computed(() => props.summary);
-        const topicTypeCounts = computed(() => [...props.distribution].sort((a, b) => b.count - a.count));
-        return {
-            isAccountMode,
-            isBatchMode,
-            dashboard,
-            topicTypeCounts
-        };
+export default {
+  props: {
+    mode: {
+      required: true,
+      type: String
     },
-    components: {HoverHint}
-});
+    summary: {
+      required: true,
+      type: Object
+    },
+    distribution: {
+      required: true,
+      type: Array
+    }
+  },
+  components: {
+    HoverHint
+  },
+  computed: {
+    isAccountMode() {
+      return this.mode === 'account';
+    },
+    isBatchMode() {
+      return this.mode === 'batch';
+    },
+    dashboard() {
+      return this.summary;
+    },
+    topicTypeCounts() {
+      return [...this.distribution].sort((a, b) => b.count - a.count);
+    }
+  }
+};
 </script>
 <template>
 <div class="vue2-component-root">

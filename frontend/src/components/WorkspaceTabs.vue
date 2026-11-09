@@ -1,26 +1,41 @@
-<script lang="ts">
-import { defineComponent, nextTick, ref, watch, type PropType } from '../compat/composition'
-import type { WorkspaceTab } from '../composables/useWorkspaceTabs'
-export default defineComponent({
-  props: { tabs: { type: Array as PropType<WorkspaceTab[]>, required: true }, active: String, busy: Boolean },
-  setup(props, { emit }) {
-    const strip = ref<HTMLElement | null>(null)
-    watch(() => props.active, async () => {
-      await nextTick()
-      strip.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    })
-    function move(event: KeyboardEvent, index: number) {
-      const size = props.tabs.length
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? size - 1
-        : event.key === 'ArrowRight' ? (index + 1) % size : event.key === 'ArrowLeft' ? (index + size - 1) % size : -1
-      if (next < 0 || props.busy) return
-      event.preventDefault()
-      emit('select', props.tabs[next].key)
-      ;(strip.value?.querySelectorAll('[role="tab"]')[next] as HTMLElement)?.focus()
-    }
-    return { strip, move }
+<script>
+export default {
+  props: {
+    tabs: {
+      type: Array,
+      required: true
+    },
+    active: String,
+    busy: Boolean
   },
-})
+  computed: {
+    strip: {
+      cache: false,
+      get() {
+        return this.$refs.strip || null;
+      }
+    }
+  },
+  methods: {
+    move(event, index) {
+      const size = this.tabs.length;
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? size - 1 : event.key === 'ArrowRight' ? (index + 1) % size : event.key === 'ArrowLeft' ? (index + size - 1) % size : -1;
+      if (next < 0 || this.busy) return;
+      event.preventDefault();
+      this.$emit('select', this.tabs[next].key);
+      this.strip?.querySelectorAll('[role="tab"]')[next]?.focus();
+    }
+  },
+  created() {
+    this.$watch(() => this.active, async () => {
+      await this.$nextTick();
+      this.strip?.querySelector('[aria-selected="true"]')?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest'
+      });
+    });
+  }
+};
 </script>
 <template>
   <div ref="strip" class="workspace-tabs" role="tablist" aria-label="业务页面">

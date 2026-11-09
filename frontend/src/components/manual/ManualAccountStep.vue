@@ -1,88 +1,516 @@
-<script lang="ts">
+<script>
 import QueryActions from '../QueryActions.vue';
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed, toRef } from '../../compat/composition';
 import AccountTypeBadge from '../AccountTypeBadge.vue';
 import ListPagination from '../ListPagination.vue';
 import LoadingSkeleton from '../LoadingSkeleton.vue';
-import type { ManualAccountSelection } from '../../composables/useManualAccountSelection';
-export default defineComponent({
-    props: { selection: { required: true, type: null as unknown as PropType<ManualAccountSelection> },
-        marketing: { required: true, type: Boolean as PropType<boolean> },
-        publishDate: { required: true, type: String as PropType<string> },
-        busy: { required: true, type: Boolean as PropType<boolean> },
-        loading: { required: true, type: Boolean as PropType<boolean> },
-        initialized: { required: true, type: Boolean as PropType<boolean> } },
-    setup(props, context) {
-        const isMarketing = toRef(props, 'marketing');
-        const emit = context.emit;
-        const { sampledIds, accountReview, accountSelectionMode, setAccountSelectionMode, accountPage, availabilityReady, availabilityLoading, isAccountPlanned, targetCount, targetCountError, lifecycleFilter, lifecycleOptions, followersMin, followersMax, accountTypeFilter, organizationFilter, organizationOptions, platformFilter, platformOptions, keyword, umNoFilter, applyAccountFilters, accountSelectionPool, matchingAccounts, downloadAccountTemplate, importFileInput, importAccountsByIdentifier, importDataRowCount, importMatchedCount, importDuplicateRows, importUnmatchedRows, importPlannedRows, hasImportIssues, importErrorCount, showImportIssues, importIssueDialogOpen, importDialogClose, importTrigger, availableMatchingCount, plannedMatchingCount, accountListRef, plannedAccountTooltip, allAccountsSelected, someAccountsSelected, selectAllAccounts, pagedAccounts, visibleAccounts, accountPageSize, toggleAccountRow, showPlannedAccountTooltip, toggleAccount, closeImportIssueDialog, importRowLabel, downloadImportIssues } = props.selection;
-        return {
-            importIssueRows: computed(() => [
-                ...importUnmatchedRows.value.map(row => ({ ...row, tone:'error', kind:'未能识别账号' })),
-                ...importPlannedRows.value.map(row => ({ ...row, tone:'warning', kind:'已投放账号' })),
-                ...importDuplicateRows.value.map(row => ({ ...row, tone:'warning', kind:'账号重复' })),
-            ].sort((a,b) => a.rowNumber-b.rowNumber)),
-            isMarketing,
-            emit,
-            sampledIds,
-            accountReview,
-            accountSelectionMode,
-            setAccountSelectionMode,
-            accountPage,
-            availabilityReady,
-            availabilityLoading,
-            isAccountPlanned,
-            targetCount,
-            targetCountError,
-            lifecycleFilter,
-            lifecycleOptions,
-            followersMin,
-            followersMax,
-            accountTypeFilter,
-            organizationFilter,
-            organizationOptions,
-            platformFilter,
-            platformOptions,
-            keyword,
-            umNoFilter,
-            applyAccountFilters,
-            accountSelectionPool,
-            matchingAccounts,
-            downloadAccountTemplate,
-            importFileInput,
-            importAccountsByIdentifier,
-            importDataRowCount,
-            importMatchedCount,
-            importDuplicateRows,
-            importUnmatchedRows,
-            importPlannedRows,
-            hasImportIssues,
-            importErrorCount,
-            showImportIssues,
-            importIssueDialogOpen,
-            importDialogClose,
-            importTrigger,
-            availableMatchingCount,
-            plannedMatchingCount,
-            accountListRef,
-            plannedAccountTooltip,
-            allAccountsSelected,
-            someAccountsSelected,
-            selectAllAccounts,
-            pagedAccounts,
-            visibleAccounts,
-            accountPageSize,
-            toggleAccountRow,
-            showPlannedAccountTooltip,
-            toggleAccount,
-            closeImportIssueDialog,
-            importRowLabel,
-            downloadImportIssues
-        };
+export default {
+  props: {
+    selection: {
+      required: true,
+      type: null
     },
-    components: {QueryActions, LoadingSkeleton, AccountTypeBadge, ListPagination}
-});
+    marketing: {
+      required: true,
+      type: Boolean
+    },
+    publishDate: {
+      required: true,
+      type: String
+    },
+    busy: {
+      required: true,
+      type: Boolean
+    },
+    loading: {
+      required: true,
+      type: Boolean
+    },
+    initialized: {
+      required: true,
+      type: Boolean
+    }
+  },
+  components: {
+    QueryActions,
+    LoadingSkeleton,
+    AccountTypeBadge,
+    ListPagination
+  },
+  computed: {
+    isMarketing: {
+      get() {
+        return this['marketing'];
+      },
+      set(value) {
+        this['marketing'] = value;
+      }
+    },
+    sampledIds: {
+      get() {
+        return this.selection.sampledIds;
+      },
+      set(value) {
+        this.selection.sampledIds = value;
+      }
+    },
+    accountReview: {
+      get() {
+        return this.selection.accountReview;
+      },
+      set(value) {
+        this.selection.accountReview = value;
+      }
+    },
+    accountSelectionMode: {
+      get() {
+        return this.selection.accountSelectionMode;
+      },
+      set(value) {
+        this.selection.accountSelectionMode = value;
+      }
+    },
+    setAccountSelectionMode: {
+      get() {
+        return this.selection.setAccountSelectionMode;
+      },
+      set(value) {
+        this.selection.setAccountSelectionMode = value;
+      }
+    },
+    accountPage: {
+      get() {
+        return this.selection.accountPage;
+      },
+      set(value) {
+        this.selection.accountPage = value;
+      }
+    },
+    availabilityReady: {
+      get() {
+        return this.selection.availabilityReady;
+      },
+      set(value) {
+        this.selection.availabilityReady = value;
+      }
+    },
+    availabilityLoading: {
+      get() {
+        return this.selection.availabilityLoading;
+      },
+      set(value) {
+        this.selection.availabilityLoading = value;
+      }
+    },
+    isAccountPlanned: {
+      get() {
+        return this.selection.isAccountPlanned;
+      },
+      set(value) {
+        this.selection.isAccountPlanned = value;
+      }
+    },
+    targetCount: {
+      get() {
+        return this.selection.targetCount;
+      },
+      set(value) {
+        this.selection.targetCount = value;
+      }
+    },
+    targetCountError: {
+      get() {
+        return this.selection.targetCountError;
+      },
+      set(value) {
+        this.selection.targetCountError = value;
+      }
+    },
+    lifecycleFilter: {
+      get() {
+        return this.selection.lifecycleFilter;
+      },
+      set(value) {
+        this.selection.lifecycleFilter = value;
+      }
+    },
+    lifecycleOptions: {
+      get() {
+        return this.selection.lifecycleOptions;
+      },
+      set(value) {
+        this.selection.lifecycleOptions = value;
+      }
+    },
+    followersMin: {
+      get() {
+        return this.selection.followersMin;
+      },
+      set(value) {
+        this.selection.followersMin = value;
+      }
+    },
+    followersMax: {
+      get() {
+        return this.selection.followersMax;
+      },
+      set(value) {
+        this.selection.followersMax = value;
+      }
+    },
+    accountTypeFilter: {
+      get() {
+        return this.selection.accountTypeFilter;
+      },
+      set(value) {
+        this.selection.accountTypeFilter = value;
+      }
+    },
+    organizationFilter: {
+      get() {
+        return this.selection.organizationFilter;
+      },
+      set(value) {
+        this.selection.organizationFilter = value;
+      }
+    },
+    organizationOptions: {
+      get() {
+        return this.selection.organizationOptions;
+      },
+      set(value) {
+        this.selection.organizationOptions = value;
+      }
+    },
+    platformFilter: {
+      get() {
+        return this.selection.platformFilter;
+      },
+      set(value) {
+        this.selection.platformFilter = value;
+      }
+    },
+    platformOptions: {
+      get() {
+        return this.selection.platformOptions;
+      },
+      set(value) {
+        this.selection.platformOptions = value;
+      }
+    },
+    keyword: {
+      get() {
+        return this.selection.keyword;
+      },
+      set(value) {
+        this.selection.keyword = value;
+      }
+    },
+    umNoFilter: {
+      get() {
+        return this.selection.umNoFilter;
+      },
+      set(value) {
+        this.selection.umNoFilter = value;
+      }
+    },
+    applyAccountFilters: {
+      get() {
+        return this.selection.applyAccountFilters;
+      },
+      set(value) {
+        this.selection.applyAccountFilters = value;
+      }
+    },
+    accountSelectionPool: {
+      get() {
+        return this.selection.accountSelectionPool;
+      },
+      set(value) {
+        this.selection.accountSelectionPool = value;
+      }
+    },
+    matchingAccounts: {
+      get() {
+        return this.selection.matchingAccounts;
+      },
+      set(value) {
+        this.selection.matchingAccounts = value;
+      }
+    },
+    downloadAccountTemplate: {
+      get() {
+        return this.selection.downloadAccountTemplate;
+      },
+      set(value) {
+        this.selection.downloadAccountTemplate = value;
+      }
+    },
+    importFileInput: {
+      get() {
+        return this.selection.importFileInput;
+      },
+      set(value) {
+        this.selection.importFileInput = value;
+      }
+    },
+    importAccountsByIdentifier: {
+      get() {
+        return this.selection.importAccountsByIdentifier;
+      },
+      set(value) {
+        this.selection.importAccountsByIdentifier = value;
+      }
+    },
+    importDataRowCount: {
+      get() {
+        return this.selection.importDataRowCount;
+      },
+      set(value) {
+        this.selection.importDataRowCount = value;
+      }
+    },
+    importMatchedCount: {
+      get() {
+        return this.selection.importMatchedCount;
+      },
+      set(value) {
+        this.selection.importMatchedCount = value;
+      }
+    },
+    importDuplicateRows: {
+      get() {
+        return this.selection.importDuplicateRows;
+      },
+      set(value) {
+        this.selection.importDuplicateRows = value;
+      }
+    },
+    importUnmatchedRows: {
+      get() {
+        return this.selection.importUnmatchedRows;
+      },
+      set(value) {
+        this.selection.importUnmatchedRows = value;
+      }
+    },
+    importPlannedRows: {
+      get() {
+        return this.selection.importPlannedRows;
+      },
+      set(value) {
+        this.selection.importPlannedRows = value;
+      }
+    },
+    hasImportIssues: {
+      get() {
+        return this.selection.hasImportIssues;
+      },
+      set(value) {
+        this.selection.hasImportIssues = value;
+      }
+    },
+    importErrorCount: {
+      get() {
+        return this.selection.importErrorCount;
+      },
+      set(value) {
+        this.selection.importErrorCount = value;
+      }
+    },
+    showImportIssues: {
+      get() {
+        return this.selection.showImportIssues;
+      },
+      set(value) {
+        this.selection.showImportIssues = value;
+      }
+    },
+    importIssueDialogOpen: {
+      get() {
+        return this.selection.importIssueDialogOpen;
+      },
+      set(value) {
+        this.selection.importIssueDialogOpen = value;
+      }
+    },
+    importDialogClose: {
+      get() {
+        return this.selection.importDialogClose;
+      },
+      set(value) {
+        this.selection.importDialogClose = value;
+      }
+    },
+    importTrigger: {
+      get() {
+        return this.selection.importTrigger;
+      },
+      set(value) {
+        this.selection.importTrigger = value;
+      }
+    },
+    availableMatchingCount: {
+      get() {
+        return this.selection.availableMatchingCount;
+      },
+      set(value) {
+        this.selection.availableMatchingCount = value;
+      }
+    },
+    plannedMatchingCount: {
+      get() {
+        return this.selection.plannedMatchingCount;
+      },
+      set(value) {
+        this.selection.plannedMatchingCount = value;
+      }
+    },
+    accountListRef: {
+      get() {
+        return this.selection.accountListRef;
+      },
+      set(value) {
+        this.selection.accountListRef = value;
+      }
+    },
+    plannedAccountTooltip: {
+      get() {
+        return this.selection.plannedAccountTooltip;
+      },
+      set(value) {
+        this.selection.plannedAccountTooltip = value;
+      }
+    },
+    allAccountsSelected: {
+      get() {
+        return this.selection.allAccountsSelected;
+      },
+      set(value) {
+        this.selection.allAccountsSelected = value;
+      }
+    },
+    someAccountsSelected: {
+      get() {
+        return this.selection.someAccountsSelected;
+      },
+      set(value) {
+        this.selection.someAccountsSelected = value;
+      }
+    },
+    selectAllAccounts: {
+      get() {
+        return this.selection.selectAllAccounts;
+      },
+      set(value) {
+        this.selection.selectAllAccounts = value;
+      }
+    },
+    pagedAccounts: {
+      get() {
+        return this.selection.pagedAccounts;
+      },
+      set(value) {
+        this.selection.pagedAccounts = value;
+      }
+    },
+    visibleAccounts: {
+      get() {
+        return this.selection.visibleAccounts;
+      },
+      set(value) {
+        this.selection.visibleAccounts = value;
+      }
+    },
+    accountPageSize: {
+      get() {
+        return this.selection.accountPageSize;
+      },
+      set(value) {
+        this.selection.accountPageSize = value;
+      }
+    },
+    toggleAccountRow: {
+      get() {
+        return this.selection.toggleAccountRow;
+      },
+      set(value) {
+        this.selection.toggleAccountRow = value;
+      }
+    },
+    showPlannedAccountTooltip: {
+      get() {
+        return this.selection.showPlannedAccountTooltip;
+      },
+      set(value) {
+        this.selection.showPlannedAccountTooltip = value;
+      }
+    },
+    toggleAccount: {
+      get() {
+        return this.selection.toggleAccount;
+      },
+      set(value) {
+        this.selection.toggleAccount = value;
+      }
+    },
+    closeImportIssueDialog: {
+      get() {
+        return this.selection.closeImportIssueDialog;
+      },
+      set(value) {
+        this.selection.closeImportIssueDialog = value;
+      }
+    },
+    importRowLabel: {
+      get() {
+        return this.selection.importRowLabel;
+      },
+      set(value) {
+        this.selection.importRowLabel = value;
+      }
+    },
+    downloadImportIssues: {
+      get() {
+        return this.selection.downloadImportIssues;
+      },
+      set(value) {
+        this.selection.downloadImportIssues = value;
+      }
+    },
+    importIssueRows() {
+      return [...this.importUnmatchedRows.map(row => ({
+        ...row,
+        tone: 'error',
+        kind: '未能识别账号'
+      })), ...this.importPlannedRows.map(row => ({
+        ...row,
+        tone: 'warning',
+        kind: '已投放账号'
+      })), ...this.importDuplicateRows.map(row => ({
+        ...row,
+        tone: 'warning',
+        kind: '账号重复'
+      }))].sort((a, b) => a.rowNumber - b.rowNumber);
+    }
+  },
+  methods: {
+    emit(...args) {
+      return this.$emit(...args);
+    },
+    syncSelectionElements() {
+      for (const key of ["importFileInput", "importTrigger", "accountListRef", "importDialogClose"]) this.selection[key] = this.$refs[key] || null;
+    }
+  },
+  mounted() {
+    this.syncSelectionElements();
+  },
+  updated() {
+    this.syncSelectionElements();
+  },
+  beforeDestroy() {
+    for (const key of ["importFileInput", "importTrigger", "accountListRef", "importDialogClose"]) if (this.selection[key] === this.$refs[key]) this.selection[key] = null;
+  }
+};
 </script>
 <template>
 <div class="manual-account-step">

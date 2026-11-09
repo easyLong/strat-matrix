@@ -1,35 +1,54 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed } from '../compat/composition';
-export default defineComponent({
-    props: { page: { required: true, type: Number as PropType<number> },
-        pageSize: { required: true, type: Number as PropType<number> },
-        total: { required: true, type: Number as PropType<number> },
-        showTotal: { type: Boolean, default: true },
-        unit: { required: false, type: String as PropType<string>, default: '条' },
-        pageSizeOptions: { required: false, type: Array as PropType<number[]>, default: () => [10, 20, 50] } },
-    setup(props, context) {
-        const emit = context.emit;
-        const count = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)));
-        const pages = computed(() => {
-            const numbers = new Set([1, count.value]);
-            for (let p = Math.max(1, props.page - 1); p <= Math.min(count.value, props.page + 1); p++)
-                numbers.add(p);
-            const sorted = [...numbers].sort((a, b) => a - b);
-            return sorted.flatMap((page, index) => index && page - sorted[index - 1] > 1 ? [`gap-${page}`, page] : [page]);
-        });
-        function changeSize(event: Event) {
-            emit('update:pageSize', Number((event.target as HTMLSelectElement).value));
-            emit('update:page', 1);
-        }
-        return {
-            emit,
-            count,
-            pages,
-            changeSize
-        };
+<script>
+export default {
+  props: {
+    page: {
+      required: true,
+      type: Number
+    },
+    pageSize: {
+      required: true,
+      type: Number
+    },
+    total: {
+      required: true,
+      type: Number
+    },
+    showTotal: {
+      type: Boolean,
+      default: true
+    },
+    unit: {
+      required: false,
+      type: String,
+      default: '条'
+    },
+    pageSizeOptions: {
+      required: false,
+      type: Array,
+      default: () => [10, 20, 50]
     }
-});
+  },
+  computed: {
+    count() {
+      return Math.max(1, Math.ceil(this.total / this.pageSize));
+    },
+    pages() {
+      const numbers = new Set([1, this.count]);
+      for (let p = Math.max(1, this.page - 1); p <= Math.min(this.count, this.page + 1); p++) numbers.add(p);
+      const sorted = [...numbers].sort((a, b) => a - b);
+      return sorted.flatMap((page, index) => index && page - sorted[index - 1] > 1 ? [`gap-${page}`, page] : [page]);
+    }
+  },
+  methods: {
+    changeSize(event) {
+      this.$emit('update:pageSize', Number(event.target.value));
+      this.$emit('update:page', 1);
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  }
+};
 </script>
 <template>
   <nav class="account-pagination" aria-label="分页">

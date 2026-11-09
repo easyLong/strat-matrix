@@ -1,341 +1,302 @@
-<script lang="ts">
+<script>
 import DialogTitle from '../DialogTitle.vue';
 import QueryActions from '../QueryActions.vue';
 import PlanOperationTimeline from './PlanOperationTimeline.vue';
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed, nextTick, ref, watch, onBeforeUnmount } from '../../compat/composition';
 import TopicDetailDrawer from '../TopicDetailDrawer.vue';
 import { formatDateTime } from '../../planningTime';
-import { topicLabels, type TaxonomyItems } from '../../topicTaxonomy';
+import { topicLabels } from '../../topicTaxonomy';
 import { canReplacePlanTopic as isReplaceable, productionStatusLabel } from '../../ui/slotContentStatus';
 import { canPlanning } from '../../host/runtime';
 import { api } from '../../api';
-import type { AccountPlanRecord, AdjustmentRecord, TopicOption } from '../../types';
-type SlotOperationLog = {
-    key: string;
-    createdAt: string;
-    action: string;
-    actor: string;
-    detail: string;
-};
-export default defineComponent({
-    props: { plan: { required: true, type: null as unknown as PropType<AccountPlanRecord> } },
-    setup(props, context) {
-        const canReplacePlanTopic = (item: AccountPlanRecord) => canPlanning('results.replace') && isReplaceable(item);
-        const emit = context.emit;
-        const error = ref('');
-        const replaceTarget = ref<AccountPlanRecord | null>(null);
-        const planDrawerBody = ref<HTMLElement | null>(null);
-        const drawerMode = ref<'view' | 'replace' | 'history'>('replace');
-        const planTopicDetail = ref<TopicOption | null>(null);
-        const planDetailLoading = ref(false);
-        const planOperationsLoading = ref(false);
-        const planOperationsError = ref('');
-        const replacementTopics = ref<TopicOption[]>([]);
-        const taxonomyItems = ref<TaxonomyItems>({});
-        const detailTopic = ref<TopicOption | null>(null);
-        const replacementFiltersExpanded = ref(true);
-        const replacementQuery = ref('');
-        const replacementTopicIdFilter = ref('');
-        const replacementMarketingFilter = ref('');
-        const replacementContentType = ref('');
-        const replacementProduct = ref('');
-        const replacementActivity = ref('');
-        const replacementHotspot = ref('');
-        const appliedReplacementFilters = ref({
-            topicId: '',
-            query: '',
-            marketing: '',
-            contentType: '',
-            product: '',
-            activity: '',
-            hotspot: ''
-        });
-        const replacementTopicId = ref('');
-        const replacementReason = ref('');
-        const adjustmentHistory = ref<AdjustmentRecord[]>([]);
-        const replaceBusy = ref(false);
-        let planDetailRequest = 0;
-        let replacementReturnsToDetails = false;
-        let replacementReturnScrollTop = 0;
-        const planTopicTagGroups = computed(() => {
-            if (!planTopicDetail.value)
-                return [];
-            const labels = topicLabels(planTopicDetail.value, taxonomyItems.value);
-            const paths = (nodes: {
-                name: string;
-                path: string[];
-            }[]) => nodes.map(node => node.path.join(' / '));
-            return [{
-                    name: '业务属性',
-                    values: [labels.business]
-                }, {
-                    name: '经营作用',
-                    values: [labels.role]
-                }, {
-                    name: '内容主题',
-                    values: paths([...(labels.primary ? [labels.primary] : []), ...labels.related])
-                }, {
-                    name: '目标客群',
-                    values: paths(labels.audience)
-                }, {
-                    name: '使用场景',
-                    values: paths(labels.scenes)
-                }, {
-                    name: '用户需求',
-                    values: [labels.need]
-                }].map(group => ({
-                ...group,
-                values: group.values.filter(Boolean)
-            }));
-        });
-        const planOperationLogs = computed<SlotOperationLog[]>(() => {
-            const item = replaceTarget.value;
-            if (!item)
-                return [];
-            const logs: SlotOperationLog[] = [];
-            if (item.batch_created_at)
-                logs.push({
-                    key: `created-${item.id}`,
-                    createdAt: item.batch_created_at,
-                    action: '策划结果生成',
-                    actor: item.plan_type === 'manual' ? '人工策划' : 'AI 自动策划',
-                    detail: `批次 ${item.batch_code || '—'} · ${slotLabel(item.slot_type, item.plan_type)}`
-                });
-            for (const record of adjustmentHistory.value)
-                logs.push({
-                    key: `adjustment-${record.id}`,
-                    createdAt: record.created_at,
-                    action: ({ manual_replace:'替换选题', manual:'替换选题', hotspot_replace:'热点定题' } as Record<string,string>)[record.adjustment_source] || '选题调整',
-                    actor: record.created_by || '—',
-                    detail: `${record.old_topic_title || record.old_topic_id} → ${record.new_topic_title || record.new_topic_id}${record.reason ? ` · ${record.reason}` : ''}`
-                });
-            return logs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        });
-        function slotLabel(slotType: string, planType: string) {
-            if (planType === 'manual')
-                return '手动追加';
-            return ({
-                regular: '\u666e\u901a',
-                marketing_priority: '\u8425\u9500',
-                hotspot: '\u70ed\u70b9',
-                manual_extra: '\u624b\u52a8\u8ffd\u52a0'
-            } as Record<string, string>)[slotType] ?? slotType;
-        }
-        function topicTypeLabel(item: AccountPlanRecord) {
-            if (!item.topic_id)
-                return '\u5f85\u786e\u5b9a';
-            const type = String(item.topic_type ?? '');
-            if (type === '\u8425\u9500' || type === 'marketing' || type === 'marketing_priority')
-                return '\u8425\u9500';
-            if (type === '\u70ed\u70b9' || type === 'hotspot')
-                return '\u70ed\u70b9';
-            if (type === '\u666e\u901a' || type === 'normal' || type === 'regular')
-                return '\u666e\u901a';
-            return item.slot_type === 'hotspot' ? '\u70ed\u70b9' : item.slot_type === 'marketing_priority' ? '\u8425\u9500' : '\u666e\u901a';
-        }
-        function weekdayLabel(date: string) {
-            return new Intl.DateTimeFormat('zh-CN', {
-                weekday: 'short',
-                timeZone: 'UTC'
-            }).format(new Date(`${date}T00:00:00Z`));
-        }
-        const replacementContentTypes = computed(() => [...new Set(replacementTopics.value.map(topic => topic.content_type).filter(Boolean))].sort());
-        const replacementProducts = computed(() => [...new Set(replacementTopics.value.map(topic => topic.related_product).filter(Boolean))].sort());
-        const replacementActivities = computed(() => [...new Set(replacementTopics.value.map(topic => topic.related_activity).filter(Boolean))].sort());
-        const replacementHotspots = computed(() => [...new Set(replacementTopics.value.map(topic => topic.related_hotspot).filter(Boolean))].sort());
-        const replacementCandidates = computed(() => replacementTopics.value.filter(topic => (!appliedReplacementFilters.value.topicId.trim() || topic.topic_id === appliedReplacementFilters.value.topicId.trim()) && (!appliedReplacementFilters.value.query.trim() || topic.topic_title.toLocaleLowerCase().includes(appliedReplacementFilters.value.query.trim().toLocaleLowerCase())) && (!appliedReplacementFilters.value.marketing || String(topic.is_marketing) === appliedReplacementFilters.value.marketing) && (!appliedReplacementFilters.value.contentType || topic.content_type === appliedReplacementFilters.value.contentType) && (!appliedReplacementFilters.value.product || topic.related_product === appliedReplacementFilters.value.product) && (!appliedReplacementFilters.value.activity || topic.related_activity === appliedReplacementFilters.value.activity) && (!appliedReplacementFilters.value.hotspot || topic.related_hotspot === appliedReplacementFilters.value.hotspot)));
-        function applyReplacementFilters() {
-            appliedReplacementFilters.value = {
-                topicId: replacementTopicIdFilter.value,
-                query: replacementQuery.value,
-                marketing: replacementMarketingFilter.value,
-                contentType: replacementContentType.value,
-                product: replacementProduct.value,
-                activity: replacementActivity.value,
-                hotspot: replacementHotspot.value
-            };
-        }
-        async function openReplacement(item: AccountPlanRecord) {
-            if (!canReplacePlanTopic(item))
-                return;
-            const request = ++planDetailRequest;
-            replacementReturnsToDetails = drawerMode.value === 'view' && replaceTarget.value?.id === item.id;
-            replacementReturnScrollTop = planDrawerBody.value?.scrollTop ?? 0;
-            error.value = '';
-            drawerMode.value = 'replace';
-            replaceTarget.value = item;
-            replacementFiltersExpanded.value = true;
-            appliedReplacementFilters.value = {
-                topicId: '',
-                query: '',
-                marketing: '',
-                contentType: '',
-                product: '',
-                activity: '',
-                hotspot: ''
-            };
-            replacementQuery.value = '';
-            replacementTopicIdFilter.value = '';
-            replacementMarketingFilter.value = '';
-            replacementContentType.value = '';
-            replacementProduct.value = '';
-            replacementActivity.value = '';
-            replacementHotspot.value = '';
-            replacementTopicId.value = '';
-            replacementReason.value = '';
-            replacementTopics.value = [];
-            adjustmentHistory.value = [];
-            planOperationsLoading.value = true;
-            planOperationsError.value = '';
-            try {
-                const [topics, history, taxonomy] = await Promise.all([api.replacementCandidates(item.id), api.adjustments(item.id), api.tagTaxonomy()]);
-                if (request !== planDetailRequest)
-                    return;
-                taxonomyItems.value = taxonomy.items;
-                replacementTopics.value = topics;
-                adjustmentHistory.value = history;
-            }
-            catch (exc) {
-                if (request === planDetailRequest)
-                    error.value = exc instanceof Error ? exc.message : '读取替换信息失败';
-            }
-            finally { if (request === planDetailRequest) planOperationsLoading.value = false; }
-        }
-        async function openPlanDetails(item: AccountPlanRecord, known?: {
-            topic?: TopicOption;
-            adjustments?: AdjustmentRecord[];
-        }) {
-            const request = ++planDetailRequest;
-            drawerMode.value = 'view';
-            replaceTarget.value = item;
-            adjustmentHistory.value = known?.adjustments ?? [];
-            planOperationsError.value = '';
-            planOperationsLoading.value = !known?.adjustments;
-            const catalogTopic = known?.topic ?? null;
-            planTopicDetail.value = catalogTopic ?? {
-                topic_id: item.topic_id,
-                topic_title: item.topic_title,
-                outline: item.outline,
-                content_type: item.content_type,
-                category: '',
-                is_marketing: item.topic_type === '营销' || item.topic_type === 'marketing',
-                status: '可用',
-                topic_type: topicTypeLabel(item) === '热点' ? '热点' : topicTypeLabel(item) === '营销' ? '营销' : '普通'
-            };
-            planDetailLoading.value = !catalogTopic && Boolean(item.topic_id);
-            const [operationsResult, topicResult] = await Promise.allSettled([known?.adjustments ? Promise.resolve(known.adjustments) : api.adjustments(item.id), !catalogTopic && item.topic_id ? api.topicDetail(item.topic_id, topicTypeLabel(item)) : Promise.resolve(catalogTopic)]);
-            if (request !== planDetailRequest)
-                return;
-            if (operationsResult.status === 'fulfilled')
-                adjustmentHistory.value = operationsResult.value;
-            else
-                planOperationsError.value = operationsResult.reason instanceof Error ? operationsResult.reason.message : '操作记录暂不可用';
-            if (topicResult.status === 'fulfilled' && topicResult.value)
-                planTopicDetail.value = topicResult.value;
-            else if (topicResult.status === 'rejected')
-                planDetailLoading.value = false;
-            planDetailLoading.value = false;
-            planOperationsLoading.value = false;
-        }
-        function closeReplacement() {
-            planDetailRequest++;
-            replaceTarget.value = null;
-            planDetailLoading.value = false;
-            planOperationsLoading.value = false;
-            emit('close-plan');
-        }
-        async function confirmReplacement() {
-            if (replaceBusy.value || !replaceTarget.value || !canReplacePlanTopic(replaceTarget.value) || !replacementTopicId.value || replaceTarget.value.result_version == null)
-                return;
-            const request = planDetailRequest;
-            const returnToDetails = replacementReturnsToDetails;
-            const returnScrollTop = replacementReturnScrollTop;
-            const topic = replacementTopics.value.find(topic => topic.topic_id === replacementTopicId.value);
-            replaceBusy.value = true;
-            error.value = '';
-            try {
-                const result = await api.replaceTopic(replaceTarget.value.id, replacementTopicId.value, replaceTarget.value.result_version, replacementReason.value.trim());
-                emit('plan-updated', result.item);
-                if (request !== planDetailRequest || replaceTarget.value?.id !== result.item.id || drawerMode.value !== 'replace')
-                    return;
-                const adjustments = [result.adjustment, ...adjustmentHistory.value.filter(row => row.id !== result.adjustment.id)];
-                replacementTopicId.value = '';
-                if (returnToDetails) {
-                    void openPlanDetails(result.item, {
-                        topic,
-                        adjustments
-                    });
-                    await nextTick();
-                    if (planDrawerBody.value)
-                        planDrawerBody.value.scrollTop = returnScrollTop;
-                }
-                else
-                    closeReplacement();
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '替换失败，当前结果未改变';
-            }
-            finally {
-                replaceBusy.value = false;
-            }
-        }
-        watch(() => props.plan, item => {
-            void openPlanDetails(item);
-            const request = planDetailRequest;
-            void api.tagTaxonomy().then(taxonomy => {
-                if (request === planDetailRequest)
-                    taxonomyItems.value = taxonomy.items;
-            }).catch(() => { });
-        }, {
-            immediate: true
-        });
-        onBeforeUnmount(() => {
-            planDetailRequest++;
-        });
-        return {
-            formatDateTime,
-            canReplacePlanTopic,
-            productionStatusLabel,
-            error,
-            replaceTarget,
-            planDrawerBody,
-            drawerMode,
-            planTopicDetail,
-            planDetailLoading,
-            planOperationsLoading,
-            planOperationsError,
-            taxonomyItems,
-            detailTopic,
-            replacementFiltersExpanded,
-            replacementQuery,
-            replacementTopicIdFilter,
-            replacementMarketingFilter,
-            replacementContentType,
-            replacementProduct,
-            replacementActivity,
-            replacementHotspot,
-            replacementTopicId,
-            replacementReason,
-            adjustmentHistory,
-            replaceBusy,
-            planTopicTagGroups,
-            planOperationLogs,
-            slotLabel,
-            weekdayLabel,
-            replacementContentTypes,
-            replacementProducts,
-            replacementActivities,
-            replacementHotspots,
-            replacementCandidates,
-            applyReplacementFilters,
-            openReplacement,
-            closeReplacement,
-            confirmReplacement
-        };
+export default {
+  props: {
+    plan: {
+      required: true,
+      type: null
+    }
+  },
+  components: {
+    PlanOperationTimeline,
+    DialogTitle,
+    QueryActions,
+    TopicDetailDrawer
+  },
+  data() {
+    return {
+      error: '',
+      replaceTarget: null,
+      drawerMode: 'replace',
+      planTopicDetail: null,
+      planDetailLoading: false,
+      planOperationsLoading: false,
+      planOperationsError: '',
+      replacementTopics: [],
+      taxonomyItems: {},
+      detailTopic: null,
+      replacementFiltersExpanded: true,
+      replacementQuery: '',
+      replacementTopicIdFilter: '',
+      replacementMarketingFilter: '',
+      replacementContentType: '',
+      replacementProduct: '',
+      replacementActivity: '',
+      replacementHotspot: '',
+      appliedReplacementFilters: {
+        topicId: '',
+        query: '',
+        marketing: '',
+        contentType: '',
+        product: '',
+        activity: '',
+        hotspot: ''
+      },
+      replacementTopicId: '',
+      replacementReason: '',
+      adjustmentHistory: [],
+      replaceBusy: false,
+      planDetailRequest: 0,
+      replacementReturnsToDetails: false,
+      replacementReturnScrollTop: 0
+    };
+  },
+  computed: {
+    planDrawerBody: {
+      cache: false,
+      get() {
+        return this.$refs.planDrawerBody || null;
+      }
     },
-    components: {PlanOperationTimeline, DialogTitle, QueryActions, TopicDetailDrawer}
-});
+    planTopicTagGroups() {
+      if (!this.planTopicDetail) return [];
+      const labels = topicLabels(this.planTopicDetail, this.taxonomyItems);
+      const paths = nodes => nodes.map(node => node.path.join(' / '));
+      return [{
+        name: '业务属性',
+        values: [labels.business]
+      }, {
+        name: '经营作用',
+        values: [labels.role]
+      }, {
+        name: '内容主题',
+        values: paths([...(labels.primary ? [labels.primary] : []), ...labels.related])
+      }, {
+        name: '目标客群',
+        values: paths(labels.audience)
+      }, {
+        name: '使用场景',
+        values: paths(labels.scenes)
+      }, {
+        name: '用户需求',
+        values: [labels.need]
+      }].map(group => ({
+        ...group,
+        values: group.values.filter(Boolean)
+      }));
+    },
+    planOperationLogs() {
+      const item = this.replaceTarget;
+      if (!item) return [];
+      const logs = [];
+      if (item.batch_created_at) logs.push({
+        key: `created-${item.id}`,
+        createdAt: item.batch_created_at,
+        action: '策划结果生成',
+        actor: item.plan_type === 'manual' ? '人工策划' : 'AI 自动策划',
+        detail: `批次 ${item.batch_code || '—'} · ${this.slotLabel(item.slot_type, item.plan_type)}`
+      });
+      for (const record of this.adjustmentHistory) logs.push({
+        key: `adjustment-${record.id}`,
+        createdAt: record.created_at,
+        action: {
+          manual_replace: '替换选题',
+          manual: '替换选题',
+          hotspot_replace: '热点定题'
+        }[record.adjustment_source] || '选题调整',
+        actor: record.created_by || '—',
+        detail: `${record.old_topic_title || record.old_topic_id} → ${record.new_topic_title || record.new_topic_id}${record.reason ? ` · ${record.reason}` : ''}`
+      });
+      return logs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    replacementContentTypes() {
+      return [...new Set(this.replacementTopics.map(topic => topic.content_type).filter(Boolean))].sort();
+    },
+    replacementProducts() {
+      return [...new Set(this.replacementTopics.map(topic => topic.related_product).filter(Boolean))].sort();
+    },
+    replacementActivities() {
+      return [...new Set(this.replacementTopics.map(topic => topic.related_activity).filter(Boolean))].sort();
+    },
+    replacementHotspots() {
+      return [...new Set(this.replacementTopics.map(topic => topic.related_hotspot).filter(Boolean))].sort();
+    },
+    replacementCandidates() {
+      return this.replacementTopics.filter(topic => (!this.appliedReplacementFilters.topicId.trim() || topic.topic_id === this.appliedReplacementFilters.topicId.trim()) && (!this.appliedReplacementFilters.query.trim() || topic.topic_title.toLocaleLowerCase().includes(this.appliedReplacementFilters.query.trim().toLocaleLowerCase())) && (!this.appliedReplacementFilters.marketing || String(topic.is_marketing) === this.appliedReplacementFilters.marketing) && (!this.appliedReplacementFilters.contentType || topic.content_type === this.appliedReplacementFilters.contentType) && (!this.appliedReplacementFilters.product || topic.related_product === this.appliedReplacementFilters.product) && (!this.appliedReplacementFilters.activity || topic.related_activity === this.appliedReplacementFilters.activity) && (!this.appliedReplacementFilters.hotspot || topic.related_hotspot === this.appliedReplacementFilters.hotspot));
+    },
+    formatDateTime() {
+      return formatDateTime;
+    },
+    productionStatusLabel() {
+      return productionStatusLabel;
+    }
+  },
+  methods: {
+    canReplacePlanTopic(item) {
+      return canPlanning('results.replace') && isReplaceable(item);
+    },
+    slotLabel(slotType, planType) {
+      if (planType === 'manual') return '手动追加';
+      return {
+        regular: '\u666e\u901a',
+        marketing_priority: '\u8425\u9500',
+        hotspot: '\u70ed\u70b9',
+        manual_extra: '\u624b\u52a8\u8ffd\u52a0'
+      }[slotType] ?? slotType;
+    },
+    topicTypeLabel(item) {
+      if (!item.topic_id) return '\u5f85\u786e\u5b9a';
+      const type = String(item.topic_type ?? '');
+      if (type === '\u8425\u9500' || type === 'marketing' || type === 'marketing_priority') return '\u8425\u9500';
+      if (type === '\u70ed\u70b9' || type === 'hotspot') return '\u70ed\u70b9';
+      if (type === '\u666e\u901a' || type === 'normal' || type === 'regular') return '\u666e\u901a';
+      return item.slot_type === 'hotspot' ? '\u70ed\u70b9' : item.slot_type === 'marketing_priority' ? '\u8425\u9500' : '\u666e\u901a';
+    },
+    weekdayLabel(date) {
+      return new Intl.DateTimeFormat('zh-CN', {
+        weekday: 'short',
+        timeZone: 'UTC'
+      }).format(new Date(`${date}T00:00:00Z`));
+    },
+    applyReplacementFilters() {
+      this.appliedReplacementFilters = {
+        topicId: this.replacementTopicIdFilter,
+        query: this.replacementQuery,
+        marketing: this.replacementMarketingFilter,
+        contentType: this.replacementContentType,
+        product: this.replacementProduct,
+        activity: this.replacementActivity,
+        hotspot: this.replacementHotspot
+      };
+    },
+    async openReplacement(item) {
+      if (!this.canReplacePlanTopic(item)) return;
+      const request = ++this.planDetailRequest;
+      this.replacementReturnsToDetails = this.drawerMode === 'view' && this.replaceTarget?.id === item.id;
+      this.replacementReturnScrollTop = this.planDrawerBody?.scrollTop ?? 0;
+      this.error = '';
+      this.drawerMode = 'replace';
+      this.replaceTarget = item;
+      this.replacementFiltersExpanded = true;
+      this.appliedReplacementFilters = {
+        topicId: '',
+        query: '',
+        marketing: '',
+        contentType: '',
+        product: '',
+        activity: '',
+        hotspot: ''
+      };
+      this.replacementQuery = '';
+      this.replacementTopicIdFilter = '';
+      this.replacementMarketingFilter = '';
+      this.replacementContentType = '';
+      this.replacementProduct = '';
+      this.replacementActivity = '';
+      this.replacementHotspot = '';
+      this.replacementTopicId = '';
+      this.replacementReason = '';
+      this.replacementTopics = [];
+      this.adjustmentHistory = [];
+      this.planOperationsLoading = true;
+      this.planOperationsError = '';
+      try {
+        const [topics, history, taxonomy] = await Promise.all([api.replacementCandidates(item.id), api.adjustments(item.id), api.tagTaxonomy()]);
+        if (request !== this.planDetailRequest) return;
+        this.taxonomyItems = taxonomy.items;
+        this.replacementTopics = topics;
+        this.adjustmentHistory = history;
+      } catch (exc) {
+        if (request === this.planDetailRequest) this.error = exc instanceof Error ? exc.message : '读取替换信息失败';
+      } finally {
+        if (request === this.planDetailRequest) this.planOperationsLoading = false;
+      }
+    },
+    async openPlanDetails(item, known) {
+      const request = ++this.planDetailRequest;
+      this.drawerMode = 'view';
+      this.replaceTarget = item;
+      this.adjustmentHistory = known?.adjustments ?? [];
+      this.planOperationsError = '';
+      this.planOperationsLoading = !known?.adjustments;
+      const catalogTopic = known?.topic ?? null;
+      this.planTopicDetail = catalogTopic ?? {
+        topic_id: item.topic_id,
+        topic_title: item.topic_title,
+        outline: item.outline,
+        content_type: item.content_type,
+        category: '',
+        is_marketing: item.topic_type === '营销' || item.topic_type === 'marketing',
+        status: '可用',
+        topic_type: this.topicTypeLabel(item) === '热点' ? '热点' : this.topicTypeLabel(item) === '营销' ? '营销' : '普通'
+      };
+      this.planDetailLoading = !catalogTopic && Boolean(item.topic_id);
+      const [operationsResult, topicResult] = await Promise.allSettled([known?.adjustments ? Promise.resolve(known.adjustments) : api.adjustments(item.id), !catalogTopic && item.topic_id ? api.topicDetail(item.topic_id, this.topicTypeLabel(item)) : Promise.resolve(catalogTopic)]);
+      if (request !== this.planDetailRequest) return;
+      if (operationsResult.status === 'fulfilled') this.adjustmentHistory = operationsResult.value;else this.planOperationsError = operationsResult.reason instanceof Error ? operationsResult.reason.message : '操作记录暂不可用';
+      if (topicResult.status === 'fulfilled' && topicResult.value) this.planTopicDetail = topicResult.value;else if (topicResult.status === 'rejected') this.planDetailLoading = false;
+      this.planDetailLoading = false;
+      this.planOperationsLoading = false;
+    },
+    closeReplacement() {
+      this.planDetailRequest++;
+      this.replaceTarget = null;
+      this.planDetailLoading = false;
+      this.planOperationsLoading = false;
+      this.$emit('close-plan');
+    },
+    async confirmReplacement() {
+      if (this.replaceBusy || !this.replaceTarget || !this.canReplacePlanTopic(this.replaceTarget) || !this.replacementTopicId || this.replaceTarget.result_version == null) return;
+      const request = this.planDetailRequest;
+      const returnToDetails = this.replacementReturnsToDetails;
+      const returnScrollTop = this.replacementReturnScrollTop;
+      const topic = this.replacementTopics.find(topic => topic.topic_id === this.replacementTopicId);
+      this.replaceBusy = true;
+      this.error = '';
+      try {
+        const result = await api.replaceTopic(this.replaceTarget.id, this.replacementTopicId, this.replaceTarget.result_version, this.replacementReason.trim());
+        this.$emit('plan-updated', result.item);
+        if (request !== this.planDetailRequest || this.replaceTarget?.id !== result.item.id || this.drawerMode !== 'replace') return;
+        const adjustments = [result.adjustment, ...this.adjustmentHistory.filter(row => row.id !== result.adjustment.id)];
+        this.replacementTopicId = '';
+        if (returnToDetails) {
+          void this.openPlanDetails(result.item, {
+            topic,
+            adjustments
+          });
+          await this.$nextTick();
+          if (this.planDrawerBody) this.planDrawerBody.scrollTop = returnScrollTop;
+        } else this.closeReplacement();
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '替换失败，当前结果未改变';
+      } finally {
+        this.replaceBusy = false;
+      }
+    }
+  },
+  created() {
+    this.$watch(() => this.plan, item => {
+      void this.openPlanDetails(item);
+      const request = this.planDetailRequest;
+      void api.tagTaxonomy().then(taxonomy => {
+        if (request === this.planDetailRequest) this.taxonomyItems = taxonomy.items;
+      }).catch(() => {});
+    }, {
+      immediate: true
+    });
+  },
+  beforeDestroy() {
+    this.planDetailRequest++;
+  }
+};
 </script>
 
 <template>

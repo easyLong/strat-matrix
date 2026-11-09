@@ -1,69 +1,313 @@
-<script lang="ts">
+<script>
 import QueryActions from '../QueryActions.vue';
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed, toRef } from '../../compat/composition';
 import HoverHint from '../HoverHint.vue';
 import ListPagination from '../ListPagination.vue';
 import LoadingSkeleton from '../LoadingSkeleton.vue';
 import MarketingTopicTable from '../MarketingTopicTable.vue';
 import { marketingTopicName, topicValidityLabel } from '../../ui/manualTopics';
-import type { ManualTopicSelection } from '../../composables/useManualTopicSelection';
-export default defineComponent({
-    props: { selection: { required: true, type: null as unknown as PropType<ManualTopicSelection> },
-        marketing: { required: true, type: Boolean as PropType<boolean> },
-        loading: { required: true, type: Boolean as PropType<boolean> },
-        initialized: { required: true, type: Boolean as PropType<boolean> },
-        review: { required: true, type: Boolean as PropType<boolean> },
-        allocationCount: { required: true, type: [Number, String] as PropType<number | ''> } },
-    setup(props, context) {
-        const isMarketing = toRef(props, 'marketing');
-        const topicReview = computed({
-            get: () => props.review,
-            set: value => emit('update:review', value)
-        });
-        const allocationCountModel = computed({
-            get: () => props.allocationCount,
-            set: value => emit('update:allocationCount', value)
-        });
-        const emit = context.emit;
-        const { topicListRef, topicFiltersExpanded, selectedTopicIds, topicIdFilter, topicQuery, topicTypeFilter, contentType, relatedProduct, relatedActivity, relatedHotspot, appliedTopicFilters, topicPage, topicPageSize, contentTypes, relatedProducts, relatedActivities, relatedHotspots, filteredTopics, topicPageCount, pagedTopics, applyTopicFilters, toggleTopicRow, setTopicSelected, removeTopic, topicTooltip, selectedTopics, validityHint } = props.selection;
-        return {
-            clearSelectedTopics() { if (!props.review) selectedTopicIds.value=[]; },
-            isMarketing,
-            validityHint,
-            marketingTopicName,
-            topicValidityLabel,
-            topicReview,
-            allocationCountModel,
-            emit,
-            topicListRef,
-            topicFiltersExpanded,
-            selectedTopicIds,
-            topicIdFilter,
-            topicQuery,
-            topicTypeFilter,
-            contentType,
-            relatedProduct,
-            relatedActivity,
-            relatedHotspot,
-            topicPage,
-            topicPageSize,
-            contentTypes,
-            relatedProducts,
-            relatedActivities,
-            relatedHotspots,
-            filteredTopics,
-            pagedTopics,
-            applyTopicFilters,
-            toggleTopicRow,
-            setTopicSelected,
-            removeTopic,
-            topicTooltip,
-            selectedTopics
-        };
+export default {
+  props: {
+    selection: {
+      required: true,
+      type: null
     },
-    components: {QueryActions, LoadingSkeleton, HoverHint, ListPagination, MarketingTopicTable}
-});
+    marketing: {
+      required: true,
+      type: Boolean
+    },
+    loading: {
+      required: true,
+      type: Boolean
+    },
+    initialized: {
+      required: true,
+      type: Boolean
+    },
+    review: {
+      required: true,
+      type: Boolean
+    },
+    allocationCount: {
+      required: true,
+      type: [Number, String]
+    }
+  },
+  components: {
+    QueryActions,
+    LoadingSkeleton,
+    HoverHint,
+    ListPagination,
+    MarketingTopicTable
+  },
+  computed: {
+    isMarketing: {
+      get() {
+        return this['marketing'];
+      },
+      set(value) {
+        this['marketing'] = value;
+      }
+    },
+    topicReview: {
+      get() {
+        return this.review;
+      },
+      set(value) {
+        return this.$emit('update:review', value);
+      }
+    },
+    allocationCountModel: {
+      get() {
+        return this.allocationCount;
+      },
+      set(value) {
+        return this.$emit('update:allocationCount', value);
+      }
+    },
+    topicListRef: {
+      get() {
+        return this.selection.topicListRef;
+      },
+      set(value) {
+        this.selection.topicListRef = value;
+      }
+    },
+    topicFiltersExpanded: {
+      get() {
+        return this.selection.topicFiltersExpanded;
+      },
+      set(value) {
+        this.selection.topicFiltersExpanded = value;
+      }
+    },
+    selectedTopicIds: {
+      get() {
+        return this.selection.selectedTopicIds;
+      },
+      set(value) {
+        this.selection.selectedTopicIds = value;
+      }
+    },
+    topicIdFilter: {
+      get() {
+        return this.selection.topicIdFilter;
+      },
+      set(value) {
+        this.selection.topicIdFilter = value;
+      }
+    },
+    topicQuery: {
+      get() {
+        return this.selection.topicQuery;
+      },
+      set(value) {
+        this.selection.topicQuery = value;
+      }
+    },
+    topicTypeFilter: {
+      get() {
+        return this.selection.topicTypeFilter;
+      },
+      set(value) {
+        this.selection.topicTypeFilter = value;
+      }
+    },
+    contentType: {
+      get() {
+        return this.selection.contentType;
+      },
+      set(value) {
+        this.selection.contentType = value;
+      }
+    },
+    relatedProduct: {
+      get() {
+        return this.selection.relatedProduct;
+      },
+      set(value) {
+        this.selection.relatedProduct = value;
+      }
+    },
+    relatedActivity: {
+      get() {
+        return this.selection.relatedActivity;
+      },
+      set(value) {
+        this.selection.relatedActivity = value;
+      }
+    },
+    relatedHotspot: {
+      get() {
+        return this.selection.relatedHotspot;
+      },
+      set(value) {
+        this.selection.relatedHotspot = value;
+      }
+    },
+    appliedTopicFilters: {
+      get() {
+        return this.selection.appliedTopicFilters;
+      },
+      set(value) {
+        this.selection.appliedTopicFilters = value;
+      }
+    },
+    topicPage: {
+      get() {
+        return this.selection.topicPage;
+      },
+      set(value) {
+        this.selection.topicPage = value;
+      }
+    },
+    topicPageSize: {
+      get() {
+        return this.selection.topicPageSize;
+      },
+      set(value) {
+        this.selection.topicPageSize = value;
+      }
+    },
+    contentTypes: {
+      get() {
+        return this.selection.contentTypes;
+      },
+      set(value) {
+        this.selection.contentTypes = value;
+      }
+    },
+    relatedProducts: {
+      get() {
+        return this.selection.relatedProducts;
+      },
+      set(value) {
+        this.selection.relatedProducts = value;
+      }
+    },
+    relatedActivities: {
+      get() {
+        return this.selection.relatedActivities;
+      },
+      set(value) {
+        this.selection.relatedActivities = value;
+      }
+    },
+    relatedHotspots: {
+      get() {
+        return this.selection.relatedHotspots;
+      },
+      set(value) {
+        this.selection.relatedHotspots = value;
+      }
+    },
+    filteredTopics: {
+      get() {
+        return this.selection.filteredTopics;
+      },
+      set(value) {
+        this.selection.filteredTopics = value;
+      }
+    },
+    topicPageCount: {
+      get() {
+        return this.selection.topicPageCount;
+      },
+      set(value) {
+        this.selection.topicPageCount = value;
+      }
+    },
+    pagedTopics: {
+      get() {
+        return this.selection.pagedTopics;
+      },
+      set(value) {
+        this.selection.pagedTopics = value;
+      }
+    },
+    applyTopicFilters: {
+      get() {
+        return this.selection.applyTopicFilters;
+      },
+      set(value) {
+        this.selection.applyTopicFilters = value;
+      }
+    },
+    toggleTopicRow: {
+      get() {
+        return this.selection.toggleTopicRow;
+      },
+      set(value) {
+        this.selection.toggleTopicRow = value;
+      }
+    },
+    setTopicSelected: {
+      get() {
+        return this.selection.setTopicSelected;
+      },
+      set(value) {
+        this.selection.setTopicSelected = value;
+      }
+    },
+    removeTopic: {
+      get() {
+        return this.selection.removeTopic;
+      },
+      set(value) {
+        this.selection.removeTopic = value;
+      }
+    },
+    topicTooltip: {
+      get() {
+        return this.selection.topicTooltip;
+      },
+      set(value) {
+        this.selection.topicTooltip = value;
+      }
+    },
+    selectedTopics: {
+      get() {
+        return this.selection.selectedTopics;
+      },
+      set(value) {
+        this.selection.selectedTopics = value;
+      }
+    },
+    validityHint: {
+      get() {
+        return this.selection.validityHint;
+      },
+      set(value) {
+        this.selection.validityHint = value;
+      }
+    },
+    marketingTopicName() {
+      return marketingTopicName;
+    },
+    topicValidityLabel() {
+      return topicValidityLabel;
+    }
+  },
+  methods: {
+    clearSelectedTopics() {
+      if (!this.review) this.selectedTopicIds = [];
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    },
+    syncSelectionElements() {
+      for (const key of ["topicListRef"]) this.selection[key] = this.$refs[key] || null;
+    }
+  },
+  mounted() {
+    this.syncSelectionElements();
+  },
+  updated() {
+    this.syncSelectionElements();
+  },
+  beforeDestroy() {
+    for (const key of ["topicListRef"]) if (this.selection[key] === this.$refs[key]) this.selection[key] = null;
+  }
+};
 </script>
 <template>
     <section key="manual-step-topics" class="manual-topic-step" :class="{ card: !isMarketing, 'manual-marketing-topic-step': isMarketing }">

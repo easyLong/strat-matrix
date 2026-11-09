@@ -1,433 +1,525 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from '../compat/composition';
-import { useRouter } from '../compat/router';
+<script>
+import { planningRouter } from '../compat/router';
 import { canPlanning } from '../host/runtime';
-import { useActivePage } from '../composables/useActivePage';
+import { bindPageActivity } from "../services/pageActivity";
 import ManualAccountStep from '../components/manual/ManualAccountStep.vue';
-import { useManualAccountSelection } from '../composables/useManualAccountSelection';
+import { createAccountSelection } from "../models/accountSelection";
 import ManualTopicStep from '../components/manual/ManualTopicStep.vue';
-import { useManualTopicSelection } from '../composables/useManualTopicSelection';
+import { createTopicSelection } from "../models/topicSelection";
 import ManualTaskList from '../components/manual/ManualTaskList.vue';
 import MarketingTaskDetails from '../components/MarketingTaskDetails.vue';
 import { api } from '../api';
 import ManualConfirmationLists from '../components/ManualConfirmationLists.vue';
 import { usePlanningStore } from '../store';
-import type { AccountOption, ManualTaskSummary, TopicOption } from '../types';
 import { createRequestId } from '../ui/requestId';
 import { beijingDate } from '../ui/manualTopics';
-export default defineComponent({
-    name: 'PlanningManualPage',
-    setup(props, context) {
-        const store = usePlanningStore();
-        const router = useRouter();
-        const mode = computed<'list' | 'create'>({
-            get: () => store.manualCreating ? 'create' : 'list',
-            set: value => {
-                store.manualCreating = value === 'create';
-            }
-        });
-        const step = ref(1);
-        const busy = ref(false);
-        const stepperRef = ref<HTMLElement | null>(null);
-        const taskName = ref('');
-        const contentMode = ref<'marketing' | 'non_marketing'>('non_marketing');
-        const isMarketing = computed(() => contentMode.value === 'marketing');
-        const allocationCount = ref<number | ''>('');
-        const marketingRequestId = ref('');
-        const marketingDetails = ref<Awaited<ReturnType<typeof api.marketingTaskDetails>> | null>(null);
-        const workflowSteps = computed(() => isMarketing.value ? [{
-                number: 1,
-                label: '创建策划'
-            }, {
-                number: 2,
-                label: '选择选题'
-            }, {
-                number: 3,
-                label: '确认策划'
-            }] : [{
-                number: 1,
-                label: '创建策划'
-            }, {
-                number: 2,
-                label: '选择账号'
-            }, {
-                number: 3,
-                label: '选择选题'
-            }, {
-                number: 4,
-                label: '确认策划'
-            }]);
-        const topicStepNumber = computed(() => isMarketing.value ? 2 : 3);
-        const submitStepNumber = computed(() => isMarketing.value ? 3 : 4);
-        const validAllocationCount = computed(() => Number.isInteger(allocationCount.value) && Number(allocationCount.value) >= 1 && Number(allocationCount.value) <= 1000);
-        const publishDate = ref('');
-        const today = ref(beijingDate());
-        let validityTimer: ReturnType<typeof setInterval> | undefined;
-        useActivePage(() => {
-            today.value = beijingDate();
-            validityTimer = setInterval(() => { today.value = beijingDate(); }, 30000);
-        }, () => { if (validityTimer !== undefined) clearInterval(validityTimer); });
-        const accounts = ref<AccountOption[]>([]);
-        const topics = ref<TopicOption[]>([]);
-        watch([taskName, allocationCount], () => {
-            marketingRequestId.value = createRequestId();
-        }, {
-            flush: 'sync'
-        });
-        const catalogLoading = ref(false);
-        let catalogRequest = 0;
-        const error = ref('');
-        watch(allocationCount, () => {
-            if (validAllocationCount.value && error.value === '请输入 1 至 1000 之间的生成内容数量')
-                error.value = '';
-        });
-        const notice = ref('');
-        const accountSelection = useManualAccountSelection({
-            accounts,
-            publishDate,
-            isMarketing,
-            databaseReady: toRef(store, 'databaseReady'),
-            error,
-            notice,
-            fetchAvailability: api.manualAccountAvailability
-        });
-        const { sampledIds, selectedAccounts, targetCount, accountReview, availabilityReady, availabilityError, loadAccountAvailability, accountSelectionMode, importDataRowCount, accountPage, accountListRef } = accountSelection;
-        const eligibilityNotice = ref('');
-        const topicReview = ref(false);
-        const topicSelection = useManualTopicSelection({
-            topics,
-            isMarketing,
-            publishDate,
-            today,
-            topicReview,
-            error
-        });
-        const { selectedTopicIds, selectedTopics, topicPage, topicListRef } = topicSelection;
-        watch(selectedTopicIds, () => {
-            marketingRequestId.value = createRequestId();
-        }, {
-            flush: 'sync'
-        });
-        async function revealStepProgress() {
-            await nextTick();
-            const stepper = stepperRef.value;
-            stepper?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start'
-            });
-            const activeStep = stepper?.querySelector<HTMLElement>('.manual-step.active');
-            if (stepper && activeStep && stepper.scrollWidth > stepper.clientWidth) {
-                stepper.scrollTo({
-                    left: Math.max(0, activeStep.offsetLeft - stepper.offsetLeft - 16),
-                    behavior: 'smooth'
-                });
-            }
-        }
-        async function resetSelectionListScroll(target: 'accounts' | 'topics') {
-            await nextTick();
-            const list = target === 'accounts' ? accountListRef.value : topicListRef.value;
-            if (list) {
-                list.scrollTop = 0;
-                list.scrollLeft = 0;
-            }
-        }
-        const canSubmit = computed(() => topicSelection.selectionValid.value && (isMarketing.value ? store.databaseReady && !busy.value && taskName.value.trim() !== '' && selectedTopicIds.value.length === 1 && validAllocationCount.value : store.databaseReady && availabilityReady.value && !busy.value && taskName.value.trim() !== '' && sampledIds.value.length > 0 && selectedTopicIds.value.length > 0 && publishDate.value !== ''));
-        watch(contentMode, () => {
-            accountSelection.reset();
-            topicSelection.reset();
-            topicReview.value = false;
-            marketingRequestId.value = createRequestId();
-        });
-        async function loadCatalog() {
-            const request = ++catalogRequest;
-            catalogLoading.value = true;
-            try {
-                const [accountRows, topicRows] = await Promise.all([api.accounts(), api.topics()]);
-                if (request !== catalogRequest)
-                    return;
-                accounts.value = accountRows;
-                topics.value = topicRows;
-            }
-            catch (exc) {
-                if (request === catalogRequest)
-                    error.value = exc instanceof Error ? exc.message : '读取账号和选题失败';
-            }
-            finally {
-                if (request === catalogRequest)
-                    catalogLoading.value = false;
-            }
-        }
-        async function openTaskDetails(task: ManualTaskSummary) {
-            // 已生成正式批次的任务统一复用策划结果中的批次策划详情。
-            if (task.batch_id) {
-                void router.push({
-                    path: '/results',
-                    query: {
-                        batch: String(task.batch_id),
-                        from: 'manual'
-                    }
-                });
-                return;
-            }
-            if (task.content_mode === 'marketing') {
-                try {
-                    marketingDetails.value = await api.marketingTaskDetails(task.task_code);
-                }
-                catch (exc) {
-                    error.value = exc instanceof Error ? exc.message : '读取营销策划失败';
-                }
-                return;
-            }
-            if (!task.batch_id)
-                return;
-            void router.push({
-                path: '/results',
-                query: {
-                    batch: String(task.batch_id),
-                    plan_type: 'manual',
-                    from: 'manual'
-                }
-            });
-        }
-        watch([() => store.databaseReady, mode], ([ready, current]) => {
-            if (ready && current === 'create')
-                void loadCatalog();
-            else {
-                catalogRequest++;
-                catalogLoading.value = false;
-            }
-        }, {
-            immediate: true
-        });
-        onBeforeUnmount(() => {
-            catalogRequest++;
-            store.manualCreating = false;
-        });
-        function startCreate() {
-            contentMode.value = 'non_marketing';
-            allocationCount.value = '';
-            marketingRequestId.value = createRequestId();
-            publishDate.value = '';
-            step.value = 1;
-            taskName.value = '';
-            accountSelection.reset();
-            topicSelection.reset();
-            accountReview.value = false;
-            topicReview.value = false;
-            error.value = '';
-            notice.value = '';
-            eligibilityNotice.value = '';
-            mode.value = 'create';
-        }
-        function returnToStep(next: number) {
-            if (next >= step.value || busy.value)
-                return;
-            step.value = next;
-            if (!isMarketing.value && next <= 2)
-                accountReview.value = false;
-            if (next <= topicStepNumber.value)
-                topicReview.value = false;
-            void revealStepProgress();
-        }
-        function savePlanStep() {
-            error.value = '';
-            if (!taskName.value.trim()) {
-                error.value = '请输入任务名称';
-                return;
-            }
-            if (!isMarketing.value && !publishDate.value) {
-                error.value = '请选择投放日期';
-                return;
-            }
-            step.value = 2;
-            void revealStepProgress();
-        }
-        async function saveAccountStep() {
-            error.value = '';
-            if (!taskName.value.trim()) {
-                error.value = '请输入任务名称';
-                return;
-            }
-            if (!isMarketing.value && !publishDate.value) {
-                error.value = '请选择投放日期';
-                return;
-            }
-            if (accountSelectionMode.value === 'filter') {
-                if (targetCount.value === '') {
-                    error.value = '请输入计划账号数量';
-                    return;
-                }
-                if (!Number.isInteger(targetCount.value) || targetCount.value < 1 || targetCount.value > 1000) {
-                    error.value = '计划账号数量须为 1 至 1000 之间的整数';
-                    return;
-                }
-            }
-            else if (accountSelectionMode.value === 'upload') {
-                if (!importDataRowCount.value) {
-                    error.value = '请先导入账号模板';
-                    return;
-                }
-                targetCount.value = importDataRowCount.value;
-            }
-            if (!sampledIds.value.length) {
-                error.value = '请先选择账号';
-                return;
-            }
-            if (!(await loadAccountAvailability()))
-                return;
-            if (!sampledIds.value.length) {
-                error.value = '所选账号当日已手动策划，请重新选择';
-                return;
-            }
-            accountPage.value = 1;
-            accountReview.value = true;
-            void resetSelectionListScroll('accounts');
-        }
-        function saveTopicStep() {
-            error.value = '';
-            if (!topicSelection.validateSelection()) return;
-            if (!selectedTopicIds.value.length || isMarketing.value && selectedTopicIds.value.length !== 1) {
-                error.value = isMarketing.value ? '请选择一个选题' : '请至少选择一个选题';
-                return;
-            }
-            if (isMarketing.value && !validAllocationCount.value) {
-                error.value = '请输入 1 至 1000 之间的生成内容数量';
-                return;
-            }
-            topicPage.value = 1;
-            topicReview.value = true;
-            void resetSelectionListScroll('topics');
-        }
-        function confirmAccountReview() {
-            if (!availabilityReady.value || !sampledIds.value.length) {
-                accountReview.value = false;
-                error.value = '请重新确认可策划账号后再继续';
-                return;
-            }
-            accountReview.value = true;
-            step.value = 3;
-            void revealStepProgress();
-        }
-        function confirmTopicReview() {
-            if (!topicSelection.validateSelection()) return;
-            if (!selectedTopicIds.value.length || isMarketing.value && selectedTopicIds.value.length !== 1) {
-                topicReview.value = false;
-                error.value = isMarketing.value ? '请选择一个选题' : '请选择至少一个选题';
-                return;
-            }
-            if (isMarketing.value && !validAllocationCount.value) {
-                topicReview.value = false;
-                error.value = '请输入 1 至 1000 之间的生成内容数量';
-                return;
-            }
-            topicReview.value = true;
-            step.value = submitStepNumber.value;
-            error.value = '';
-            void revealStepProgress();
-        }
-        async function submit() {
-            if (!topicSelection.validateSelection()) return;
-            if (!canSubmit.value)
-                return;
-            busy.value = true;
-            error.value = '';
-            notice.value = '';
-            eligibilityNotice.value = '';
-            try {
-                if (isMarketing.value) {
-                    await api.createMarketingTask({
-                        request_id: marketingRequestId.value,
-                        task_name: taskName.value.trim(),
-                        topic_id: selectedTopicIds.value[0]!,
-                        allocation_count: Number(allocationCount.value)
-                    });
-                    mode.value = 'list';
-                    notice.value = '营销策划已提交';
-                    return;
-                }
-                const selectedCount = sampledIds.value.length;
-                if (!(await loadAccountAvailability()))
-                    return;
-                if (sampledIds.value.length !== selectedCount) {
-                    step.value = 2;
-                    error.value = '部分账号当日已手动策划，已移除，请重新确认账号数量';
-                    return;
-                }
-                const preview = await api.previewManual({
-                    content_mode: 'non_marketing',
-                    task_name: taskName.value.trim(),
-                    publish_date: publishDate.value,
-                    account_ids: sampledIds.value,
-                    target_count: selectedCount,
-                    topic_ids: selectedTopicIds.value,
-                    note: ''
-                });
-                await api.submitManualPreview(preview.preview_id);
-                notice.value = '手动策划已提交，当前状态：生成中';
-                mode.value = 'list';
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '提交手动策划失败';
-                if (error.value.includes('不具备所选营销选题资格'))
-                    eligibilityNotice.value = error.value;
-            }
-            finally {
-                busy.value = false;
-            }
-        }
-        function closeEligibilityNotice(returnToSelection = false) {
-            eligibilityNotice.value = '';
-            if (returnToSelection) {
-                error.value = '';
-                accountReview.value = false;
-                topicReview.value = false;
-                step.value = 1;
-                void revealStepProgress();
-            }
-        }
-        return {
-            canPlanning,
-            store,
-            mode,
-            step,
-            busy,
-            stepperRef,
-            taskName,
-            contentMode,
-            isMarketing,
-            allocationCount,
-            marketingDetails,
-            workflowSteps,
-            topicStepNumber,
-            submitStepNumber,
-            publishDate,
-            catalogLoading,
-            error,
-            notice,
-            accountSelection,
-            selectedAccounts,
-            targetCount,
-            availabilityError,
-            eligibilityNotice,
-            topicReview,
-            topicSelection,
-            selectedTopics,
-            canSubmit,
-            openTaskDetails,
-            startCreate,
-            returnToStep,
-            savePlanStep,
-            saveAccountStep,
-            saveTopicStep,
-            confirmAccountReview,
-            confirmTopicReview,
-            submit,
-            closeEligibilityNotice
-        };
+export default {
+  name: 'PlanningManualPage',
+  components: {
+    MarketingTaskDetails,
+    ManualTaskList,
+    ManualAccountStep,
+    ManualTopicStep,
+    ManualConfirmationLists
+  },
+  data() {
+    return {
+      step: 1,
+      busy: false,
+      taskName: '',
+      contentMode: 'non_marketing',
+      allocationCount: '',
+      marketingRequestId: '',
+      marketingDetails: null,
+      publishDate: '',
+      today: beijingDate(),
+      validityTimer: undefined,
+      accounts: [],
+      topics: [],
+      catalogLoading: false,
+      catalogRequest: 0,
+      error: '',
+      notice: '',
+      accountSelection: null,
+      eligibilityNotice: '',
+      topicReview: false,
+      topicSelection: null
+    };
+  },
+  computed: {
+    store() {
+      return usePlanningStore();
     },
-    components: {MarketingTaskDetails, ManualTaskList, ManualAccountStep, ManualTopicStep, ManualConfirmationLists}
-});
+    router() {
+      return planningRouter(this);
+    },
+    mode: {
+      get() {
+        return this.store.manualCreating ? 'create' : 'list';
+      },
+      set(value) {
+        this.store.manualCreating = value === 'create';
+      }
+    },
+    stepperRef: {
+      cache: false,
+      get() {
+        return this.$refs.stepperRef || null;
+      }
+    },
+    isMarketing() {
+      return this.contentMode === 'marketing';
+    },
+    workflowSteps() {
+      return this.isMarketing ? [{
+        number: 1,
+        label: '创建策划'
+      }, {
+        number: 2,
+        label: '选择选题'
+      }, {
+        number: 3,
+        label: '确认策划'
+      }] : [{
+        number: 1,
+        label: '创建策划'
+      }, {
+        number: 2,
+        label: '选择账号'
+      }, {
+        number: 3,
+        label: '选择选题'
+      }, {
+        number: 4,
+        label: '确认策划'
+      }];
+    },
+    topicStepNumber() {
+      return this.isMarketing ? 2 : 3;
+    },
+    submitStepNumber() {
+      return this.isMarketing ? 3 : 4;
+    },
+    validAllocationCount() {
+      return Number.isInteger(this.allocationCount) && Number(this.allocationCount) >= 1 && Number(this.allocationCount) <= 1000;
+    },
+    sampledIds: {
+      get() {
+        return this.accountSelection.sampledIds;
+      },
+      set(value) {
+        this.accountSelection.sampledIds = value;
+      }
+    },
+    selectedAccounts: {
+      get() {
+        return this.accountSelection.selectedAccounts;
+      },
+      set(value) {
+        this.accountSelection.selectedAccounts = value;
+      }
+    },
+    targetCount: {
+      get() {
+        return this.accountSelection.targetCount;
+      },
+      set(value) {
+        this.accountSelection.targetCount = value;
+      }
+    },
+    accountReview: {
+      get() {
+        return this.accountSelection.accountReview;
+      },
+      set(value) {
+        this.accountSelection.accountReview = value;
+      }
+    },
+    availabilityReady: {
+      get() {
+        return this.accountSelection.availabilityReady;
+      },
+      set(value) {
+        this.accountSelection.availabilityReady = value;
+      }
+    },
+    availabilityError: {
+      get() {
+        return this.accountSelection.availabilityError;
+      },
+      set(value) {
+        this.accountSelection.availabilityError = value;
+      }
+    },
+    loadAccountAvailability: {
+      get() {
+        return this.accountSelection.loadAccountAvailability;
+      },
+      set(value) {
+        this.accountSelection.loadAccountAvailability = value;
+      }
+    },
+    accountSelectionMode: {
+      get() {
+        return this.accountSelection.accountSelectionMode;
+      },
+      set(value) {
+        this.accountSelection.accountSelectionMode = value;
+      }
+    },
+    importDataRowCount: {
+      get() {
+        return this.accountSelection.importDataRowCount;
+      },
+      set(value) {
+        this.accountSelection.importDataRowCount = value;
+      }
+    },
+    accountPage: {
+      get() {
+        return this.accountSelection.accountPage;
+      },
+      set(value) {
+        this.accountSelection.accountPage = value;
+      }
+    },
+    accountListRef: {
+      get() {
+        return this.accountSelection.accountListRef;
+      },
+      set(value) {
+        this.accountSelection.accountListRef = value;
+      }
+    },
+    selectedTopicIds: {
+      get() {
+        return this.topicSelection.selectedTopicIds;
+      },
+      set(value) {
+        this.topicSelection.selectedTopicIds = value;
+      }
+    },
+    selectedTopics: {
+      get() {
+        return this.topicSelection.selectedTopics;
+      },
+      set(value) {
+        this.topicSelection.selectedTopics = value;
+      }
+    },
+    topicPage: {
+      get() {
+        return this.topicSelection.topicPage;
+      },
+      set(value) {
+        this.topicSelection.topicPage = value;
+      }
+    },
+    topicListRef: {
+      get() {
+        return this.topicSelection.topicListRef;
+      },
+      set(value) {
+        this.topicSelection.topicListRef = value;
+      }
+    },
+    canSubmit() {
+      return this.topicSelection.selectionValid && (this.isMarketing ? this.store.databaseReady && !this.busy && this.taskName.trim() !== '' && this.selectedTopicIds.length === 1 && this.validAllocationCount : this.store.databaseReady && this.availabilityReady && !this.busy && this.taskName.trim() !== '' && this.sampledIds.length > 0 && this.selectedTopicIds.length > 0 && this.publishDate !== '');
+    },
+    canPlanning() {
+      return canPlanning;
+    }
+  },
+  methods: {
+    async revealStepProgress() {
+      await this.$nextTick();
+      const stepper = this.stepperRef;
+      stepper?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+      const activeStep = stepper?.querySelector('.manual-step.active');
+      if (stepper && activeStep && stepper.scrollWidth > stepper.clientWidth) {
+        stepper.scrollTo({
+          left: Math.max(0, activeStep.offsetLeft - stepper.offsetLeft - 16),
+          behavior: 'smooth'
+        });
+      }
+    },
+    async resetSelectionListScroll(target) {
+      await this.$nextTick();
+      const list = target === 'accounts' ? this.accountListRef : this.topicListRef;
+      if (list) {
+        list.scrollTop = 0;
+        list.scrollLeft = 0;
+      }
+    },
+    async loadCatalog() {
+      const request = ++this.catalogRequest;
+      this.catalogLoading = true;
+      try {
+        const [accountRows, topicRows] = await Promise.all([api.accounts(), api.topics()]);
+        if (request !== this.catalogRequest) return;
+        this.accounts = accountRows;
+        this.topics = topicRows;
+      } catch (exc) {
+        if (request === this.catalogRequest) this.error = exc instanceof Error ? exc.message : '读取账号和选题失败';
+      } finally {
+        if (request === this.catalogRequest) this.catalogLoading = false;
+      }
+    },
+    async openTaskDetails(task) {
+      // 已生成正式批次的任务统一复用策划结果中的批次策划详情。
+      if (task.batch_id) {
+        void this.router.push({
+          path: '/results',
+          query: {
+            batch: String(task.batch_id),
+            from: 'manual'
+          }
+        });
+        return;
+      }
+      if (task.content_mode === 'marketing') {
+        try {
+          this.marketingDetails = await api.marketingTaskDetails(task.task_code);
+        } catch (exc) {
+          this.error = exc instanceof Error ? exc.message : '读取营销策划失败';
+        }
+        return;
+      }
+      if (!task.batch_id) return;
+      void this.router.push({
+        path: '/results',
+        query: {
+          batch: String(task.batch_id),
+          plan_type: 'manual',
+          from: 'manual'
+        }
+      });
+    },
+    startCreate() {
+      this.contentMode = 'non_marketing';
+      this.allocationCount = '';
+      this.marketingRequestId = createRequestId();
+      this.publishDate = '';
+      this.step = 1;
+      this.taskName = '';
+      this.accountSelection.reset();
+      this.topicSelection.reset();
+      this.accountReview = false;
+      this.topicReview = false;
+      this.error = '';
+      this.notice = '';
+      this.eligibilityNotice = '';
+      this.mode = 'create';
+    },
+    returnToStep(next) {
+      if (next >= this.step || this.busy) return;
+      this.step = next;
+      if (!this.isMarketing && next <= 2) this.accountReview = false;
+      if (next <= this.topicStepNumber) this.topicReview = false;
+      void this.revealStepProgress();
+    },
+    savePlanStep() {
+      this.error = '';
+      if (!this.taskName.trim()) {
+        this.error = '请输入任务名称';
+        return;
+      }
+      if (!this.isMarketing && !this.publishDate) {
+        this.error = '请选择投放日期';
+        return;
+      }
+      this.step = 2;
+      void this.revealStepProgress();
+    },
+    async saveAccountStep() {
+      this.error = '';
+      if (!this.taskName.trim()) {
+        this.error = '请输入任务名称';
+        return;
+      }
+      if (!this.isMarketing && !this.publishDate) {
+        this.error = '请选择投放日期';
+        return;
+      }
+      if (this.accountSelectionMode === 'filter') {
+        if (this.targetCount === '') {
+          this.error = '请输入计划账号数量';
+          return;
+        }
+        if (!Number.isInteger(this.targetCount) || this.targetCount < 1 || this.targetCount > 1000) {
+          this.error = '计划账号数量须为 1 至 1000 之间的整数';
+          return;
+        }
+      } else if (this.accountSelectionMode === 'upload') {
+        if (!this.importDataRowCount) {
+          this.error = '请先导入账号模板';
+          return;
+        }
+        this.targetCount = this.importDataRowCount;
+      }
+      if (!this.sampledIds.length) {
+        this.error = '请先选择账号';
+        return;
+      }
+      if (!(await this.loadAccountAvailability())) return;
+      if (!this.sampledIds.length) {
+        this.error = '所选账号当日已手动策划，请重新选择';
+        return;
+      }
+      this.accountPage = 1;
+      this.accountReview = true;
+      void this.resetSelectionListScroll('accounts');
+    },
+    saveTopicStep() {
+      this.error = '';
+      if (!this.topicSelection.validateSelection()) return;
+      if (!this.selectedTopicIds.length || this.isMarketing && this.selectedTopicIds.length !== 1) {
+        this.error = this.isMarketing ? '请选择一个选题' : '请至少选择一个选题';
+        return;
+      }
+      if (this.isMarketing && !this.validAllocationCount) {
+        this.error = '请输入 1 至 1000 之间的生成内容数量';
+        return;
+      }
+      this.topicPage = 1;
+      this.topicReview = true;
+      void this.resetSelectionListScroll('topics');
+    },
+    confirmAccountReview() {
+      if (!this.availabilityReady || !this.sampledIds.length) {
+        this.accountReview = false;
+        this.error = '请重新确认可策划账号后再继续';
+        return;
+      }
+      this.accountReview = true;
+      this.step = 3;
+      void this.revealStepProgress();
+    },
+    confirmTopicReview() {
+      if (!this.topicSelection.validateSelection()) return;
+      if (!this.selectedTopicIds.length || this.isMarketing && this.selectedTopicIds.length !== 1) {
+        this.topicReview = false;
+        this.error = this.isMarketing ? '请选择一个选题' : '请选择至少一个选题';
+        return;
+      }
+      if (this.isMarketing && !this.validAllocationCount) {
+        this.topicReview = false;
+        this.error = '请输入 1 至 1000 之间的生成内容数量';
+        return;
+      }
+      this.topicReview = true;
+      this.step = this.submitStepNumber;
+      this.error = '';
+      void this.revealStepProgress();
+    },
+    async submit() {
+      if (!this.topicSelection.validateSelection()) return;
+      if (!this.canSubmit) return;
+      this.busy = true;
+      this.error = '';
+      this.notice = '';
+      this.eligibilityNotice = '';
+      try {
+        if (this.isMarketing) {
+          await api.createMarketingTask({
+            request_id: this.marketingRequestId,
+            task_name: this.taskName.trim(),
+            topic_id: this.selectedTopicIds[0],
+            allocation_count: Number(this.allocationCount)
+          });
+          this.mode = 'list';
+          this.notice = '营销策划已提交';
+          return;
+        }
+        const selectedCount = this.sampledIds.length;
+        if (!(await this.loadAccountAvailability())) return;
+        if (this.sampledIds.length !== selectedCount) {
+          this.step = 2;
+          this.error = '部分账号当日已手动策划，已移除，请重新确认账号数量';
+          return;
+        }
+        const preview = await api.previewManual({
+          content_mode: 'non_marketing',
+          task_name: this.taskName.trim(),
+          publish_date: this.publishDate,
+          account_ids: this.sampledIds,
+          target_count: selectedCount,
+          topic_ids: this.selectedTopicIds,
+          note: ''
+        });
+        await api.submitManualPreview(preview.preview_id);
+        this.notice = '手动策划已提交，当前状态：生成中';
+        this.mode = 'list';
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '提交手动策划失败';
+        if (this.error.includes('不具备所选营销选题资格')) this.eligibilityNotice = this.error;
+      } finally {
+        this.busy = false;
+      }
+    },
+    closeEligibilityNotice(returnToSelection = false) {
+      this.eligibilityNotice = '';
+      if (returnToSelection) {
+        this.error = '';
+        this.accountReview = false;
+        this.topicReview = false;
+        this.step = 1;
+        void this.revealStepProgress();
+      }
+    },
+    fetchAvailability(date) {
+      return api.manualAccountAvailability(date);
+    }
+  },
+  created() {
+    bindPageActivity(this, () => {
+      this.today = beijingDate();
+      this.validityTimer = setInterval(() => {
+        this.today = beijingDate();
+      }, 30000);
+    }, () => {
+      if (this.validityTimer !== undefined) clearInterval(this.validityTimer);
+    });
+    this.$watch(() => [this.taskName, this.allocationCount], () => {
+      this.marketingRequestId = createRequestId();
+    }, {
+      sync: true
+    });
+    this.$watch(() => this.allocationCount, () => {
+      if (this.validAllocationCount && this.error === '请输入 1 至 1000 之间的生成内容数量') this.error = '';
+    });
+    this.accountSelection = createAccountSelection(this);
+    this.topicSelection = createTopicSelection(this);
+    this.$watch(() => this.selectedTopicIds, () => {
+      this.marketingRequestId = createRequestId();
+    }, {
+      sync: true
+    });
+    this.$watch(() => this.contentMode, () => {
+      this.accountSelection.reset();
+      this.topicSelection.reset();
+      this.topicReview = false;
+      this.marketingRequestId = createRequestId();
+    });
+    this.$watch(() => [this.store.databaseReady, this.mode], ([ready, current]) => {
+      if (ready && current === 'create') void this.loadCatalog();else {
+        this.catalogRequest++;
+        this.catalogLoading = false;
+      }
+    }, {
+      immediate: true
+    });
+  },
+  beforeDestroy() {
+    this.accountSelection?.$destroy();
+    this.topicSelection?.$destroy();
+    this.catalogRequest++;
+    this.store.manualCreating = false;
+  }
+};
 </script>
 
 <template>

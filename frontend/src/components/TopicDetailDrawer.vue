@@ -1,87 +1,99 @@
-<script lang="ts">
-import { useActivePage } from '../composables/useActivePage';
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '../compat/composition';
+<script>
+import { bindPageActivity } from "../services/pageActivity";
 import { api } from '../api';
-import type { TopicOption } from '../types';
-import type { TaxonomyItems } from '../topicTaxonomy';
 import TopicLabelDetails from './TopicLabelDetails.vue';
-export default defineComponent({
-    props: { topic: { required: true, type: null as unknown as PropType<TopicOption> },
-        items: { required: true, type: null as unknown as PropType<TaxonomyItems> } },
-    setup(props, context) {
-        const emit = context.emit;
-        const loaded = ref<TopicOption | null>(null);
-        const loading = ref(false);
-        const error = ref('');
-        const panel = ref<HTMLElement | null>(null);
-        const detail = computed(() => loaded.value ?? props.topic);
-        const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        let requestId = 0;
-        watch(() => [props.topic.topic_id, props.topic.topic_type], async () => {
-            const request = ++requestId;
-            loaded.value = null;
-            error.value = '';
-            loading.value = true;
-            try {
-                const row = await api.topicDetail(props.topic.topic_id, props.topic.topic_type);
-                if (request === requestId)
-                    loaded.value = row;
-            }
-            catch (exc) {
-                if (request === requestId)
-                    error.value = exc instanceof Error ? exc.message : '读取选题详情失败';
-            }
-            finally {
-                if (request === requestId)
-                    loading.value = false;
-            }
-        }, {
-            immediate: true
-        });
-        function keyboard(event: KeyboardEvent) {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                event.stopPropagation();
-                emit('close');
-                return;
-            }
-            if (event.key !== 'Tab')
-                return;
-            const nodes = panel.value?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]');
-            if (!nodes?.length)
-                return;
-            const first = nodes[0], last = nodes[nodes.length - 1];
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            }
-            else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
-        }
-        const drawerActive = useActivePage(async () => {
-            document.addEventListener('keydown', keyboard, true);
-            await nextTick();
-            if (drawerActive.value) panel.value?.querySelector<HTMLButtonElement>('button')?.focus();
-        }, () => {
-            document.removeEventListener('keydown', keyboard, true);
-            if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus({
-                preventScroll: true
-            });
-        });
-        onBeforeUnmount(() => { requestId++; });
-        return {
-            emit,
-            loading,
-            error,
-            panel,
-            detail
-        };
+export default {
+  props: {
+    topic: {
+      required: true,
+      type: null
     },
-    components: {TopicLabelDetails}
-});
+    items: {
+      required: true,
+      type: null
+    }
+  },
+  components: {
+    TopicLabelDetails
+  },
+  data() {
+    return {
+      loaded: null,
+      loading: false,
+      error: '',
+      returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      requestId: 0,
+      drawerActive: null
+    };
+  },
+  computed: {
+    panel: {
+      cache: false,
+      get() {
+        return this.$refs.panel || null;
+      }
+    },
+    detail() {
+      return this.loaded ?? this.topic;
+    }
+  },
+  methods: {
+    keyboard(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.$emit('close');
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const nodes = this.panel?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]');
+      if (!nodes?.length) return;
+      const first = nodes[0],
+        last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  },
+  created() {
+    this.$watch(() => [this.topic.topic_id, this.topic.topic_type], async () => {
+      const request = ++this.requestId;
+      this.loaded = null;
+      this.error = '';
+      this.loading = true;
+      try {
+        const row = await api.topicDetail(this.topic.topic_id, this.topic.topic_type);
+        if (request === this.requestId) this.loaded = row;
+      } catch (exc) {
+        if (request === this.requestId) this.error = exc instanceof Error ? exc.message : '读取选题详情失败';
+      } finally {
+        if (request === this.requestId) this.loading = false;
+      }
+    }, {
+      immediate: true
+    });
+    this.drawerActive = bindPageActivity(this, async () => {
+      document.addEventListener('keydown', this.keyboard, true);
+      await this.$nextTick();
+      if (this.drawerActive.active) this.panel?.querySelector('button')?.focus();
+    }, () => {
+      document.removeEventListener('keydown', this.keyboard, true);
+      if (this.returnFocus?.isConnected && this.returnFocus.getClientRects().length) this.returnFocus.focus({
+        preventScroll: true
+      });
+    });
+  },
+  beforeDestroy() {
+    this.requestId++;
+  }
+};
 </script>
 <template>
   <BodyPortal><div class="drawer-mask topic-detail-mask" @click.self="emit('close')"><aside ref="panel" class="drawer topic-detail-drawer" role="dialog" aria-modal="true" aria-label="选题详情"><div class="drawer-head"><h2>选题详情</h2><button class="icon-btn" type="button" aria-label="关闭选题详情" @click="emit('close')">×</button></div><div class="drawer-body">

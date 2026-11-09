@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": "16.13.0", "npm": ">=8.1.0 <9" },
+  "engines": {
+    "node": "16.13.0",
+    "npm": ">=8.1.0 <9"
+  },
   "packageManager": "npm@8.1.0",
   "scripts": {
     "preinstall": "node tooling/checkNode.cjs",
@@ -13,11 +16,10 @@
     "prepreview": "node tooling/checkNode.cjs",
     "dev": "vite",
     "test": "mocha --parallel --jobs 2 --require ./tests/helpers/node16.cjs \"tests/*.test.cjs\"",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vue/composition-api": "1.7.2",
     "axios": "1.8.2",
     "element-ui": "2.15.13",
     "vue": "^2.6.14",
@@ -25,15 +27,14 @@
     "vuex": "3.6.0"
   },
   "devDependencies": {
-    "@types/node": "16.11.7",
     "browserslist": "4.24.5",
     "mocha": "10.8.2",
     "node-releases": "2.0.19",
-    "typescript": "5.9.3",
     "vite": "4.5.14",
     "vite-plugin-vue2": "2.0.3",
     "vue-server-renderer": "2.6.14",
     "vue-template-compiler": "2.6.14",
-    "vue-tsc": "2.2.12"
+    "@babel/core": "7.28.5",
+    "@babel/plugin-transform-modules-commonjs": "7.27.1"
   }
 }

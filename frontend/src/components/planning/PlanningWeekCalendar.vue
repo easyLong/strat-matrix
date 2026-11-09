@@ -1,29 +1,55 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../../compat/composition';
-import { computed } from '../../compat/composition';
-import type { AccountPlanRecord } from '../../types';
-import { daysFor, topicTypeLabel, sourceLabel, sourceHint, type PlanningWeek } from '../../ui/planningCalendar';
+<script>
+import { daysFor, topicTypeLabel, sourceLabel, sourceHint } from '../../ui/planningCalendar';
 import { statusTone } from '../../ui/status';
 import { productionStatusLabel } from '../../ui/slotContentStatus';
-export default defineComponent({
-    props: { week: { required: true, type: null as unknown as PropType<PlanningWeek> },
-        compactSource: { required: false, type: Boolean as PropType<boolean>, default: false },
-        showBatch: { required: false, type: Boolean as PropType<boolean>, default: true },
-        showTopicType: { required: false, type: Boolean as PropType<boolean>, default: false } },
-    setup(props, context) {
-        const emit = context.emit;
-        const days = computed(() => daysFor(props.week));
-        return {
-            topicTypeLabel,
-            sourceLabel,
-            sourceHint,
-            statusTone,
-            productionStatusLabel,
-            emit,
-            days
-        };
+export default {
+  props: {
+    week: {
+      required: true,
+      type: null
+    },
+    compactSource: {
+      required: false,
+      type: Boolean,
+      default: false
+    },
+    showBatch: {
+      required: false,
+      type: Boolean,
+      default: true
+    },
+    showTopicType: {
+      required: false,
+      type: Boolean,
+      default: false
     }
-});
+  },
+  computed: {
+    days() {
+      return daysFor(this.week);
+    },
+    topicTypeLabel() {
+      return topicTypeLabel;
+    },
+    sourceLabel() {
+      return sourceLabel;
+    },
+    sourceHint() {
+      return sourceHint;
+    },
+    statusTone() {
+      return statusTone;
+    },
+    productionStatusLabel() {
+      return productionStatusLabel;
+    }
+  },
+  methods: {
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  }
+};
 </script>
 <template>
   <div class="planning-week-wrap"><div class="planning-week-grid">

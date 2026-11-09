@@ -37,6 +37,11 @@ class JavaContractBundleTests(unittest.TestCase):
                 self.assertIn('docs/JAVA_MANUAL_MIGRATION.md', names)
                 self.assertIn('docs/contracts/README.md', names)
                 self.assertIn('frontend/package.json', names)
+                self.assertIn('frontend/vite.config.js', names)
+                self.assertIn('frontend/src/main.js', names)
+                self.assertIn('frontend/src/integration.js', names)
+                self.assertNotIn('frontend/tsconfig.json', names)
+                self.assertFalse(any(name.startswith('frontend/src/') and name.endswith('.ts') for name in names))
                 java_names = {name for name in names if name.startswith('docs/integration/java-host/templates/') and name.endswith('.java.example')}
                 self.assertEqual({Path(name).name for name in java_names}, {
                     'PlanningGateway.java.example', 'PendingPlanningGateway.java.example',

@@ -1,11 +1,20 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../../compat/composition'
-import { formatDateTime } from '../../planningTime'
-export interface PlanOperationLog { key:string; createdAt:string; action:string; actor:string; detail:string }
-export default defineComponent({
-  props: { logs: { type:Array as PropType<PlanOperationLog[]>,required:true }, loading:Boolean, error:String },
-  setup(){ return {formatDateTime} },
-})
+<script>
+import { formatDateTime } from '../../planningTime';
+export default {
+  props: {
+    logs: {
+      type: Array,
+      required: true
+    },
+    loading: Boolean,
+    error: String
+  },
+  computed: {
+    formatDateTime() {
+      return formatDateTime;
+    }
+  }
+};
 </script>
 <template>
   <section class="plan-operation-timeline">

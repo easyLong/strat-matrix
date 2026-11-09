@@ -1,51 +1,69 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, ref, watch } from '../compat/composition';
+<script>
 import HoverHint from './HoverHint.vue';
 import AccountTypeBadge from './AccountTypeBadge.vue';
 import ListPagination from './ListPagination.vue';
 import MarketingTopicTable from './MarketingTopicTable.vue';
-import type { AccountOption, TopicOption } from '../types';
-export default defineComponent({
-    props: { accounts: { required: true, type: Array as PropType<AccountOption[]> },
-        topics: { required: true, type: Array as PropType<TopicOption[]> },
-        marketing: { required: true, type: Boolean as PropType<boolean> } },
-    setup(props, context) {
-        const selectedAccounts = computed(() => props.accounts);
-        const selectedTopics = computed(() => props.topics);
-        const isMarketing = computed(() => props.marketing);
-        const submitAccountPage = ref(1);
-        const submitTopicPage = ref(1);
-        const submitAccountPageSize = ref(10);
-        const submitTopicPageSize = ref(10);
-        const submitAccountsPage = computed(() => props.accounts.slice((submitAccountPage.value - 1) * submitAccountPageSize.value, submitAccountPage.value * submitAccountPageSize.value));
-        const submitTopicsPage = computed(() => props.topics.slice((submitTopicPage.value - 1) * submitTopicPageSize.value, submitTopicPage.value * submitTopicPageSize.value));
-        watch(() => props.accounts, () => {
-            submitAccountPage.value = 1;
-        });
-        watch(() => props.topics, () => {
-            submitTopicPage.value = 1;
-        });
-        watch(submitAccountPageSize, () => {
-            submitAccountPage.value = 1;
-        });
-        watch(submitTopicPageSize, () => {
-            submitTopicPage.value = 1;
-        });
-        return {
-            selectedAccounts,
-            selectedTopics,
-            isMarketing,
-            submitAccountPage,
-            submitTopicPage,
-            submitAccountPageSize,
-            submitTopicPageSize,
-            submitAccountsPage,
-            submitTopicsPage
-        };
+export default {
+  props: {
+    accounts: {
+      required: true,
+      type: Array
     },
-    components: {HoverHint, AccountTypeBadge, ListPagination, MarketingTopicTable}
-});
+    topics: {
+      required: true,
+      type: Array
+    },
+    marketing: {
+      required: true,
+      type: Boolean
+    }
+  },
+  components: {
+    HoverHint,
+    AccountTypeBadge,
+    ListPagination,
+    MarketingTopicTable
+  },
+  data() {
+    return {
+      submitAccountPage: 1,
+      submitTopicPage: 1,
+      submitAccountPageSize: 10,
+      submitTopicPageSize: 10
+    };
+  },
+  computed: {
+    selectedAccounts() {
+      return this.accounts;
+    },
+    selectedTopics() {
+      return this.topics;
+    },
+    isMarketing() {
+      return this.marketing;
+    },
+    submitAccountsPage() {
+      return this.accounts.slice((this.submitAccountPage - 1) * this.submitAccountPageSize, this.submitAccountPage * this.submitAccountPageSize);
+    },
+    submitTopicsPage() {
+      return this.topics.slice((this.submitTopicPage - 1) * this.submitTopicPageSize, this.submitTopicPage * this.submitTopicPageSize);
+    }
+  },
+  created() {
+    this.$watch(() => this.accounts, () => {
+      this.submitAccountPage = 1;
+    });
+    this.$watch(() => this.topics, () => {
+      this.submitTopicPage = 1;
+    });
+    this.$watch(() => this.submitAccountPageSize, () => {
+      this.submitAccountPage = 1;
+    });
+    this.$watch(() => this.submitTopicPageSize, () => {
+      this.submitTopicPage = 1;
+    });
+  }
+};
 </script>
 
 <template>

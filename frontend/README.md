@@ -21,9 +21,11 @@ Windows也可在仓库根目录使用`./scripts/frontend.ps1 version`、`./scrip
 
 浏览器继续使用相对`/api`路径。正式部署时客户网关／前端服务器也必须将该前缀映射到Java；Vite开发代理不是生产静态文件自带的代理。
 
-页面请求集中在`src/api/`及`src/api.ts`，界面、路由和状态分别位于`src/views/`、`src/router.ts`和相关composables。迁入客户前端时复用客户的请求、身份、路由和UI基础设施。
+页面请求集中在`src/api/`及`src/api.js`，界面、路由和状态分别位于`src/views/`、`src/router.js`、`src/models/`和`src/services/`。迁入客户前端时复用客户的请求、身份、路由和UI基础设施。
 
-现有组合逻辑通过`@vue/composition-api@1.7.2`在Vue2.6运行，组件均为普通`<script lang="ts">`，无需`script setup`或Vue3宏编译插件。独立页面启动使用`src/main.ts`；嵌入宿主统一调用`src/integration.ts`的`createPlanningIntegration`并引入`integration.css`，集中绑定现有HTTP、Vuex、路由前缀、接口前缀、权限和异常处理。原有三个底层绑定函数保留兼容，不要在宿主内再启动一个独立Vue应用。
+当前前端为**纯 JavaScript + Vue 2 选项式 API**，组件使用普通 `<script>` 及 `data/computed/methods`，不再依赖 TypeScript、`vue-tsc` 或 `@vue/composition-api`。共享选择状态由原生 Vue 2 模型维护；异步请求与缓存生命周期服务集中在 `src/services/`。独立启动入口为 `src/main.js`；嵌入宿主调用 `src/integration.js` 的 `createPlanningIntegration` 并引入 `integration.css`，统一注入现有 HTTP、Vuex、路由前缀、接口前缀、权限及异常处理。
+
+本轮按确认范围迁移 JS 和选项式 API，行外 Vite 构建保留。复制业务源码到宿主时使用宿主现有 Vue CLI/webpack 构建；现场仍需核对其 Babel、模板编译器及 CSS 支持，不把行外构建成功当成宿主构建已通过。迁移与验收见[JS 与选项式 API 迁移记录](../docs/前端JS与选项式API迁移_2026-11-09.md)。
 
 共用接口约定见[三工程契约](../docs/contracts/README.md)。
 

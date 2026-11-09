@@ -2,13 +2,8 @@ const assert = require('node:assert/strict')
 const { it: test } = require('mocha')
 const fs = require('node:fs')
 const path = require('node:path')
-const ts = require('typescript')
-const moduleUnderTest = { exports: {} }
-const code = ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../tooling/serverOptions.ts'), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText
-new Function('module', 'exports', code)(moduleUnderTest, moduleUnderTest.exports)
-const { serverOptions } = moduleUnderTest.exports
+const { load } = require('./helpers/vue2-loader.cjs')
+const { serverOptions } = load(path.resolve(__dirname, '../tooling/serverOptions.js'))
 
 test('standalone frontend uses local development defaults without a backend config reader', () => {
   const options = serverOptions()

@@ -4,8 +4,8 @@ const path = require('node:path')
 const { load, Vue } = require('./helpers/vue2-loader.cjs')
 const renderer = require('vue-server-renderer').createRenderer()
 const Component = load(path.resolve(__dirname, '../src/components/config/ProductionTimingConfig.vue')).default
-const { productionTimingValid, productionLeadLabel } = load(path.resolve(__dirname, '../src/ui/productionTiming.ts'))
-const { configDetailRows, configValuesEqual } = load(path.resolve(__dirname, '../src/ui/configHistory.ts'))
+const { productionTimingValid, productionLeadLabel } = load(path.resolve(__dirname, '../src/ui/productionTiming.js'))
+const { configDetailRows, configValuesEqual } = load(path.resolve(__dirname, '../src/ui/configHistory.js'))
 
 test('production timing supports same-day, separate types, unset values and strict integer bounds', () => {
   assert.equal(productionLeadLabel(0), 'T−0（投放当天）')
@@ -34,13 +34,15 @@ test('production timing renders compact readonly values and emits edits without 
   assert.doesNotMatch(html, /<input/)
   const props = Vue.observable({ value, readonly: false })
   const events = []
-  const state = Component.setup(props, { emit: (...event) => events.push(event) })
+  const state = new Vue({ ...Component, propsData: props })
+  state.$on('input', value => events.push(['input',value]))
   state.change('ordinary', { target: { value: '5' } })
   assert.deepEqual(events[0], ['input', { ordinary: 5, marketing: 0, hotspot: 1 }])
   assert.equal(value.ordinary, 3)
-  props.readonly = true
+  state.readonly = true
   state.change('ordinary', { target: { value: '2' } })
   assert.equal(events.length, 1)
+  state.$destroy()
 })
 
 test('configuration history distinguishes an unrecorded rule from intentionally unset and same-day values', () => {

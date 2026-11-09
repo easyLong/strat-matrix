@@ -6,7 +6,7 @@ const assert = require('node:assert/strict')
 require('./helpers/node16.cjs')
 const { chromium } = require(process.env.PLANNING_PLAYWRIGHT_MODULE || 'playwright')
 const { load } = require('./helpers/vue2-loader.cjs')
-const defaults = load(path.resolve(__dirname, '../src/store.ts')).defaultConfig
+const defaults = load(path.resolve(__dirname, '../src/store.js')).defaultConfig
 const root = path.resolve(__dirname, '../../run/frontend-host-preview')
 const counts = {}
 const errors = []
@@ -22,13 +22,13 @@ const server = http.createServer(async (req,res) => {
     let body = ''; for await (const part of req) body += part
     let data
     if (api === '/health') data = { service:'java-test', database:'ok' }
-    else if (api === '/config') {
-      if (req.method === 'PUT') { Object.assign(defaults, JSON.parse(body)); version++ }
+    else if (api === '/config/query' || api === '/config/save') {
+      if (api === '/config/save') { Object.assign(defaults, JSON.parse(body).config); version++ }
       data = config()
     }
-    else if (api === '/config/versions') data = versions()
-    else if (api === '/tag-taxonomy') data = { version:1, items:{ T1:[],T2:[],T3:[],T4:[],T5:[] } }
-    else if (api === '/accounts' || api === '/topics') data = []
+    else if (api === '/config/versions/query') data = versions()
+    else if (api === '/tag-taxonomy/query') data = { version:1, items:{ T1:[],T2:[],T3:[],T4:[],T5:[] } }
+    else if (api === '/accounts/query' || api === '/topics/query') data = []
     else if (api === '/query/period-context') data = []
     else if (api.startsWith('/query/')) data = { items:[],total:0,page:1,page_size:10,
       summary:{ accounts:0,batches:0,topics:0 }, distribution:[], accounts:[], content_types:[], facets:{ organizations:[],platforms:[],lifecycles:[] } }

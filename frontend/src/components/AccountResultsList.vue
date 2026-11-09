@@ -1,114 +1,120 @@
-<script lang="ts">
+<script>
 import QueryActions from './QueryActions.vue';
-import { defineComponent, type PropType } from '../compat/composition';
-import { ref, watch, onBeforeUnmount } from '../compat/composition';
 import { api } from '../api';
 import { usePlanningStore } from '../store';
-import { useAsyncPage } from '../composables/useAsyncPage';
+import { createAsyncPage } from "../services/asyncPage";
 import ListPagination from './ListPagination.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import PlanningExport from './PlanningExport.vue';
 import AccountTypeBadge from './AccountTypeBadge.vue';
-import type { AccountOption, PlanningAccountSummary } from '../types';
-export default defineComponent({
-    setup(props, context) {
-        const emit = context.emit;
-        const store = usePlanningStore();
-        const initial = {
-            keyword: '',
-            umNo: '',
-            organization: '',
-            platform: '',
-            lifecycle: '',
-            accountType: '',
-            followersMin: null as number | null,
-            followersMax: null as number | null
-        };
-        const saved = store.resultAccountListState;
-        const draft = ref(Object.assign({
-            ...initial
-        }, saved?.draft)), applied = ref(Object.assign({
-            ...initial
-        }, saved?.applied));
-        const page = ref(saved?.page ?? 1), pageSize = ref(saved?.pageSize ?? 20), total = ref(0), loading = ref(false), error = ref(''), expanded = ref(true);
-        const items = ref<(PlanningAccountSummary & {
-            profile?: AccountOption;
-        })[]>([]);
-        const facets = ref({
-            organizations: [] as string[],
-            platforms: [] as string[],
-            lifecycles: [] as string[]
-        });
-        const query = useAsyncPage<PlanningAccountSummary & {
-            profile?: AccountOption;
-        }>(async (signal) => {
-            const response = await api.accountPage({
-                page: page.value,
-                page_size: pageSize.value,
-                filters: applied.value
-            }, signal);
-            if (!signal.aborted)
-                facets.value = response.facets;
-            return response;
-        }, {
-            items,
-            total,
-            loading
-        }, message => {
-            error.value = message;
-        });
-        async function load() {
-            error.value = '';
-            await query.load();
-            const max = Math.max(1, Math.ceil(total.value / pageSize.value));
-            if (page.value > max)
-                page.value = max;
-        }
-        function search() {
-            if (draft.value.followersMin != null && draft.value.followersMax != null && draft.value.followersMin > draft.value.followersMax) {
-                error.value = '粉丝量下限不能大于上限';
-                return;
-            }
-            applied.value = {
-                ...draft.value
-            };
-            page.value = 1;
-        }
-        watch([() => store.databaseReady, page, pageSize, applied], () => {
-            if (store.databaseReady)
-                void load();
-        }, {
-            immediate: true
-        });
-        onBeforeUnmount(() => {
-            store.resultAccountListState = {
-                page: page.value,
-                pageSize: pageSize.value,
-                draft: {
-                    ...draft.value
-                },
-                applied: {
-                    ...applied.value
-                }
-            };
-        });
-        return {
-            emit,
-            draft,
-            applied,
-            page,
-            pageSize,
-            total,
-            loading,
-            error,
-            expanded,
-            items,
-            facets,
-            search
-        };
+export default {
+  components: {
+    QueryActions,
+    PlanningExport,
+    LoadingSkeleton,
+    AccountTypeBadge,
+    ListPagination
+  },
+  data() {
+    return {
+      initial: {
+        keyword: '',
+        umNo: '',
+        organization: '',
+        platform: '',
+        lifecycle: '',
+        accountType: '',
+        followersMin: null,
+        followersMax: null
+      },
+      saved: null,
+      draft: null,
+      applied: null,
+      page: null,
+      pageSize: null,
+      total: 0,
+      loading: false,
+      error: '',
+      expanded: true,
+      items: [],
+      facets: {
+        organizations: [],
+        platforms: [],
+        lifecycles: []
+      },
+      query: null
+    };
+  },
+  computed: {
+    store() {
+      return usePlanningStore();
+    }
+  },
+  methods: {
+    async load() {
+      this.error = '';
+      await this.query.load();
+      const max = Math.max(1, Math.ceil(this.total / this.pageSize));
+      if (this.page > max) this.page = max;
     },
-    components: {QueryActions, PlanningExport, LoadingSkeleton, AccountTypeBadge, ListPagination}
-});
+    search() {
+      if (this.draft.followersMin != null && this.draft.followersMax != null && this.draft.followersMin > this.draft.followersMax) {
+        this.error = '粉丝量下限不能大于上限';
+        return;
+      }
+      this.applied = {
+        ...this.draft
+      };
+      this.page = 1;
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  },
+  created() {
+    this.saved = this.store.resultAccountListState;
+    this.draft = Object.assign({
+      ...this.initial
+    }, this.saved?.draft);
+    this.applied = Object.assign({
+      ...this.initial
+    }, this.saved?.applied);
+    this.page = this.saved?.page ?? 1;
+    this.pageSize = this.saved?.pageSize ?? 20;
+    this.query = createAsyncPage(this, async signal => {
+      const response = await api.accountPage({
+        page: this.page,
+        page_size: this.pageSize,
+        filters: this.applied
+      }, signal);
+      if (!signal.aborted) this.facets = response.facets;
+      return response;
+    }, {
+      items: "items",
+      total: "total",
+      loading: "loading"
+    }, message => {
+      this.error = message;
+    });
+    this.$watch(() => [this.store.databaseReady, this.page, this.pageSize, this.applied], () => {
+      if (this.store.databaseReady) void this.load();
+    }, {
+      immediate: true
+    });
+  },
+  beforeDestroy() {
+    this.store.resultAccountListState = {
+      page: this.page,
+      pageSize: this.pageSize,
+      draft: {
+        ...this.draft
+      },
+      applied: {
+        ...this.applied
+      }
+    };
+  }
+};
 </script>
 <template>
 <div class="vue2-component-root">

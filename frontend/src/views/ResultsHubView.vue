@@ -1,11 +1,9 @@
-<script lang="ts">
+<script>
 import DateRangeFields from '../components/DateRangeFields.vue';
 import QueryActions from '../components/QueryActions.vue';
 import PeriodBatchDialog from '../components/planning/PeriodBatchDialog.vue';
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, ref, watch, onBeforeUnmount } from '../compat/composition';
-import { useRoute, useRouter } from '../compat/router';
-import { useActivePage } from '../composables/useActivePage';
+import { planningRoute, planningRouter } from '../compat/router';
+import { bindPageActivity } from "../services/pageActivity";
 import ContentProgress from '../components/ContentProgress.vue';
 import ListPagination from '../components/ListPagination.vue';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
@@ -13,297 +11,288 @@ import PlanningExport from '../components/PlanningExport.vue';
 import { api } from '../api';
 import { formatDateTime } from '../planningTime';
 import { usePlanningStore } from '../store';
-import type { AutoFailure, BatchSummary, PlanningAccountSummary } from '../types';
 import { statusTone } from '../ui/status';
 import PlanningDetailsView from './PlanningDetailsView.vue';
 import ResultFailureDrawer from '../components/planning/ResultFailureDrawer.vue';
 import AccountResultsList from '../components/AccountResultsList.vue';
-import type { PeriodSummary } from '../api/queries';
-type ResultDimension = 'account' | 'period';
-export default defineComponent({
-    name: 'PlanningResultsPage',
-    setup(props, context) {
-        const store = usePlanningStore();
-        const route = useRoute();
-        const router = useRouter();
-        const batches = ref<BatchSummary[]>([]);
-        const loading = ref(false);
-        const error = ref('');
-        const filtersExpanded = ref(true);
-        const expandedPeriod = ref<string | null>(null);
-        const startDate = ref('');
-        const endDate = ref('');
-        const batchQuery = ref('');
-        const dateFilterError = ref('');
-        const appliedFilters = ref({
-            startDate: '',
-            endDate: '',
-            batchQuery: ''
-        });
-        const failurePeriod = ref<PeriodSummary | null>(null);
-        const page = ref(1);
-        const pageSize = ref(20);
-        const periodRows = ref<PeriodSummary[]>([]);
-        const contextRows = ref<PeriodSummary[]>([]);
-        const periodTotal = ref(0);
-        let loadVersion = 0;
-        let controller: AbortController | undefined;
-        let resultsPaused = false;
-        const requestedBatchId = computed(() => typeof route.query.batch === 'string' && /^\d+$/.test(route.query.batch) ? Number(route.query.batch) : null);
-        const requestedAccountId = computed(() => typeof route.query.account === 'string' ? route.query.account.trim() : '');
-        const requestedCycle = computed(() => typeof route.query.cycle === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(route.query.cycle) ? route.query.cycle : '');
-        const showingBatchDetail = computed(() => requestedBatchId.value !== null);
-        const showingAccountDetail = computed(() => !showingBatchDetail.value && Boolean(requestedAccountId.value));
-        const showingPeriodDetail = computed(() => !showingBatchDetail.value && !showingAccountDetail.value && Boolean(requestedCycle.value));
-        const dimension = computed<ResultDimension>(() => showingAccountDetail.value ? 'account' : route.query.dimension === 'period' || showingBatchDetail.value || showingPeriodDetail.value ? 'period' : 'account');
-        const fromManualTask = computed(() => showingBatchDetail.value && route.query.from === 'manual');
-        const fromCycleDetail = computed(() => showingBatchDetail.value && route.query.from === 'cycle' && Boolean(requestedCycle.value));
-        function cycleWeekStart(date: string) {
-            const value = new Date(`${date}T00:00:00Z`);
-            value.setUTCDate(value.getUTCDate() - (value.getUTCDay() + 6) % 7);
-            return value.toISOString().slice(0, 10);
-        }
-        function cycleWeekEnd(date: string) {
-            const value = new Date(`${cycleWeekStart(date)}T00:00:00Z`);
-            value.setUTCDate(value.getUTCDate() + 6);
-            return value.toISOString().slice(0, 10);
-        }
-        const selectedPeriod = computed(() => contextRows.value.find(period => period.cycleStart === requestedCycle.value) ?? periodRows.value.find(period => period.cycleStart === requestedCycle.value) ?? null);
-        const selectedBatch = computed(() => batches.value.find(batch => batch.id === requestedBatchId.value) ?? null);
-        const periods = computed(() => periodRows.value);
-        const pagedPeriods = computed(() => periodRows.value);
-        function switchDimension(next: ResultDimension) {
-            if (next === dimension.value && !showingBatchDetail.value && !showingPeriodDetail.value && !showingAccountDetail.value)
-                return;
-            expandedPeriod.value = null;
-            void router.push({
-                path: '/results',
-                query: next === 'period' ? {
-                    dimension: 'period'
-                } : {}
-            });
-        }
-        function applyFilters() {
-            if (startDate.value && endDate.value && startDate.value > endDate.value) {
-                dateFilterError.value = '开始时间不能晚于结束时间';
-                return;
-            }
-            dateFilterError.value = '';
-            appliedFilters.value = {
-                startDate: startDate.value,
-                endDate: endDate.value,
-                batchQuery: batchQuery.value.trim()
-            };
-            expandedPeriod.value = null;
-            page.value = 1;
-        }
-        function showFailureDetails(period: PeriodSummary) {
-            failurePeriod.value = period;
-        }
-        function closeFailureDetails() {
-            failurePeriod.value = null;
-        }
-        function togglePeriod(cycleStart: string) {
-            expandedPeriod.value = expandedPeriod.value === cycleStart ? null : cycleStart;
-        }
-        function openPeriod(period: PeriodSummary) {
-            void router.push({
-                path: '/results',
-                query: {
-                    dimension: 'period',
-                    cycle: period.cycleStart
-                }
-            });
-        }
-        function openAccount(account: PlanningAccountSummary) {
-            void router.push({
-                path: '/results',
-                query: {
-                    dimension: 'account',
-                    account: account.account_id
-                }
-            });
-        }
-        function returnToPeriodList() {
-            void router.push({
-                path: '/results',
-                query: {
-                    dimension: 'period'
-                }
-            });
-        }
-        function openBatch(batch: BatchSummary, cycleStart?: string) {
-            const query: Record<string, string> = {
-                batch: String(batch.id),
-                dimension: 'period'
-            };
-            if (cycleStart)
-                query.cycle = cycleStart;
-            void router.push({
-                path: '/results',
-                query
-            });
-        }
-        function returnFromBatchDetail() {
-            if (fromManualTask.value)
-                void router.push('/manual');
-            else if (fromCycleDetail.value)
-                void router.push({
-                    path: '/results',
-                    query: {
-                        dimension: 'period',
-                        cycle: requestedCycle.value,
-                        show_batches: '1'
-                    }
-                });
-            else
-                returnToPeriodList();
-        }
-        function openBatchFromCycle(batch: BatchSummary) {
-            void router.push({
-                path: '/results',
-                query: {
-                    dimension: 'period',
-                    cycle: requestedCycle.value,
-                    batch: String(batch.id),
-                    from: 'cycle'
-                }
-            });
-        }
-        function returnToBatchCycle() {
-            appliedFilters.value = {
-                ...appliedFilters.value,
-                batchQuery: ''
-            };
-            if (selectedBatch.value)
-                void router.push({
-                    path: '/results',
-                    query: {
-                        dimension: 'period',
-                        cycle: cycleWeekStart(selectedBatch.value.cycle_start),
-                        show_batches: '1'
-                    }
-                });
-        }
-        async function loadBatches() {
-            if (resultsPaused || route.path !== '/results' || !store.databaseReady)
-                return;
-            const version = ++loadVersion;
-            controller?.abort();
-            controller = new AbortController();
-            loading.value = true;
-            error.value = '';
-            try {
-                if (showingAccountDetail.value) {
-                    batches.value = [];
-                    return;
-                }
-                if (showingBatchDetail.value || showingPeriodDetail.value) {
-                    const response = await api.periodContext({
-                        mode: showingBatchDetail.value ? 'batch' : 'cycle',
-                        batch_id: requestedBatchId.value ?? undefined,
-                        cycle_start: requestedCycle.value || undefined,
-                        cycle_end: requestedCycle.value ? cycleWeekEnd(requestedCycle.value) : undefined,
-                        filters: appliedFilters.value
-                    });
-                    if (version !== loadVersion)
-                        return;
-                    contextRows.value = response;
-                    batches.value = response.flatMap(period => period.batches);
-                }
-                else {
-                    const response = await api.periodPage({
-                        page: page.value,
-                        page_size: pageSize.value,
-                        filters: appliedFilters.value
-                    }, controller.signal);
-                    if (version !== loadVersion)
-                        return;
-                    periodRows.value = response.items;
-                    periodTotal.value = response.total;
-                    const max = Math.max(1, Math.ceil(response.total / pageSize.value));
-                    if (page.value > max)
-                        page.value = max;
-                }
-            }
-            catch (exc) {
-                if (version === loadVersion)
-                    error.value = exc instanceof Error ? exc.message : '读取策划结果失败';
-            }
-            finally {
-                if (version === loadVersion)
-                    loading.value = false;
-            }
-        }
-        watch([() => store.databaseReady, dimension, requestedBatchId, requestedCycle, requestedAccountId], () => {
-            if (store.databaseReady && (dimension.value === 'period' || showingAccountDetail.value))
-                void loadBatches();
-        }, {
-            immediate: true
-        });
-        watch([page, pageSize, appliedFilters], () => {
-            if (store.databaseReady && dimension.value === 'period' && !showingBatchDetail.value && !showingPeriodDetail.value)
-                void loadBatches();
-        });
-        useActivePage(() => {
-            const resumed = resultsPaused;
-            resultsPaused = false;
-            if (resumed && store.databaseReady && (dimension.value === 'period' || showingAccountDetail.value)) void loadBatches();
-        }, () => {
-            resultsPaused = true;
-            ++loadVersion;
-            controller?.abort();
-        });
-        const periodBatchDetail = computed(() => periods.value.find(period => period.cycleStart === expandedPeriod.value) || null);
-        return {
-            periodBatchDetail,
-            formatDateTime,
-            statusTone,
-            store,
-            route,
-            batches,
-            loading,
-            error,
-            filtersExpanded,
-            expandedPeriod,
-            startDate,
-            endDate,
-            batchQuery,
-            dateFilterError,
-            failurePeriod,
-            page,
-            pageSize,
-            periodTotal,
-            requestedAccountId,
-            requestedCycle,
-            showingBatchDetail,
-            showingAccountDetail,
-            showingPeriodDetail,
-            dimension,
-            fromManualTask,
-            fromCycleDetail,
-            cycleWeekStart,
-            cycleWeekEnd,
-            selectedPeriod,
-            selectedBatch,
-            periods,
-            pagedPeriods,
-            switchDimension,
-            applyFilters,
-            showFailureDetails,
-            closeFailureDetails,
-            togglePeriod,
-            openPeriod,
-            openAccount,
-            returnToPeriodList,
-            openBatch,
-            returnFromBatchDetail,
-            openBatchFromCycle,
-            returnToBatchCycle
-        };
+export default {
+  name: 'PlanningResultsPage',
+  components: {
+    DateRangeFields,
+    QueryActions,
+    PeriodBatchDialog,
+    AccountResultsList,
+    LoadingSkeleton,
+    PlanningDetailsView,
+    PlanningExport,
+    ContentProgress,
+    ListPagination,
+    ResultFailureDrawer
+  },
+  data() {
+    return {
+      batches: [],
+      loading: false,
+      error: '',
+      filtersExpanded: true,
+      expandedPeriod: null,
+      startDate: '',
+      endDate: '',
+      batchQuery: '',
+      dateFilterError: '',
+      appliedFilters: {
+        startDate: '',
+        endDate: '',
+        batchQuery: ''
+      },
+      failurePeriod: null,
+      page: 1,
+      pageSize: 20,
+      periodRows: [],
+      contextRows: [],
+      periodTotal: 0,
+      loadVersion: 0,
+      controller: undefined,
+      resultsPaused: false
+    };
+  },
+  computed: {
+    store() {
+      return usePlanningStore();
     },
-    components: {DateRangeFields, QueryActions, PeriodBatchDialog, AccountResultsList, LoadingSkeleton, PlanningDetailsView, PlanningExport, ContentProgress, ListPagination, ResultFailureDrawer}
-});
+    route() {
+      return planningRoute(this);
+    },
+    router() {
+      return planningRouter(this);
+    },
+    requestedBatchId() {
+      return typeof this.route.query.batch === 'string' && /^\d+$/.test(this.route.query.batch) ? Number(this.route.query.batch) : null;
+    },
+    requestedAccountId() {
+      return typeof this.route.query.account === 'string' ? this.route.query.account.trim() : '';
+    },
+    requestedCycle() {
+      return typeof this.route.query.cycle === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(this.route.query.cycle) ? this.route.query.cycle : '';
+    },
+    showingBatchDetail() {
+      return this.requestedBatchId !== null;
+    },
+    showingAccountDetail() {
+      return !this.showingBatchDetail && Boolean(this.requestedAccountId);
+    },
+    showingPeriodDetail() {
+      return !this.showingBatchDetail && !this.showingAccountDetail && Boolean(this.requestedCycle);
+    },
+    dimension() {
+      return this.showingAccountDetail ? 'account' : this.route.query.dimension === 'period' || this.showingBatchDetail || this.showingPeriodDetail ? 'period' : 'account';
+    },
+    fromManualTask() {
+      return this.showingBatchDetail && this.route.query.from === 'manual';
+    },
+    fromCycleDetail() {
+      return this.showingBatchDetail && this.route.query.from === 'cycle' && Boolean(this.requestedCycle);
+    },
+    selectedPeriod() {
+      return this.contextRows.find(period => period.cycleStart === this.requestedCycle) ?? this.periodRows.find(period => period.cycleStart === this.requestedCycle) ?? null;
+    },
+    selectedBatch() {
+      return this.batches.find(batch => batch.id === this.requestedBatchId) ?? null;
+    },
+    periods() {
+      return this.periodRows;
+    },
+    pagedPeriods() {
+      return this.periodRows;
+    },
+    periodBatchDetail() {
+      return this.periods.find(period => period.cycleStart === this.expandedPeriod) || null;
+    },
+    formatDateTime() {
+      return formatDateTime;
+    },
+    statusTone() {
+      return statusTone;
+    }
+  },
+  methods: {
+    cycleWeekStart(date) {
+      const value = new Date(`${date}T00:00:00Z`);
+      value.setUTCDate(value.getUTCDate() - (value.getUTCDay() + 6) % 7);
+      return value.toISOString().slice(0, 10);
+    },
+    cycleWeekEnd(date) {
+      const value = new Date(`${this.cycleWeekStart(date)}T00:00:00Z`);
+      value.setUTCDate(value.getUTCDate() + 6);
+      return value.toISOString().slice(0, 10);
+    },
+    switchDimension(next) {
+      if (next === this.dimension && !this.showingBatchDetail && !this.showingPeriodDetail && !this.showingAccountDetail) return;
+      this.expandedPeriod = null;
+      void this.router.push({
+        path: '/results',
+        query: next === 'period' ? {
+          dimension: 'period'
+        } : {}
+      });
+    },
+    applyFilters() {
+      if (this.startDate && this.endDate && this.startDate > this.endDate) {
+        this.dateFilterError = '开始时间不能晚于结束时间';
+        return;
+      }
+      this.dateFilterError = '';
+      this.appliedFilters = {
+        startDate: this.startDate,
+        endDate: this.endDate,
+        batchQuery: this.batchQuery.trim()
+      };
+      this.expandedPeriod = null;
+      this.page = 1;
+    },
+    showFailureDetails(period) {
+      this.failurePeriod = period;
+    },
+    closeFailureDetails() {
+      this.failurePeriod = null;
+    },
+    togglePeriod(cycleStart) {
+      this.expandedPeriod = this.expandedPeriod === cycleStart ? null : cycleStart;
+    },
+    openPeriod(period) {
+      void this.router.push({
+        path: '/results',
+        query: {
+          dimension: 'period',
+          cycle: period.cycleStart
+        }
+      });
+    },
+    openAccount(account) {
+      void this.router.push({
+        path: '/results',
+        query: {
+          dimension: 'account',
+          account: account.account_id
+        }
+      });
+    },
+    returnToPeriodList() {
+      void this.router.push({
+        path: '/results',
+        query: {
+          dimension: 'period'
+        }
+      });
+    },
+    openBatch(batch, cycleStart) {
+      const query = {
+        batch: String(batch.id),
+        dimension: 'period'
+      };
+      if (cycleStart) query.cycle = cycleStart;
+      void this.router.push({
+        path: '/results',
+        query
+      });
+    },
+    returnFromBatchDetail() {
+      if (this.fromManualTask) void this.router.push('/manual');else if (this.fromCycleDetail) void this.router.push({
+        path: '/results',
+        query: {
+          dimension: 'period',
+          cycle: this.requestedCycle,
+          show_batches: '1'
+        }
+      });else this.returnToPeriodList();
+    },
+    openBatchFromCycle(batch) {
+      void this.router.push({
+        path: '/results',
+        query: {
+          dimension: 'period',
+          cycle: this.requestedCycle,
+          batch: String(batch.id),
+          from: 'cycle'
+        }
+      });
+    },
+    returnToBatchCycle() {
+      this.appliedFilters = {
+        ...this.appliedFilters,
+        batchQuery: ''
+      };
+      if (this.selectedBatch) void this.router.push({
+        path: '/results',
+        query: {
+          dimension: 'period',
+          cycle: this.cycleWeekStart(this.selectedBatch.cycle_start),
+          show_batches: '1'
+        }
+      });
+    },
+    async loadBatches() {
+      if (this.resultsPaused || this.route.path !== '/results' || !this.store.databaseReady) return;
+      const version = ++this.loadVersion;
+      this.controller?.abort();
+      this.controller = new AbortController();
+      this.loading = true;
+      this.error = '';
+      try {
+        if (this.showingAccountDetail) {
+          this.batches = [];
+          return;
+        }
+        if (this.showingBatchDetail || this.showingPeriodDetail) {
+          const response = await api.periodContext({
+            mode: this.showingBatchDetail ? 'batch' : 'cycle',
+            batch_id: this.requestedBatchId ?? undefined,
+            cycle_start: this.requestedCycle || undefined,
+            cycle_end: this.requestedCycle ? this.cycleWeekEnd(this.requestedCycle) : undefined,
+            filters: this.appliedFilters
+          });
+          if (version !== this.loadVersion) return;
+          this.contextRows = response;
+          this.batches = response.flatMap(period => period.batches);
+        } else {
+          const response = await api.periodPage({
+            page: this.page,
+            page_size: this.pageSize,
+            filters: this.appliedFilters
+          }, this.controller.signal);
+          if (version !== this.loadVersion) return;
+          this.periodRows = response.items;
+          this.periodTotal = response.total;
+          const max = Math.max(1, Math.ceil(response.total / this.pageSize));
+          if (this.page > max) this.page = max;
+        }
+      } catch (exc) {
+        if (version === this.loadVersion) this.error = exc instanceof Error ? exc.message : '读取策划结果失败';
+      } finally {
+        if (version === this.loadVersion) this.loading = false;
+      }
+    }
+  },
+  created() {
+    this.$watch(() => [this.store.databaseReady, this.dimension, this.requestedBatchId, this.requestedCycle, this.requestedAccountId], () => {
+      if (this.store.databaseReady && (this.dimension === 'period' || this.showingAccountDetail)) void this.loadBatches();
+    }, {
+      immediate: true
+    });
+    this.$watch(() => [this.page, this.pageSize, this.appliedFilters], () => {
+      if (this.store.databaseReady && this.dimension === 'period' && !this.showingBatchDetail && !this.showingPeriodDetail) void this.loadBatches();
+    });
+    bindPageActivity(this, () => {
+      const resumed = this.resultsPaused;
+      this.resultsPaused = false;
+      if (resumed && this.store.databaseReady && (this.dimension === 'period' || this.showingAccountDetail)) void this.loadBatches();
+    }, () => {
+      this.resultsPaused = true;
+      ++this.loadVersion;
+      this.controller?.abort();
+    });
+  }
+};
 </script>
 
 <template>

@@ -2,13 +2,12 @@ const assert = require('node:assert/strict')
 const { it: test } = require('mocha')
 const fs = require('node:fs')
 const path = require('node:path')
-const ts = require('typescript')
 const { load, Vue } = require('./helpers/vue2-loader.cjs')
 const renderer = require('vue-server-renderer').createRenderer()
 
 // Render the actual history component, including its table and detail drawer.
 const History = load(path.resolve(__dirname, '../src/components/config/ConfigHistory.vue')).default
-const { canRestoreConfig, configDetailRows } = load(path.resolve(__dirname, '../src/ui/configHistory.ts'))
+const { canRestoreConfig, configDetailRows } = load(path.resolve(__dirname, '../src/ui/configHistory.js'))
 const latest = {
   version: 19, created_at: '2026-11-03T07:35:01.926Z', created_by: 'tester',
   config: {

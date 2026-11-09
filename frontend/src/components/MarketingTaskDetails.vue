@@ -1,64 +1,76 @@
-<script lang="ts">
+<script>
 import DialogTitle from './DialogTitle.vue';
-import { useActivePage } from '../composables/useActivePage';
-import { defineComponent, type PropType } from '../compat/composition';
-import { computed, onBeforeUnmount, onMounted, ref } from '../compat/composition';
+import { bindPageActivity } from "../services/pageActivity";
 import AccountTypeBadge from './AccountTypeBadge.vue';
 import ListPagination from './ListPagination.vue';
 import MarketingTopicTable from './MarketingTopicTable.vue';
-import type { AccountOption, ManualTaskSummary, TopicOption } from '../types';
-export default defineComponent({
-    props: { details: { required: true, type: Object as PropType<{
-                task: ManualTaskSummary;
-                accounts: AccountOption[];
-                topics: TopicOption[];
-            }> } },
-    setup(props, context) {
-        const emit = context.emit;
-        const page = ref(1);
-        const size = ref(20);
-        const panel = ref<HTMLElement | null>(null);
-        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const rows = computed(() => props.details.accounts.slice((page.value - 1) * size.value, page.value * size.value));
-        const awaitingExternalAllocation = computed(() => (props.details.task.allocation_count || 0) > 0 && props.details.accounts.length === 0);
-        function keyboard(event: KeyboardEvent) {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                emit('close');
-            }
-            if (event.key !== 'Tab')
-                return;
-            const focusable = panel.value?.querySelectorAll<HTMLElement>('button:not(:disabled),select');
-            if (!focusable?.length)
-                return;
-            const first = focusable[0]!, last = focusable[focusable.length - 1]!;
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            }
-            else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
-        }
-        useActivePage(() => {
-            panel.value?.querySelector('button')?.focus();
-            document.addEventListener('keydown', keyboard);
-        }, () => {
-            document.removeEventListener('keydown', keyboard);
-            if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus();
-        });
-        return {
-            emit,
-            page,
-            size,
-            panel,
-            rows,
-            awaitingExternalAllocation
-        };
+export default {
+  props: {
+    details: {
+      required: true,
+      type: Object
+    }
+  },
+  components: {
+    DialogTitle,
+    AccountTypeBadge,
+    ListPagination,
+    MarketingTopicTable
+  },
+  data() {
+    return {
+      page: 1,
+      size: 20,
+      previousFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null
+    };
+  },
+  computed: {
+    panel: {
+      cache: false,
+      get() {
+        return this.$refs.panel || null;
+      }
     },
-    components: {DialogTitle, AccountTypeBadge, ListPagination, MarketingTopicTable}
-});
+    rows() {
+      return this.details.accounts.slice((this.page - 1) * this.size, this.page * this.size);
+    },
+    awaitingExternalAllocation() {
+      return (this.details.task.allocation_count || 0) > 0 && this.details.accounts.length === 0;
+    }
+  },
+  methods: {
+    keyboard(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.$emit('close');
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = this.panel?.querySelectorAll('button:not(:disabled),select');
+      if (!focusable?.length) return;
+      const first = focusable[0],
+        last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  },
+  created() {
+    bindPageActivity(this, () => {
+      this.panel?.querySelector('button')?.focus();
+      document.addEventListener('keydown', this.keyboard);
+    }, () => {
+      document.removeEventListener('keydown', this.keyboard);
+      if (this.previousFocus?.isConnected && this.previousFocus.getClientRects().length) this.previousFocus.focus();
+    });
+  }
+};
 </script>
 
 <template>

@@ -1,100 +1,114 @@
-<script lang="ts">
-import { useActivePage } from '../composables/useActivePage';
-import { defineComponent, type PropType } from '../compat/composition';
-import { nextTick, onBeforeUnmount, onMounted, ref, useId } from '../compat/composition';
-export default defineComponent({
-    props: { text: { required: true, type: String as PropType<string> },
-        showIcon: { required: false, type: Boolean as PropType<boolean>, default: true },
-        overflowOnly: { required: false, type: Boolean as PropType<boolean>, default: false } },
-    setup(props, context) {
-        const tooltipId = useId();
-        const trigger = ref<HTMLButtonElement | null>(null);
-        const tooltip = ref<HTMLElement | null>(null);
-        const open = ref(false);
-        const position = ref({
-            left: '0px',
-            top: '0px',
-            visibility: 'hidden' as 'hidden' | 'visible'
-        });
-        let closeTimer: ReturnType<typeof setTimeout> | undefined;
-        const hovered = ref(false);
-        const focused = ref(false);
-        function close() {
-            if (closeTimer !== undefined) clearTimeout(closeTimer);
-            open.value = false;
-        }
-        function place() {
-            if (!open.value || !trigger.value || !tooltip.value)
-                return;
-            const anchor = trigger.value.getBoundingClientRect();
-            const box = tooltip.value.getBoundingClientRect();
-            const left = Math.max(12, Math.min(anchor.left, window.innerWidth - box.width - 12));
-            const below = anchor.bottom + 8;
-            const top = below + box.height <= window.innerHeight - 12 ? below : Math.max(12, anchor.top - box.height - 8);
-            position.value = {
-                left: `${left}px`,
-                top: `${top}px`,
-                visibility: 'visible'
-            };
-        }
-        async function show() {
-            if (props.overflowOnly) {
-                const content = trigger.value?.firstElementChild;
-                if (!content || content.scrollWidth <= content.clientWidth) {
-                    close();
-                    return;
-                }
-            }
-            if (closeTimer !== undefined) clearTimeout(closeTimer);
-            if (!open.value)
-                position.value.visibility = 'hidden';
-            open.value = true;
-            await nextTick();
-            place();
-        }
-        function scheduleClose() {
-            if (closeTimer !== undefined) clearTimeout(closeTimer);
-            closeTimer = setTimeout(() => {
-                if (!hovered.value && !focused.value)
-                    close();
-            }, 120);
-        }
-        function dismissOutside(event: PointerEvent) {
-            const target = event.target as Node | null;
-            if (target && !trigger.value?.contains(target) && !tooltip.value?.contains(target))
-                close();
-        }
-        function dismissEscape(event: KeyboardEvent) {
-            if (event.key === 'Escape')
-                close();
-        }
-        useActivePage(() => {
-            document.addEventListener('pointerdown', dismissOutside);
-            document.addEventListener('keydown', dismissEscape);
-            window.addEventListener('resize', place);
-            window.addEventListener('scroll', place, true);
-        }, () => {
-            close();
-            if (closeTimer !== undefined) clearTimeout(closeTimer);
-            document.removeEventListener('pointerdown', dismissOutside);
-            document.removeEventListener('keydown', dismissEscape);
-            window.removeEventListener('resize', place);
-            window.removeEventListener('scroll', place, true);
-        });
-        return {
-            tooltipId,
-            trigger,
-            tooltip,
-            open,
-            position,
-            hovered,
-            focused,
-            show,
-            scheduleClose
-        };
+<script>
+import { createUiId } from "../ui/instanceId";
+import { bindPageActivity } from "../services/pageActivity";
+export default {
+  props: {
+    text: {
+      required: true,
+      type: String
     },
-    inheritAttrs: false
-});
+    showIcon: {
+      required: false,
+      type: Boolean,
+      default: true
+    },
+    overflowOnly: {
+      required: false,
+      type: Boolean,
+      default: false
+    }
+  },
+  inheritAttrs: false,
+  data() {
+    return {
+      tooltipId: createUiId(),
+      open: false,
+      position: {
+        left: '0px',
+        top: '0px',
+        visibility: 'hidden'
+      },
+      closeTimer: undefined,
+      hovered: false,
+      focused: false
+    };
+  },
+  computed: {
+    trigger: {
+      cache: false,
+      get() {
+        return this.$refs.trigger || null;
+      }
+    },
+    tooltip: {
+      cache: false,
+      get() {
+        return this.$refs.tooltip || null;
+      }
+    }
+  },
+  methods: {
+    close() {
+      if (this.closeTimer !== undefined) clearTimeout(this.closeTimer);
+      this.open = false;
+    },
+    place() {
+      if (!this.open || !this.trigger || !this.tooltip) return;
+      const anchor = this.trigger.getBoundingClientRect();
+      const box = this.tooltip.getBoundingClientRect();
+      const left = Math.max(12, Math.min(anchor.left, window.innerWidth - box.width - 12));
+      const below = anchor.bottom + 8;
+      const top = below + box.height <= window.innerHeight - 12 ? below : Math.max(12, anchor.top - box.height - 8);
+      this.position = {
+        left: `${left}px`,
+        top: `${top}px`,
+        visibility: 'visible'
+      };
+    },
+    async show() {
+      if (this.overflowOnly) {
+        const content = this.trigger?.firstElementChild;
+        if (!content || content.scrollWidth <= content.clientWidth) {
+          this.close();
+          return;
+        }
+      }
+      if (this.closeTimer !== undefined) clearTimeout(this.closeTimer);
+      if (!this.open) this.position.visibility = 'hidden';
+      this.open = true;
+      await this.$nextTick();
+      this.place();
+    },
+    scheduleClose() {
+      if (this.closeTimer !== undefined) clearTimeout(this.closeTimer);
+      this.closeTimer = setTimeout(() => {
+        if (!this.hovered && !this.focused) this.close();
+      }, 120);
+    },
+    dismissOutside(event) {
+      const target = event.target;
+      if (target && !this.trigger?.contains(target) && !this.tooltip?.contains(target)) this.close();
+    },
+    dismissEscape(event) {
+      if (event.key === 'Escape') this.close();
+    }
+  },
+  created() {
+    bindPageActivity(this, () => {
+      document.addEventListener('pointerdown', this.dismissOutside);
+      document.addEventListener('keydown', this.dismissEscape);
+      window.addEventListener('resize', this.place);
+      window.addEventListener('scroll', this.place, true);
+    }, () => {
+      this.close();
+      if (this.closeTimer !== undefined) clearTimeout(this.closeTimer);
+      document.removeEventListener('pointerdown', this.dismissOutside);
+      document.removeEventListener('keydown', this.dismissEscape);
+      window.removeEventListener('resize', this.place);
+      window.removeEventListener('scroll', this.place, true);
+    });
+  }
+};
 </script>
 
 <template>

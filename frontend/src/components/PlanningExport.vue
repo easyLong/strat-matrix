@@ -1,88 +1,105 @@
-<script lang="ts">
+<script>
 import DialogTitle from './DialogTitle.vue';
 import DateRangeFields from './DateRangeFields.vue';
-import { defineComponent, type PropType } from '../compat/composition';
 import { canPlanning } from '../host/runtime';
-import { ref } from '../compat/composition';
-import type { PlanPageQuery } from '../api/queries';
 import { requestBlob } from '../api/http';
-import type { BatchSummary } from '../types';
-export default defineComponent({
-    props: { accounts: { required: false, type: Array as PropType<string[]> },
-        batches: { required: false, type: Array as PropType<BatchSummary[]> },
-        inline: { required: false, type: Boolean as PropType<boolean> },
-        filename: { required: false, type: String as PropType<string> },
-        scope: { required: false, type: null as unknown as PropType<PlanPageQuery> },
-        accountDates: { required: false, type: Boolean as PropType<boolean> } },
-    setup(props, context) {
-        const opened = ref(false);
-        const start = ref('');
-        const end = ref('');
-        const busy = ref(false);
-        const error = ref('');
-        async function download() {
-            error.value = '';
-            if ((props.accounts || props.accountDates) && (!start.value || !end.value || start.value > end.value)) {
-                error.value = '请选择有效的开始时间和截止时间';
-                return;
-            }
-            busy.value = true;
-            try {
-                const scope = props.scope || {
-                    mode: 'all' as const,
-                    page: 1,
-                    page_size: 200,
-                    filters: {},
-                    account_ids: props.accounts,
-                    batch_ids: props.accounts ? undefined : (props.batches || []).map(b => b.id)
-                };
-                const response = await requestBlob('/query/export', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        ...scope,
-                        format: 'xlsx',
-                        filters: {
-                            ...scope.filters,
-                            ...(props.accounts || props.accountDates ? {
-                                start: start.value,
-                                end: end.value
-                            } : {})
-                        }
-                    })
-                });
-                const data = response.data;
-                const url = URL.createObjectURL(data);
-                const link = document.createElement('a');
-                link.href = url;
-                const extension = String(response.headers['content-type'] || data.type).includes('spreadsheetml.sheet') ? 'xlsx' : 'csv';
-                const filename = props.filename || `${props.accounts || props.accountDates ? '账号' : '时间'}策划明细.xlsx`;
-                link.download = /\.(csv|xlsx)$/i.test(filename) ? filename.replace(/\.(csv|xlsx)$/i, `.${extension}`) : `${filename}.${extension}`;
-                link.click();
-                URL.revokeObjectURL(url);
-                opened.value = false;
-            }
-            catch (exc) {
-                error.value = exc instanceof Error ? exc.message : '导出失败，请重试';
-            }
-            finally {
-                busy.value = false;
-            }
-        }
-        return {
-            canPlanning,
-            opened,
-            start,
-            end,
-            busy,
-            error,
-            download
-        };
+export default {
+  props: {
+    accounts: {
+      required: false,
+      type: Array
     },
-    components: {DialogTitle, DateRangeFields}
-});
+    batches: {
+      required: false,
+      type: Array
+    },
+    inline: {
+      required: false,
+      type: Boolean
+    },
+    filename: {
+      required: false,
+      type: String
+    },
+    scope: {
+      required: false,
+      type: null
+    },
+    accountDates: {
+      required: false,
+      type: Boolean
+    }
+  },
+  components: {
+    DialogTitle,
+    DateRangeFields
+  },
+  data() {
+    return {
+      opened: false,
+      start: '',
+      end: '',
+      busy: false,
+      error: ''
+    };
+  },
+  computed: {
+    canPlanning() {
+      return canPlanning;
+    }
+  },
+  methods: {
+    async download() {
+      this.error = '';
+      if ((this.accounts || this.accountDates) && (!this.start || !this.end || this.start > this.end)) {
+        this.error = '请选择有效的开始时间和截止时间';
+        return;
+      }
+      this.busy = true;
+      try {
+        const scope = this.scope || {
+          mode: 'all',
+          page: 1,
+          page_size: 200,
+          filters: {},
+          account_ids: this.accounts,
+          batch_ids: this.accounts ? undefined : (this.batches || []).map(b => b.id)
+        };
+        const response = await requestBlob('/query/export', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ...scope,
+            format: 'xlsx',
+            filters: {
+              ...scope.filters,
+              ...(this.accounts || this.accountDates ? {
+                start: this.start,
+                end: this.end
+              } : {})
+            }
+          })
+        });
+        const data = response.data;
+        const url = URL.createObjectURL(data);
+        const link = document.createElement('a');
+        link.href = url;
+        const extension = String(response.headers['content-type'] || data.type).includes('spreadsheetml.sheet') ? 'xlsx' : 'csv';
+        const filename = this.filename || `${this.accounts || this.accountDates ? '账号' : '时间'}策划明细.xlsx`;
+        link.download = /\.(csv|xlsx)$/i.test(filename) ? filename.replace(/\.(csv|xlsx)$/i, `.${extension}`) : `${filename}.${extension}`;
+        link.click();
+        URL.revokeObjectURL(url);
+        this.opened = false;
+      } catch (exc) {
+        this.error = exc instanceof Error ? exc.message : '导出失败，请重试';
+      } finally {
+        this.busy = false;
+      }
+    }
+  }
+};
 </script>
 
 <template>

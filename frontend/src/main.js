@@ -1,0 +1,14 @@
+import Vue from 'vue';
+import 'element-ui/lib/theme-chalk/index.css';
+import { planningStore } from './store';
+import { router } from './router';
+import App from './App.vue';
+import { installPlanningUi } from './install';
+import './styles/tokens.css';
+import './style.css';
+import './styles/system.css';
+import './styles/review.css';
+import './styles/standalone.css';
+installPlanningUi();
+Vue.config.productionTip = false;
+new Vue({ router, store: planningStore, render: h => h('div', { class: 'planning-ui' }, [h(App)]) }).$mount('#app');

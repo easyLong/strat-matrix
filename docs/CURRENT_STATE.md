@@ -1,5 +1,7 @@
 # 当前实现与交接状态
 
+2026-11-09前端语言与组件迁移：39个组件已改为纯JavaScript与Vue2原生选项式API，移除TypeScript、vue-tsc和组合式API插件。58项前端测试、53个隔离Java/H2浏览器状态及模拟宿主验收通过；源码包入口同步为JS。Vite仍用于行外构建，宿主Webpack与模板编译链需现场验证；运行中的服务未在本轮重启。详见[迁移记录](前端JS与选项式API迁移_2026-11-09.md)。
+
 2026-11-09追加优化：xiangliang新增启动期Mapper/事务元数据检查、只读源码合并预检、可复现源码包和六份接入模板Java8编译验收。宿主SQL及私有适配文件仅报告差异，不自动覆盖；详见[供应商隔离最终验收](xiangliang供应商隔离与验收_2026-11-09.md#验证)与[预检命令](../java-backend/host-integration/MAVEN_MODULES.md#合并前只读预检)。
 
 2026-11-09供应商隔离：[xiangliang迁移及验收](xiangliang供应商隔离与验收_2026-11-09.md)已完成。Java五层生产包按宿主目录落位，7份Mapper XML、Spring Bean及Advice范围隔离；可导出按行内已有五模块目录组织的源码ZIP。本轮在独立构建目录验证，没有覆盖运行服务JAR、执行数据库DDL或修改HTTP协议；真实行内SQL、SSO、依赖与数据权限仍待现场适配。

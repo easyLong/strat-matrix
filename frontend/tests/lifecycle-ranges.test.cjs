@@ -2,8 +2,8 @@ const assert = require('node:assert/strict')
 const { it:test } = require('mocha')
 const path = require('node:path')
 const { load, Vue } = require('./helpers/vue2-loader.cjs')
-const ranges = load(path.resolve(__dirname,'../src/ui/lifecycleRanges.ts'))
-const { lifecycleGroups } = load(path.resolve(__dirname,'../src/ui/lifecycleRules.ts'))
+const ranges = load(path.resolve(__dirname,'../src/ui/lifecycleRanges.js'))
+const { lifecycleGroups } = load(path.resolve(__dirname,'../src/ui/lifecycleRules.js'))
 const condition = (operator,value,join='AND',field='followers_count') => ({field,operator,value,join})
 const rule = conditions => ({name:'测试阶段',catchAll:false,condition_mode:'grouped',conditions})
 
@@ -23,20 +23,24 @@ test('legacy summaries distribute the shared AND condition across OR groups with
   const Component=load(path.resolve(__dirname,'../src/components/config/LifecycleRuleSummary.vue')).default
   const stage={...rule([condition('gte',50),condition('gte',10,'OR','rolling_interaction_count'),condition('gte',5,'AND','valid_content_count')]),condition_mode:undefined}
   const before=JSON.stringify(stage)
-  const state=Component.setup({rule:stage,rules:[stage]})
-  assert.deepEqual(state.groups.value.map(group=>group.map(item=>item.label)),[['粉丝数','有效内容数'],['滚动篇均互动数','有效内容数']])
+  const state=new Vue({ ...Component, propsData:{rule:stage,rules:[stage]} })
+  assert.deepEqual(state.groups.map(group=>group.map(item=>item.label)),[['粉丝数','有效内容数'],['滚动篇均互动数','有效内容数']])
   assert.equal(JSON.stringify(stage),before)
+  state.$destroy()
 })
 
 test('an unfinished summary never exposes NaN and the fallback stage keeps its existing rule', () => {
   const Component=load(path.resolve(__dirname,'../src/components/config/LifecycleRuleSummary.vue')).default
   const stage=rule([condition('gte',NaN)])
-  assert.equal(Component.setup({rule:stage,rules:[stage]}).groups.value[0][0].range,'≥ 待填写 人')
+  const unfinished=new Vue({ ...Component, propsData:{rule:stage,rules:[stage]} })
+  assert.equal(unfinished.groups[0][0].range,'≥ 待填写 人')
+  unfinished.$destroy()
   const fallback={name:'冷启动期',catchAll:true,conditions:[]}
   const growth={...rule([condition('gte',50),condition('gte',5,'OR','valid_content_count')]),name:'流量增长期'}
-  const state=Component.setup({rule:fallback,rules:[growth,fallback]})
-  assert.deepEqual(state.groups.value,[])
-  assert.equal(state.fallback.value,'粉丝数 < 50 人 或 有效内容数 < 5 篇；未命中其他阶段时也归入此阶段')
+  const state=new Vue({ ...Component, propsData:{rule:fallback,rules:[growth,fallback]} })
+  assert.deepEqual(state.groups,[])
+  assert.equal(state.fallback,'粉丝数 < 50 人 或 有效内容数 < 5 篇；未命中其他阶段时也归入此阶段')
+  state.$destroy()
 })
 
 test('the actual stage editor renders existing thresholds and range labels without changing their values', async () => {

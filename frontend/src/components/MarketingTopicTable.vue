@@ -1,26 +1,51 @@
-<script lang="ts">
-import { defineComponent, type PropType } from '../compat/composition';
+<script>
 import HoverHint from './HoverHint.vue';
-import type { TopicOption } from '../types';
 import { marketingTopicName, topicValidityLabel } from '../ui/manualTopics';
-export default defineComponent({
-  components: { HoverHint },
+export default {
+  components: {
+    HoverHint
+  },
   props: {
-    topics: { type: Array as PropType<TopicOption[]>, required: true },
-    selectable: { type: Boolean, default: false },
-    selectedIds: { type: Array as PropType<string[]>, default: () => [] },
-    readonly: { type: Boolean, default: false },
-    validityHint: { type:String,default:'' },
-  },
-  setup(props, { emit }) {
-    function select(topic: TopicOption, event: Event) {
-      if (!props.selectable || props.readonly) return;
-      if (event.type === 'click' && event.target instanceof Element && event.target.closest('input,button,a')) return;
-      emit('select', topic.topic_id);
+    topics: {
+      type: Array,
+      required: true
+    },
+    selectable: {
+      type: Boolean,
+      default: false
+    },
+    selectedIds: {
+      type: Array,
+      default: () => []
+    },
+    readonly: {
+      type: Boolean,
+      default: false
+    },
+    validityHint: {
+      type: String,
+      default: ''
     }
-    return { select, emit, marketingTopicName, topicValidityLabel };
   },
-});
+  computed: {
+    marketingTopicName() {
+      return marketingTopicName;
+    },
+    topicValidityLabel() {
+      return topicValidityLabel;
+    }
+  },
+  methods: {
+    select(topic, event) {
+      if (!this.selectable || this.readonly) return;
+      if (event.type === 'click' && event.target instanceof Element && event.target.closest('input,button,a')) return;
+      this.$emit('select', topic.topic_id);
+    },
+    emit(...args) {
+      return this.$emit(...args);
+    }
+  }
+};
 </script>
 <template>
   <table class="marketing-topic-table">
