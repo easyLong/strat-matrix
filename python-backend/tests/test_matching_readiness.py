@@ -6,10 +6,10 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app.account_profile import canonical_json, profile_from_snapshot
-from app.matching_readiness import evaluate_readiness
-from app.models import StrategyConfig
-from app.topic_profile import profile_from_source
+from app.content_planning.account_profile import canonical_json, profile_from_snapshot
+from app.content_planning.matching_readiness import evaluate_readiness
+from app.content_planning.models import StrategyConfig
+from app.content_planning.topic_profile import profile_from_source
 
 
 CHECKED_AT = datetime(2026, 10, 12, 8, tzinfo=timezone.utc)
@@ -191,13 +191,13 @@ class MatchingReadinessTests(unittest.TestCase):
 class ReadinessApiTests(unittest.TestCase):
     def test_missing_and_duplicate_batch_return_business_errors(self):
         from fastapi import HTTPException
-        from app.matching_readiness_api import matching_readiness
+        from app.content_planning.matching_readiness_api import matching_readiness
         for rows, expected_status in (([], 404), ([{}, {}], 409)):
             with self.subTest(expected_status=expected_status):
                 db, cursor = MagicMock(), MagicMock()
                 db.cursor.return_value.__enter__.return_value = cursor
                 cursor.fetchall.return_value = rows
-                with patch("app.matching_readiness_api.connection") as connection:
+                with patch("app.content_planning.matching_readiness_api.connection") as connection:
                     connection.return_value.__enter__.return_value = db
                     with self.assertRaises(HTTPException) as error:
                         matching_readiness(123)
@@ -205,14 +205,14 @@ class ReadinessApiTests(unittest.TestCase):
                 db.commit.assert_not_called()
 
     def test_report_uses_supplied_database_snapshot_without_writing(self):
-        from app.matching_readiness_api import matching_readiness
+        from app.content_planning.matching_readiness_api import matching_readiness
         batch, accounts, topics = fixture()
         db, cursor = MagicMock(), MagicMock()
         db.cursor.return_value.__enter__.return_value = cursor
         cursor.fetchall.side_effect = ([batch], accounts)
-        with patch("app.matching_readiness_api.connection") as connection, \
-                patch("app.matching_readiness_api.datetime") as clock, \
-                patch('app.matching_readiness_api.load_matching_topics', return_value=topics):
+        with patch("app.content_planning.matching_readiness_api.connection") as connection, \
+                patch("app.content_planning.matching_readiness_api.datetime") as clock, \
+                patch('app.content_planning.matching_readiness_api.load_matching_topics', return_value=topics):
             connection.return_value.__enter__.return_value = db
             clock.now.return_value = CHECKED_AT
             report = matching_readiness(123)

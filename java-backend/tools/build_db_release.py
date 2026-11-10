@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / 'godp-planning-services/src/main/resources/db'
 BASE = ('manual-business.sql', 'business-planning-config.sql',
         'auto-planning-business.sql', 'slot-completion.sql')
-VERSION = '20261107-v9'
+VERSION = '20261110-v10'
 HEADER = '-- godp-strat-matrix Java业务库发布；由DBA在已确认的目标schema执行。\n'
 PUBLIC = ('id', 'del_flag', 'created_by', 'updated_by', 'created_time', 'updated_time')
 
@@ -20,7 +20,6 @@ def digest(data):
 
 def build():
     sources = {name: (DB / name).read_text(encoding='utf-8') for name in BASE}
-    views = (DB / 'planning-query-views.sql').read_text(encoding='utf-8')
     upgrade = (DB / 'migrations/V9__staged_result_publication.sql').read_text(encoding='utf-8')
     tables = {}
     for source in sources.values():
@@ -45,12 +44,17 @@ def build():
 SELECT TABLE_NAME,ENGINE,TABLE_COLLATION,TABLE_COMMENT FROM information_schema.TABLES
  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ({quoted}) ORDER BY TABLE_NAME;
 '''
-    rollback_views = views.replace(" AND b.write_state='ready'", '').replace(" AND write_state='ready'", '')
     files = {
         'ddl/01-new-install.sql': HEADER + '-- 仅用于全新库；先检查14张业务表均不存在。不得用IF NOT EXISTS替代存量升级。\n'
-            + '\n'.join(sources.values()) + '\n' + views,
-        'ddl/02-upgrade-v8-to-v9.sql': HEADER + '-- 仅适用于已完成V8且尚无V9字段的库；新库不要执行。\n'
-            + upgrade + '\n' + views,
+            + '\n'.join(sources.values()),
+        'ddl/02-upgrade-v8-to-v10.sql': HEADER + '-- 仅适用于已完成V8且尚无V9字段的库；新库不要执行。\n'
+            + upgrade,
+        'ddl/03-upgrade-v9-to-v10.sql': HEADER + '''-- V9到V10没有新增业务表或字段，只切换应用中的MyBatis查询。
+-- 先执行checks/05-upgrade-v9-precheck.sql，再部署V10应用。无需创建、重建或查询数据库视图。
+-- 旧库已有的历史视图由DBA另行评估清理，本包不自动删除任何数据库对象。
+SELECT DATABASE() AS target_schema;
+SELECT write_state,COUNT(*) AS batch_count FROM godp_planning_batch GROUP BY write_state;
+''',
         'dml/01-initial-data-review.sql': HEADER + '''-- 没有可擅自覆盖的通用初始配置；不包含测试账号、测试选题、密钥或批准策略。
 -- 新库由业务负责人通过正式配置发布流程建立当前版本和历史，不能伪造已确认的两侧配置。
 -- 存量库保持全部现有配置，本脚本只核查。
@@ -82,19 +86,27 @@ SELECT COUNT(DISTINCT INDEX_NAME) AS v8_indexes FROM information_schema.STATISTI
 SELECT status,COUNT(*) AS task_count FROM godp_auto_planning_task WHERE del_flag='N' GROUP BY status;
 ''',
         'checks/03-postcheck.sql': basecheck + f'''
--- 三个视图必须全部存在，新增字段类型、默认值、中文说明需与DDL一致。
+-- 新增字段类型、默认值、中文说明需与DDL一致。查询直接读取14张业务表。
 SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT,COLUMN_COMMENT
  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
  AND TABLE_NAME='godp_planning_batch' AND COLUMN_NAME IN ('write_state','write_cursor');
-SELECT TABLE_NAME,VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA=DATABASE()
- AND TABLE_NAME IN ('godp_planning_item_read','godp_planning_batch_read','godp_planning_task_read');
 SELECT write_state,COUNT(*) AS batch_count FROM godp_planning_batch GROUP BY write_state;
 SELECT COUNT(*) AS invalid_write_states FROM godp_planning_batch
  WHERE write_state NOT IN ('ready','staging') OR write_cursor<0;
-SELECT COUNT(*) AS leaked_staging_items FROM godp_planning_item_read i
- JOIN godp_planning_batch b ON b.id=i.batch_id WHERE b.write_state<>'ready';
--- 应用账号应独立验证：具有必要DML和视图SELECT，无需CREATE/ALTER/DROP。
+-- staging批次允许恢复推进，但列表、统计、导出和扫描均必须通过MyBatis发布边界隐藏它们。
+SELECT COUNT(*) AS unpublished_items FROM godp_planning_item i
+ JOIN godp_planning_batch b ON b.id=i.batch_id WHERE i.del_flag='N' AND b.del_flag='N' AND b.write_state<>'ready';
+-- 应用账号应独立验证：只有业务表DML权限也可运行，无需视图、CREATE/ALTER/DROP权限。
 SHOW GRANTS;
+''',
+        'checks/05-upgrade-v9-precheck.sql': basecheck + f'''-- existing_tables应为14，publication_columns应为2；先按现状确认V9已完整安装。
+SELECT COUNT(*) AS existing_tables FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME IN ({quoted});
+SELECT COUNT(*) AS publication_columns FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='godp_planning_batch'
+ AND COLUMN_NAME IN ('write_state','write_cursor');
+SELECT status,COUNT(*) AS task_count FROM godp_auto_planning_task WHERE del_flag='N' GROUP BY status;
+-- V10无新增DDL；停止旧实例/调度后切换应用，再验证分页、统计和调度扫描。
 ''',
         'checks/04-index-review.sql': HEADER + f'''-- 只读；真实EXPLAIN和容量结论由现场实际数据验证。
 SELECT TABLE_NAME,INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,SUB_PART
@@ -113,9 +125,10 @@ SELECT id,write_state,write_cursor FROM godp_planning_batch WHERE write_state<>'
 SELECT status,COUNT(*) AS task_count FROM godp_auto_planning_task WHERE del_flag='N' GROUP BY status;
 ''',
         'rollback/02-compatible-rollback.sql': HEADER
-            + '-- 仅在01-precheck的blocking_batches为0后执行，再回退应用。\n'
-            + '-- 恢复V8视图；保留兼容列和全部业务数据，不自动DROP表/列，不删除分批结果。\n'
-            + rollback_views,
+            + '-- 仅在01-precheck的blocking_batches为0后，由DBA确认备份及目标版本。\n'
+            + '-- 本版本不改变表结构；保留全部业务数据，不自动创建或删除数据库对象。\n'
+            + '-- 只能回退至已验收的无视图兼容应用。依赖视图的V8/V9旧应用不可直接回退。\n'
+            + 'SELECT COUNT(*) AS blocking_batches FROM godp_planning_batch WHERE write_state<>\'ready\';\n',
     }
     inventory = ['# Java业务表与索引评审清单', '',
         '生成自当前DDL；仅包含本模块14张业务表，不包含Python算法表和行内内容流水表。', '',
@@ -146,13 +159,13 @@ SELECT status,COUNT(*) AS task_count FROM godp_auto_planning_task WHERE del_flag
     files['TABLE_DESIGN.md'] = '\n'.join(inventory)
     files['README.md'] = '''# godp-strat-matrix Java业务库 DBA发布包
 
-版本：20261107-v9。工具只读取源码、生成文件，不连接数据库、不修改任何环境。
+版本：20261110-v10。工具只读取源码、生成文件，不连接数据库、不修改任何环境。
 
 ## 目标与权限
 
 目标schema由行内确认，通过数据库客户端连接选择；不硬编码operations、strat_matrix_bus。
 Java业务表和Python算法表分别发布；本包不建行内既有内容流水表。
-应用只需业务表SELECT/INSERT/UPDATE/DELETE及视图SELECT；发布账号由DBA掌管DDL权限。
+应用只需业务表SELECT/INSERT/UPDATE/DELETE；无需视图访问或创建权限。发布账号由DBA掌管DDL权限。
 不在应用启动执行建表，不启用Flyway/Liquibase自动迁移，不提供内置GRANT或生产账户口令。
 
 ## 执行路线（只能选择一条）
@@ -160,9 +173,11 @@ Java业务表和Python算法表分别发布；本包不建行内既有内容流�
 1. 新库：停止调度，备份/审批 → checks/01-new-install-precheck.sql（existing_tables=0）
    → ddl/01-new-install.sql → dml/01-initial-data-review.sql → checks/03-postcheck.sql。
 2. V8存量库：核实已完成V6/V7/V8、先备份 → checks/02-upgrade-v8-precheck.sql
-   → ddl/02-upgrade-v8-to-v9.sql → checks/03-postcheck.sql → 部署V9应用 → 恢复调度。
+   → ddl/02-upgrade-v8-to-v10.sql → checks/03-postcheck.sql → 部署V10应用 → 恢复调度。
    V2～V7旧基线须先按原迁移链升级，不能直接执行本增量。部分执行中断时先核对元数据，不能直接重放ALTER。
-3. 运行账户由DBA单独验证，不能用管理员启动成功代替DML-only验收。
+3. V9存量库：备份 → checks/05-upgrade-v9-precheck.sql → ddl/03-upgrade-v9-to-v10.sql
+   → 部署V10应用 → checks/03-postcheck.sql → 恢复调度；此路径不改变表结构，也不处理历史视图对象。
+4. 运行账户由DBA单独验证，不能用管理员启动成功代替DML-only验收。
 
 检查脚本只返回结果，不自动阻断；任何不符合项由DBA处理并确认后才可执行下一步。
 MySQL DDL可能已自动提交，SQL事务回滚不能替代备份和恢复；执行失败时停止并记录已完成语句。
@@ -171,7 +186,8 @@ MySQL DDL可能已自动提交，SQL事务回滚不能替代备份和恢复；�
 ## 回退
 
 停止调度与写入 → rollback/01-precheck.sql → blocking_batches必须为0
-→ rollback/02-compatible-rollback.sql恢复旧视图 → 回退旧应用 → 只读复核后恢复调度。
+→ 审核rollback/02-compatible-rollback.sql → 回退至已验收的无视图兼容应用 → 只读复核后恢复调度。
+依赖视图的V8/V9旧应用不能作为行内直接回退目标；首次无视图发布须保留本次验收制品并制定修复／备份恢复方案。
 若有staging批次，先由新版继续推进，或由DBA制定保留数据的恢复方案，禁止直接暴露半成品。
 兼容回退保留新增列和全部业务数据，旧应用写入使用ready默认值。
 首次建库回退也不自动DROP14张表；是否撤销空表由DBA在确认无业务数据后另行审批。
@@ -179,15 +195,19 @@ MySQL DDL可能已自动提交，SQL事务回滚不能替代备份和恢复；�
 ## 索引、容量与完整性
 
 TABLE_DESIGN.md为表/索引及容量评审入口；checks/04-index-review.sql只读获取索引和典型EXPLAIN。
-真实行内MySQL版本、排序规则、JSON/视图支持、执行权限、数据范围和压测仍需现场确认。
+真实行内MySQL版本、排序规则、JSON函数支持、执行权限、数据范围和压测仍需现场确认。
+本轮仅移除视图依赖，JSON字段实体化及新增组合索引应按独立评审清单另行实施。
 manifest.json记录权威源码和产物SHA256；下列命令验证发布包未偏离当前源码：
 
 ```bash
-python tools/build_db_release.py --output godp-planning-services/src/main/resources/db/release/20261107-v9 --check
+python tools/build_db_release.py --output godp-planning-services/src/main/resources/db/release/20261110-v10 --check
 ```
 '''
-    source_paths = [DB / n for n in BASE] + [DB / 'planning-query-views.sql', DB / 'migrations/V9__staged_result_publication.sql', Path(__file__).resolve()]
-    manifest = {'release': VERSION, 'hash_format': 'UTF-8 text with LF line endings',
+    for name, value in files.items():
+        if name.endswith('.sql') and re.search(r'\b(?:CREATE\s+(?:OR\s+REPLACE\s+)?|ALTER\s+|DROP\s+)VIEW\b', value, re.I):
+            raise ValueError('Database views are forbidden in the bank release: ' + name)
+    source_paths = [DB / n for n in BASE] + [DB / 'migrations/V9__staged_result_publication.sql', Path(__file__).resolve()]
+    manifest = {'release': VERSION, 'database_views': 0, 'hash_format': 'UTF-8 text with LF line endings',
         'sources': {str(p.relative_to(ROOT)).replace('\\', '/'): digest(p.read_text(encoding='utf-8').encode('utf-8')) for p in source_paths},
         'files': {name: digest(value.encode('utf-8')) for name, value in sorted(files.items())}}
     files['manifest.json'] = json.dumps(manifest, ensure_ascii=False, indent=2) + '\n'

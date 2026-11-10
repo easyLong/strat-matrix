@@ -57,6 +57,7 @@ class OutsideContentBranchesAcceptanceTest {
     f.setMapperLocations(
         new ClassPathResource("mapper/xiangliang/ManualMapper.xml"),
         new ClassPathResource("mapper/xiangliang/SlotCompletionMapper.xml"),
+        new ClassPathResource("mapper/xiangliang/PlanningQueryMapper.xml"),
         new ClassPathResource("mapper/xiangliang/BusinessPlanningConfigMapper.xml"));
     SqlSessionTemplate sql = new SqlSessionTemplate(f.getObject());
     ManualMapper mapper = sql.getMapper(ManualMapper.class);

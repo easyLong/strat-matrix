@@ -7,19 +7,19 @@ import unittest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.account_mapping import resolve_mapping
-from app.matching_contracts import MatchingQualityOptions, MatchingPolicyDocument
-from app.matching_quality import (t3_score,masked_score,recall,history_penalty,precision_score,
+from app.content_planning.account_mapping import resolve_mapping
+from app.content_planning.matching_contracts import MatchingQualityOptions, MatchingPolicyDocument
+from app.content_planning.matching_quality import (t3_score,masked_score,recall,history_penalty,precision_score,
                                   valid_on,IMPLEMENTATION_KEY,QUALITY_PARAMETERS)
-from app.matching_quality_model import checked_annotation,checked_account_mapping,PairJudgment,judge_batch,map_account
-from app.matching_quality_store import QualityRuntime,QualityPending,save_quality_report
-from app.matching_quality_executor import merged_mapping,allocate_quality
-from app.matching_quality_executor import raw_account
-from app.matching_quality_snapshot import content_hash
-from app.matching_quality_validation import validate_quality_evaluation
-from app.matching_policy import implementation_approval_errors
-from app import matching_executor_worker as worker
-from app.system_config import override_config
+from app.content_planning.matching_quality_model import checked_annotation,checked_account_mapping,PairJudgment,judge_batch,map_account
+from app.content_planning.matching_quality_store import QualityRuntime,QualityPending,save_quality_report
+from app.content_planning.matching_quality_executor import merged_mapping,allocate_quality
+from app.content_planning.matching_quality_executor import raw_account
+from app.content_planning.matching_quality_snapshot import content_hash
+from app.content_planning.matching_quality_validation import validate_quality_evaluation
+from app.content_planning.matching_policy import implementation_approval_errors
+from app.content_planning import matching_executor_worker as worker
+from app.content_planning.system_config import override_config
 import test_account_mapping as mapping_fixture
 import matching_fixtures as executor_fixture
 import test_planning_result_commit as commit_fixture
@@ -133,14 +133,14 @@ class QualityModelContractTests(unittest.TestCase):
         valid={'mappings':[{'dimension':'T3','tag_id':'fund','relation':'CORE','condition':'',
                            'evidence_field':'interests','evidence':'基金'}],'need_capability':'理解家庭投资'}
         duplicate=deepcopy(valid);duplicate['mappings'] *= 2
-        with patch('app.matching_quality_model.chat',side_effect=[duplicate,valid]) as model:
+        with patch('app.content_planning.matching_quality_model.chat',side_effect=[duplicate,valid]) as model:
             self.assertEqual(map_account(context(),raw),valid)
             self.assertEqual(model.call_count,2)
             self.assertIn('上次输出未通过',model.call_args.args[1])
             self.assertEqual(model.call_args.args[2]['previous_output'],duplicate)
             self.assertIn('重复',model.call_args.args[2]['validation_error'])
             self.assertEqual(model.call_args.args[2]['account'],raw)
-        with patch('app.matching_quality_model.chat',return_value=duplicate) as model:
+        with patch('app.content_planning.matching_quality_model.chat',return_value=duplicate) as model:
             with self.assertRaisesRegex(ValueError,'重复'):
                 map_account(context(),raw)
             self.assertEqual(model.call_count,2)
@@ -197,7 +197,7 @@ class QualityModelContractTests(unittest.TestCase):
             with self.assertRaises(ValidationError):PairJudgment.model_validate(judgment(**changes))
 
     def test_incomplete_pair_batch_fails_instead_of_assuming_missing_is_accepted(self):
-        with patch('app.matching_quality_model.chat',return_value={'results':{}}):
+        with patch('app.content_planning.matching_quality_model.chat',return_value={'results':{}}):
             with self.assertRaises(ValueError):judge_batch(context(),{}, {'0':{}})
 
 
@@ -220,7 +220,7 @@ class QualityPersistenceTests(unittest.TestCase):
         db=MagicMock();db.__enter__.return_value=db
         db.cursor.return_value.__enter__.return_value.fetchone.return_value={'result_json':'{}','result_hash':'0'*64}
         runtime=QualityRuntime(context(),lambda:None)
-        with patch('app.matching_quality_store.connection',return_value=db):
+        with patch('app.content_planning.matching_quality_store.connection',return_value=db):
             with self.assertRaises(ValueError):runtime.find('pair_precision',{})
         self.assertEqual(runtime.stats['model_calls'],0)
 
@@ -228,7 +228,7 @@ class QualityPersistenceTests(unittest.TestCase):
         db=MagicMock();db.__enter__.return_value=db
         cursor=db.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value={'status':'processing','lease_id':'new','live':1}
-        with patch('app.matching_quality_store.connection',return_value=db):
+        with patch('app.content_planning.matching_quality_store.connection',return_value=db):
             with self.assertRaises(HTTPException):save_quality_report({'task_id':1,'lease_id':'old'},{},'processing','recall')
         db.commit.assert_not_called()
         self.assertEqual(cursor.execute.call_count,1)

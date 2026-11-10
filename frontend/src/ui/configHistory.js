@@ -33,7 +33,7 @@ export function canRestoreConfig(config) {
 }
 export function configDetailRows(config) {
     const rows = [
-        { key: 'planning_days', group: '策划内容配置', label: '每周策划日', value: config.planning_days?.map(day => ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] ?? `周${day}`).join('、') || '未记录' },
+        { key: 'planning_days', group: '策划内容配置', label: '每周内容推送日', value: config.planning_days?.map(day => ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] ?? `周${day}`).join('、') || '未记录' },
         { key: 'schedule', group: '策划内容配置', label: '自动策划调度时间', value: config.schedule_day != null && config.schedule_time != null ? `每周${['一', '二', '三', '四', '五', '六', '日'][config.schedule_day - 1]} ${config.schedule_time}` : '未记录' },
         { key: 'marketing_max', group: '策划内容配置', label: '营销内容周上限', value: config.marketing_max == null ? '未记录' : `${config.marketing_max} 条 / 营销账号 / 周` },
         { key: 'hotspot_ratio', group: '策划内容配置', label: '热点选题占比', value: config.hotspot_ratio == null ? '未记录' : `${config.hotspot_ratio}%` },

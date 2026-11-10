@@ -13,15 +13,15 @@ from urllib.request import Request, urlopen
 
 from fastapi.testclient import TestClient
 
-from app.bank_bridge import factory
-from app.bank_bridge.contracts import AccountQuery, TopicQuery, ProductionQuery, ProductionRecord, MarketingProductionRecord
-from app.bank_bridge.java_http import JavaHTTPClient, JavaHTTPSource, JavaProductionStatus
-from app.bank_bridge.memory import fixture_source
-from app.bank_bridge.ports import DataContractError, IntegrationUnavailable
-from app.core.actor import current_actor
+from app.content_planning.bank_bridge import factory
+from app.content_planning.bank_bridge.contracts import AccountQuery, TopicQuery, ProductionQuery, ProductionRecord, MarketingProductionRecord
+from app.content_planning.bank_bridge.java_http import JavaHTTPClient, JavaHTTPSource, JavaProductionStatus
+from app.content_planning.bank_bridge.memory import fixture_source
+from app.content_planning.bank_bridge.ports import DataContractError, IntegrationUnavailable
+from app.content_planning.core.actor import current_actor
 from app.main import app
-from app.services import content_status
-from app.system_config import override_config
+from app.content_planning.services import content_status
+from app.content_planning.system_config import override_config
 
 
 @contextmanager

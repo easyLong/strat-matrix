@@ -1,5 +1,5 @@
 import unittest
-from app.manual_compute import ComputeInput, allocate
+from app.content_planning.manual_compute import ComputeInput, allocate
 
 
 class ManualComputeTests(unittest.TestCase):
@@ -23,8 +23,8 @@ class ManualComputeTests(unittest.TestCase):
         with self.assertRaises(ValueError):ComputeInput(**payload)
 
     def test_compute_does_not_depend_on_business_database(self):
-        import inspect,app.manual_compute
-        source=inspect.getsource(app.manual_compute)
+        import inspect,app.content_planning.manual_compute
+        source=inspect.getsource(app.content_planning.manual_compute)
         for table in ('godp_manual_task','godp_planning_batch','godp_planning_item','godp_slot_state'):
             self.assertNotIn(table,source)
 

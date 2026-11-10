@@ -10,19 +10,19 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pymysql
 
-from app.bank_bridge import api, factory, operations
-from app.bank_bridge.bank_sql import BankSQLSource
-from app.bank_bridge.bridge import collect, planning_accounts
-from app.bank_bridge.contracts import (AccountQuery, TopicQuery, MarketingQuery, AccountPlanningQuery,
+from app.content_planning.bank_bridge import api, factory, operations
+from app.content_planning.bank_bridge.bank_sql import BankSQLSource
+from app.content_planning.bank_bridge.bridge import collect, planning_accounts
+from app.content_planning.bank_bridge.contracts import (AccountQuery, TopicQuery, MarketingQuery, AccountPlanningQuery,
     EffectivePlacementQuery, Page, Account, UsageQuery, TopicIdentity, LabelTestQuery, MarketingDemand)
-from app.bank_bridge.memory import fixture_source, MemorySource, MemoryProduction
-from app.bank_bridge.ports import DataContractError, IntegrationUnavailable
-from app.bank_bridge.selfcheck import fixture_check
-from app.models import StrategyConfig, AccountOption, TopicOption
-from app.system_config import override_config
+from app.content_planning.bank_bridge.memory import fixture_source, MemorySource, MemoryProduction
+from app.content_planning.bank_bridge.ports import DataContractError, IntegrationUnavailable
+from app.content_planning.bank_bridge.selfcheck import fixture_check
+from app.content_planning.models import StrategyConfig, AccountOption, TopicOption
+from app.content_planning.system_config import override_config
 from app.main import app, list_accounts, list_topics, available_topics, topic_detail
-from app.ordinary_planning import load_accounts, load_topics
-from app.matching_inputs import load_matching_topics
+from app.content_planning.ordinary_planning import load_accounts, load_topics
+from app.content_planning.matching_inputs import load_matching_topics
 
 
 class Cursor:
@@ -46,7 +46,7 @@ def database(cursor):
     db.cursor.return_value.__exit__ = Mock(return_value=False)
     with ExitStack() as stack:
         for module in ('catalog', 'configuration'):
-            connect = stack.enter_context(patch(f'app.services.{module}.connection'))
+            connect = stack.enter_context(patch(f'app.content_planning.services.{module}.connection'))
             connect.return_value.__enter__.return_value = db
         connect = stack.enter_context(patch.object(api, 'connection'))
         connect.return_value.__enter__.return_value = db
@@ -198,7 +198,7 @@ class ExistingReadPathTests(unittest.TestCase):
             planning_accounts(Cursor(), 'live', StrategyConfig())
 
     def test_offline_smoke_has_no_model_or_database_dependencies(self):
-        with patch('app.db.connection', side_effect=AssertionError('no DB')):
+        with patch('app.content_planning.db.connection', side_effect=AssertionError('no DB')):
             self.assertTrue(all(c['status'] == 'passed' for c in fixture_check()))
 
 
@@ -243,7 +243,7 @@ class OperationsTests(unittest.TestCase):
             operations.label_paths({'T3': ['未定义']}, {}, tree)
 
     def test_test_labels_is_read_only_and_preserves_per_topic_errors(self):
-        from app.doubao_labeling import DoubaoUnavailable
+        from app.content_planning.doubao_labeling import DoubaoUnavailable
         tree = {f'T{i}': [{'id': f'T{i}-1', 'name': f'L{i}', 'enabled': True}] for i in range(1, 6)}
         cursor = Cursor({'godp_strategy_config': [{'version': 1, 'config_json': __import__('json').dumps(tree)}]})
         labeler = Mock(side_effect=[{'labels': {**{f'T{i}': f'L{i}' for i in range(1, 6)}, 'T6': '需求'}}, DoubaoUnavailable('unavailable')])

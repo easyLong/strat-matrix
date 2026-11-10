@@ -6,16 +6,16 @@ import json
 import pytest
 import pymysql
 
-from app.connection_pool import MySQLPool
-from app import planning_input_runner as inputs
-from app.preparation_batches import InputBatch,BatchLimit
-from app.matching_precheck import role_coverage,InsufficientRoleCoverage
-from app.matching_quality_store import QualityRuntime
-from app.matching_quality_snapshot import content_hash
-from app import matching_quality_executor as executor,matching_executor_worker as worker
-from app.matching_quality import IMPLEMENTATION_KEY
-from app.doubao_labeling import DoubaoAccessError, DoubaoUnavailable
-from app.preparation_batches import InputModelBlocked,block_model_preparation
+from app.content_planning.connection_pool import MySQLPool
+from app.content_planning import planning_input_runner as inputs
+from app.content_planning.preparation_batches import InputBatch,BatchLimit
+from app.content_planning.matching_precheck import role_coverage,InsufficientRoleCoverage
+from app.content_planning.matching_quality_store import QualityRuntime
+from app.content_planning.matching_quality_snapshot import content_hash
+from app.content_planning import matching_quality_executor as executor,matching_executor_worker as worker
+from app.content_planning.matching_quality import IMPLEMENTATION_KEY
+from app.content_planning.doubao_labeling import DoubaoAccessError, DoubaoUnavailable
+from app.content_planning.preparation_batches import InputModelBlocked,block_model_preparation
 import test_matching_quality as quality_fixture
 
 
@@ -88,7 +88,7 @@ def test_dirty_pool_connection_is_disconnected_and_original_body_error_is_preser
 
 
 def test_pool_never_silently_replays_failed_sql():
-    with patch('app.connection_pool.PooledDB') as constructor:
+    with patch('app.content_planning.connection_pool.PooledDB') as constructor:
         MySQLPool({'autocommit':False})
     options=constructor.call_args.kwargs
     assert not options['blocking'] and options['maxshared']==0
@@ -101,7 +101,7 @@ def test_cache_prefetch_is_immutable_validated_and_avoids_per_item_reads():
     first=runtime.key('pair_precision',payloads[0])[0]
     db=MagicMock();cursor=db.__enter__.return_value.cursor.return_value.__enter__.return_value
     cursor.fetchall.return_value=[dict(cache_key=first,result_json='{"value":1}',result_hash=content_hash({'value':1}))]
-    with patch('app.matching_quality_store.connection',return_value=db):
+    with patch('app.content_planning.matching_quality_store.connection',return_value=db):
         runtime.prefetch('pair_precision',payloads)
         value=runtime.find('pair_precision',payloads[0]);value['value']=99
         assert runtime.find('pair_precision',payloads[0])=={'value':1}
@@ -116,7 +116,7 @@ def test_cache_save_refreshes_negative_memo_and_consumes_concurrent_winner():
     db=MagicMock();cursor=db.__enter__.return_value.cursor.return_value.__enter__.return_value
     cursor.fetchone.return_value=dict(result_json='{"winner":2}',result_hash=content_hash({'winner':2}))
     cursor.rowcount=0
-    with patch('app.matching_quality_store.connection',return_value=db):
+    with patch('app.content_planning.matching_quality_store.connection',return_value=db):
         assert runtime.save('pair_precision',payload,{'winner':1})=={'winner':2}
     assert runtime.stats['cache_writes']==0
 
@@ -126,7 +126,7 @@ def test_batch_cache_corruption_is_rejected_without_publishing_partial_memo():
     payload={'title':'bad'};key=runtime.key('pair_precision',payload)[0]
     db=MagicMock();cursor=db.__enter__.return_value.cursor.return_value.__enter__.return_value
     cursor.fetchall.return_value=[dict(cache_key=key,result_json='{"value":1}',result_hash='invalid')]
-    with patch('app.matching_quality_store.connection',return_value=db):
+    with patch('app.content_planning.matching_quality_store.connection',return_value=db):
         with pytest.raises(ValueError,match='完整性'):runtime.prefetch('pair_precision',[payload])
     assert runtime._memory=={}
 
@@ -207,7 +207,7 @@ def test_preparation_model_block_does_not_overwrite_frozen_or_cancelled_state():
     for status in ('waiting_inputs','inputs_frozen','cancelled'):
         db=MagicMock();cursor=db.__enter__.return_value.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value=dict(status=status,last_report_json='{}')
-        with patch('app.preparation_batches.connection',return_value=db):
+        with patch('app.content_planning.preparation_batches.connection',return_value=db):
             block_model_preparation(42,'DoubaoAccessError')
         statements=[c.args[0] for c in cursor.execute.call_args_list]
         assert statements[-1].startswith('UPDATE') == (status=='waiting_inputs')

@@ -2,11 +2,11 @@
 from unittest.mock import MagicMock, patch
 import pytest
 
-from app import deployment_environment as env
-from app.bank_bridge import factory
-from app.system_config import override_config, public_settings
-from app import init_system_config
-from app.ordinary_scheduler import schedule_owner
+from app.content_planning import deployment_environment as env
+from app.content_planning.bank_bridge import factory
+from app.content_planning.system_config import override_config, public_settings
+from app.content_planning import init_system_config
+from app.content_planning.ordinary_scheduler import schedule_owner
 
 
 def host_values():
@@ -46,14 +46,14 @@ def test_inside_requires_host_endpoints_auth_and_disallows_mock_production():
 
 
 def test_failed_inside_selection_does_not_change_database():
-    with patch('app.system_config.snapshot',return_value={}), patch('app.db.connection') as connect:
+    with patch('app.content_planning.system_config.snapshot',return_value={}), patch('app.content_planning.db.connection') as connect:
         with pytest.raises(ValueError):env.select('inside')
         connect.assert_not_called()
 
 
 def test_selection_only_writes_the_environment_key():
     db=MagicMock();cursor=db.__enter__.return_value.cursor.return_value.__enter__.return_value
-    with patch('app.system_config.snapshot',return_value=host_values()),patch('app.db.connection',return_value=db):
+    with patch('app.content_planning.system_config.snapshot',return_value=host_values()),patch('app.content_planning.db.connection',return_value=db):
         assert env.select('inside')['PLANNING_ENV']=='inside'
     assert cursor.execute.call_count==1
     sql,args=cursor.execute.call_args.args
@@ -79,7 +79,7 @@ def test_upgrade_never_replaces_an_existing_java_data_source_with_a_fixture():
 def test_inside_fails_before_starting_python_background_executor():
     from fastapi.testclient import TestClient
     from app.main import app
-    with override_config({'PLANNING_ENV':'inside'}),patch('app.api.background_execution.BackgroundExecutor') as pool:
-        with pytest.raises(ValueError,match='行内接入配置不完整'):
+    with override_config({'PLANNING_ENV':'inside'}),patch('app.content_planning.api.background_execution.BackgroundExecutor') as pool:
+        with pytest.raises(RuntimeError, match='Content planning resources could not be started'):
             with TestClient(app):pass
         pool.assert_not_called()

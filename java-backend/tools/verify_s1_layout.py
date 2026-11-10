@@ -63,7 +63,8 @@ def check():
         assert root.tag == 'mapper' and root.attrib['namespace'] == LAYOUT['mapper_package'] + '.' + path.stem, ('wrong Mapper namespace', str(path))
         assert 'com.pab.aitmp.aiis.godp.planning' not in path.read_text(encoding='utf-8'), ('old XML type reference', str(path))
     assert inventory() == expected_inventory(), 'API/SQL contract drift'
-    return {'ok': True, 'vendor': LAYOUT['vendor'], 'classes': counts, 'mapper_xml': len(mapper_paths), 'tables': 14, 'views': 3}
+    assert inventory()['views'] == [], 'bank runtime must not depend on database views'
+    return {'ok': True, 'vendor': LAYOUT['vendor'], 'classes': counts, 'mapper_xml': len(mapper_paths), 'tables': 14, 'views': 0}
 
 
 if __name__ == '__main__':

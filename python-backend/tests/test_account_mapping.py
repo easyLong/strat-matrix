@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
 
-from app.account_mapping import MappingRule, resolve_mapping, validate_target
-from app.account_mapping_seed import build_seed_rules
-from app import init_account_mapping as initializer
-from app.init_db import column_definitions, table_descriptions
-from app.taxonomy import normalize_taxonomy
+from app.content_planning.account_mapping import MappingRule, resolve_mapping, validate_target
+from app.content_planning.account_mapping_seed import build_seed_rules
+from app.content_planning import init_account_mapping as initializer
+from app.content_planning.init_db import column_definitions, table_descriptions
+from app.content_planning.taxonomy import normalize_taxonomy
 
 
 def taxonomy():
@@ -175,7 +175,7 @@ class MappingInitializationTests(unittest.TestCase):
         self.assertEqual(next(iter(saved.values()))['status'], 'active')
 
     def test_all_table_fields_have_chinese_comments(self):
-        sql = (Path(__file__).resolve().parents[1] / 'schema.sql').read_text(encoding='utf-8')
+        sql = (Path(__file__).resolve().parents[1] / 'database/content_planning/schema.sql').read_text(encoding='utf-8')
         columns = column_definitions(sql)['godp_account_mapping_rule']
         self.assertEqual(len(columns), 25)
         self.assertTrue({'id','del_flag','created_by','updated_by','created_time','updated_time'} <= set(columns))

@@ -3,8 +3,8 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from app.algorithm_config_commands import BUSINESS_FIELDS
-from app.business_snapshot import normalize_business_snapshot
+from app.content_planning.algorithm_config_commands import BUSINESS_FIELDS
+from app.content_planning.business_snapshot import normalize_business_snapshot
 
 
 def business_config():

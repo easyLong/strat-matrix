@@ -3,9 +3,9 @@ from datetime import date
 from fastapi import HTTPException
 import pytest
 
-from app import planning_pipeline_api as api
-from app import ordinary_scheduler
-from app.ordinary_planning import PlanningError
+from app.content_planning import planning_pipeline_api as api
+from app.content_planning import ordinary_scheduler
+from app.content_planning.ordinary_planning import PlanningError
 
 BUSINESS = dict(planning_days=[1, 3, 5], schedule_day=2, schedule_time='22:00',
                 marketing_max=3, hotspot_ratio=20)
@@ -46,7 +46,7 @@ def test_python_weekly_job_does_not_compete_with_java_schedule(monkeypatch):
 
 
 def test_missing_new_owner_setting_keeps_existing_scheduler(monkeypatch):
-    from app.system_config import SystemConfigError
+    from app.content_planning.system_config import SystemConfigError
 
     def missing(_key, _default=""):
         raise SystemConfigError("系统配置 AUTO_SCHEDULE_OWNER 尚未初始化")
@@ -55,13 +55,13 @@ def test_missing_new_owner_setting_keeps_existing_scheduler(monkeypatch):
     assert ordinary_scheduler.schedule_owner() == "python"
 
 def test_java_owner_disables_old_hotspot_business_writes(monkeypatch):
-    from app import hotspot_scheduler
+    from app.content_planning import hotspot_scheduler
     monkeypatch.setattr(ordinary_scheduler, 'schedule_owner', lambda: 'java')
     monkeypatch.setattr(hotspot_scheduler, '_run_due', lambda _now: pytest.fail('old hotspot business writes'))
     assert hotspot_scheduler.run_due()['status'] == 'delegated'
 
 def test_java_owner_keeps_python_execution_algorithm_only(monkeypatch):
-    from app.jobs import handlers
+    from app.content_planning.jobs import handlers
     monkeypatch.setattr(handlers, 'schedule_owner', lambda: 'java')
     monkeypatch.setattr(handlers, 'manual', lambda: pytest.fail('old manual writer'))
     seen=[]

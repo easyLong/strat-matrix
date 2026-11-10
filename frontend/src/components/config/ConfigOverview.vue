@@ -48,7 +48,7 @@ export default {
     <div class="card-head"><h2>策划内容配置</h2><div class="config-overview-actions"><slot name="actions" /></div></div>
     <div class="card-body config-overview-body">
       <div class="config-at-glance">
-        <div class="config-glance-item config-glance-days"><span>每周策划日</span><div class="config-glance-days-list"><b v-for="day in planningDays" :key="day">{{ ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] }}</b></div></div>
+        <div class="config-glance-item config-glance-days"><span>每周内容推送日</span><div class="config-glance-days-list"><b v-for="day in planningDays" :key="day">{{ ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][day - 1] }}</b></div></div>
         <div class="config-glance-item"><span>自动策划调度时间</span><b>每周{{ ['一', '二', '三', '四', '五', '六', '日'][scheduleDay - 1] }} {{ scheduleTime }}</b></div>
         <div class="config-glance-item"><span>营销内容周上限</span><b>{{ config.marketing_max }} 条 / 营销账号</b></div>
         <div class="config-glance-item"><span>热点选题占比</span><b>{{ config.hotspot_ratio }}%</b></div>

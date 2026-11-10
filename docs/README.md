@@ -1,5 +1,15 @@
 # 项目文档目录
 
+- [2026-11-10 发布与交接记录](发布记录_2026-11-10.md)：Python 0.3.0 模块化、Java 无视图 V10、前端名称、PRD 文件及数据库升级边界的本次提交总览。
+
+2026-11-10 Python模块化：运行代码迁入 `app/content_planning/`，支持独立 FastAPI 与宿主安装；配置、资源和接口按应用隔离，启动不建表。见 [接入说明](../python-backend/INTEGRATION.md)、[验收记录](../python-backend/VALIDATION.md) 与 [数据库依赖边界](../python-backend/database/content_planning/README.md)。
+
+
+- [PRD V2.3 三Tab精简版 Word（2026-11-10）](多账号智能策划_PRD_V2.0_精简版.docx) · [PDF](多账号智能策划_PRD_V2.3_三Tab精简版_2026-11-10.pdf)：仅保留AI策划配置、人工策划、策划结果三个Tab的功能、字段解释和关键交互，含4张当前页面示意图；架构、接口及驻场方案仍查对应专项文档。
+
+- [Java无视图查询改造（2026-11-10）](Java无视图查询改造_2026-11-10.md)：三个查询投影移入MyBatis、V10数据库发布路线及无视图验收。
+- [数据库索引核查（2026-11-10）](数据库索引核查与改造建议_2026-11-10.md)：39张表的静态核查与后续索引／查询字段落列候选，本轮不执行索引DDL。
+
 - [前端JavaScript与Vue2选项式API迁移（2026-11-09）](前端JS与选项式API迁移_2026-11-09.md)：当前语言、组件与宿主接入方式，58项测试及53个浏览器状态验收；旧章节的TS/组合式API说明仅保留历史记录。
 
 - [xiangliang供应商隔离与验收（2026-11-09）](xiangliang供应商隔离与验收_2026-11-09.md)：五层包与Bean隔离、7份独立Mapper XML、宿主源码导出和回归；[行内模块落点与命令](../java-backend/host-integration/MAVEN_MODULES.md)。
@@ -17,11 +27,11 @@
 
 - [前端统一宿主接入（2026-11-07）](../frontend/VUE2_INTEGRATION.md)：现有Axios/Vuex复用、路由及Java接口前缀、权限能力映射、样式隔离、keep-alive生命周期和模拟宿主验收。
 
-- [Java业务库DBA发布包V9](../java-backend/godp-planning-services/src/main/resources/db/release/20261107-v9/README.md) · [表与索引评审清单](../java-backend/godp-planning-services/src/main/resources/db/release/20261107-v9/TABLE_DESIGN.md)：新库/升级/回退、仅DML权限验收、分批结果发布、流水事务边界及只读检查，正式发布由DBA执行。
+- [Java业务库DBA发布包V10](../java-backend/godp-planning-services/src/main/resources/db/release/20261110-v10/README.md) · [表与索引评审清单](../java-backend/godp-planning-services/src/main/resources/db/release/20261110-v10/TABLE_DESIGN.md)：14张业务表、零视图，新库/V8升级/V9切换及兼容回退路线分别说明，正式发布由DBA执行。
 
 - [模型接口入口限流与任务准入（2026-11-06）](../python-backend/ONSITE.md#模型入口并发与任务准入2026-11-06)：入口429、文本/向量共享并发、持久化任务容量、MySQL配置与可选跨进程额度、限流延后及Java重试提示。
 
-- [PRD V2.2 近期变更整合评审稿 Word（2026-11-06）](多账号智能策划_PRD_V2.2_近期变更整合评审稿_2026-11-06.docx) · [PDF](多账号智能策划_PRD_V2.2_近期变更整合评审稿_2026-11-06.pdf)：在 V2.1 全局图文稿上整合营销活动/产品字段、固定选题类型、有效期、三类 T−x、每天三次到期写内容流水，以及 Java/Python 双库职责；含33张界面图、18张流程/泳道，保留未决事项与真实行内待接边界。
+- [PRD V2.2 近期变更整合评审稿 Word（2026-11-06）](多账号智能策划_PRD_V2.0.docx) · [PDF](多账号智能策划_PRD_V2.2_近期变更整合评审稿_2026-11-06.pdf)：在 V2.1 全局图文稿上整合营销活动/产品字段、固定选题类型、有效期、三类 T−x、每天三次到期写内容流水，以及 Java/Python 双库职责；含33张界面图、18张流程/泳道，保留未决事项与真实行内待接边界。
 
 - [账号策划结果写入内容流水（2026-11-05）](账号策划结果写入内容流水_2026-11-05.md)：每天3次扫描、到T−x生产日写入、现有表适配端口、回执及验证边界。
 
@@ -117,7 +127,7 @@
 
 - [PRD V2.1 历史页面同步稿 Word（2026-10-30）](多账号智能策划_PRD_V2.1_页面同步评审稿_2026-10-30.docx) · [PDF](多账号智能策划_PRD_V2.1_页面同步评审稿_2026-10-30.pdf)：V2.2 的完整底稿，保留历史追溯；近期业务规则优先看 V2.2，实际行内字段与接入按当前宿主契约确认。
 - [功能、数据与行内适配完整对应表（2026-10-31）](账号策划系统_功能数据与行内适配对应表_V1.0_2026-10-31.md) · [Excel](账号策划系统_功能数据与行内适配对应表_V1.0_2026-10-31.xlsx)：87项功能、12个模块，逐项列出数据归属、双方职责、触发方式、适配内容、验收条件及当前状态；拟新增能力与已实现能力分别标注。
-- [旧表清理 SQL](../python-backend/migrations/20261030_drop_retired_source_tables.sql)：14 张旧基础副本、同步及主动投递表已完成备份和代码依赖调整；当前数据库账号缺少 DROP 权限，物理删除尚未执行成功。
+- [旧表清理 SQL](../python-backend/database/content_planning/migrations/20261030_drop_retired_source_tables.sql)：14 张旧基础副本、同步及主动投递表已完成备份和代码依赖调整；当前数据库账号缺少 DROP 权限，物理删除尚未执行成功。
 - [驻场对接方法、SQL 模板与交接包](#驻场对接开发第一版2026-10-30)：固定业务实体、统一方法、模拟数据及行内 SQL 实现；驻场填写与自检说明见文末。
 - [全局 PRD V1.3 营销衔接修订稿（2026-10-28）](多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.md) · [Word](多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.docx) · [PDF](多账号智能策划_PRD_V1.3_营销衔接修订稿_2026-10-28.pdf)：同账号目标日已有有效营销投放时直接引用，不另填新内容；已同步流程图、同库衔接与验收。
 - [历史全局 PRD V1.2 全量整合评审稿（2026-10-28）](多账号智能策划_PRD_V1.2_全量整合评审稿_2026-10-28.md) · [PDF](多账号智能策划_PRD_V1.2_全量整合评审稿_2026-10-28.pdf)：保留业务追溯；本目录未归档对应Word，不提供失效下载链接。包含32张截图、18张流程／泳道图。
@@ -225,14 +235,14 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| [contracts.py](../python-backend/app/bank_bridge/contracts.py) | 账号、互动明细、选题、营销内容、分页、生产需求、生产结果及 OP 输入输出实体；中文别名供业务核对 |
-| [ports.py](../python-backend/app/bank_bridge/ports.py) | 数据查询与生产能力的方法边界 |
-| [factory.py](../python-backend/app/bank_bridge/factory.py) | 唯一装配入口；本地默认 `local_fixture`，也支持显式 `fixture` 自检及 `bank_sql` |
-| [site_sql_template.py](../python-backend/app/bank_bridge/site_sql_template.py) | 驻场填写 SQL 及字段、枚举映射的模板 |
-| [bank_sql.py](../python-backend/app/bank_bridge/bank_sql.py) | 参数绑定、分页校验、批量关联互动明细及返回实体校验 |
-| [memory.py](../python-backend/app/bank_bridge/memory.py) | 不依赖数据库或模型的模拟查询及生产受理实现 |
-| [operations.py](../python-backend/app/bank_bridge/operations.py) | 策划侧 OP 查询与打标效果测试方法 |
-| [api.py](../python-backend/app/bank_bridge/api.py) | 同一批方法的 HTTP 包装；内嵌同进程时直接调用方法 |
+| [contracts.py](../python-backend/app/content_planning/bank_bridge/contracts.py) | 账号、互动明细、选题、营销内容、分页、生产需求、生产结果及 OP 输入输出实体；中文别名供业务核对 |
+| [ports.py](../python-backend/app/content_planning/bank_bridge/ports.py) | 数据查询与生产能力的方法边界 |
+| [factory.py](../python-backend/app/content_planning/bank_bridge/factory.py) | 唯一装配入口；本地默认 `local_fixture`，也支持显式 `fixture` 自检及 `bank_sql` |
+| [site_sql_template.py](../python-backend/app/content_planning/bank_bridge/site_sql_template.py) | 驻场填写 SQL 及字段、枚举映射的模板 |
+| [bank_sql.py](../python-backend/app/content_planning/bank_bridge/bank_sql.py) | 参数绑定、分页校验、批量关联互动明细及返回实体校验 |
+| [memory.py](../python-backend/app/content_planning/bank_bridge/memory.py) | 不依赖数据库或模型的模拟查询及生产受理实现 |
+| [operations.py](../python-backend/app/content_planning/bank_bridge/operations.py) | 策划侧 OP 查询与打标效果测试方法 |
+| [api.py](../python-backend/app/content_planning/bank_bridge/api.py) | 同一批方法的 HTTP 包装；内嵌同进程时直接调用方法 |
 
 账号列表、选题列表、选题详情、人工选题校验、替换候选、普通策划输入、AI 匹配输入、向量读写校验及结果列表均通过统一数据入口读取原始资料。本地开发已将当前有效测试资料导出至 Git 忽略的 `run/bank-source-fixture.json`；正式行内部署使用 `bank_sql` 预留方法，不再依赖旧基础副本表。
 
@@ -315,9 +325,9 @@ python -m app.bank_bridge.package --output ../run/strat-matrix-onsite-v1.zip --w
 
 ### 旧表清理状态
 
-删除清单集中于 [retired_tables.py](../python-backend/app/retired_tables.py)，可恢复备份位于本机 `run/backups/retired-tables-20261030-final/`，包含原建表语句、全部原始记录及校验摘要。备份与测试夹具不进入 Git 或驻场交接包。
+删除清单集中于 [retired_tables.py](../python-backend/app/content_planning/retired_tables.py)，可恢复备份位于本机 `run/backups/retired-tables-20261030-final/`，包含原建表语句、全部原始记录及校验摘要。备份与测试夹具不进入 Git 或驻场交接包。
 
-当前 MySQL 账号返回 `DROP command denied`，14 张表仍存在；并非已完成物理删除。可由管理员执行 [限定数据库与表名的删除脚本](../python-backend/migrations/20261030_drop_retired_source_tables.sql)，或者授予相应 DROP 权限后继续运行：
+当前 MySQL 账号返回 `DROP command denied`，14 张表仍存在；并非已完成物理删除。可由管理员执行 [限定数据库与表名的删除脚本](../python-backend/database/content_planning/migrations/20261030_drop_retired_source_tables.sql)，或者授予相应 DROP 权限后继续运行：
 
 ```bash
 cd python-backend

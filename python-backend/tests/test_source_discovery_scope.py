@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 import pytest
-from app import source_discovery as discovery
+from app.content_planning import source_discovery as discovery
 
 
 def test_scoped_discovery_does_not_cancel_unrelated_pending_jobs():

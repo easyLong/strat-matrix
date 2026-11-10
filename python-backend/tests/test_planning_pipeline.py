@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from app import planning_pipeline as service
-from app.init_db import column_definitions, table_descriptions
+from app.content_planning import planning_pipeline as service
+from app.content_planning.init_db import column_definitions, table_descriptions
 
 
 START = date(2026, 10, 26)
@@ -198,7 +198,7 @@ class PlanningPipelineTests(unittest.TestCase):
         self.assertIn("请通过正式结果提交执行器重试", str(caught.exception.detail))
 
     def test_schema_has_chinese_table_and_column_comments(self):
-        schema = (Path(__file__).resolve().parents[1] / "pipeline_schema.sql").read_text(encoding="utf-8")
+        schema = (Path(__file__).resolve().parents[1] / "database/content_planning/pipeline_schema.sql").read_text(encoding="utf-8")
         tables = table_descriptions(schema)
         columns = column_definitions(schema)
         self.assertEqual(set(tables), {"godp_planning_pipeline_run", "godp_planning_stage_run", "godp_algorithm_proposal", "godp_algorithm_config_command"})

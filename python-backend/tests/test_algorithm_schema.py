@@ -1,9 +1,9 @@
 """Algorithm deployment never requires or creates business/source tables."""
 from unittest.mock import MagicMock,patch
 
-from app import algorithm_schema as schema
-from app import db
-from app import init_algorithm_db
+from app.content_planning import algorithm_schema as schema
+from app.content_planning import db
+from app.content_planning import init_algorithm_db
 
 
 def records():
@@ -16,7 +16,7 @@ def test_algorithm_package_exactly_matches_owner_list_and_canonical_sources():
     assert len(statements)==25 and set(statements)==schema.REQUIRED_TABLES
     assert not {'godp_planning_batch','godp_planning_item','godp_slot_state',
                 'godp_manual_task','godp_account','godp_topic','godp_topic_official_usage'} & set(statements)
-    assert (schema.ROOT/'algorithm_schema.sql').read_text(encoding='utf-8')==schema.build_sql()
+    assert (schema.database_directory()/'algorithm_schema.sql').read_text(encoding='utf-8')==schema.build_sql()
     assert all(schema.column_specs(ddl) for ddl in statements.values())
     assert not any(word in schema.build_sql().upper() for word in ('DROP TABLE','ALTER TABLE','INSERT INTO'))
 
@@ -49,7 +49,7 @@ def test_algorithm_initializer_does_not_run_business_upgrade_or_approve_rules():
     connect=MagicMock();database=connect.return_value.__enter__.return_value
     cursor=database.cursor.return_value.__enter__.return_value
     with patch.object(db,'connection',connect),patch.object(init_algorithm_db,'inspect_schema',return_value={'status':'passed'}),\
-         patch('app.init_system_config.seed_config',return_value=1) as seed:
+         patch('app.content_planning.init_system_config.seed_config',return_value=1) as seed:
         report=init_algorithm_db.initialize()
     assert report['configuration_seeded']
     seed.assert_called_once_with(cursor,migrate_legacy=False)
@@ -62,6 +62,6 @@ def test_algorithm_initializer_does_not_run_business_upgrade_or_approve_rules():
 def test_initializer_does_not_seed_over_incompatible_existing_schema():
     connect=MagicMock()
     with patch.object(db,'connection',connect),patch.object(init_algorithm_db,'inspect_schema',return_value={'status':'not_ready','missing_columns':['example']}),\
-         patch('app.init_system_config.seed_config') as seed:
+         patch('app.content_planning.init_system_config.seed_config') as seed:
         assert not init_algorithm_db.initialize()['configuration_seeded']
     seed.assert_not_called()

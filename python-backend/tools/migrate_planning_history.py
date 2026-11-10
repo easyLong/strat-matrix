@@ -6,14 +6,14 @@ from pathlib import Path
 import sys
 import pymysql
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from app.db import connection
-from app.java_development import java_database_settings
-from app.services.results import read_batches
-from app.adapters.mysql.planning_queries import items as source_items
-from app.core.planning_items import enrich_plan_item
-from app.services.manual_planning import list_manual_tasks
-from app.manual_marketing_api import summary as marketing_summary
-from app.services.periods import cycle_failure_rows
+from app.content_planning.db import connection
+from app.content_planning.java_development import java_database_settings
+from app.content_planning.services.results import read_batches
+from app.content_planning.adapters.mysql.planning_queries import items as source_items
+from app.content_planning.core.planning_items import enrich_plan_item
+from app.content_planning.services.manual_planning import list_manual_tasks
+from app.content_planning.manual_marketing_api import summary as marketing_summary
+from app.content_planning.services.periods import cycle_failure_rows
 
 ROOT=Path(__file__).resolve().parents[2]
 def encoded(value):return json.dumps(value,ensure_ascii=False,default=str,separators=(',',':'))

@@ -3,8 +3,8 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.integration import TagTaxonomyInput
-from app.taxonomy import active_tag_names, legacy_tag_ids, normalize_taxonomy, selectable_tags
+from app.content_planning.compatibility import TagTaxonomyInput
+from app.content_planning.taxonomy import active_tag_names, legacy_tag_ids, normalize_taxonomy, selectable_tags
 
 
 class TaxonomyHierarchyTests(unittest.TestCase):

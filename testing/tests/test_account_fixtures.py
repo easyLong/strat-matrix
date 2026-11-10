@@ -17,7 +17,7 @@ def test_complete_account_keeps_known_facts_and_adds_valid_interaction_examples(
 
 
 def test_account_contract_accepts_the_completed_fixture():
-    from app.bank_bridge.contracts import Account
+    from app.content_planning.bank_bridge.contracts import Account
     account=Account.model_validate(complete_account(dict(account_id='E2E-B',persona='家庭理财分享者',followers=120)))
     assert len(account.interactions)==12
     assert all(p.title and p.likes is not None and p.favorites is not None and p.comments is not None for p in account.interactions)
@@ -25,11 +25,11 @@ def test_account_contract_accepts_the_completed_fixture():
 
 def test_page_account_dto_preserves_the_completed_persona_and_interaction_fields():
     from unittest.mock import patch
-    from app.bank_bridge.bridge import account_options
-    from app.bank_bridge.memory import MemorySource
-    from app.models import StrategyConfig,AccountOption
+    from app.content_planning.bank_bridge.bridge import account_options
+    from app.content_planning.bank_bridge.memory import MemorySource
+    from app.content_planning.models import StrategyConfig,AccountOption
     source=MemorySource(accounts=[complete_account(dict(account_id='E2E-C',persona='家庭理财分享者'))])
-    with patch('app.bank_bridge.bridge.get_source',return_value=source):
+    with patch('app.content_planning.bank_bridge.bridge.get_source',return_value=source):
         rows=account_options(None,StrategyConfig())
     account=AccountOption.model_validate(rows[0])
     assert account.gender and account.interests and account.expression_style and account.updated_at

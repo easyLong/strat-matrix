@@ -9,18 +9,18 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from app import matching_policy as policies
-from app import matching_supplemental as supplemental
-from app import matching_tasks as tasks
-from app.account_profile import canonical_json
-from app.integration import source_record_json
-from app.integration_models import HistoryFact
-from app.init_db import column_definitions
-from app.matching_contracts import (ClaimTask, MatchingInputOptions, MatchingTaskCreate,
+from app.content_planning import matching_policy as policies
+from app.content_planning import matching_supplemental as supplemental
+from app.content_planning import matching_tasks as tasks
+from app.content_planning.account_profile import canonical_json
+from app.content_planning.compatibility import source_record_json
+from app.content_planning.integration_models import HistoryFact
+from app.content_planning.init_db import column_definitions
+from app.content_planning.matching_contracts import (ClaimTask, MatchingInputOptions, MatchingTaskCreate,
                                    PolicyConfirmation)
 import test_matching_execution as execution_fixtures
 from test_matching_execution import policy_payload
-from app.ai_preparation import frozen_input, input_digest
+from app.content_planning.ai_preparation import frozen_input, input_digest
 from test_matching_readiness import CHECKED_AT
 
 
@@ -39,7 +39,7 @@ class SupplementalTaskTests(unittest.TestCase):
         execution_fixtures.MatchingExecutionTests.setUp(self)
         # These algorithm fixtures emulate the original SQL snapshot entirely
         # in memory. Provider-based reads have separate bank-bridge tests.
-        self.stack.enter_context(patch('app.bank_bridge.factory.external_source_enabled', return_value=False))
+        self.stack.enter_context(patch('app.content_planning.bank_bridge.factory.external_source_enabled', return_value=False))
         self.snapshot = None
         self.fail_snapshot_write = False
         first = deepcopy(self.store.topics[0])
@@ -358,7 +358,7 @@ class SupplementalCompatibilityTests(unittest.TestCase):
             supplemental.load_official_usage(cursor, ["A"])
 
     def test_new_table_and_migration_columns_have_chinese_comments(self):
-        schema = (Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8")
+        schema = (Path(__file__).resolve().parents[1] / "database/content_planning/schema.sql").read_text(encoding="utf-8")
         columns = column_definitions(schema)
         self.assertIn("godp_matching_input_snapshot", columns)
         self.assertIn("contract_version", columns["godp_matching_task"])

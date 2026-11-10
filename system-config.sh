@@ -15,9 +15,9 @@ load_system_config() {
   fi
   local settings
   if [[ "${1:-}" == "initialize" ]]; then
-    (cd "$APP_ROOT/python-backend" && "$PYTHON_BIN" -m app.init_shared_workflow_db) || return 1
+    (cd "$APP_ROOT/python-backend" && "$PYTHON_BIN" -m app.content_planning.init_shared_workflow_db) || return 1
   fi
-  settings="$(cd "$APP_ROOT/python-backend" && "$PYTHON_BIN" -m app.system_config launch-shell)" || return 1
+  settings="$(cd "$APP_ROOT/python-backend" && "$PYTHON_BIN" -m app.content_planning.system_config launch-shell)" || return 1
   # The CLI emits a fixed allowlist of non-secret names, with shlex-quoted values.
   eval "$settings"
   [[ "$RUN_DIR" = /* ]] || RUN_DIR="$APP_ROOT/$RUN_DIR"

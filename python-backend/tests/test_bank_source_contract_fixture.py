@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import pytest
 from pydantic import TypeAdapter
-from app.bank_bridge.contracts import (Account, Topic, MarketingContent, Page,
+from app.content_planning.bank_bridge.contracts import (Account, Topic, MarketingContent, Page,
                                       EffectivePlacement, ProductionRecord, MarketingProductionRecord)
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'java-backend/godp-planning-server/src/test/resources/bank-source/contract-sample.json'

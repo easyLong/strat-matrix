@@ -12,14 +12,14 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from app import ai_preparation as service
-from app import ai_preparation_api as api
-from app.services import preparations as vector_service
-from app import account_vector_worker as worker
-from app.account_profile import canonical_json, profile_from_preparation, profile_from_snapshot
-from app.account_vector_api import AccountVectorResult
-from app.init_db import column_definitions, table_descriptions
-from app.worker_http import WorkerError
+from app.content_planning import ai_preparation as service
+from app.content_planning import ai_preparation_api as api
+from app.content_planning.services import preparations as vector_service
+from app.content_planning import account_vector_worker as worker
+from app.content_planning.account_profile import canonical_json, profile_from_preparation, profile_from_snapshot
+from app.content_planning.account_vector_api import AccountVectorResult
+from app.content_planning.init_db import column_definitions, table_descriptions
+from app.content_planning.worker_http import WorkerError
 from test_matching_readiness import fixture, CHECKED_AT
 
 
@@ -334,7 +334,7 @@ class PreparationTests(unittest.TestCase):
         self.assertNotEqual(prep_hash, profile_from_preparation(snapshot, 124, 3)[1])
 
     def test_all_new_tables_and_columns_have_chinese_comments(self):
-        schema = (Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8")
+        schema = (Path(__file__).resolve().parents[1] / "database/content_planning/schema.sql").read_text(encoding="utf-8")
         definitions, descriptions = column_definitions(schema), table_descriptions(schema)
         for table in ("godp_ai_preparation", "godp_ai_preparation_account", "godp_ai_preparation_topic"):
             self.assertIn(table, descriptions)
@@ -374,7 +374,7 @@ class PreparationWorkerTests(unittest.TestCase):
             self.assertIn("/account-vector-jobs", request.call_args_list[1].args[0])
 
     def test_preparation_poll_continues_after_record_failure(self):
-        from app import ai_preparation_worker as advance_worker
+        from app.content_planning import ai_preparation_worker as advance_worker
         cursor = MagicMock()
         cursor.__enter__.return_value = cursor
         cursor.fetchall.side_effect = [[{"id": 1, "version": 2}, {"id": 2, "version": 3}], []]
@@ -413,7 +413,7 @@ class PreparationAuthorizationTests(unittest.TestCase):
                      ("GET", "/api/internal/preparation-account-vector-jobs", {}),
                      ("PUT", "/api/internal/preparation-account-vectors/1/ACCOUNT-001",
                       {"profile_hash": "a" * 64, "vector": [1, 0], "vector_model": "test"})]
-        from app.system_config import override_config
+        from app.content_planning.system_config import override_config
         with override_config({"INTEGRATION_TOKEN": "test-only-internal-token"}), \
                 patch.object(vector_service, "connection") as api_db, patch.object(service, "connection") as service_db:
             for method, path, body in endpoints:

@@ -1,0 +1,33 @@
+{
+  "document": "docs/多账号智能策划_PRD_V2.0_精简版.docx",
+  "baseline_sha256": "474f3b69100dc3e20ddb031b463ee67fb802a166dc1fee49ae32ed3384021ab3",
+  "figures": [
+    {
+      "file": "docs\\assets\\prd-compact-20261110\\config-readonly.png",
+      "caption": "图 1  AI策划配置：只读总览（上部）",
+      "sha256": "862bb1e489ec1ce9283f161f7e6821deaa3af296de2c98f64f1b885083694ef2"
+    },
+    {
+      "file": "docs\\assets\\prd-compact-20261110\\manual-tasks.png",
+      "caption": "图 2  人工策划：策划任务列表",
+      "sha256": "eb3bbc4bedce9e15bb28866ed17980691299b172914d45d9ea6a0b551f7569d6"
+    },
+    {
+      "file": "docs\\assets\\prd-compact-20261110\\results-accounts.png",
+      "caption": "图 3  策划结果：账号列表",
+      "sha256": "ef4979266ac824dbd1b17658959148215b7a7b502ddd5271875646e1a40472b8"
+    },
+    {
+      "file": "docs\\assets\\prd-compact-20261110\\results-periods.png",
+      "caption": "图 4  策划结果：时间列表",
+      "sha256": "50fd84a4bb79ba3935bf4d1d7beedd481ffe803ca327271cd2e4198ca55c439d"
+    }
+  ],
+  "top_level_sections": [
+    "AI策划配置",
+    "人工策划",
+    "策划结果"
+  ],
+  "source": "当前前端字段及交互 + V2.2已确认业务规则；截图为2026-11-10隔离演示数据",
+  "document_sha256": "41bb44a41a8227827963d20b3080bb3882a0f34c16f0a2d40e9bce177b96b601"
+}

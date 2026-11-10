@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import zipfile
 
-from app.bank_bridge.package import build_bundle
+from app.content_planning.bank_bridge.package import build_bundle
 
 
 class JavaContractBundleTests(unittest.TestCase):
@@ -27,9 +27,9 @@ class JavaContractBundleTests(unittest.TestCase):
                 self.assertIn('java-backend/godp-planning-server/src/main/java/com/pab/aitmp/aiis/godp/digital/marketing/server/xiangliang/dev/PlanningDevelopmentApplication.java', names)
                 self.assertIn('python-backend/app/main.py', names)
                 self.assertIn('python-backend/requirements.txt', names)
-                self.assertIn('python-backend/matching_quality_schema.sql', names)
-                self.assertIn('python-backend/manual_compute_schema.sql', names)
-                self.assertIn('python-backend/algorithm_schema.sql', names)
+                self.assertIn('python-backend/database/content_planning/matching_quality_schema.sql', names)
+                self.assertIn('python-backend/database/content_planning/manual_compute_schema.sql', names)
+                self.assertIn('python-backend/database/content_planning/algorithm_schema.sql', names)
                 self.assertIn('python-backend/ONSITE.md', names)
                 self.assertIn('java-backend/godp-planning-services/src/main/resources/mapper/xiangliang/ManualMapper.xml', names)
                 self.assertIn('java-backend/host-integration/BankSourceBindings.java.example', names)
@@ -62,7 +62,7 @@ class JavaContractBundleTests(unittest.TestCase):
                 self.assertTrue(manifest['java_runtime_in_project'])
                 self.assertEqual(manifest['subprojects'], ['frontend', 'java-backend', 'python-backend'])
                 self.assertTrue(manifest['java_requires_host_auth'])
-                self.assertEqual(manifest['python_schema_entry'], 'python-backend/algorithm_schema.sql')
+                self.assertEqual(manifest['python_schema_entry'], 'python-backend/database/content_planning/algorithm_schema.sql')
                 self.assertNotIn('init_shared_workflow_db',archive.read('ONSITE.txt').decode('utf-8'))
                 self.assertFalse(manifest['includes_credentials'])
                 self.assertIn('java-backend', archive.read('ONSITE.txt').decode('utf-8'))

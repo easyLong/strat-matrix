@@ -1,0 +1,28 @@
+{
+  "release": "20261110-v10",
+  "database_views": 0,
+  "hash_format": "UTF-8 text with LF line endings",
+  "sources": {
+    "godp-planning-services/src/main/resources/db/manual-business.sql": "ad9ce9fb8274d389584e00b66169acec66bedc79e04876ad60acf960feac86a5",
+    "godp-planning-services/src/main/resources/db/business-planning-config.sql": "85a099ac7438ae96661daf85ac69e2b823c7738f1af8bda44e8907553586be2d",
+    "godp-planning-services/src/main/resources/db/auto-planning-business.sql": "4233389150319e1509925d404006e53390c728bd3122039721081eca7e921332",
+    "godp-planning-services/src/main/resources/db/slot-completion.sql": "db21b487e17d83f667dae808692ad136555532031a077095c8da1b2e2f45583c",
+    "godp-planning-services/src/main/resources/db/migrations/V9__staged_result_publication.sql": "99e3b541b8573033563853661e7547e389e5fce2a20dddabb12308ec8426e493",
+    "tools/build_db_release.py": "a1c3aff0a442496c6105ea6b8191e87af5f579f6b6e87c96956891dc28ed63a3"
+  },
+  "files": {
+    "README.md": "df3f777ff8d9c3373f99c3566f11640eb4c03305fc5b9fb668da76317f431c26",
+    "TABLE_DESIGN.md": "9a6d55a30dbe74b4183c1b3a3c3b672dcdd43451f25a74fcbf4c764170dc6f64",
+    "checks/01-new-install-precheck.sql": "bba4ab2317b7afce6bc315445de16fb74312c23f309c38c7de2b47b0dd38660c",
+    "checks/02-upgrade-v8-precheck.sql": "b7bea6df55401b5d0e0a2ebcfe3e2773b074c4bb5d9107d487a423d214411f9b",
+    "checks/03-postcheck.sql": "170c4f27a0a2a704759f9bd5a24bb6b8cf63f48f7c0a6dc6cf829c661961695f",
+    "checks/04-index-review.sql": "b448dd53bf231297874393a5c258ac20159a29ac44914b2179a8e3927e1ad682",
+    "checks/05-upgrade-v9-precheck.sql": "2cd17a459da7dee7d3ff5d24e9166dc7a1c64cb8628c0356a7cd9862294bc36a",
+    "ddl/01-new-install.sql": "c03220f678f3cc64a0a976f2dbeba53983f6680d50f35c0ee3d4386e7d241c59",
+    "ddl/02-upgrade-v8-to-v10.sql": "f1998d6dd3fbca5e15dc3eb3ca89a05dc9b3c247471fb4fc3f4d4c85c025069a",
+    "ddl/03-upgrade-v9-to-v10.sql": "0aab171ba12367502c42e07198ace18c0e3198996fe41f463a15e3a39622abd7",
+    "dml/01-initial-data-review.sql": "963c8794ce8fba00d4287815bb8495dfe254dcbb522f0152aca3bd91db92bc59",
+    "rollback/01-precheck.sql": "876cc83f1ccb4970f28d25ba9646df5f3631aebfdd701ca0045dd051b3e96d7d",
+    "rollback/02-compatible-rollback.sql": "e46df0c8f6768431f236e21ed1c2cae03f9fc106a6c5ba8c532532dda175fddb"
+  }
+}

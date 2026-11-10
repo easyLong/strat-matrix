@@ -4,10 +4,10 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import patch
 
-from app.bank_bridge.factory import use_adapters
-from app.bank_bridge.memory import fixture_source
-from app.hotspot_scheduler import load_hotspot_candidates
-from app.topic_vector_api import topic_vector_jobs, ai_topic_candidates
+from app.content_planning.bank_bridge.factory import use_adapters
+from app.content_planning.bank_bridge.memory import fixture_source
+from app.content_planning.hotspot_scheduler import load_hotspot_candidates
+from app.content_planning.topic_vector_api import topic_vector_jobs, ai_topic_candidates
 
 
 class SourceTaskFlowTests(unittest.TestCase):
@@ -24,16 +24,16 @@ class SourceTaskFlowTests(unittest.TestCase):
         self.assertTrue(identity.startswith('QUERY-'))
 
     def test_labeled_pending_profile_is_an_embedding_job(self):
-        with patch('app.services.topic_vectors.connection'), \
-             patch('app.bank_bridge.current_topics.rows', return_value=[self.row('pending')]), \
-             patch('app.services.topic_vectors.profile_from_source', return_value=('profile', 'test-hash')):
+        with patch('app.content_planning.services.topic_vectors.connection'), \
+             patch('app.content_planning.bank_bridge.current_topics.rows', return_value=[self.row('pending')]), \
+             patch('app.content_planning.services.topic_vectors.profile_from_source', return_value=('profile', 'test-hash')):
             result = topic_vector_jobs()
         self.assertEqual([row['topic_id'] for row in result['jobs']], ['T-1'])
 
     def test_labeled_ready_profile_is_a_matching_candidate(self):
-        with patch('app.services.topic_vectors.connection'), \
-             patch('app.bank_bridge.current_topics.rows', return_value=[self.row('ready')]), \
-             patch('app.services.topic_vectors.profile_from_source', return_value=('profile', 'test-hash')):
+        with patch('app.content_planning.services.topic_vectors.connection'), \
+             patch('app.content_planning.bank_bridge.current_topics.rows', return_value=[self.row('ready')]), \
+             patch('app.content_planning.services.topic_vectors.profile_from_source', return_value=('profile', 'test-hash')):
             result = ai_topic_candidates()
         self.assertEqual([row['topic_id'] for row in result['candidates']], ['T-1'])
 

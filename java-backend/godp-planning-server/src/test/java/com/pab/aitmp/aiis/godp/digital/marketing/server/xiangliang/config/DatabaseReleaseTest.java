@@ -14,15 +14,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
-/** DBA delivery rehearsal in H2; JSON and multi-action ALTER need dialect compatibility. */
+/** View-free DBA delivery rehearsal; multi-action ALTER needs H2 dialect compatibility. */
 class DatabaseReleaseTest {
   @Test
   void newInstallAndV8UpgradePreserveExistingDataAndCompatibleRollback() {
     DriverManagerDataSource ds = new DriverManagerDataSource("jdbc:h2:mem:release-" + UUID.randomUUID()
         + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1", "sa", "");
     JdbcTemplate sql = new JdbcTemplate(ds);
-    sql.execute("CREATE ALIAS JSON_EXTRACT FOR 'com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.query.ReadDatabaseFixture.extract'");
-    sql.execute("CREATE ALIAS JSON_UNQUOTE FOR 'com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.query.ReadDatabaseFixture.unquote'");
     apply(ds, "ddl/01-new-install.sql");
     assertEquals(14, sql.queryForObject("SELECT COUNT(*) FROM information_schema.tables "
         + "WHERE table_schema='public' AND table_type='BASE TABLE'", Integer.class));
@@ -32,20 +30,23 @@ class DatabaseReleaseTest {
     sql.update("INSERT INTO godp_planning_batch(id,payload,created_at) VALUES(7,'{}',123)");
     apply(ds, "rollback/02-compatible-rollback.sql");
     assertEquals("ready", sql.queryForObject("SELECT write_state FROM godp_planning_batch WHERE id=7", String.class));
-    assertEquals(1, sql.queryForObject("SELECT COUNT(*) FROM godp_planning_batch_read", Integer.class));
+    assertEquals(1, sql.queryForObject("SELECT COUNT(*) FROM godp_planning_batch", Integer.class));
+    assertEquals(0, sql.queryForObject("SELECT COUNT(*) FROM information_schema.views WHERE table_schema='public'", Integer.class));
     // Reconstruct V8 on the isolated database; the DBA upgrade then adds V9 defaults.
     sql.execute("ALTER TABLE godp_planning_batch DROP COLUMN write_state");
     sql.execute("ALTER TABLE godp_planning_batch DROP COLUMN write_cursor");
-    apply(ds, "ddl/02-upgrade-v8-to-v9.sql");
+    apply(ds, "ddl/02-upgrade-v8-to-v10.sql");
     assertEquals("{}", sql.queryForObject("SELECT payload FROM godp_planning_batch WHERE id=7", String.class));
     assertEquals("ready", sql.queryForObject("SELECT write_state FROM godp_planning_batch WHERE id=7", String.class));
     assertEquals(0, sql.queryForObject("SELECT write_cursor FROM godp_planning_batch WHERE id=7", Integer.class));
-    assertEquals(1, sql.queryForObject("SELECT COUNT(*) FROM godp_planning_batch_read", Integer.class));
+    apply(ds, "ddl/03-upgrade-v9-to-v10.sql");
+    assertEquals(1, sql.queryForObject("SELECT COUNT(*) FROM godp_planning_batch", Integer.class));
+    assertEquals(0, sql.queryForObject("SELECT COUNT(*) FROM information_schema.views WHERE table_schema='public'", Integer.class));
   }
 
   private static void apply(DriverManagerDataSource ds, String relative) {
-    Resource resource = new ClassPathResource("db/release/20261107-v9/" + relative);
-    if (relative.equals("ddl/02-upgrade-v8-to-v9.sql")) {
+    Resource resource = new ClassPathResource("db/release/20261110-v10/" + relative);
+    if (relative.equals("ddl/02-upgrade-v8-to-v10.sql")) {
       // MySQL supports multiple ADD COLUMN in one ALTER; H2 requires two ALTERs.
       try (java.io.InputStream input = resource.getInputStream()) {
         String sql = StreamUtils.copyToString(input, StandardCharsets.UTF_8)

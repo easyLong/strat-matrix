@@ -2,17 +2,17 @@
 from unittest.mock import patch
 import pytest
 
-from app.model_endpoint import DEFAULT_BASE_URL,ModelEndpointError,resolve_base_url
-from app.system_config import override_config
-from app.system_config_catalog import validate_value
-from app.doubao_labeling import read_config,read_embedding_config,DoubaoConfigurationError
+from app.content_planning.model_endpoint import DEFAULT_BASE_URL,ModelEndpointError,resolve_base_url
+from app.content_planning.system_config import override_config
+from app.content_planning.system_config_catalog import validate_value
+from app.content_planning.doubao_labeling import read_config,read_embedding_config,DoubaoConfigurationError
 
 
 def test_outside_default_and_explicit_gateway_share_both_model_types():
     assert resolve_base_url({'PLANNING_ENV':'outside'})==DEFAULT_BASE_URL
     values=dict(PLANNING_ENV='inside',MODEL_BASE_URL='https://model.bank.test/gateway/v3/',
                 ARK_API_KEY='test-secret',MODEL_NAME='text',EMBEDDING_MODEL_NAME='vector')
-    with override_config(values),patch('app.doubao_labeling.open_request') as network:
+    with override_config(values),patch('app.content_planning.doubao_labeling.open_request') as network:
         text,vector=read_config(),read_embedding_config()
     assert text.base_url==vector.base_url=='https://model.bank.test/gateway/v3'
     assert 'test-secret' not in repr(text) and 'test-secret' not in repr(vector)

@@ -3,8 +3,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from app.java_development import local_java_address, properties_text, write_local_configuration
-from app.system_config import override_config
+from app.content_planning.java_development import local_java_address, properties_text, write_local_configuration
+from app.content_planning.system_config import override_config
 
 
 class JavaDevelopmentTests(unittest.TestCase):
@@ -16,7 +16,7 @@ class JavaDevelopmentTests(unittest.TestCase):
                 local_java_address(value)
 
     def test_generated_configuration_preserves_secret_characters_without_exporting_other_keys(self):
-        with patch('app.java_development.java_database_settings', return_value={
+        with patch('app.content_planning.java_development.java_database_settings', return_value={
             'host':'localhost','port':3306,'database':'business_test','user':'test','password':'test-pass'
         }), patch('pymysql.connect') as connect, TemporaryDirectory() as directory, override_config({
             "JAVA_ACCESS_MODE": "local_development", "JAVA_GATEWAY_URL": "http://127.0.0.1:16931",
@@ -32,7 +32,7 @@ class JavaDevelopmentTests(unittest.TestCase):
             self.assertNotIn("must-not-export", text)
             self.assertIn('planning.manual.enabled=true', text)
             self.assertIn('business_test', text)
-            self.assertIn('planning.manual.initialize-schema=true', text)
+            self.assertIn('planning.manual.initialize-schema=false', text)
             connect.assert_not_called()
         with self.assertRaises(ValueError):
             properties_text({"key": "bad\nvalue"})
@@ -48,7 +48,7 @@ class JavaDevelopmentTests(unittest.TestCase):
         with TemporaryDirectory() as directory, override_config({
             'JAVA_ACCESS_MODE':'local_development','JAVA_GATEWAY_URL':'http://127.0.0.1:6931',
             'BACKEND_HOST':'127.0.0.1','BACKEND_PORT':'6930','INTEGRATION_TOKEN':'test'
-        }), patch('app.java_development.java_database_settings',side_effect=ValueError('same database')):
+        }), patch('app.content_planning.java_development.java_database_settings',side_effect=ValueError('same database')):
             path=Path(directory)/'java.properties'
             path.write_text('previous-config',encoding='ascii')
             with self.assertRaises(ValueError):write_local_configuration(path)

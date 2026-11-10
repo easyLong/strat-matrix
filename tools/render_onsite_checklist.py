@@ -59,7 +59,6 @@ PYTHON_TABLES=[
 ]
 DATABASES=(
  [['Java业务库',name,purpose,'Java业务服务','策划侧业务数据，不复制行内基础表',ids] for name,purpose,ids in JAVA_TABLES]
- +[['Java业务库视图',name,'同库只读投影','Java发布SQL','视图不是第二份原始资料', 'H01;H02;H05'] for name in ('godp_planning_item_read','godp_planning_batch_read','godp_planning_task_read')]
  +[['Python算法库',name,purpose,'Python算法服务','核心表族参考，非已核准最小DDL全集',ids] for name,purpose,ids in PYTHON_TABLES]
  +[['行内原始库/服务','账号/选题/营销内容/互动/生产/审核/投放原始资产','原始事实','行内业务/内容系统','真实表名不在本清单中猜测；Python仅经Java查询','B01;B02;B03;B04;B05;B06;B07']]
 )

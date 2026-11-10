@@ -9,15 +9,15 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pymysql
 
-from app.bootstrap import app
-from app.jobs.worker import run_once
-from app.matching_contracts import ClaimTask
-from app.matching_tasks import claim_task
-from app.services.errors import ApplicationError
-from app.services.list_queries import PageQuery, validate_dates
-from app.services.plan_queries import PlanQuery, plan_page
+from app.main import app
+from app.content_planning.jobs.worker import run_once
+from app.content_planning.matching_contracts import ClaimTask
+from app.content_planning.matching_tasks import claim_task
+from app.content_planning.services.errors import ApplicationError
+from app.content_planning.services.list_queries import PageQuery, validate_dates
+from app.content_planning.services.plan_queries import PlanQuery, plan_page
 
-APP = Path(__file__).resolve().parents[1] / 'app'
+APP = Path(__file__).resolve().parents[1] / 'app/content_planning'
 
 
 class DependencyTests(unittest.TestCase):
@@ -40,7 +40,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_active_services_have_no_retired_source_table_sql(self):
         import re
-        from app.retired_tables import RETIRED_TABLES
+        from app.content_planning.retired_tables import RETIRED_TABLES
         pattern = re.compile(r'\b(?:'+'|'.join(RETIRED_TABLES)+r')\b', re.I)
         for path in (APP / 'services').glob('*.py'):
             for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
@@ -70,7 +70,7 @@ class WorkerTests(unittest.TestCase):
             db.cursor.return_value.__enter__.return_value = cursor
             yield db
         for implementation in (None, 'builtin-tag-vector-portfolio-v2'):
-            with patch('app.matching_tasks.connection', database):
+            with patch('app.content_planning.matching_tasks.connection', database):
                 result = claim_task(ClaimTask(),
                                     implementation_key=implementation, task_id=12345)
             sql, values = cursor.execute.call_args.args
@@ -98,11 +98,11 @@ class QueryContractTests(unittest.TestCase):
 
     def test_http_contract_preserves_service_error_and_hides_sql_details(self):
         client = TestClient(app)
-        with patch('app.services.list_queries.connection', side_effect=ApplicationError(409,'查询范围已失效')):
+        with patch('app.content_planning.services.list_queries.connection', side_effect=ApplicationError(409,'查询范围已失效')):
             response = client.post('/api/query/manual-tasks', json={})
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()['detail'], '查询范围已失效')
-        with patch('app.services.list_queries.connection', side_effect=pymysql.OperationalError(2003,'private-host/password')):
+        with patch('app.content_planning.services.list_queries.connection', side_effect=pymysql.OperationalError(2003,'private-host/password')):
             response = client.post('/api/query/manual-tasks', json={})
         self.assertEqual(response.status_code, 503)
         self.assertNotIn('private-host', response.text)

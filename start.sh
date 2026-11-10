@@ -4,10 +4,10 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="${APP_ROOT:-$SCRIPT_DIR}"
 source "$APP_ROOT/system-config.sh"
-load_system_config initialize
+load_system_config
 (
   cd "$APP_ROOT/python-backend"
-  "$PYTHON_BIN" -m app.deployment_environment check
+  "$PYTHON_BIN" -m app.content_planning.deployment_environment check
 )
 NPM_BIN="${NPM_BIN:-npm}"
 
@@ -58,7 +58,7 @@ if [[ "$PLANNING_ENV" == "outside" ]]; then
     fi
     (
       cd "$APP_ROOT/python-backend"
-      "$PYTHON_BIN" -m app.java_development --output "$RUN_DIR/java-backend.properties"
+      "$PYTHON_BIN" -m app.content_planning.java_development --output "$RUN_DIR/java-backend.properties"
     )
     (
       cd "$APP_ROOT/java-backend"

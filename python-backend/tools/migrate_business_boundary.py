@@ -7,9 +7,9 @@ import sys
 import pymysql
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.db import connection
-from app.java_development import java_database_settings
-from app.init_planner_db import statements
+from app.content_planning.db import connection
+from app.content_planning.java_development import java_database_settings
+from app.content_planning.init_planner_db import statements
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -17,10 +17,10 @@ ROOT = Path(__file__).resolve().parents[2]
 def backup(db, destination, data_tables):
     with db.cursor() as cursor:
         cursor.execute('SELECT DATABASE() name'); name=cursor.fetchone()['name']
-        cursor.execute('SHOW TABLES'); names=[list(row.values())[0] for row in cursor.fetchall()]
+        cursor.execute('SHOW FULL TABLES'); names=[list(row.values())[0] for row in cursor.fetchall() if list(row.values())[1]=='BASE TABLE']
         result={'database':name,'schema':{},'data':{},'counts':{}}
         for table in names:
-            cursor.execute(f'SHOW CREATE TABLE `{table}`');definition=cursor.fetchone();result['schema'][table]=definition.get('Create Table') or definition.get('Create View')
+            cursor.execute(f'SHOW CREATE TABLE `{table}`');definition=cursor.fetchone();result['schema'][table]=definition['Create Table']
             if table in data_tables:
                 cursor.execute(f'SELECT * FROM `{table}`');result['data'][table]=cursor.fetchall()
                 result['counts'][table]=len(result['data'][table])
@@ -74,12 +74,9 @@ def run(output, apply):
                         c.execute(f'SHOW INDEX FROM {table}')
                         if name not in {r['Key_name'] for r in c.fetchall()}:c.execute(f'ALTER TABLE {table} ADD INDEX {name}({cols})')
                     c.execute("ALTER TABLE godp_planning_item MODIFY COLUMN content_status VARCHAR(16) NOT NULL DEFAULT 'planned' COMMENT '内容状态unassigned待定题 awaiting_market待营销引用 planned待生产 ready生产中 generated已完成 failed生产失败'")
-                    source=(root/'planning-query-views.sql').read_text(encoding='utf-8')
-                    for sql in '\n'.join(l for l in source.splitlines() if not l.startswith('--')).split(';'):
-                        if sql.strip():c.execute(sql)
                     business.commit()
                 finally:c.execute("SELECT RELEASE_LOCK('strat-matrix:business-migration')")
-            from app.init_pipeline_db import main
+            from app.content_planning.init_pipeline_db import main
             main()
             with algorithm.cursor() as c:
                 c.execute("INSERT IGNORE INTO godp_system_config(config_key,config_group,config_name,config_value,value_type,is_secret,create_by,update_by) VALUES('AUTO_SCHEDULE_OWNER','planning','周自动策划触发方','python','string',0,'boundary-migration','boundary-migration')")

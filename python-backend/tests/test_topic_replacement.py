@@ -7,8 +7,8 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from app import main as api
-from app.services import results as result_service, catalog as catalog_service
-from app.models import ReplaceTopicInput
+from app.content_planning.services import results as result_service, catalog as catalog_service
+from app.content_planning.models import ReplaceTopicInput
 
 
 def slot_row(**changes):

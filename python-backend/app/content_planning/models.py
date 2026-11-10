@@ -1,0 +1,433 @@
+"""API contracts. Business rules will grow with the approved PRD."""
+
+from datetime import date, datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class StageTarget(BaseModel):
+    name: str
+    traffic: int = Field(ge=0, le=100)
+    conversion: int = Field(ge=0, le=100)
+
+
+class LifecycleCondition(BaseModel):
+    field: Literal["valid_content_count", "rolling_interaction_count", "followers_count"]
+    operator: Literal["lt", "lte", "gte", "gt", "eq"]
+    value: int = Field(ge=0)
+    join: Literal["AND", "OR"] = "AND"
+
+
+class LifecycleRule(BaseModel):
+    name: str
+    conditions: list[LifecycleCondition] = Field(default_factory=list)
+    catchAll: bool = False
+    condition_mode: Literal['legacy', 'grouped'] = 'legacy'
+
+
+def default_lifecycle_rules() -> list[LifecycleRule]:
+    return [
+        LifecycleRule(name="稳定经营期", conditions=[
+            LifecycleCondition(field="followers_count", operator="gte", value=500),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=20),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5),
+        ]),
+        LifecycleRule(name="转化放大期", conditions=[
+            LifecycleCondition(field="followers_count", operator="gte", value=200),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=10),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5),
+        ]),
+        LifecycleRule(name="转化试探期", conditions=[
+            LifecycleCondition(field="followers_count", operator="gte", value=100),
+            LifecycleCondition(field="rolling_interaction_count", operator="gte", value=5),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5),
+        ]),
+        LifecycleRule(name="流量增长期", conditions=[
+            LifecycleCondition(field="followers_count", operator="gte", value=50),
+            LifecycleCondition(field="valid_content_count", operator="gte", value=5, join="OR"),
+        ]),
+        LifecycleRule(name="冷启动期", catchAll=True),
+    ]
+
+class StrategyConfig(BaseModel):
+    marketing_max: int = Field(default=1, ge=0, le=10000)
+    planning_days: list[int] = Field(default_factory=lambda: [1, 3, 5])
+    schedule_day: int = Field(default=2, ge=1, le=7)
+    schedule_time: str = Field(default="22:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    hotspot_ratio: int = Field(default=20, ge=0, le=100)
+    rolling_posts: int = Field(default=10, ge=1, le=100)
+    lifecycle_rules: list[LifecycleRule] = Field(default_factory=default_lifecycle_rules)
+    stage_targets: list[StageTarget] = Field(
+        default_factory=lambda: [
+            StageTarget(name="冷启动期", traffic=80, conversion=20),
+            StageTarget(name="流量增长期", traffic=70, conversion=30),
+            StageTarget(name="转化试探期", traffic=50, conversion=50),
+            StageTarget(name="转化放大期", traffic=30, conversion=70),
+            StageTarget(name="稳定经营期", traffic=50, conversion=50),
+        ]
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_lifecycle_name(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        for key in ("lifecycle_rules", "stage_targets"):
+            items = value.get(key)
+            if isinstance(items, list):
+                value[key] = [
+                    {**item, "name": "冷启动期"} if isinstance(item, dict) and item.get("name") == "冷启验证期" else item
+                    for item in items
+                ]
+        return value
+
+    @field_validator("stage_targets")
+    @classmethod
+    def validate_targets(cls, targets: list[StageTarget]) -> list[StageTarget]:
+        if len(targets) != 5 or len({target.name for target in targets}) != 5:
+            raise ValueError("必须配置五个互不重复的生命周期阶段")
+        if any(target.traffic + target.conversion != 100 for target in targets):
+            raise ValueError("每个阶段的流量与转化占比之和必须为 100%")
+        return targets
+
+    @field_validator("planning_days")
+    @classmethod
+    def validate_planning_days(cls, days: list[int]) -> list[int]:
+        if not days or len(days) != len(set(days)) or any(day < 1 or day > 7 for day in days):
+            raise ValueError("每周内容推送日须选择周一至周日至少一天，且不能重复")
+        return sorted(days)
+
+    @model_validator(mode="after")
+    def validate_lifecycle_rules(self) -> "StrategyConfig":
+        names = [rule.name for rule in self.lifecycle_rules]
+        if names != ["稳定经营期", "转化放大期", "转化试探期", "流量增长期", "冷启动期"]:
+            raise ValueError("生命周期阶段须按成熟度从高到低配置五个固定阶段")
+        if {target.name for target in self.stage_targets} != set(names):
+            raise ValueError("经营目标必须覆盖五个固定生命周期阶段")
+        if any(rule.catchAll or not rule.conditions for rule in self.lifecycle_rules[:-1]):
+            raise ValueError("前四个生命周期阶段均须配置进入条件")
+        if not self.lifecycle_rules[-1].catchAll or self.lifecycle_rules[-1].conditions:
+            raise ValueError("冷启动期须作为唯一兜底阶段")
+        return self
+
+
+class ConfigResponse(BaseModel):
+    version: int
+    updated_at: datetime | None
+    config: StrategyConfig
+    is_demo: bool = False
+
+
+class ConfigVersionSummary(BaseModel):
+    version: int
+    action: str
+    source_version: int | None = None
+    created_at: datetime
+    created_by: str
+    config: StrategyConfig
+
+
+class AccountOption(BaseModel):
+    updated_at: str | None = None
+    gender: str | None = None
+    interests: list[str] = Field(default_factory=list)
+    expression_style: str = ''
+    interaction_data: list[dict] = Field(default_factory=list)
+    account_id: str
+    account_name: str
+    account_alias: str = ""
+    um_no: str = ""
+    account_type: str = ""
+    organization: str = ""
+    platform: str = ""
+    business_line: str = ""
+    city: str
+    persona: str
+    marketing_eligible: bool
+    status: str
+    certified: bool | None = None
+    followers: int | None = None
+    traffic_trend: str = "数据不足"
+    lifecycle_stage: str = ""
+
+
+class TopicOption(BaseModel):
+    topic_id: str
+    topic_title: str
+    category: str = ""
+    content_type: str = ""
+    outline: str = ""
+    account_type: str = ""
+    related_product: str = ""
+    related_activity: str = ""
+    related_hotspot: str = ""
+    valid_from: str | None = None
+    valid_to: str | None = None
+    is_marketing: bool
+    status: str
+    topic_type: Literal["普通", "营销", "热点"] | None = None
+    account_id: str | None = None
+    labels: dict[str, Any] = Field(default_factory=dict)
+    label_status: str | None = None
+    label_version: int | None = None
+    taxonomy_version: int | None = None
+    applicable_cities: list[str] = Field(default_factory=list)
+
+
+class ManualItem(BaseModel):
+    account_id: str = Field(min_length=1, max_length=64)
+    account_name: str = Field(min_length=1, max_length=120)
+    topic_id: str = Field(min_length=1, max_length=64)
+    topic_title: str = Field(min_length=1, max_length=255)
+
+
+class ManualPlanCreate(BaseModel):
+    publish_date: date
+    items: list[ManualItem] = Field(min_length=1, max_length=1000)
+    note: str = Field(default="", max_length=500)
+
+    @field_validator("items")
+    @classmethod
+    def unique_accounts(cls, items: list[ManualItem]) -> list[ManualItem]:
+        account_ids = [item.account_id for item in items]
+        if len(account_ids) != len(set(account_ids)):
+            raise ValueError("同一批次中账号不能重复")
+        return items
+
+
+class ManualPreviewInput(BaseModel):
+    content_mode: Literal['non_marketing'] | None = None
+    task_name: str = Field(min_length=1, max_length=120)
+    publish_date: date
+    account_ids: list[str] = Field(default_factory=list, max_length=1000)
+    target_count: int | None = Field(default=None, ge=1, le=1000)
+    topic_ids: list[str] = Field(min_length=1, max_length=100)
+    note: str = Field(default="", max_length=500)
+    city: str = ""
+    persona: str = ""
+    keyword: str = ""
+    certified: bool | None = None
+    followers_min: int | None = Field(default=None, ge=0)
+    followers_max: int | None = Field(default=None, ge=0)
+    traffic_trend: str = ""
+
+    @field_validator("task_name")
+    @classmethod
+    def clean_task_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("策划任务名称不能为空")
+        return value
+
+    @field_validator("account_ids")
+    @classmethod
+    def unique_ids(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("\u8d26\u53f7 ID \u4e0d\u80fd\u91cd\u590d\u9009\u62e9")
+        if any(not value.strip() for value in values):
+            raise ValueError("\u8d26\u53f7 ID \u4e0d\u80fd\u4e3a\u7a7a")
+        return values
+
+    @field_validator("topic_ids")
+    @classmethod
+    def nonempty_topic_ids(cls, values: list[str]) -> list[str]:
+        if any(not value.strip() for value in values):
+            raise ValueError("\u9009\u9898 ID \u4e0d\u80fd\u4e3a\u7a7a")
+        return values
+
+
+class ManualAccountAvailability(BaseModel):
+    publish_date: date
+    planned_account_ids: list[str]
+
+
+class ManualPreviewResponse(BaseModel):
+    preview_id: str
+    task_name: str
+    publish_date: date
+    expires_at: datetime
+    items: list[ManualItem]
+    note: str
+
+
+class ManualTaskSummary(BaseModel):
+    id: int
+    task_code: str
+    preview_code: str
+    task_name: str
+    batch_code: str = ""
+    publish_date: date | None
+    content_mode: Literal['marketing', 'non_marketing', 'legacy'] = 'legacy'
+    content_per_account: int = 1
+    allocation_count: int = 0
+    planned_account_count: int
+    result_count: int
+    failure_count: int
+    topic_count: int
+    status: str
+    content_status: str = "待生产"
+    planning_status: str = ""
+    content_failed_count: int = 0
+    content_completed_count: int = 0
+    content_total_count: int = 0
+    content_completed_account_count: int = 0
+    failure_reason: str
+    batch_id: int | None = None
+    last_error: str
+    created_at: datetime
+    created_by: str
+    updated_at: datetime
+
+
+class ReplaceTopicInput(BaseModel):
+    new_topic_id: str = Field(min_length=1, max_length=64)
+    reason: str = Field(default="", max_length=500)
+    expected_version: int = Field(ge=1)
+
+
+class AdjustmentRecord(BaseModel):
+    id: int
+    item_id: int
+    result_version: int
+    adjustment_source: str
+    old_topic_id: str
+    old_topic_title: str
+    new_topic_id: str
+    new_topic_title: str
+    reason: str
+    created_at: datetime
+    created_by: str
+
+
+class ReplaceTopicResponse(BaseModel):
+    item: dict
+    adjustment: AdjustmentRecord
+
+
+class BatchSummary(BaseModel):
+    id: int
+    batch_code: str
+    plan_type: Literal["manual", "auto"]
+    status: str
+    cycle_start: date
+    cycle_end: date
+    account_count: int
+    content_count: int
+    result_count: int = 0
+    completed_count: int = 0
+    failed_count: int = 0
+    topic_count: int = 0
+    note: str
+    created_at: datetime
+    updated_at: datetime | None = None
+    task_name: str = ""
+    planning_status: str = ""
+    content_status: str = ""
+    content_failed_count: int = 0
+    content_completed_count: int = 0
+    content_total_count: int = 0
+    content_completed_account_count: int = 0
+
+
+class PlanningAccountSummary(BaseModel):
+    account_id: str
+    account_name: str
+    account_owner: str = ""
+    cycle_count: int
+    slot_count: int
+    latest_cycle_start: date
+    latest_cycle_updated_at: datetime | None = None
+    latest_status: str = ""
+    latest_batch_id: int | None = None
+
+
+class PlanItemResponse(BaseModel):
+    id: int
+    account_id: str
+    account_name: str
+    publish_date: date
+    slot_type: str
+    topic_id: str
+    topic_title: str
+    topic_type: str | None = None
+    status: str
+    slot_id: str | None = None
+    production_status: str | None = None
+    publish_status: str = "状态未知"
+    allow_replace: bool = False
+    replace_block_reason: str = ""
+    result_version: int | None = None
+    content_type: str = ""
+    outline: str = ""
+    lifecycle_stage: str | None = None
+    content_role: str | None = None
+
+
+class BatchDetail(BatchSummary):
+    items: list[PlanItemResponse]
+
+
+class AccountPlanRecord(PlanItemResponse):
+    batch_id: int | None = None
+    batch_code: str
+    batch_created_at: datetime | None = None
+    plan_type: Literal["manual", "auto"]
+    cycle_start: date
+    cycle_end: date
+
+
+class PlanningCycleSummary(BaseModel):
+    cycle_id: str
+    cycle_start: date
+    cycle_end: date
+    batch_count: int
+    account_count: int
+    auto_item_count: int
+    manual_item_count: int
+    content_count: int
+    regular_slots: int
+    marketing_slots: int
+    hotspot_slots: int
+    topic_uses: int
+    unique_topics: int
+    success_accounts: int
+    failed_accounts: int
+    planning_status: str
+    content_status: str
+    updated_at: datetime
+
+
+class AutoCycleSummary(BaseModel):
+    cycle_id: str
+    cycle_start: date
+    cycle_end: date
+    batch_count: int
+    account_count: int
+    base_planning_complete_accounts: int
+    all_topics_determined_accounts: int
+    planning_failed_accounts: int
+    has_execution_exception: bool
+    success_accounts: int
+    failed_accounts: int
+    regular_slots: int
+    marketing_slots: int
+    hotspot_slots: int
+    hotspot_submitted: int
+    hotspot_pending: int
+    status: str | None
+    updated_at: datetime
+    config_version: int | None = None
+    planning_days: list[int] | None = None
+    schedule_day: int | None = None
+    schedule_time: str | None = None
+    allocation_method: str | None = None
+
+
+class AutoFailure(BaseModel):
+    batch_code: str
+    account_id: str | None = None
+    account_name: str
+    um_no: str | None = None
+    reason: str
+

@@ -37,7 +37,7 @@ class Recorder:
             except BaseException as error:
                 event.update(status='checkpoint' if type(error).__name__=='QualityPending' else 'error',
                              error_type=type(error).__name__)
-                from app.doubao_labeling import DoubaoError
+                from app.content_planning.doubao_labeling import DoubaoError
                 if isinstance(error,DoubaoError):event['error_reason']=str(error)[:160]
                 raise
             finally:
@@ -71,34 +71,34 @@ def _model_usage(result):
 def install(directory):
     recorder=Recorder(Path(directory)/'python-timings.jsonl')
     targets=[
-        ('app.source_discovery','discover_topics','source.discovery'),
-        ('app.ai_preparation','create_preparation','preparation.create'),
-        ('app.ai_preparation','advance_preparation','preparation.advance'),
-        ('app.planning_input_runner','prepare_inputs','input.prepare'),
-        ('app.doubao_labeling','label_topic','label.request'),
-        ('app.planning_input_runner','_execute_input',lambda counts,kind,*args,**kwargs:'input.'+kind),
-        ('app.account_profile','profile_from_preparation','account.profile'),
-        ('app.matching_tasks','create_task','matching.freeze'),
-        ('app.matching_executor_worker','run_once','matching.worker'),
-        ('app.matching_quality_model','annotate_batch','matching.annotations'),
-        ('app.matching_quality_model','map_account','matching.mapping'),
-        ('app.matching_quality_model','judge_batch','matching.precision'),
-        ('app.matching_quality_executor','_need_vector','matching.need_vector'),
-        ('app.matching_quality_executor','recall','matching.recall'),
-        ('app.matching_quality_executor','allocate_quality','matching.allocation'),
-        ('app.matching_quality_executor','allocate_matrix','matching.capacity'),
-        ('app.matching_quality_executor','optimize_portfolios','matching.portfolio'),
-        ('app.planning_workflow_worker','run_once','pipeline.worker'),
-        ('app.planning_pipeline','advance_pipeline','pipeline.advance'),
+        ('app.content_planning.source_discovery','discover_topics','source.discovery'),
+        ('app.content_planning.ai_preparation','create_preparation','preparation.create'),
+        ('app.content_planning.ai_preparation','advance_preparation','preparation.advance'),
+        ('app.content_planning.planning_input_runner','prepare_inputs','input.prepare'),
+        ('app.content_planning.doubao_labeling','label_topic','label.request'),
+        ('app.content_planning.planning_input_runner','_execute_input',lambda counts,kind,*args,**kwargs:'input.'+kind),
+        ('app.content_planning.account_profile','profile_from_preparation','account.profile'),
+        ('app.content_planning.matching_tasks','create_task','matching.freeze'),
+        ('app.content_planning.matching_executor_worker','run_once','matching.worker'),
+        ('app.content_planning.matching_quality_model','annotate_batch','matching.annotations'),
+        ('app.content_planning.matching_quality_model','map_account','matching.mapping'),
+        ('app.content_planning.matching_quality_model','judge_batch','matching.precision'),
+        ('app.content_planning.matching_quality_executor','_need_vector','matching.need_vector'),
+        ('app.content_planning.matching_quality_executor','recall','matching.recall'),
+        ('app.content_planning.matching_quality_executor','allocate_quality','matching.allocation'),
+        ('app.content_planning.matching_quality_executor','allocate_matrix','matching.capacity'),
+        ('app.content_planning.matching_quality_executor','optimize_portfolios','matching.portfolio'),
+        ('app.content_planning.planning_workflow_worker','run_once','pipeline.worker'),
+        ('app.content_planning.planning_pipeline','advance_pipeline','pipeline.advance'),
     ]
     for module,attribute,name in targets:recorder.patch(module,attribute,name)
-    recorder.patch('app.doubao_labeling','ark_post',
+    recorder.patch('app.content_planning.doubao_labeling','ark_post',
                    lambda config,path,payload:'model.chat' if path=='/chat/completions' else 'model.embedding',
                    result_metadata=_model_usage)
-    from app.bank_bridge.java_http import JavaHTTPClient
+    from app.content_planning.bank_bridge.java_http import JavaHTTPClient
     JavaHTTPClient.read=recorder.wrap('source.java_http',JavaHTTPClient.read,
         metadata=lambda self,capability,*args,**kwargs:dict(capability=capability))
-    from app.matching_quality_store import QualityRuntime
+    from app.content_planning.matching_quality_store import QualityRuntime
     QualityRuntime.find=recorder.wrap('cache.lookup',QualityRuntime.find,
         metadata=lambda self,kind,payload,*args,**kwargs:dict(kind=kind,cache_key=self.key(kind,payload)[0]),
         result_metadata=lambda value:dict(hit=value is not None))

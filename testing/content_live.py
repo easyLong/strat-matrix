@@ -85,10 +85,10 @@ def main(argv=None):
         print(json.dumps(verify(args.verify,args.base),ensure_ascii=True));return 0
     if not args.execute:parser.error('创建测试资料和正式明细须显式使用 --execute')
     sys.path.insert(0,str(ROOT/'python-backend'))
-    from app.deployment_environment import current
-    from app.bank_bridge.java_http import JavaHTTPClient
-    from app.java_development import java_database_settings,properties_text
-    from app.system_config import get_setting
+    from app.content_planning.deployment_environment import current
+    from app.content_planning.bank_bridge.java_http import JavaHTTPClient
+    from app.content_planning.java_development import java_database_settings,properties_text
+    from app.content_planning.system_config import get_setting
     if current()['PLANNING_ENV']!='outside':raise ValueError('Content acceptance is outside-only')
     with urllib.request.urlopen(args.base+'/api/service-health',timeout=10) as response:
         health=json.load(response)

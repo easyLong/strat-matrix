@@ -1,5 +1,9 @@
 # 多账号智能策划
 
+2026-11-10 Python模块化：`app/content_planning/` 支持独立运行与嵌入 FastAPI；原独立入口仍为 `app.main:app`。见 [接入说明](python-backend/INTEGRATION.md)、[验收记录](python-backend/VALIDATION.md) 和 [数据库依赖边界](python-backend/database/content_planning/README.md)。
+
+2026-11-10：Java业务查询已改为无视图的MyBatis直接查表。使用[DBA发布包V10](java-backend/godp-planning-services/src/main/resources/db/release/20261110-v10/README.md)，新库不创建视图，V9存量库仅切换查询代码。范围与验收见[无视图改造](docs/Java无视图查询改造_2026-11-10.md)。
+
 2026-11-09供应商隔离：Java生产包已按行内现有五层模块迁入各层`xiangliang`目录，业务服务位于`services.service.xiangliang`，Mapper接口和XML独立。现场可[导出按宿主模块落位的源码](java-backend/host-integration/MAVEN_MODULES.md)，无需复制本地POM及启动壳；[本轮验证记录](docs/xiangliang供应商隔离与验收_2026-11-09.md)。
 
 2026-11-09接口最终口径：前端与Java业务入口使用单套POST；Java到Python已改造的算法配置、标签和任务状态同样只使用POST，健康检查使用GET。旧GET/PUT别名、前端协议识别及请求回退已删除，部署需三工程使用相同版本。详见[POST最终契约及验收](docs/业务接口POST收口_2026-11-09.md)。
@@ -62,12 +66,13 @@ flowchart LR
 
 | 职责 | 当前入口 |
 | --- | --- |
-| 前端路由与三个页面 | `frontend/src/router.ts`、`frontend/src/views/` |
-| ASGI 入口、HTTP 装配与页面接口 | `python-backend/app/main.py`、`bootstrap.py`、`api/` |
-| 标签、向量、输入准备与保留的旧业务用例 | `python-backend/app/services/` |
-| 公共算法与序列化规则 | `python-backend/app/core/` |
-| 结果 SQL 投影与行内资料批量读取 | `python-backend/app/adapters/` |
-| 行内查询契约、Java HTTP资料与状态适配 | `python-backend/app/bank_bridge/` |
+| 前端路由与三个页面 | `frontend/src/router.js`、`frontend/src/views/` |
+| 独立入口、工厂与宿主安装 | `python-backend/app/main.py`、`app/content_planning/main.py`、`integration.py` |
+| HTTP 装配与算法接口 | `python-backend/app/content_planning/bootstrap.py`、`api/` |
+| 标签、向量、输入准备与保留的旧业务用例 | `python-backend/app/content_planning/services/` |
+| 公共算法与序列化规则 | `python-backend/app/content_planning/core/` |
+| 结果 SQL 投影与行内资料批量读取 | `python-backend/app/content_planning/adapters/` |
+| 行内查询契约、Java HTTP资料与状态适配 | `python-backend/app/content_planning/bank_bridge/` |
 | Java普通人工业务、MyBatis持久化 | `java-backend/godp-planning-services/src/main/java/com/pab/aitmp/aiis/godp/digital/marketing/services/service/xiangliang/manual/`、`java-backend/godp-planning-services/src/main/resources/mapper/xiangliang/` |
 | 本地装配及模拟资料 | `java-backend/godp-planning-server/src/main/java/com/pab/aitmp/aiis/godp/digital/marketing/server/xiangliang/dev/`；驻场不迁入 |
 | 旧行内Java方法及字段参考模板，不参与应用构建 | `docs/integration/java-host/templates/` |
@@ -82,7 +87,7 @@ flowchart LR
 | 选题生产使用次数 | Java `manual/TopicUsageService`；Python `bank_bridge/official_usage.py`经HTTP读取 |
 | 配置读取与目录 | `system_config.py`、`system_config_catalog.py` |
 
-表中未标注工程的Python文件位于`python-backend/app/`，Java业务包位于`java-backend/`。`main.py`与`integration.py`为兼容入口。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
+表中未标注工程的Python文件位于`python-backend/app/content_planning/`，Java业务包位于`java-backend/`。模块 `main.py` 是工厂，`integration.py` 是宿主安装入口，旧直接函数导出在 `compatibility.py` 与 `standalone_exports.py`。人工任务列表使用服务端分页；三种策划详情按账号或周分页读取，概览和分类分布按全部筛选结果统计。
 
 ## 初始化与配置
 
@@ -92,14 +97,10 @@ flowchart LR
 
 ```bash
 python -m pip install -r requirements.txt
-python -m app.init_db
+python -m app.content_planning.algorithm_schema check
 ```
 
-已有库升级本轮生产扫描扩展字段：
-
-```bash
-python -m app.init_shared_workflow_db
-```
+算法库首次安装使用 `database/content_planning/algorithm_schema.sql`，业务库使用 Java DBA 发布包 V10；已有库按独立增量迁移审核发布。启动不会自动建表、升级或补演示数据。25 张算法表之外的兼容路径依赖见 [数据库说明](python-backend/database/content_planning/README.md)。
 
 所有策划自有表使用`godp_`前缀，表与字段均需中文说明及规定的审计字段，不使用外键、存储过程或自定义数据库函数。Java业务库当前有查询视图，需随迁移脚本发布并在行内确认兼容性，不能按“完全没有视图”交接。
 
@@ -113,7 +114,7 @@ python -m app.init_shared_workflow_db
 
 ```bash
 # python-backend/
-python -m app.java_development --output ../run/java-backend.properties
+python -m app.content_planning.java_development --output ../run/java-backend.properties
 uvicorn app.main:app --host 0.0.0.0 --port 6930
 
 # java-backend/，需安装JDK8及Maven

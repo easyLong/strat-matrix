@@ -10,12 +10,12 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from app import shared_production as production
-from app import ordinary_scheduler as scheduler
-from app.source_discovery import discovery_action, source_signature
-from app.topic_profile import profile_from_source
-from app.bank_bridge.memory import fixture_source
-from app.shared_production_api import ResultInput
+from app.content_planning import shared_production as production
+from app.content_planning import ordinary_scheduler as scheduler
+from app.content_planning.source_discovery import discovery_action, source_signature
+from app.content_planning.topic_profile import profile_from_source
+from app.content_planning.bank_bridge.memory import fixture_source
+from app.content_planning.shared_production_api import ResultInput
 
 
 class DiscoveryTests(unittest.TestCase):

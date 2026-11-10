@@ -66,8 +66,8 @@ def policy(engine="v19", *, dimension=8):
                       "shortlist_per_slot": 20, "max_improvement_passes": 10},
     }
     if engine == "v19":
-        from app.matching_contracts import MatchingQualityOptions
-        from app.matching_quality import QUALITY_PARAMETERS
+        from app.content_planning.matching_contracts import MatchingQualityOptions
+        from app.content_planning.matching_quality import QUALITY_PARAMETERS
         value.update(implementation_key="builtin-v19-quality-v1",
                      quality=MatchingQualityOptions().model_dump(mode="json", exclude_none=True))
         for key, params in QUALITY_PARAMETERS.items():
@@ -77,7 +77,7 @@ def policy(engine="v19", *, dimension=8):
 
 def build(profile):
     """Generation is deterministic: IDs, dates, vectors and responses never use the current clock."""
-    from app.taxonomy import normalize_taxonomy
+    from app.content_planning.taxonomy import normalize_taxonomy
     count, topic_count = PROFILES[profile]
     taxonomy = {"T1": ["非营销", "营销"], "T2": ["流量", "转化"], "T3": [], "T4": [], "T5": []}
     for i, domain in enumerate(DOMAINS):

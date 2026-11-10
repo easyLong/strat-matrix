@@ -5,10 +5,10 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app import algorithm_config_commands as config
-from app import manual_compute as manual
-from app import planning_pipeline_api as pipeline
-from app.api import labels
+from app.content_planning import algorithm_config_commands as config
+from app.content_planning import manual_compute as manual
+from app.content_planning import planning_pipeline_api as pipeline
+from app.content_planning.api import labels
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def client():
     app = FastAPI()
     for router in (config.router, labels.router, pipeline.router, manual.router):
         app.include_router(router)
-    with patch('app.api.security.get_setting', return_value='test-token'):
+    with patch('app.content_planning.api.security.get_setting', return_value='test-token'):
         with TestClient(app) as http:
             yield http
 
@@ -38,13 +38,13 @@ def test_post_requires_service_identity_before_query_or_write(client, url):
 def test_read_routes_return_contract_and_reject_removed_methods(client):
     cases = [
         ('/api/internal/algorithm-config/query', '/api/internal/algorithm-config',
-         'app.services.configuration.get_config', {'version': 3}),
+         'app.content_planning.services.configuration.get_config', {'version': 3}),
         ('/api/tag-taxonomy/query', '/api/tag-taxonomy',
-         'app.services.labels.get_tag_taxonomy', {'version': 2, 'items': {}}),
+         'app.content_planning.services.labels.get_tag_taxonomy', {'version': 2, 'items': {}}),
         ('/api/internal/planning-pipelines/88/query', '/api/internal/planning-pipelines/88',
-         'app.planning_pipeline_api.read_pipeline', {'id': 88, 'status': 'running'}),
+         'app.content_planning.planning_pipeline_api.read_pipeline', {'id': 88, 'status': 'running'}),
         ('/api/internal/manual-computations/JMAN-test/query', '/api/internal/manual-computations/JMAN-test',
-         'app.manual_compute.read', {'request_id': 'JMAN-test', 'status': 'pending'}),
+         'app.content_planning.manual_compute.read', {'request_id': 'JMAN-test', 'status': 'pending'}),
     ]
     for post_url, get_url, handler, result in cases:
         with patch(handler, return_value=result) as read:

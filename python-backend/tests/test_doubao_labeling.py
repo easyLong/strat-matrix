@@ -11,10 +11,10 @@ from urllib.error import HTTPError, URLError
 
 from pydantic import ValidationError
 
-from app import doubao_labeling as service
-from app import topic_label_model_api as api
-from app import topic_label_worker as worker
-from app.system_config import override_config
+from app.content_planning import doubao_labeling as service
+from app.content_planning import topic_label_model_api as api
+from app.content_planning import topic_label_worker as worker
+from app.content_planning.system_config import override_config
 
 
 TAXONOMY = {"T1": ["非营销", "营销"], "T2": ["流量", "转化"],

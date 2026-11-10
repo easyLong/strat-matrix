@@ -10,10 +10,10 @@ from unittest.mock import MagicMock, patch
 from dotenv import dotenv_values
 import pymysql
 
-from app import init_system_config as migration
-from app import system_config as config
-from app.init_db import column_definitions, table_descriptions
-from app.system_config_catalog import CATALOG, MYSQL_KEYS, validate_value
+from app.content_planning import init_system_config as migration
+from app.content_planning import system_config as config
+from app.content_planning.init_db import column_definitions, table_descriptions
+from app.content_planning.system_config_catalog import CATALOG, MYSQL_KEYS, validate_value
 
 
 class SystemConfigTests(unittest.TestCase):

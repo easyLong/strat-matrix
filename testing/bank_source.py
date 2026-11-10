@@ -25,7 +25,7 @@ class ProbeError(Exception):
 def _contracts():
     sys.path.insert(0, str(ROOT / 'python-backend'))
     from pydantic import Field, TypeAdapter, ValidationError
-    from app.bank_bridge.contracts import (
+    from app.content_planning.bank_bridge.contracts import (
         Contract, AccountQuery, TopicQuery, MarketingQuery, EffectivePlacementQuery,
         ProductionQuery, MarketingStatusQuery, Account, Topic, MarketingContent, Page,
         EffectivePlacement, ProductionRecord, MarketingProductionRecord)

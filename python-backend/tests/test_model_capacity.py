@@ -10,15 +10,15 @@ from urllib.error import HTTPError
 
 import pytest
 from fastapi.testclient import TestClient
-from app import model_capacity as cap, doubao_labeling as model
-from app.bootstrap import app
-from app.system_config import override_config,SystemConfigError
-from app import planning_input_runner as inputs, matching_executor_worker as matching
-from app import topic_label_worker,topic_vector_worker,account_vector_worker
-from app.worker_http import WorkerRateLimited,json_request
-from app.services.labels import defer_topic_label_job
-from app.matching_quality import IMPLEMENTATION_KEY
-from app.bank_bridge.operations import test_labels as run_label_test
+from app.content_planning import model_capacity as cap, doubao_labeling as model
+from app.main import app
+from app.content_planning.system_config import override_config,SystemConfigError
+from app.content_planning import planning_input_runner as inputs, matching_executor_worker as matching
+from app.content_planning import topic_label_worker,topic_vector_worker,account_vector_worker
+from app.content_planning.worker_http import WorkerRateLimited,json_request
+from app.content_planning.services.labels import defer_topic_label_job
+from app.content_planning.matching_quality import IMPLEMENTATION_KEY
+from app.content_planning.bank_bridge.operations import test_labels as run_label_test
 
 
 ENV={'BANK_SOURCE_MODE':'local_fixture','INTEGRATION_TOKEN':'capacity-test-token'}
@@ -89,8 +89,8 @@ def test_invalid_limit_configuration_fails_closed(key,value):
 
 def test_model_api_rejects_at_entry_but_health_and_auth_are_independent():
     with override_config({**ENV,'AI_API_MAX_CONCURRENT_REQUESTS':'1'}),\
-         patch('app.topic_label_model_api.label_topic') as network,\
-         patch('app.bootstrap.check_database',return_value=True),TestClient(app) as client,cap.budget.slot('api',1):
+         patch('app.content_planning.topic_label_model_api.label_topic') as network,\
+         patch('app.content_planning.bootstrap.check_database',return_value=True),TestClient(app) as client,app.state.planning_runtime.budget().slot('api',1):
         response=client.post('/api/internal/topic-label-model',headers=HEADERS,json=PAYLOAD)
         assert response.status_code==429
         assert response.headers['Retry-After']=='2'
@@ -102,7 +102,7 @@ def test_model_api_rejects_at_entry_but_health_and_auth_are_independent():
 
 def test_api_handler_error_and_return_do_not_leak_entry_permit():
     with override_config({**ENV,'AI_API_MAX_CONCURRENT_REQUESTS':'1'}),\
-         patch('app.topic_label_model_api.label_topic',side_effect=[model.DoubaoUnavailable('busy'),{}]),TestClient(app) as client:
+         patch('app.content_planning.topic_label_model_api.label_topic',side_effect=[model.DoubaoUnavailable('busy'),{}]),TestClient(app) as client:
         assert client.post('/api/internal/topic-label-model',headers=HEADERS,json=PAYLOAD).status_code==503
         assert client.post('/api/internal/topic-label-model',headers=HEADERS,json=PAYLOAD).status_code==200
 
@@ -119,7 +119,7 @@ def test_cancelled_async_entry_releases_its_permit():
 
 
 def test_embedding_test_and_background_wakeup_are_protected_at_entry():
-    with override_config({**ENV,'AI_API_MAX_CONCURRENT_REQUESTS':'1'}),TestClient(app) as client,cap.budget.slot('api',1):
+    with override_config({**ENV,'AI_API_MAX_CONCURRENT_REQUESTS':'1'}),TestClient(app) as client,app.state.planning_runtime.budget().slot('api',1):
         for path in ['/api/internal/embedding-model','/api/integrations/bank/op04/topic-labels/test','/api/internal/wakeup']:
             assert client.post(path,headers=HEADERS,json={}).status_code==429
 
@@ -156,7 +156,7 @@ class LockStore:
 
 def test_mysql_shared_budget_and_limit_reduction_count_high_numbered_old_slots():
     store=LockStore()
-    with patch('app.db.connection',store.connection),patch.object(cap,'lock_prefix',return_value='test'):
+    with patch('app.content_planning.db.connection',store.connection),patch.object(cap,'lock_prefix',return_value='test'):
         first=cap.database_slot('text',2);first.__enter__()
         with cap.database_slot('text',2):
             first.__exit__(None,None,None)
@@ -176,7 +176,7 @@ def task_db(existing=None,count=0):
 
 def test_pending_quota_rejects_new_task_and_releases_admission_lock():
     db,cursor=task_db(count=1)
-    with patch('app.db.connection',return_value=db),patch.object(cap,'lock_prefix',return_value='test'):
+    with patch('app.content_planning.db.connection',return_value=db),patch.object(cap,'lock_prefix',return_value='test'):
         with pytest.raises(cap.CapacityExceeded):
             with cap.pending_task_admission('matching',{'preparation_id':7},policy=cap.CapacityPolicy(pending=1)):
                 pytest.fail('must not accept')
@@ -186,7 +186,7 @@ def test_pending_quota_rejects_new_task_and_releases_admission_lock():
 def test_idempotent_replay_bypasses_full_queue_but_terminal_retry_checks_capacity():
     for retry,should_reject in [(False,False),(True,True)]:
         db,cursor=task_db(existing={'id':7,'status':'failed'},count=1)
-        with patch('app.db.connection',return_value=db),patch.object(cap,'lock_prefix',return_value='test'):
+        with patch('app.content_planning.db.connection',return_value=db),patch.object(cap,'lock_prefix',return_value='test'):
             if should_reject:
                 with pytest.raises(cap.CapacityExceeded):
                     with cap.pending_task_admission('matching',{'id':7,'retry':retry},policy=cap.CapacityPolicy(pending=1)):pass
@@ -199,7 +199,7 @@ def test_http_pending_quota_rejects_before_creating_task():
     @contextmanager
     def full(*args,**kwargs):raise cap.CapacityExceeded('tasks');yield
     with override_config(ENV),patch.object(cap,'pending_task_admission',full),\
-         patch('app.planning_pipeline_api.start_v19_pipeline') as create,TestClient(app) as client:
+         patch('app.content_planning.planning_pipeline_api.start_v19_pipeline') as create,TestClient(app) as client:
         response=client.post('/api/internal/auto-planning/start',headers=HEADERS,json={'cycle_start':'2027-01-04'})
         assert response.status_code==429
         assert response.json()['scope']=='tasks'
@@ -209,7 +209,7 @@ def test_http_pending_quota_rejects_before_creating_task():
 def test_deferred_label_release_only_updates_its_current_lease():
     db=MagicMock();db.__enter__.return_value=db
     cursor=db.cursor.return_value.__enter__.return_value;cursor.rowcount=1
-    with patch('app.services.labels.connection',return_value=db):
+    with patch('app.content_planning.services.labels.connection',return_value=db):
         assert defer_topic_label_job('T1','LEASE')['deferred']
     sql,params=cursor.execute.call_args.args
     assert "status='processing'" in sql and 'lease_id=%s' in sql and "del_flag='N'" in sql
@@ -267,7 +267,7 @@ def test_matching_throttling_yields_existing_task_without_marking_failure():
 
 def test_http_worker_does_not_turn_429_into_failure_payload():
     error=HTTPError('http://local',429,'busy',{},BytesIO(b''))
-    with patch('app.worker_http.urlopen',side_effect=error),pytest.raises(WorkerRateLimited):json_request('http://local','POST',body={})
+    with patch('app.content_planning.worker_http.urlopen',side_effect=error),pytest.raises(WorkerRateLimited):json_request('http://local','POST',body={})
     topic={'topic_id':'T1','content_hash':'a'*64,'tag_version':1,'profile':{}}
     with patch.object(topic_vector_worker,'json_request',side_effect=WorkerRateLimited()) as request:
         topic_vector_worker.process_job(topic,'http://local','test')
@@ -288,7 +288,7 @@ def test_old_label_worker_returns_claim_on_429_without_writing_failed_tags():
 def test_config_initializer_only_inserts_five_keys_and_keeps_existing_values():
     db=MagicMock();db.__enter__.return_value=db
     cursor=db.cursor.return_value.__enter__.return_value;cursor.rowcount=1
-    with patch('app.db.connection',return_value=db):assert cap.initialize_config()==5
+    with patch('app.content_planning.db.connection',return_value=db):assert cap.initialize_config()==5
     for call in cursor.execute.call_args_list:
         sql,params=call.args
         assert sql.startswith('INSERT IGNORE') and 'UPDATE ' not in sql
@@ -296,7 +296,7 @@ def test_config_initializer_only_inserts_five_keys_and_keeps_existing_values():
 
 
 def test_op04_does_not_convert_throttling_to_label_failure():
-    with patch('app.bank_bridge.operations.taxonomy_snapshot',return_value=(1,{})),\
-         patch('app.taxonomy.active_tag_names',return_value=TAXONOMY),pytest.raises(cap.CapacityExceeded):
+    with patch('app.content_planning.bank_bridge.operations.taxonomy_snapshot',return_value=(1,{})),\
+         patch('app.content_planning.taxonomy.active_tag_names',return_value=TAXONOMY),pytest.raises(cap.CapacityExceeded):
         run_label_test(None,SimpleNamespace(topics=[SimpleNamespace(topic_id='T1',title='title',outline='outline')]),
                        labeler=MagicMock(side_effect=cap.CapacityExceeded('text')))

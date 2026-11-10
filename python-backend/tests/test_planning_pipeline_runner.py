@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from app import planning_pipeline_runner as runner
-from app.planning_result_commit import ResultCommitError
+from app.content_planning import planning_pipeline_runner as runner
+from app.content_planning.planning_result_commit import ResultCommitError
 
 
 def waiting_result(status="waiting", version=7):

@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 import pytest
-from app.bank_bridge import factory
-from app.bank_bridge.contracts import Account, Topic, AccountQuery, TopicQuery
-from app.bank_bridge.java_http import JavaHTTPClient, JavaHTTPSource
-from app.bank_bridge.ports import IntegrationUnavailable
-from app.models import StrategyConfig
-from app.services.catalog_projection import project_catalog
-from app.system_config import override_config
+from app.content_planning.bank_bridge import factory
+from app.content_planning.bank_bridge.contracts import Account, Topic, AccountQuery, TopicQuery
+from app.content_planning.bank_bridge.java_http import JavaHTTPClient, JavaHTTPSource
+from app.content_planning.bank_bridge.ports import IntegrationUnavailable
+from app.content_planning.models import StrategyConfig
+from app.content_planning.services.catalog_projection import project_catalog
+from app.content_planning.system_config import override_config
 
 
 def test_outside_selects_daily_java_and_auth_without_fixture_fallback():
@@ -30,7 +30,7 @@ def test_inside_never_invents_outside_address_or_token():
 def test_java_failure_does_not_read_python_fixture():
     from urllib.error import URLError
     with override_config(dict(PLANNING_ENV='outside', INTEGRATION_TOKEN='test-token')), \
-         patch('app.bank_bridge.local_fixture.load_fixture') as fallback:
+         patch('app.content_planning.bank_bridge.local_fixture.load_fixture') as fallback:
         source = factory.get_source(None)
         source.client.opener = MagicMock()
         source.client.opener.open.side_effect = URLError('test Java unavailable')
@@ -48,9 +48,9 @@ def test_projection_uses_supplied_facts_and_restores_the_previous_source():
     def database():
         yield MagicMock()
     previous = MagicMock()
-    with factory.use_adapters(previous), patch('app.services.catalog_projection.connection', database), \
-         patch('app.services.catalog_projection.get_config', return_value=SimpleNamespace(config=StrategyConfig())), \
-         patch('app.services.catalog_projection.attach_topic_labels'):
+    with factory.use_adapters(previous), patch('app.content_planning.services.catalog_projection.connection', database), \
+         patch('app.content_planning.services.catalog_projection.get_config', return_value=SimpleNamespace(config=StrategyConfig())), \
+         patch('app.content_planning.services.catalog_projection.attach_topic_labels'):
         result = project_catalog([a], [t])
         assert result['accounts'][0]['account_id'] == 'SCOPE-A'
         assert result['topics'][0]['topic_id'] == 'SCOPE-T'
@@ -83,8 +83,8 @@ def test_projection_binds_every_topic_id_and_keeps_saved_labels_without_network(
                                      label_status='已完成',version=2,taxonomy_version=4) for topic in topics]
     @contextmanager
     def connection():yield database
-    with patch('app.services.catalog_projection.connection',connection), \
-         patch('app.services.catalog_projection.get_config',return_value=SimpleNamespace(config=StrategyConfig())):
+    with patch('app.content_planning.services.catalog_projection.connection',connection), \
+         patch('app.content_planning.services.catalog_projection.get_config',return_value=SimpleNamespace(config=StrategyConfig())):
         result=project_catalog([],topics)
     assert len(captured)==1
     assert len(result['topics'])==count
@@ -103,9 +103,9 @@ def test_projection_keeps_future_active_topics_and_untitled_marketing_metadata_f
     @contextmanager
     def database():
         yield MagicMock()
-    with patch('app.services.catalog_projection.connection', database), \
-         patch('app.services.catalog_projection.get_config', return_value=SimpleNamespace(config=StrategyConfig())), \
-         patch('app.services.catalog_projection.attach_topic_labels'):
+    with patch('app.content_planning.services.catalog_projection.connection', database), \
+         patch('app.content_planning.services.catalog_projection.get_config', return_value=SimpleNamespace(config=StrategyConfig())), \
+         patch('app.content_planning.services.catalog_projection.attach_topic_labels'):
         result = project_catalog([], [future, marketing, disabled])
     assert [r['topic_id'] for r in result['topics']] == ['FUTURE', 'MARKETING']
     assert result['topics'][1]['topic_title'] == ''
@@ -129,7 +129,7 @@ def test_acceptance_scopes_ids_but_reuses_the_same_java_source():
 
 def test_acceptance_scope_applies_to_preimported_functions_and_background_threads():
     from concurrent.futures import ThreadPoolExecutor
-    from app.bank_bridge.bridge import get_source as preimported
+    from app.content_planning.bank_bridge.bridge import get_source as preimported
     source = MagicMock()
     with patch.object(factory, 'SOURCE_PROVIDER', lambda _: source):
         with ThreadPoolExecutor(max_workers=1) as pool:

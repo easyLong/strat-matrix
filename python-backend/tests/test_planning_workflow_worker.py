@@ -4,9 +4,9 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
-from app import planning_workflow_worker as worker
-from app.jobs.worker import execute
-from app.services.errors import ApplicationError
+from app.content_planning import planning_workflow_worker as worker
+from app.content_planning.jobs.worker import execute
+from app.content_planning.services.errors import ApplicationError
 
 
 def state(status='waiting', version=1, matching=None, batch=None):

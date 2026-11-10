@@ -20,6 +20,23 @@ import org.springframework.web.client.*;
 
 class PythonClientTest {
   @Test
+  void embeddedPlanningBaseKeepsPrefixBodyTokenAndAcceptedStatus() {
+    RestTemplate http = new RestTemplate();
+    MockRestServiceServer server = MockRestServiceServer.createServer(http);
+    server.expect(requestTo("http://host.test/planning/api/internal/manual-computations"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(header("X-Integration-Token", "host-service-token"))
+        .andExpect(header("X-Operator-Id", "STAFF-UM"))
+        .andExpect(content().json("{\"batch_code\":\"MAN-TEST\"}"))
+        .andRespond(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON)
+            .body("{\"status\":\"accepted\",\"computation_id\":19}"));
+    PythonClient client = new PythonClient(URI.create("http://host.test/planning/"), "host-service-token", http);
+    assertEquals(19, client.call(HttpMethod.POST, "/api/internal/manual-computations",
+        Collections.singletonMap("batch_code", "MAN-TEST"), "STAFF-UM", 202).get("computation_id"));
+    server.verify();
+  }
+
+  @Test
   void propagatesOnlyTrustedRequestTraceAndDoesNotRetainItAcrossCalls() {
     RestTemplate http = new RestTemplate();
     MockRestServiceServer server = MockRestServiceServer.createServer(http);

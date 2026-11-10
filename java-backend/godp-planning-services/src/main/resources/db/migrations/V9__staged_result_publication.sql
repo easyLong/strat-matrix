@@ -5,4 +5,4 @@ ALTER TABLE godp_planning_batch
     COMMENT '结果发布状态：staging分批写入不可见、ready完整发布',
   ADD COLUMN write_cursor INT NOT NULL DEFAULT 0
     COMMENT '自动结果已提交的明细游标，分批恢复使用';
--- 随后发布planning-query-views.sql，再部署新应用。历史批次默认ready，不改业务数据。
+-- 随后部署无视图查询版本应用。历史批次默认ready，不改业务数据。

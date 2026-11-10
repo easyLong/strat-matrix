@@ -6,15 +6,15 @@ import unittest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.retired_tables import RETIRED_TABLES, retired_statement
-from app.init_planner_db import statements
-from app.bank_bridge.local_fixture import load_fixture
-from app.bank_bridge.ports import IntegrationUnavailable
+from app.content_planning.retired_tables import RETIRED_TABLES, retired_statement
+from app.content_planning.init_planner_db import statements
+from app.content_planning.bank_bridge.local_fixture import load_fixture
+from app.content_planning.bank_bridge.ports import IntegrationUnavailable
 
 
 class RetiredTablesTests(unittest.TestCase):
     def test_schema_has_no_retired_table_definitions(self):
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[1] / 'database/content_planning'
         for name in ('schema.sql', 'content_production_schema.sql', 'pipeline_schema.sql', 'manual_marketing_schema.sql'):
             for statement in statements((root / name).read_text(encoding='utf-8')):
                 self.assertFalse(retired_statement(statement), name)

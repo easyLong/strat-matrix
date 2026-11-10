@@ -2,8 +2,8 @@ import json
 from unittest.mock import MagicMock, patch
 from fastapi import HTTPException
 import pytest
-from app import algorithm_config_commands as service
-from app.models import StrategyConfig
+from app.content_planning import algorithm_config_commands as service
+from app.content_planning.models import StrategyConfig
 
 def test_algorithm_command_reuses_receipt_and_preserves_business_fields():
     db,cursor=MagicMock(),MagicMock();db.__enter__.return_value=db;db.cursor.return_value=cursor;cursor.__enter__.return_value=cursor

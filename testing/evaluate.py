@@ -57,8 +57,8 @@ class ReplayRuntime:
 
 
 def job_for(dataset, engine, candidate_policy=None):
-    from app.matching_contracts import MatchingPolicyDocument
-    from app.matching_policy import implementation_approval_errors
+    from app.content_planning.matching_contracts import MatchingPolicyDocument
+    from app.content_planning.matching_policy import implementation_approval_errors
     policy = deepcopy(candidate_policy or dataset["policies"][engine])
     expected_key = {"v19": "builtin-v19-quality-v1"}[engine]
     document = MatchingPolicyDocument.model_validate(policy)
@@ -82,8 +82,8 @@ def job_for(dataset, engine, candidate_policy=None):
 
 
 def quality_replay(job, dataset):
-    from app import matching_quality_executor as executor
-    from app.matching_quality_model import PairJudgment, checked_annotation
+    from app.content_planning import matching_quality_executor as executor
+    from app.content_planning.matching_quality_model import PairJudgment, checked_annotation
     replay = dataset["replay"]
     by_title = {t["source_payload"]["title"]: t["topic_id"] for t in dataset["topics"]}
     captured, phases = {}, []
@@ -113,7 +113,7 @@ def quality_replay(job, dataset):
             "_need_vector": lambda _runtime, text, dimension: replay["need_vectors"][text],
         }.items():
             stack.enter_context(patch.object(executor, name, value))
-        stack.enter_context(patch("app.matching_tasks.heartbeat_task", lambda *_args: None))
+        stack.enter_context(patch("app.content_planning.matching_tasks.heartbeat_task", lambda *_args: None))
         result = executor.execute_quality_job(job)
     if not captured:
         raise ValueError("V19未形成完整回放报告")
@@ -121,7 +121,7 @@ def quality_replay(job, dataset):
 
 
 def metrics(dataset, result, engine, quality):
-    from app.core.matching_common import city_allowed, role_plan, stage_targets
+    from app.content_planning.core.matching_common import city_allowed, role_plan, stage_targets
     accounts = {a["account_id"]: a for a in dataset["accounts"]}
     topics = {t["topic_id"]: t for t in dataset["topics"]}
     history = {(r["account_id"], r["topic_id"]) for r in dataset["history"]}
@@ -184,7 +184,7 @@ def evaluate(dataset, candidate_policy=None, engine_filter=None):
     revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True)
     sources = ["matching_quality_executor.py", "matching_quality.py",
                "matching_portfolio.py", "matching_allocation.py", "account_mapping.py", "core/matching_common.py"]
-    source_hashes = {name: sha256((ROOT / "python-backend/app" / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest() for name in sources}
+    source_hashes = {name: sha256((ROOT / "python-backend/app/content_planning" / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest() for name in sources}
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True)
     return dict(schema_version=1, dataset_id=dataset["dataset_id"], dataset_hash=digest(dataset),
                 vector_space=dataset["vector_space"], mode="synthetic_replay", real_model_calls=0,

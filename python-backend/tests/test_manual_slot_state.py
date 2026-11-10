@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from app.integration import queue_manual_slot
+from app.content_planning.compatibility import queue_manual_slot
 
 
 class ManualSlotStateTests(unittest.TestCase):
@@ -15,7 +15,7 @@ class ManualSlotStateTests(unittest.TestCase):
         self.assertEqual(len(inserts), 1)
         self.assertEqual(inserts[0].args[1][:3], (17, 'SLOT-17', 'TOPIC-1'))
 
-    @patch('app.integration.queue_event')
+    @patch('app.content_planning.compatibility.queue_event')
     def test_demo_has_local_state_without_external_event(self, event):
         cursor = Mock()
         self.assertFalse(self.create(cursor, 'DEMO-MAN-1'))
@@ -23,7 +23,7 @@ class ManualSlotStateTests(unittest.TestCase):
         cursor.fetchone.assert_not_called()
         event.assert_not_called()
 
-    @patch('app.integration.queue_event')
+    @patch('app.content_planning.compatibility.queue_event')
     def test_unsynced_source_has_local_state_without_external_event(self, event):
         cursor = Mock()
         cursor.fetchone.return_value = None
@@ -31,7 +31,7 @@ class ManualSlotStateTests(unittest.TestCase):
         self.assert_state_created(cursor)
         event.assert_not_called()
 
-    @patch('app.integration.queue_event')
+    @patch('app.content_planning.compatibility.queue_event')
     def test_shared_database_has_local_state_without_delivery_event(self, event):
         cursor = Mock()
         cursor.fetchone.return_value = {'id': 1}

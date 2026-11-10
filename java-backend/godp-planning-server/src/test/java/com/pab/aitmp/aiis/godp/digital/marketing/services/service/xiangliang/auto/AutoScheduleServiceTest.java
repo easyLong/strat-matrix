@@ -37,6 +37,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 class AutoScheduleServiceTest {
   AutoScheduleMapper mapper;
   ManualMapper resultMapper;
+  com.pab.aitmp.aiis.godp.digital.marketing.services.mapper.xiangliang.PlanningQueryMapper queryMapper;
   ManualRepository results;
   BusinessPlanningConfigService config;
   BusinessPlanningConfig values;
@@ -59,10 +60,12 @@ class AutoScheduleServiceTest {
     factory.setMapperLocations(
         new ClassPathResource("mapper/xiangliang/BusinessPlanningConfigMapper.xml"),
         new ClassPathResource("mapper/xiangliang/AutoScheduleMapper.xml"),
-        new ClassPathResource("mapper/xiangliang/ManualMapper.xml"));
+        new ClassPathResource("mapper/xiangliang/ManualMapper.xml"),
+        new ClassPathResource("mapper/xiangliang/PlanningQueryMapper.xml"));
     SqlSessionTemplate sql = new SqlSessionTemplate(factory.getObject());
     tx = new DataSourceTransactionManager(ds);
     resultMapper = sql.getMapper(ManualMapper.class);
+    queryMapper = sql.getMapper(com.pab.aitmp.aiis.godp.digital.marketing.services.mapper.xiangliang.PlanningQueryMapper.class);
     results = new ManualRepository(resultMapper, tx);
     mapper = sql.getMapper(AutoScheduleMapper.class);
     commit = new AutoResultCommitService(mapper, results);
@@ -380,10 +383,11 @@ class AutoScheduleServiceTest {
     org.springframework.jdbc.core.JdbcTemplate jdbc = new org.springframework.jdbc.core.JdbcTemplate(tx.getDataSource());
     jdbc.execute("CREATE ALIAS JSON_EXTRACT FOR 'com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.query.ReadDatabaseFixture.extract'");
     jdbc.execute("CREATE ALIAS JSON_UNQUOTE FOR 'com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.query.ReadDatabaseFixture.unquote'");
-    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
-        new ClassPathResource("db/planning-query-views.sql")).execute(tx.getDataSource());
-    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_item_read", Integer.class));
-    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_batch_read", Integer.class));
+    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.views WHERE table_schema='public'", Integer.class));
+    com.pab.aitmp.aiis.godp.digital.marketing.entity.xiangliang.command.PlanningQueryCriteria visible =
+        SqlRows.criteria(map("limit", 1000));
+    assertEquals(0, queryMapper.records(visible).size());
+    assertEquals(0, queryMapper.periodCount(visible));
     long hiddenId = jdbc.queryForObject("SELECT MIN(id) FROM godp_planning_item", Long.class);
     assertNull(results.itemById(hiddenId));
     Map<String, Object> drift = read(text(proposal, "proposal_json"));
@@ -408,11 +412,11 @@ class AutoScheduleServiceTest {
     // Publication and task receipt are atomic, including the final page's rows.
     assertEquals(500, results.stagedItemCount(id));
     assertNull(results.batchById(id));
-    assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_item_read", Integer.class));
+    assertEquals(0, queryMapper.records(visible).size());
     AutoResultCommitService resumed = new AutoResultCommitService(mapper, results);
     assertEquals("待确认", resumed.commit(id, proposal, due.plusSeconds(120)).get("status"));
     assertEquals(603, results.itemsByBatch(id).size());
-    assertEquals(603, jdbc.queryForObject("SELECT COUNT(*) FROM godp_planning_item_read", Integer.class));
+    assertEquals(603, queryMapper.records(visible).size());
     assertTrue(results.itemsByBatch(id).stream().allMatch(row -> due.toString().equals(row.get("batch_created_at"))));
     resumed.commit(id, proposal, due.plusSeconds(180));
     assertEquals(603, results.stagedItemCount(id));

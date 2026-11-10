@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from app.main import list_batches
-from app.planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, planning_status_label, production_status
+from app.content_planning.planning_progress import COMPLETED_ACCOUNT_COUNT_SQL, planning_status_label, production_status
 
 
 class PlanningProgressTests(unittest.TestCase):
@@ -81,7 +81,7 @@ class PlanningProgressTests(unittest.TestCase):
         def database():
             yield Database()
 
-        with patch("app.services.results.connection", database):
+        with patch("app.content_planning.services.results.connection", database):
             batch = list_batches()[0]
         self.assertEqual(batch["planning_status"], "已完成")
         self.assertEqual(batch["failed_count"], 0)

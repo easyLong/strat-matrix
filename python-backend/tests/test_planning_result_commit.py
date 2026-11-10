@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from app import planning_result_commit as service
-from app.hotspot_scheduler import ai_hotspot_fallback
-from app.models import StrategyConfig
-from app.planning_result_commit import ResultCommitError, build_final_plan
+from app.content_planning import planning_result_commit as service
+from app.content_planning.hotspot_scheduler import ai_hotspot_fallback
+from app.content_planning.models import StrategyConfig
+from app.content_planning.planning_result_commit import ResultCommitError, build_final_plan
 
 
 def account(account_id="A", marketing=True):

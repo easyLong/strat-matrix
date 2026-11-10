@@ -128,10 +128,10 @@ def main(argv=None):
     if not args.execute:
         parser.error('实际调用模型和写入测试数据须显式使用 --execute')
     sys.path.insert(0, str(ROOT/'python-backend'))
-    from app.deployment_environment import current
-    from app.db import connection
-    from app.java_development import java_database_settings, properties_text
-    from app.system_config import get_setting
+    from app.content_planning.deployment_environment import current
+    from app.content_planning.db import connection
+    from app.content_planning.java_development import java_database_settings, properties_text
+    from app.content_planning.system_config import get_setting
     if current()['PLANNING_ENV'] != 'outside':
         raise ValueError('Full chain acceptance is outside-only')
     gateway=(get_setting('JAVA_GATEWAY_URL','') or 'http://127.0.0.1:6931').rstrip('/')
@@ -177,8 +177,8 @@ def main(argv=None):
     from .benchmark import case_fingerprint
     fingerprint=case_fingerprint(fixture)
     (output/'fixture.json').write_text(json.dumps(fixture,ensure_ascii=False,indent=2),encoding='utf-8')
-    from app.bank_bridge.java_http import JavaHTTPClient
-    from app.bank_bridge.contracts import AccountQuery, Page, Account
+    from app.content_planning.bank_bridge.java_http import JavaHTTPClient
+    from app.content_planning.bank_bridge.contracts import AccountQuery, Page, Account
     from urllib.parse import urlsplit
     source_client = JavaHTTPClient.from_settings()
     address = urlsplit(source_client.base_url)
@@ -194,8 +194,8 @@ def main(argv=None):
     if args.scenario == 'mixed' and not args.resume:
         # Select test dates that exercise all branches; never change the policy, frozen roles or thresholds.
         import random
-        from app.planning_result_commit import _hotspot_seed
-        from app.services.configuration import get_config
+        from app.content_planning.planning_result_commit import _hotspot_seed
+        from app.content_planning.services.configuration import get_config
         config=get_config()
         while random.Random(_hotspot_seed(cycle.isoformat(),config.version)).sample(range(3),1)[0] == 0 or cycle in occupied:
             cycle += timedelta(days=7)

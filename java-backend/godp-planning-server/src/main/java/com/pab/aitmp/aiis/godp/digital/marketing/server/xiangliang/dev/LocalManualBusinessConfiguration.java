@@ -63,13 +63,6 @@ public class LocalManualBusinessConfiguration {
       @Qualifier("xiangliangManualBusinessDataSource") DataSource ds, Environment env) throws Exception {
     if (env.getProperty("planning.manual.initialize-schema", Boolean.class, true)) {
       LocalManualBusinessSchema.initialize(ds);
-      if ("business_only".equals(env.getProperty("planning.history.mode"))) {
-        org.springframework.jdbc.datasource.init.ResourceDatabasePopulator views =
-            new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
-                new ClassPathResource("db/planning-query-views.sql"));
-        views.setSqlScriptEncoding("UTF-8");
-        views.execute(ds);
-      }
     }
     SqlSessionFactoryBean factory = new SqlSessionFactoryBean();
     factory.setDataSource(ds);
@@ -135,7 +128,8 @@ public class LocalManualBusinessConfiguration {
       @Qualifier("xiangliangManualBusinessDataSource") DataSource ds) throws Exception {
     SqlSessionFactoryBean f = new SqlSessionFactoryBean();
     f.setDataSource(ds);
-    f.setMapperLocations(new ClassPathResource("mapper/xiangliang/SlotCompletionMapper.xml"));
+    f.setMapperLocations(new ClassPathResource("mapper/xiangliang/SlotCompletionMapper.xml"),
+        new ClassPathResource("mapper/xiangliang/PlanningQueryMapper.xml"));
     return new SqlSessionTemplate(f.getObject()).getMapper(SlotCompletionMapper.class);
   }
 

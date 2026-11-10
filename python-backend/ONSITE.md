@@ -1,5 +1,7 @@
 # Python驻场接入与预检
 
+2026-11-10：同进程 FastAPI 接入请先阅读 [content_planning 接入说明](INTEGRATION.md) 与 [本轮验收](VALIDATION.md)。运行目录为 `app/content_planning/`，SQL 为 `database/content_planning/`。下文的 25 表检查只证明算法自有结构就绪，旧准备/提交路径的额外业务表依赖须按 [数据库边界](database/content_planning/README.md) 核对。
+
 2026-11-04确认行内Python为**3.10.11**，以此为本项目适配目标。目标服务器操作系统、CPU架构和离线包来源仍需现场确认；Windows测试环境不能代替目标Linux离线安装验证。
 
 2026-11-05已统一六公共字段。存量库升级、备份、断点恢复及只读验收见[表结构发布说明](../docs/表结构公共字段规范与升级_2026-11-05.md)；现场可用`--owner algorithm`独立发布算法库，不要求Python运行服务获得Java业务库权限。DDM建模与实际DDL发布由现场流程完成。
@@ -13,11 +15,11 @@
 | 部分 | 可直接复用 | 驻场处理 |
 | --- | --- | --- |
 | 算法接口与执行 | FastAPI、持久化任务、租约、冻结输入、V19、提案确认 | 并入宿主ASGI工程，绑定日志/鉴权及内部地址；宿主统一触发 |
-| 行内资料读取 | `app/bank_bridge/java_http.py`的7项查询及固定实体 | Java实现真实查询，填写地址和令牌；有统一包装时集中适配`site_java_private.py`，不改算法 |
+| 行内资料读取 | `app/content_planning/bank_bridge/java_http.py`的7项查询及固定实体 | Java实现真实查询，填写地址和令牌；有统一包装时集中适配`site_java_private.py`，不改算法 |
 | 模型出口 | 文本、标签、画像、向量及精判共用模型地址和凭据 | 填模型网关前缀与两个模型名称，准备网络及系统信任证书；核对协议 |
-| 算法库发布 | `algorithm_schema.sql`的25张表、中文注释和独立初始化命令 | DBA创建独立库及授权；首次安装或按预检结果审核增量变更 |
-| 接入预检 | `python -m app.onsite_check` | 查看实际缺项，补真实资料样本与网络联调证据 |
-| 交接包 | `python -m app.bank_bridge.package`包含算法DDL、预检、Java Mapper及装配模板 | 按行内实际Python/OS准备离线wheels及宿主依赖，不搬Windows环境目录到Linux |
+| 算法库发布 | `database/content_planning/algorithm_schema.sql`的25张表、中文注释和独立初始化命令 | DBA创建独立库及授权；首次安装或按预检结果审核增量变更 |
+| 接入预检 | `python -m app.content_planning.onsite_check` | 查看实际缺项，补真实资料样本与网络联调证据 |
+| 交接包 | `python -m app.content_planning.bank_bridge.package`包含算法DDL、预检、Java Mapper及装配模板 | 按行内实际Python/OS准备离线wheels及宿主依赖，不搬Windows环境目录到Linux |
 
 当前模型适配仍采用方舟协议：`/chat/completions`和文本输入的`/embeddings/multimodal`，Bearer鉴权。更换兼容网关只改配置；若行内模型平台的请求/响应或鉴权协议不同，应集中修改`app/doubao_labeling.py`适配器及测试，不改打标、画像和V19业务调用。不能把“可改地址”等同于已支持任意模型协议。
 
@@ -40,11 +42,11 @@ HTTP入口名额与实际模型名额分开。后台打标、T6向量、账号/�
 新环境随算法库初始化补齐上述配置。已有环境只新增这五项、不覆盖已有值、不改模型密钥或其他配置：
 
 ```bash
-python -m app.model_capacity --init-config
-python -m app.system_config list --group model_limits
+python -m app.content_planning.model_capacity --init-config
+python -m app.content_planning.system_config list --group model_limits
 ```
 
-调整用既有`app.system_config set`，数值并发范围1—64、任务阈值1—1000，不能用0关闭保护；旧库未补键前按上表保守默认值运行，已停用或非法配置拒绝执行。配置缓存约5秒生效，改变上限保留原运行计数，不重建信号量。缩小上限不会中断在途模型调用，已有调用结束前不再超额进入。
+调整用既有`app.content_planning.system_config set`，数值并发范围1—64、任务阈值1—1000，不能用0关闭保护；旧库未补键前按上表保守默认值运行，已停用或非法配置拒绝执行。配置缓存约5秒生效，改变上限保留原运行计数，不重建信号量。缩小上限不会中断在途模型调用，已有调用结束前不再超额进入。
 
 单进程保留process即可。多Uvicorn worker、多实例或独立模型Worker共享同一模型配额时，设置`AI_LIMIT_SCOPE=mysql`，所有实例须连接同一算法MySQL并使用一致配置；入口请求额度仍按进程计算。mysql模式使用独立数据库连接持有模型槽位命名锁至网络调用结束，进程退出释放；需要结合连接池预算和行内模型网关配额设置，不能简单把案例中的8复制到每台实例。现场用有限模拟请求核对MySQL命名锁权限和实际网关额度，不以测试桩代替集群验收。
 
@@ -57,25 +59,25 @@ python -m app.system_config list --group model_limits
 下述命令在`python-backend/`运行。仅MySQL连接放`.env`或由宿主注入；其它配置保存在算法库`godp_system_config`。
 
 ```bash
-python -m app.algorithm_schema check
-python -m app.bank_bridge.selfcheck
+python -m app.content_planning.algorithm_schema check
+python -m app.content_planning.bank_bridge.selfcheck
 ```
 
 这两个命令不连接真实模型、不写数据库。生成文件从四份现有DDL中按固定算法表清单抽取，测试防止混入Java业务表；需要重新生成时：
 
 ```bash
-python -m app.algorithm_schema export --output algorithm_schema.sql
+python -m app.content_planning.algorithm_schema export --output algorithm_schema.sql
 ```
 
 新算法库的显式安装入口：
 
 ```bash
-python -m app.init_algorithm_db --apply
+python -m app.content_planning.init_algorithm_db --apply
 ```
 
 仅创建25张算法表并补充缺失的系统配置键，保留已有配置值及版本。不创建Java批次/明细/人工任务表，不复制行内主数据，不导入演示数据，不初始化或批准匹配策略，不自动生成标签词表。词表、生命周期/经营规则及策略需按经确认版本单独发布。
 
-DDL在MySQL中会自动提交；失败可能已有部分表生效，排除权限等原因后可以重跑。`CREATE IF NOT EXISTS`不升级旧表字段，已有结构不兼容时停止配置初始化并报告缺项，需由DBA审核增量迁移。不要以再次执行旧`app.init_db`、`app.init_planner_db`或`app.init_shared_workflow_db`补齐业务表的方式处理。
+DDL在MySQL中会自动提交；失败可能已有部分表生效，排除权限等原因后可以重跑。`CREATE IF NOT EXISTS`不升级旧表字段，已有结构不兼容时停止配置初始化并报告缺项，需由DBA审核增量迁移。不要以再次执行旧`app.content_planning.init_db`、`app.content_planning.init_planner_db`或`app.content_planning.init_shared_workflow_db`补齐业务表的方式处理。
 
 已有环境只新增模型地址配置时，使用`migrations/20261103_add_model_endpoint.sql`，它不会覆盖已有值。不要为添加这个键运行会清理其它配置的历史迁移命令。
 
@@ -100,7 +102,7 @@ DDL在MySQL中会自动提交；失败可能已有部分表生效，排除权限
 ## 3. 统一只读预检
 
 ```bash
-python -m app.onsite_check --target inside --output /受控目录/python-preflight.json
+python -m app.content_planning.onsite_check --target inside --output /受控目录/python-preflight.json
 ```
 
 只按inside校验，不保存切换、不写库、不新建任务、不触发Java或模型。检查Java配置、内部令牌、模型配置、25张算法表及字段/中文注释、启用标签词表、算法配置、V19策略及向量模型一致性。
@@ -116,7 +118,7 @@ python -m app.onsite_check --target inside --output /受控目录/python-preflig
 只读检查一页Java账号和选题，显式增加`--java`：
 
 ```bash
-python -m app.onsite_check --target inside --java
+python -m app.content_planning.onsite_check --target inside --java
 ```
 
 样本数量为0不能算字段验收通过。此检查仅覆盖账号及选题样本，完整7项查询、账号/选题过滤、营销审核及生产状态须继续使用仓库的`testing.bank_source`资料适配工具，并由现场准备真实脱敏样本。
@@ -124,7 +126,7 @@ python -m app.onsite_check --target inside --java
 需要实际验证模型时，显式增加以下参数；会产生最多两次模型调用，只发送固定测试文本，不读取账号/选题、不保存标签/向量、不创建策划：
 
 ```bash
-python -m app.onsite_check --target inside --probe-models
+python -m app.content_planning.onsite_check --target inside --probe-models
 ```
 
 文本输出、向量返回及已批准策略的模型标识/维度需要一致。某一调用失败会停止样本测试并报错，不保存上游原始响应或密钥。模型连通不等于真实业务数据的脱敏口径已获批准。
@@ -132,7 +134,7 @@ python -m app.onsite_check --target inside --probe-models
 补齐并确认配置后再用既有环境选择命令切换，重启宿主部署的Python服务：
 
 ```bash
-python -m app.deployment_environment select inside
+python -m app.content_planning.deployment_environment select inside
 ```
 
 ## 4. 验收与仍需现场完成的部分

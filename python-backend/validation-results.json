@@ -1,0 +1,129 @@
+{
+  "module": "content_planning",
+  "version": "0.3.0",
+  "date": "2026-11-10",
+  "base_commit": "00c94fe4dd21a62b95e62a541e5dd1954cbf5ea2",
+  "uncommitted_worktree": true,
+  "runtime": {
+    "python": "3.10.11",
+    "fastapi": "0.136.1",
+    "starlette": "1.3.1",
+    "httpx": "0.28.1"
+  },
+  "database_writes": 0,
+  "real_model_calls": 0,
+  "real_model_quality_evaluated": false,
+  "business_end_to_end_revalidated": false,
+  "security_scan_repeated": false,
+  "production_approved": false,
+  "python": {
+    "tests": 563,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit_sha256": "3c6107f36950509db9b46a088c90925c5239d82ed0ba7f9afb2a64cdca8c9991",
+    "subtests_passed": 149,
+    "junit_reported_tests_including_subtests": 712
+  },
+  "harness": {
+    "tests": 53,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit_sha256": "21ce37cf56b83b9ef26f55e940d930b0984e31cb42fa24ecca35cda96af4b2a5"
+  },
+  "java": {
+    "tests": 155,
+    "passed": 150,
+    "skipped": 5,
+    "failures": 0,
+    "errors": 0,
+    "isolated_build": true,
+    "log_sha256": "9470e2976e223a5f7c634da6ee7f1f7634030d385f7bc4a765c09287a7951e4f"
+  },
+  "v19_replay": [
+    {
+      "dataset": "small",
+      "changed_paths": [
+        "/engines/v19/duration_seconds"
+      ]
+    },
+    {
+      "dataset": "scale",
+      "changed_paths": [
+        "/engines/v19/duration_seconds"
+      ]
+    }
+  ],
+  "standalone_contract": {
+    "old_operation_count": 111,
+    "new_operation_count": 111,
+    "removed": [],
+    "added": []
+  },
+  "network_startup": {
+    "status": "passed",
+    "real_model_calls": 0,
+    "database_writes": 0,
+    "database_access": "standalone readiness read only",
+    "checks": [
+      {
+        "mode": "standalone",
+        "status": "passed",
+        "checks": [
+          {
+            "path": "/api/health",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "mode": "minimal-host-disabled",
+        "status": "passed",
+        "checks": [
+          {
+            "path": "/health",
+            "status": 200
+          },
+          {
+            "path": "/planning/api/health",
+            "status": 503
+          },
+          {
+            "path": "/openapi.json",
+            "status": 200
+          }
+        ]
+      },
+      {
+        "mode": "minimal-host-enabled",
+        "status": "passed",
+        "checks": [
+          {
+            "path": "/health",
+            "status": 200
+          },
+          {
+            "path": "/planning/api/health",
+            "status": 200
+          },
+          {
+            "path": "/planning/api/internal/executor",
+            "status": 401
+          },
+          {
+            "path": "/openapi.json",
+            "status": 200
+          }
+        ]
+      }
+    ]
+  },
+  "limitations": [
+    "Only algorithm-owned schema readiness is checked at startup.",
+    "ai_preparation still queries godp_planning_batch; compatibility business dependencies remain.",
+    "Current running service was not interrupted; drain pending signals before replacement.",
+    "Target host dependencies, real model gateway and bank deployment remain to be accepted."
+  ],
+  "module_delivery_tests": 32
+}

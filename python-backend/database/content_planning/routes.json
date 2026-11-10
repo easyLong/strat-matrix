@@ -1,0 +1,468 @@
+{
+  "module_version": "0.3.0",
+  "external_prefix": "/planning",
+  "routes": [
+    {
+      "path": "/api/health",
+      "methods": [
+        "GET"
+      ],
+      "name": "health"
+    },
+    {
+      "path": "/api/integrations/bank/op03/topic-labels/query",
+      "methods": [
+        "POST"
+      ],
+      "name": "query_labels"
+    },
+    {
+      "path": "/api/integrations/bank/op04/topic-labels/test",
+      "methods": [
+        "POST"
+      ],
+      "name": "query_test_labels"
+    },
+    {
+      "path": "/api/internal/account-profiles/{batch_id}/{account_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "account_profile_status"
+    },
+    {
+      "path": "/api/internal/account-vector-jobs",
+      "methods": [
+        "GET"
+      ],
+      "name": "account_vector_jobs"
+    },
+    {
+      "path": "/api/internal/account-vectors/{batch_id}/{account_id}",
+      "methods": [
+        "PUT"
+      ],
+      "name": "save_account_vector"
+    },
+    {
+      "path": "/api/internal/ai-account-candidates",
+      "methods": [
+        "GET"
+      ],
+      "name": "ai_account_candidates"
+    },
+    {
+      "path": "/api/internal/ai-preparations",
+      "methods": [
+        "POST"
+      ],
+      "name": "create_ai_preparation"
+    },
+    {
+      "path": "/api/internal/ai-preparations",
+      "methods": [
+        "GET"
+      ],
+      "name": "list_ai_preparations"
+    },
+    {
+      "path": "/api/internal/ai-preparations/{preparation_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "ai_preparation_status"
+    },
+    {
+      "path": "/api/internal/ai-preparations/{preparation_id}/advance",
+      "methods": [
+        "POST"
+      ],
+      "name": "advance_ai_preparation"
+    },
+    {
+      "path": "/api/internal/ai-preparations/{preparation_id}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel_ai_preparation"
+    },
+    {
+      "path": "/api/internal/ai-preparations/{preparation_id}/inputs",
+      "methods": [
+        "GET"
+      ],
+      "name": "ai_preparation_inputs"
+    },
+    {
+      "path": "/api/internal/ai-topic-candidates",
+      "methods": [
+        "GET"
+      ],
+      "name": "ai_topic_candidates"
+    },
+    {
+      "path": "/api/internal/algorithm-config/commands",
+      "methods": [
+        "POST"
+      ],
+      "name": "apply_config_command"
+    },
+    {
+      "path": "/api/internal/algorithm-config/query",
+      "methods": [
+        "POST"
+      ],
+      "name": "read_algorithm_config"
+    },
+    {
+      "path": "/api/internal/auto-planning/start",
+      "methods": [
+        "POST"
+      ],
+      "name": "start_auto_algorithm"
+    },
+    {
+      "path": "/api/internal/catalog-projection",
+      "methods": [
+        "POST"
+      ],
+      "name": "project"
+    },
+    {
+      "path": "/api/internal/embedding-model",
+      "methods": [
+        "POST"
+      ],
+      "name": "generate_embedding"
+    },
+    {
+      "path": "/api/internal/executor",
+      "methods": [
+        "GET"
+      ],
+      "name": "executor_status"
+    },
+    {
+      "path": "/api/internal/manual-computations",
+      "methods": [
+        "POST"
+      ],
+      "name": "submit"
+    },
+    {
+      "path": "/api/internal/manual-computations/{request_id}/query",
+      "methods": [
+        "POST"
+      ],
+      "name": "status"
+    },
+    {
+      "path": "/api/internal/manual-source",
+      "methods": [
+        "POST"
+      ],
+      "name": "snapshot"
+    },
+    {
+      "path": "/api/internal/manual-source/availability",
+      "methods": [
+        "GET"
+      ],
+      "name": "availability"
+    },
+    {
+      "path": "/api/internal/manual-source/latest-operations",
+      "methods": [
+        "POST"
+      ],
+      "name": "latest_operations"
+    },
+    {
+      "path": "/api/internal/manual-source/result-watermark",
+      "methods": [
+        "GET"
+      ],
+      "name": "result_watermark"
+    },
+    {
+      "path": "/api/internal/matching-policies",
+      "methods": [
+        "POST"
+      ],
+      "name": "create_matching_policy"
+    },
+    {
+      "path": "/api/internal/matching-policies",
+      "methods": [
+        "GET"
+      ],
+      "name": "list_matching_policies"
+    },
+    {
+      "path": "/api/internal/matching-policies/{policy_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "matching_policy_detail"
+    },
+    {
+      "path": "/api/internal/matching-policies/{policy_id}/approve",
+      "methods": [
+        "POST"
+      ],
+      "name": "approve_matching_policy"
+    },
+    {
+      "path": "/api/internal/matching-policies/{policy_id}/disable",
+      "methods": [
+        "POST"
+      ],
+      "name": "disable_matching_policy"
+    },
+    {
+      "path": "/api/internal/matching-readiness",
+      "methods": [
+        "GET"
+      ],
+      "name": "matching_readiness"
+    },
+    {
+      "path": "/api/internal/matching-tasks",
+      "methods": [
+        "POST"
+      ],
+      "name": "create_matching_task"
+    },
+    {
+      "path": "/api/internal/matching-tasks",
+      "methods": [
+        "GET"
+      ],
+      "name": "list_matching_tasks"
+    },
+    {
+      "path": "/api/internal/matching-tasks/claim",
+      "methods": [
+        "POST"
+      ],
+      "name": "claim_matching_task"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "matching_task_detail"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "matching_task_cancel"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/evaluation",
+      "methods": [
+        "PUT"
+      ],
+      "name": "matching_task_evaluation"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/failure",
+      "methods": [
+        "PUT"
+      ],
+      "name": "matching_task_failure"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/heartbeat",
+      "methods": [
+        "POST"
+      ],
+      "name": "matching_task_heartbeat"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/inputs",
+      "methods": [
+        "GET"
+      ],
+      "name": "matching_task_inputs"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/quality",
+      "methods": [
+        "GET"
+      ],
+      "name": "matching_quality_detail"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/result",
+      "methods": [
+        "GET"
+      ],
+      "name": "matching_task_result"
+    },
+    {
+      "path": "/api/internal/matching-tasks/{task_id}/retry",
+      "methods": [
+        "POST"
+      ],
+      "name": "matching_task_retry"
+    },
+    {
+      "path": "/api/internal/planning-pipelines",
+      "methods": [
+        "POST"
+      ],
+      "name": "create_planning_pipeline"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/query",
+      "methods": [
+        "POST"
+      ],
+      "name": "query_planning_pipelines"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/{pipeline_id}/acknowledgement",
+      "methods": [
+        "POST"
+      ],
+      "name": "planning_proposal_acknowledgement"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/{pipeline_id}/advance",
+      "methods": [
+        "POST"
+      ],
+      "name": "advance_planning_pipeline"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/{pipeline_id}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel_planning_pipeline"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/{pipeline_id}/proposal",
+      "methods": [
+        "POST"
+      ],
+      "name": "planning_pipeline_proposal"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/{pipeline_id}/query",
+      "methods": [
+        "POST"
+      ],
+      "name": "planning_pipeline_detail"
+    },
+    {
+      "path": "/api/internal/planning-pipelines/{pipeline_id}/retry",
+      "methods": [
+        "POST"
+      ],
+      "name": "retry_planning_pipeline"
+    },
+    {
+      "path": "/api/internal/preparation-account-vector-jobs",
+      "methods": [
+        "GET"
+      ],
+      "name": "preparation_account_jobs"
+    },
+    {
+      "path": "/api/internal/preparation-account-vectors/{preparation_id}/{account_id}",
+      "methods": [
+        "PUT"
+      ],
+      "name": "save_preparation_account_vector"
+    },
+    {
+      "path": "/api/internal/topic-label-jobs",
+      "methods": [
+        "GET"
+      ],
+      "name": "list_topic_label_jobs"
+    },
+    {
+      "path": "/api/internal/topic-label-jobs/{topic_id}/claim",
+      "methods": [
+        "POST"
+      ],
+      "name": "claim_topic_label_job"
+    },
+    {
+      "path": "/api/internal/topic-label-jobs/{topic_id}/defer",
+      "methods": [
+        "POST"
+      ],
+      "name": "defer_topic_label"
+    },
+    {
+      "path": "/api/internal/topic-label-model",
+      "methods": [
+        "POST"
+      ],
+      "name": "generate_topic_labels"
+    },
+    {
+      "path": "/api/internal/topic-profiles/{topic_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "topic_profile_status"
+    },
+    {
+      "path": "/api/internal/topic-tags/{topic_id}",
+      "methods": [
+        "PUT"
+      ],
+      "name": "put_topic_tags"
+    },
+    {
+      "path": "/api/internal/topic-tags/{topic_id}/history",
+      "methods": [
+        "GET"
+      ],
+      "name": "topic_tag_history"
+    },
+    {
+      "path": "/api/internal/topic-vector-jobs",
+      "methods": [
+        "GET"
+      ],
+      "name": "topic_vector_jobs"
+    },
+    {
+      "path": "/api/internal/topic-vectors/{topic_id}",
+      "methods": [
+        "PUT"
+      ],
+      "name": "save_topic_vector"
+    },
+    {
+      "path": "/api/internal/wakeup",
+      "methods": [
+        "POST"
+      ],
+      "name": "wakeup"
+    },
+    {
+      "path": "/api/tag-taxonomy/query",
+      "methods": [
+        "POST"
+      ],
+      "name": "get_tag_taxonomy"
+    },
+    {
+      "path": "/api/tag-taxonomy/save",
+      "methods": [
+        "POST"
+      ],
+      "name": "put_tag_taxonomy"
+    }
+  ]
+}

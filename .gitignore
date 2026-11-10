@@ -3,6 +3,7 @@ dist/
 .venv/
 __pycache__/
 *.py[cod]
+~$*
 .pytest_cache/
 .env
 docs/.env
@@ -18,4 +19,9 @@ python-backend/app/bank_bridge/site_sql_private/
 python-backend/app/bank_bridge/site_java_private.py
 python-backend/app/bank_bridge/site_java_private/
 python-backend/app/bank_bridge/private-selfcheck*.json
+python-backend/app/content_planning/bank_bridge/site_sql_private.py
+python-backend/app/content_planning/bank_bridge/site_sql_private/
+python-backend/app/content_planning/bank_bridge/site_java_private.py
+python-backend/app/content_planning/bank_bridge/site_java_private/
+python-backend/app/content_planning/bank_bridge/private-selfcheck*.json
 

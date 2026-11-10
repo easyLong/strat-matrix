@@ -6,12 +6,12 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app import matching_executor_worker as worker, matching_policy as policies
-from app.account_profile import canonical_json
-from app.consolidate_v19 import production_document
-from app.matching_contracts import MatchingPolicyDocument, MatchingQualityOptions, PolicyCreate
-from app.matching_quality import IMPLEMENTATION_KEY
-from app.system_config import override_config
+from app.content_planning import matching_executor_worker as worker, matching_policy as policies
+from app.content_planning.account_profile import canonical_json
+from app.content_planning.consolidate_v19 import production_document
+from app.content_planning.matching_contracts import MatchingPolicyDocument, MatchingQualityOptions, PolicyCreate
+from app.content_planning.matching_quality import IMPLEMENTATION_KEY
+from app.content_planning.system_config import override_config
 import test_matching_quality as quality_fixtures
 
 

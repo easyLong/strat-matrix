@@ -3,8 +3,8 @@ from contextlib import ExitStack
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app import planning_input_runner as runner
-from app.services.errors import ApplicationError
+from app.content_planning import planning_input_runner as runner
+from app.content_planning.services.errors import ApplicationError
 
 
 class PreparationRunnerTests(unittest.TestCase):
@@ -159,7 +159,7 @@ class PreparationRunnerTests(unittest.TestCase):
 
     def test_expired_budget_stops_before_model_request(self):
         self.labels(1)
-        with patch('app.preparation_batches.monotonic', side_effect=[0, 31]):
+        with patch('app.content_planning.preparation_batches.monotonic', side_effect=[0, 31]):
             report = runner.prepare_inputs()
         self.assertTrue(report['budget_exhausted'])
         self.mocks['claim_topic_label_job'].assert_not_called()

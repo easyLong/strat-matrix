@@ -3,8 +3,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock,patch
 
-from app import onsite_check as preflight
-from app import db
+from app.content_planning import onsite_check as preflight
+from app.content_planning import db
 
 
 def values():
@@ -53,8 +53,8 @@ def test_empty_java_samples_do_not_pass_contract_acceptance():
     source=MagicMock()
     source.accounts.return_value=SimpleNamespace(items=[])
     source.topics.return_value=SimpleNamespace(items=[])
-    with patch('app.bank_bridge.java_http.JavaHTTPSource',return_value=source),\
-         patch('app.bank_bridge.java_http.JavaHTTPClient.from_settings'):
+    with patch('app.content_planning.bank_bridge.java_http.JavaHTTPSource',return_value=source),\
+         patch('app.content_planning.bank_bridge.java_http.JavaHTTPClient.from_settings'):
         result=preflight.java_probe()
     assert result['status']=='not_ready'
     assert source.accounts.call_args.args[0].page_size==1
@@ -63,15 +63,15 @@ def test_empty_java_samples_do_not_pass_contract_acceptance():
 
 def test_model_probe_uses_synthetic_text_and_counts_failed_calls_without_saving():
     config=SimpleNamespace(chat_model='text',embedding_model='vector')
-    with patch('app.doubao_labeling.read_config',return_value=config),\
-         patch('app.matching_quality_model.chat',return_value={'ok':True}) as text,\
-         patch('app.doubao_labeling.embed_text',return_value={'vector':[1.,0.],'vector_model':'vector'}) as vector:
+    with patch('app.content_planning.doubao_labeling.read_config',return_value=config),\
+         patch('app.content_planning.matching_quality_model.chat',return_value={'ok':True}) as text,\
+         patch('app.content_planning.doubao_labeling.embed_text',return_value={'vector':[1.,0.],'vector_model':'vector'}) as vector:
         result=preflight.model_probe()
     assert result['status']=='passed' and result['attempted_calls']==2
     assert text.call_args.args[2]=={'probe':'synthetic-connectivity-only'}
     assert '技术连通性测试' in vector.call_args.args[0]
-    with patch('app.doubao_labeling.read_config',return_value=config),\
-         patch('app.matching_quality_model.chat',side_effect=ValueError('test-private-key')):
+    with patch('app.content_planning.doubao_labeling.read_config',return_value=config),\
+         patch('app.content_planning.matching_quality_model.chat',side_effect=ValueError('test-private-key')):
         result=preflight.model_probe()
     assert result['attempted_calls']==1 and 'test-private' not in json.dumps(result)
 
@@ -84,9 +84,9 @@ def test_algorithm_preflight_rejects_preview_wrong_vector_and_unapproved_policy(
         document.quality.evaluation_only=changes.get('evaluation_only',False)
         document.vector_space.vector_model=changes.get('model','vector')
         cursor=MagicMock();cursor.fetchone.side_effect=[{'config_json':'{}'},{'status':changes.get('status','approved')}]
-        with patch('app.services.account_mapping.load_taxonomy',return_value=(4,taxonomy)),\
-             patch('app.matching_policy.intact_document',return_value=document),\
-             patch('app.matching_policy.implementation_approval_errors',return_value=[]):
+        with patch('app.content_planning.services.account_mapping.load_taxonomy',return_value=(4,taxonomy)),\
+             patch('app.content_planning.matching_policy.intact_document',return_value=document),\
+             patch('app.content_planning.matching_policy.implementation_approval_errors',return_value=[]):
             checks=preflight.algorithm_checks(cursor,{**values(),'AUTO_PLANNING_POLICY_ID':'9'})
         assert next(c for c in checks if c['name']=='v19_policy')['status']=='not_ready'
 
@@ -98,9 +98,9 @@ def test_no_reviewed_rules_are_not_silently_promoted_or_treated_as_approved():
     for mode,expected in [('restricted_model','needs_confirmation'),('hold','not_ready')]:
         document.quality.unknown_persona=mode
         cursor=MagicMock();cursor.fetchone.side_effect=[{'config_json':'{}'},{'status':'approved'},{'n':0}]
-        with patch('app.services.account_mapping.load_taxonomy',return_value=(4,taxonomy)),\
-             patch('app.matching_policy.intact_document',return_value=document),\
-             patch('app.matching_policy.implementation_approval_errors',return_value=[]):
+        with patch('app.content_planning.services.account_mapping.load_taxonomy',return_value=(4,taxonomy)),\
+             patch('app.content_planning.matching_policy.intact_document',return_value=document),\
+             patch('app.content_planning.matching_policy.implementation_approval_errors',return_value=[]):
             checks=preflight.algorithm_checks(cursor,{**values(),'AUTO_PLANNING_POLICY_ID':'9'})
         assert next(c for c in checks if c['name']=='reviewed_mapping')['status']==expected
         assert all(call.args[0].startswith('SELECT') for call in cursor.execute.call_args_list)

@@ -12,14 +12,14 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app import ai_preparation as preparation
-from app import matching_execution_api as api
-from app import matching_policy as policies
-from app import matching_tasks as tasks
-from app.system_config import override_config
-from app.account_profile import canonical_json
-from app.init_db import column_definitions, table_descriptions
-from app.matching_contracts import (ALGORITHM_CODES, ClaimTask, LeaseHeartbeat, MatchingEvaluation,
+from app.content_planning import ai_preparation as preparation
+from app.content_planning import matching_execution_api as api
+from app.content_planning import matching_policy as policies
+from app.content_planning import matching_tasks as tasks
+from app.content_planning.system_config import override_config
+from app.content_planning.account_profile import canonical_json
+from app.content_planning.init_db import column_definitions, table_descriptions
+from app.content_planning.matching_contracts import (ALGORITHM_CODES, ClaimTask, LeaseHeartbeat, MatchingEvaluation,
                                    MatchingFailure, MatchingTaskCreate, PolicyConfirmation, PolicyCreate)
 from test_ai_preparation import Store, START
 from test_matching_readiness import CHECKED_AT
@@ -381,7 +381,7 @@ class MatchingExecutionTests(unittest.TestCase):
                 MatchingEvaluation.model_validate(invalid)
 
     def test_new_schema_has_chinese_comments_and_required_audit_fields(self):
-        schema = (Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8")
+        schema = (Path(__file__).resolve().parents[1] / "database/content_planning/schema.sql").read_text(encoding="utf-8")
         columns, descriptions = column_definitions(schema), table_descriptions(schema)
         for name in ("godp_matching_policy", "godp_matching_task", "godp_matching_attempt"):
             self.assertIn(name, descriptions)
@@ -391,7 +391,7 @@ class MatchingExecutionTests(unittest.TestCase):
 class MatchingExecutionAuthorizationTests(unittest.TestCase):
     def test_new_policy_and_execution_routes_are_protected_before_db_access(self):
         from app.main import app
-        from app import planning_pipeline, planning_pipeline_api, planning_pipeline_runner
+        from app.content_planning import planning_pipeline, planning_pipeline_api, planning_pipeline_runner
         async def request(method, path, body):
             messages = []
             async def receive():

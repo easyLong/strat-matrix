@@ -1,5 +1,6 @@
 """Process-local guards: unit tests may use loopback HTTP fixtures, never real MySQL/models."""
 import socket
+import sys
 from urllib.parse import urlsplit
 import urllib.request
 from unittest.mock import patch
@@ -10,13 +11,29 @@ import pytest
 def synthetic_system_settings(request):
     # Older tests mocked business SQL but still read live system settings. Supply isolated settings;
     # the dedicated config-store tests must exercise their own mocked provider and failure paths.
-    if request.path.name == "test_system_config.py":
+    if request.path.name in ("test_system_config.py", "test_content_planning_integration.py"):
         yield
         return
-    from app.system_config import override_config
+    from app.content_planning.system_config import override_config
     with override_config({"BANK_SOURCE_MODE": "local_fixture", "INTEGRATION_TOKEN": "regression-only-token",
                           "AUTO_SCHEDULE_OWNER": "python"}):
         yield
+
+
+@pytest.fixture(autouse=True)
+def isolated_standalone_application(request, monkeypatch):
+    """Old direct-entry HTTP tests also get a new factory instance for every test."""
+    main = sys.modules.get('app.main')
+    if main is None or 'app.main' not in request.path.read_text(encoding='utf-8'):
+        return
+    from app.content_planning.main import create_app
+    from app.standalone_config import load_config
+    from fastapi import FastAPI
+    fresh = create_app(load_config())
+    monkeypatch.setattr(main, 'app', fresh)
+    for name, value in list(vars(request.module).items()):
+        if isinstance(value, FastAPI):
+            monkeypatch.setattr(request.module, name, fresh)
 
 
 def pytest_configure(config):

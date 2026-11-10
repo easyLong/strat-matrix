@@ -19,12 +19,12 @@ def read(url, body=None, token=None):
 
 def verify(base='http://127.0.0.1:930'):
     sys.path.insert(0, str(ROOT/'python-backend'))
-    from app.bank_bridge.factory import get_source
-    from app.bank_bridge.bridge import collect
-    from app.bank_bridge.contracts import AccountQuery, TopicQuery
-    from app.bank_bridge.java_http import JavaHTTPClient
-    from app.system_config import get_setting
-    from app.deployment_environment import current
+    from app.content_planning.bank_bridge.factory import get_source
+    from app.content_planning.bank_bridge.bridge import collect
+    from app.content_planning.bank_bridge.contracts import AccountQuery, TopicQuery
+    from app.content_planning.bank_bridge.java_http import JavaHTTPClient
+    from app.content_planning.system_config import get_setting
+    from app.content_planning.deployment_environment import current
     if current()['PLANNING_ENV'] != 'outside':
         raise ValueError('Source smoke verification is outside-only')
     source = get_source(None)

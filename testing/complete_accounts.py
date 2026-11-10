@@ -14,8 +14,8 @@ def main():
     args=parser.parse_args()
     import sys
     sys.path.insert(0,str(ROOT/'python-backend'))
-    from app.bank_bridge.contracts import Account
-    from app.deployment_environment import current
+    from app.content_planning.bank_bridge.contracts import Account
+    from app.content_planning.deployment_environment import current
     if current()['PLANNING_ENV']!='outside':
         raise ValueError('Test facts may only be completed outside')
     path=ROOT/'run/bank-source-fixture.json'

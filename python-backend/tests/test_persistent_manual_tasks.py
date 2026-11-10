@@ -3,11 +3,11 @@ from contextlib import contextmanager
 from datetime import datetime,timedelta
 import unittest
 from unittest.mock import MagicMock,patch
-from app.services import manual_tasks as tasks
-from app.services.errors import ApplicationError
-from app.jobs.worker import execute
-from app.services.result_scope import ResultQuery,compile_scope
-from app.services.result_lists import account_matches
+from app.content_planning.services import manual_tasks as tasks
+from app.content_planning.services.errors import ApplicationError
+from app.content_planning.jobs.worker import execute
+from app.content_planning.services.result_scope import ResultQuery,compile_scope
+from app.content_planning.services.result_lists import account_matches
 
 class PersistentTaskTests(unittest.TestCase):
     def database(self,cursor):

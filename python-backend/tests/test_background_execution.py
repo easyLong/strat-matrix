@@ -6,10 +6,10 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
-from app.bootstrap import app
-from app.jobs.runtime import BackgroundExecutor, job_lock
-from app.system_config import override_config
-from app.api.manual_planning import submit_manual_preview
+from app.main import app
+from app.content_planning.jobs.runtime import BackgroundExecutor, job_lock
+from app.content_planning.system_config import override_config
+from app.content_planning.api.manual_planning import submit_manual_preview
 
 
 @contextmanager
@@ -110,7 +110,7 @@ class BackgroundExecutorTests(unittest.TestCase):
         database.__enter__.return_value = database
         database.cursor.return_value.__enter__.return_value = cursor
         cursor.fetchone.return_value = {'acquired': 1}
-        with patch('app.jobs.runtime.connection', return_value=database):
+        with patch('app.content_planning.jobs.runtime.connection', return_value=database):
             with self.assertRaises(RuntimeError):
                 with job_lock('manual') as acquired:
                     self.assertTrue(acquired)
@@ -125,7 +125,7 @@ class BackgroundApiTests(unittest.TestCase):
         executor = BackgroundExecutor(jobs={'manual': (2, handler)}, locker=unlocked)
         try:
             with override_config({'BANK_SOURCE_MODE': 'local_fixture', 'INTEGRATION_TOKEN': 'test-token'}), \
-                    patch('app.api.background_execution.BackgroundExecutor', return_value=executor), TestClient(app) as client:
+                    patch('app.content_planning.api.background_execution.BackgroundExecutor', return_value=executor), TestClient(app) as client:
                 handler.assert_not_called()
                 self.assertEqual(client.post('/api/internal/wakeup', json={'jobs': ['manual']}).status_code, 401)
                 headers = {'X-Integration-Token': 'test-token'}
@@ -151,9 +151,9 @@ class BackgroundApiTests(unittest.TestCase):
         def persist(*args, **kwargs):
             committed.append(True)
             return {'id': 7}
-        with patch('app.api.manual_planning.invoke', side_effect=persist):
+        with patch('app.content_planning.api.manual_planning.invoke', side_effect=persist):
             self.assertEqual(submit_manual_preview('P', request), {'id': 7})
         executor.wake.assert_called_once_with(['manual'])
         executor.wake.side_effect = RuntimeError('closing')
-        with patch('app.api.manual_planning.invoke', return_value={'id': 7}):
+        with patch('app.content_planning.api.manual_planning.invoke', return_value={'id': 7}):
             self.assertEqual(submit_manual_preview('P', request), {'id': 7})

@@ -1,5 +1,7 @@
 # Java 业务后端子项目
 
+2026-11-10：业务查询已取消三个数据库视图，改为MyBatis公共SQL片段。新库及升级使用[无视图DBA发布包V10](godp-planning-services/src/main/resources/db/release/20261110-v10/README.md)；V9库无新增表结构变更。应用只需业务表DML权限，原视图对象由DBA单独评估清理。本轮不更改HTTP契约，未修改实际数据库或重启运行服务。详见[改造与验收说明](../docs/Java无视图查询改造_2026-11-10.md)。
+
 已完成五模块拆分和`xiangliang`供应商隔离。聚合坐标为`com.pab.aitmp.aiis:godp-planning-parent:0.1.0-SNAPSHOT`；生产包位于`com.pab.aitmp.aiis.godp.digital.marketing`下各层的`xiangliang`目录。行外使用公开依赖构建，行内Parent/BOM及SDK由宿主提供。具体目录、Bean绑定及源码导出见[供应商并入说明](host-integration/MAVEN_MODULES.md)。
 
 已补齐14表实体、业务Mapper类型化、声明式事务边界、页面请求对象、运行配置端口、四类Handler及人工任务持久化领取。页面业务已统一POST，旧GET/PUT兼容路由删除；健康检查保留GET。响应字段、SQL视图分页及POI默认实现保持现有业务契约。
@@ -12,7 +14,7 @@
 | `godp-planning-services` | 人工/自动/配置/内容/查询/资料/任务业务、Mapper与SQL | api、client |
 | `godp-planning-server` | Controller、Web适配、宿主装配；dev下包含本地启动壳 | services、client |
 
-14张正式业务表已按[六公共字段规范](../docs/表结构公共字段规范与升级_2026-11-05.md)更新。新增[DBA发布包V9](godp-planning-services/src/main/resources/db/release/20261107-v9/README.md)：新库安装、V8→V9升级、初始化核查、保留数据的兼容回退及索引检查分别交付。旧库须先完成V6/V7/V8，发布V9字段和查询视图后再部署新版；应用不执行升级DDL。审计UM上限50字符，记录可信请求身份；账号占用采用逻辑释放与复用。
+14张正式业务表已按[六公共字段规范](../docs/表结构公共字段规范与升级_2026-11-05.md)更新。当前[DBA发布包V10](godp-planning-services/src/main/resources/db/release/20261110-v10/README.md)：新库安装、V8→V9升级、初始化核查、保留数据的兼容回退及索引检查分别交付。旧库须先完成V6/V7/V8，发布结果可见性字段后再部署无视图新版；应用不执行升级DDL。审计UM上限50字符，记录可信请求身份；账号占用采用逻辑释放与复用。
 
 三侧共同进场适配以[功能流程清单](../docs/三工程驻场功能流程适配清单_V1.0_2026-11-03.md)及[Excel跟踪表](../docs/三工程驻场功能流程适配清单_V1.0_2026-11-03.xlsx)为当前核查入口，明确资料SQL、权限、内容方、正式OP及宿主调度的真实待接边界。
 
@@ -56,7 +58,7 @@ java -jar godp-planning-server/target/planning-business.jar --spring.config.addi
 
 启动配置文件包含内部令牌，应随本地运行文件保护；POSIX按0600写入，Windows沿用当前用户目录访问权限，不提交、不复制到驻场包。修改库内端口或令牌后重新生成配置并重启Java。
 
-配置生成器不连接Java业务库。请先提供可访问的Java业务库；新库启用业务模块后，本地Java通过`LocalManualBusinessSchema`创建14张业务表，并在`business_only`模式发布查询视图。表和字段含中文注释，重复建表保留数据，但不替代存量库增量迁移。存量部署先按[数据库发布步骤](../docs/双库业务迁移与验收_2026-11-03.md#数据库发布)发布V3/V4/V5及算法库迁移；`planning.manual.initialize-schema=false`可关闭运行期建表。驻场不迁入本地DDL类，分别由宿主发布业务库和Python算法库脚本。
+配置生成器不连接Java业务库。请先提供可访问的Java业务库；新库启用业务模块后，本地Java通过`LocalManualBusinessSchema`创建14张业务表，；`business_only`查询由MyBatis直接访问业务表。表和字段含中文注释，重复建表保留数据，但不替代存量库增量迁移。存量部署先按[数据库发布步骤](../docs/双库业务迁移与验收_2026-11-03.md#数据库发布)发布V3/V4/V5及算法库迁移；`planning.manual.initialize-schema=false`可关闭运行期建表。驻场不迁入本地DDL类，分别由宿主发布业务库和Python算法库脚本。
 
 ## 代码边界
 

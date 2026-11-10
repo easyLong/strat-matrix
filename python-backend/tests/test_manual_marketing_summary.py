@@ -3,8 +3,8 @@
 import unittest
 from datetime import datetime
 
-from app.manual_marketing_api import summary
-from app.models import ManualTaskSummary
+from app.content_planning.manual_marketing_api import summary
+from app.content_planning.models import ManualTaskSummary
 
 
 class MarketingSummaryTests(unittest.TestCase):

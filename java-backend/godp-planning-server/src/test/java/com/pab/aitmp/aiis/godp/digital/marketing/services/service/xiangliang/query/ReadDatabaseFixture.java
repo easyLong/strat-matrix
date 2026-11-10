@@ -24,9 +24,8 @@ import org.mybatis.spring.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.*;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
-/** Test-only JSON function aliases let the production SQL views run against isolated H2. */
+/** Test-only JSON functions run the production table projections against H2, without views. */
 public final class ReadDatabaseFixture {
   private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -72,10 +71,8 @@ public final class ReadDatabaseFixture {
         "CREATE ALIAS JSON_EXTRACT FOR 'com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.query.ReadDatabaseFixture.extract'");
     jdbc.execute(
         "CREATE ALIAS JSON_UNQUOTE FOR 'com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.query.ReadDatabaseFixture.unquote'");
-    ResourceDatabasePopulator views =
-        new ResourceDatabasePopulator(new ClassPathResource("db/planning-query-views.sql"));
-    views.setSqlScriptEncoding("UTF-8");
-    views.execute(ds);
+    if (jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.views WHERE table_schema='public'", Integer.class) != 0)
+      throw new IllegalStateException("Acceptance database must not contain views");
     if (runtimePrivilegesOnly) {
       // Simulated DBA installation above; the application below gets DML only.
       jdbc.execute("CREATE USER planning_runtime PASSWORD 'test-only'");

@@ -58,7 +58,7 @@ godp-digital-marketing-services/src/main/
     source/BankSourceMapper.xml     待填写行内真实资料SQL
 ```
 
-六份业务XML加载到同一业务库MyBatis会话，使用`classpath*:mapper/xiangliang/*Mapper.xml`。资料SQL通过资料所属会话单独加载；不能默认资料库与策划业务库相同。若接已有Service，则实现`BankSourceQueries`，不加载此XML。所有XML namespace和实体类型引用均已与新包名一致。
+六份业务XML加载到同一业务库MyBatis会话，使用`classpath*:mapper/xiangliang/*Mapper.xml`。`SlotCompletionMapper.xml`引用`PlanningQueryMapper.xml`中的公共查询片段，两者必须加载到同一SqlSessionFactory；`BusinessMapperSupport.businessXml()`已统一返回六份业务XML。本地独立Slot装配与测试也已加载共享片段。资料SQL通过资料所属会话单独加载；不能默认资料库与策划业务库相同。若接已有Service，则实现`BankSourceQueries`，不加载此XML。所有XML namespace和实体类型引用均已与新包名一致。
 
 也可在宿主现有MyBatis工厂初始化处调用`BusinessMapperSupport.appendBusinessXml(existingHostResources)`，追加本供应商六份XML并保留原资源；不要覆盖原Mapper列表或另建缺少权限插件的工厂。会话及事务别名参考[HostBusinessBindings.java.example](HostBusinessBindings.java.example)。
 

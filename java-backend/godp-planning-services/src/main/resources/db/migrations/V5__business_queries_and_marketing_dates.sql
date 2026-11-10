@@ -1,5 +1,5 @@
 -- 存量业务库一次性升级；本地发布工具按列和索引存在性检查后执行，重复发布请使用发布工具。
--- 新库使用 manual-business.sql、business-planning-config.sql、slot-completion.sql，再发布 planning-query-views.sql。
+-- 新库使用 manual-business.sql、business-planning-config.sql、slot-completion.sql。
 ALTER TABLE godp_planning_batch
  ADD COLUMN week_start VARCHAR(10) NULL COMMENT '批次所属自然周周一，用于时间列表数据库分页';
 ALTER TABLE godp_planning_item

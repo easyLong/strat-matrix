@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from app.manual_availability import (
+from app.content_planning.manual_availability import (
     ensure_manual_accounts_available, pending_manual_accounts, planned_manual_accounts,
 )
 from app.main import preview_manual_plan, submit_manual_preview
-from app.models import ManualPreviewInput
+from app.content_planning.models import ManualPreviewInput
 
 
 class Cursor:
@@ -40,7 +40,7 @@ class ManualAvailabilityTests(unittest.TestCase):
     day = date(2026, 10, 15)
 
     def setUp(self):
-        self.patch=patch('app.manual_availability.active_account_ids',side_effect=lambda cursor,wanted:set(wanted))
+        self.patch=patch('app.content_planning.manual_availability.active_account_ids',side_effect=lambda cursor,wanted:set(wanted))
         self.patch.start()
         self.addCleanup(self.patch.stop)
 
@@ -89,16 +89,16 @@ class ManualAvailabilityTests(unittest.TestCase):
     def test_disabled_accounts_are_rejected_before_allocation(self):
         cursor = Cursor([{"acquired":1}])
         self.patch.stop()
-        with patch("app.manual_availability.active_account_ids", return_value=set()), self.assertRaises(HTTPException):
+        with patch("app.content_planning.manual_availability.active_account_ids", return_value=set()), self.assertRaises(HTTPException):
             ensure_manual_accounts_available(cursor, self.day, ["A"])
         self.assertEqual(len(cursor.calls), 1)
 
     def test_preview_rejects_explicitly_selected_planned_account(self):
         account = dict(account_id="A", account_name="Account A", account_alias="", city="",
                        persona="", traffic_trend="", certified=False, followers=100)
-        with patch('app.services.manual_planning.list_accounts', return_value=[account]), patch(
-            'app.services.manual_planning.manual_account_availability', return_value={"planned_account_ids": ["A"]},
-        ), patch('app.services.manual_planning.connection') as db:
+        with patch('app.content_planning.services.manual_planning.list_accounts', return_value=[account]), patch(
+            'app.content_planning.services.manual_planning.manual_account_availability', return_value={"planned_account_ids": ["A"]},
+        ), patch('app.content_planning.services.manual_planning.connection') as db:
             with self.assertRaises(HTTPException) as raised:
                 preview_manual_plan(ManualPreviewInput(task_name="Test", publish_date=self.day,
                                                       account_ids=["A"], topic_ids=["T"]))
@@ -120,7 +120,7 @@ class ManualAvailabilityTests(unittest.TestCase):
         def connection():
             yield DB()
 
-        with patch('app.services.manual_planning.connection', connection):
+        with patch('app.content_planning.services.manual_planning.connection', connection):
             self.assertEqual(submit_manual_preview("P"), existing)
         self.assertEqual(cursor.calls[0][0], "SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
         self.assertFalse(any("INSERT INTO" in sql for sql, _ in cursor.calls))
@@ -141,8 +141,8 @@ class ManualAvailabilityTests(unittest.TestCase):
         def connection():
             yield DB()
 
-        with patch('app.services.manual_planning.connection', connection), patch(
-            'app.services.manual_planning.ensure_manual_accounts_available',
+        with patch('app.content_planning.services.manual_planning.connection', connection), patch(
+            'app.content_planning.services.manual_planning.ensure_manual_accounts_available',
             side_effect=HTTPException(status_code=409, detail="Already planned"),
         ):
             with self.assertRaises(HTTPException) as raised:

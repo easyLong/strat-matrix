@@ -1,0 +1,632 @@
+{
+  "status": "inventory_only",
+  "database_connections": 0,
+  "algorithm_owned_table_count": 25,
+  "algorithm_owned_tables": [
+    "godp_account_mapping_rule",
+    "godp_account_profile",
+    "godp_ai_preparation",
+    "godp_ai_preparation_account",
+    "godp_ai_preparation_progress",
+    "godp_ai_preparation_topic",
+    "godp_algorithm_config_command",
+    "godp_algorithm_proposal",
+    "godp_manual_compute",
+    "godp_matching_ai_cache",
+    "godp_matching_attempt",
+    "godp_matching_input_snapshot",
+    "godp_matching_policy",
+    "godp_matching_quality_run",
+    "godp_matching_task",
+    "godp_planning_pipeline_run",
+    "godp_planning_stage_run",
+    "godp_strategy_config",
+    "godp_strategy_config_version",
+    "godp_system_config",
+    "godp_t6_tag",
+    "godp_topic_label_job",
+    "godp_topic_profile",
+    "godp_topic_tag",
+    "godp_topic_tag_history"
+  ],
+  "sql_literal_references": [
+    {
+      "table": "godp_account",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/local_sql.py",
+        "legacy/integration.py",
+        "ordinary_planning.py",
+        "seed_demo.py",
+        "seed_failure_demo.py",
+        "seed_large_demo.py",
+        "seed_prototype.py"
+      ]
+    },
+    {
+      "table": "godp_account_mapping_rule",
+      "ownership": "algorithm",
+      "files": [
+        "init_account_mapping.py",
+        "matching_quality_snapshot.py",
+        "onsite_check.py",
+        "services/account_mapping.py"
+      ]
+    },
+    {
+      "table": "godp_account_profile",
+      "ownership": "algorithm",
+      "files": [
+        "account_profile.py",
+        "legacy/content_production.py",
+        "matching_readiness_api.py",
+        "services/account_vectors.py"
+      ]
+    },
+    {
+      "table": "godp_account_source",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "backfill_demo_account_data.py",
+        "backfill_demo_um.py",
+        "bank_bridge/local_sql.py",
+        "legacy/content_production.py",
+        "legacy/integration.py",
+        "ordinary_planning.py",
+        "seed_demo.py",
+        "seed_large_demo.py",
+        "seed_prototype.py"
+      ]
+    },
+    {
+      "table": "godp_ai_preparation",
+      "ownership": "algorithm",
+      "files": [
+        "ai_preparation.py",
+        "ai_preparation_worker.py",
+        "planning_reservation.py",
+        "preparation_batches.py",
+        "run_quality_matching_acceptance.py",
+        "services/preparations.py"
+      ]
+    },
+    {
+      "table": "godp_ai_preparation_account",
+      "ownership": "algorithm",
+      "files": [
+        "ai_preparation.py",
+        "services/preparations.py"
+      ]
+    },
+    {
+      "table": "godp_ai_preparation_progress",
+      "ownership": "algorithm",
+      "files": [
+        "preparation_scope.py"
+      ]
+    },
+    {
+      "table": "godp_ai_preparation_topic",
+      "ownership": "algorithm",
+      "files": [
+        "ai_preparation.py",
+        "run_scoped_matching_acceptance.py"
+      ]
+    },
+    {
+      "table": "godp_algorithm_config_command",
+      "ownership": "algorithm",
+      "files": [
+        "algorithm_config_commands.py"
+      ]
+    },
+    {
+      "table": "godp_algorithm_proposal",
+      "ownership": "algorithm",
+      "files": [
+        "planning_result_commit.py"
+      ]
+    },
+    {
+      "table": "godp_auto_plan_run",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "hotspot_scheduler.py",
+        "init_result_commit_db.py",
+        "matching_readiness_api.py",
+        "ordinary_planning.py",
+        "ordinary_scheduler.py",
+        "planning_result_commit.py",
+        "refresh_auto_demo.py",
+        "services/account_vectors.py",
+        "services/periods.py",
+        "services/results.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_content_history",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/local_sql.py",
+        "legacy/integration.py",
+        "matching_supplemental.py",
+        "ordinary_planning.py"
+      ]
+    },
+    {
+      "table": "godp_content_production_task",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/content_production.py",
+        "legacy/run_ordinary_workflow_demo.py"
+      ]
+    },
+    {
+      "table": "godp_content_receipt",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py"
+      ]
+    },
+    {
+      "table": "godp_hotspot_sync_run",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py"
+      ]
+    },
+    {
+      "table": "godp_hotspot_topic_source",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/local_sql.py",
+        "legacy/integration.py"
+      ]
+    },
+    {
+      "table": "godp_integration_outbox",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py",
+        "refresh_auto_demo.py",
+        "seed_prototype.py"
+      ]
+    },
+    {
+      "table": "godp_manual_compute",
+      "ownership": "algorithm",
+      "files": [
+        "manual_compute.py"
+      ]
+    },
+    {
+      "table": "godp_manual_marketing_task",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "init_manual_marketing_db.py",
+        "init_shared_workflow_db.py",
+        "manual_marketing_api.py",
+        "services/content_status.py",
+        "services/list_queries.py"
+      ]
+    },
+    {
+      "table": "godp_manual_preview",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "adapters/mysql/task_queries.py",
+        "init_manual_marketing_db.py",
+        "manual_availability.py",
+        "run_execution_query_acceptance.py",
+        "seed_prototype.py",
+        "services/manual_planning.py",
+        "services/manual_tasks.py"
+      ]
+    },
+    {
+      "table": "godp_manual_task",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "adapters/mysql/task_queries.py",
+        "bank_bridge/operations.py",
+        "init_manual_tasks_db.py",
+        "manual_availability.py",
+        "run_execution_query_acceptance.py",
+        "seed_prototype.py",
+        "services/manual_planning.py",
+        "services/manual_tasks.py",
+        "services/result_lists.py",
+        "services/results.py"
+      ]
+    },
+    {
+      "table": "godp_marketing_sync_run",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_marketing_topic_source",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_matching_ai_cache",
+      "ownership": "algorithm",
+      "files": [
+        "matching_quality_store.py"
+      ]
+    },
+    {
+      "table": "godp_matching_attempt",
+      "ownership": "algorithm",
+      "files": [
+        "matching_execution_api.py",
+        "matching_tasks.py"
+      ]
+    },
+    {
+      "table": "godp_matching_input_snapshot",
+      "ownership": "algorithm",
+      "files": [
+        "matching_supplemental.py"
+      ]
+    },
+    {
+      "table": "godp_matching_policy",
+      "ownership": "algorithm",
+      "files": [
+        "consolidate_v19.py",
+        "legacy/run_ordinary_workflow_demo.py",
+        "matching_execution_api.py",
+        "matching_policy.py",
+        "matching_tasks.py",
+        "onsite_check.py",
+        "ordinary_scheduler.py",
+        "run_quality_matching_acceptance.py"
+      ]
+    },
+    {
+      "table": "godp_matching_quality_run",
+      "ownership": "algorithm",
+      "files": [
+        "matching_quality_store.py",
+        "matching_quality_validation.py"
+      ]
+    },
+    {
+      "table": "godp_matching_task",
+      "ownership": "algorithm",
+      "files": [
+        "consolidate_v19.py",
+        "init_result_commit_db.py",
+        "matching_execution_api.py",
+        "matching_quality_store.py",
+        "matching_tasks.py",
+        "planning_result_commit.py",
+        "run_quality_matching_acceptance.py"
+      ]
+    },
+    {
+      "table": "godp_planning_adjustment",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "api/manual_source_bridge.py",
+        "hotspot_scheduler.py",
+        "refresh_auto_demo.py",
+        "seed_prototype.py",
+        "services/content_status.py",
+        "services/result_export.py",
+        "services/results.py",
+        "shared_production.py"
+      ]
+    },
+    {
+      "table": "godp_planning_batch",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "adapters/mysql/planning_queries.py",
+        "adapters/mysql/task_queries.py",
+        "ai_preparation.py",
+        "bank_bridge/operations.py",
+        "hotspot_scheduler.py",
+        "legacy/content_production.py",
+        "legacy/integration.py",
+        "manual_availability.py",
+        "matching_readiness_api.py",
+        "ordinary_planning.py",
+        "planning_result_commit.py",
+        "refresh_auto_demo.py",
+        "repair_pending_slot_states.py",
+        "run_execution_query_acceptance.py",
+        "seed_demo.py",
+        "seed_failure_demo.py",
+        "seed_prototype.py",
+        "services/account_vectors.py",
+        "services/catalog.py",
+        "services/content_status.py",
+        "services/manual_planning.py",
+        "services/periods.py",
+        "services/plan_queries.py",
+        "services/result_lists.py",
+        "services/results.py",
+        "shared_production.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_planning_item",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "adapters/mysql/planning_queries.py",
+        "adapters/mysql/task_queries.py",
+        "api/manual_source_bridge.py",
+        "bank_bridge/operations.py",
+        "hotspot_scheduler.py",
+        "legacy/content_production.py",
+        "legacy/integration.py",
+        "legacy/run_ordinary_workflow_demo.py",
+        "manual_availability.py",
+        "ordinary_planning.py",
+        "planning_result_commit.py",
+        "refresh_auto_demo.py",
+        "repair_pending_slot_states.py",
+        "run_execution_query_acceptance.py",
+        "seed_demo.py",
+        "seed_failure_demo.py",
+        "seed_prototype.py",
+        "services/catalog.py",
+        "services/content_status.py",
+        "services/manual_planning.py",
+        "services/periods.py",
+        "services/plan_queries.py",
+        "services/result_export.py",
+        "services/result_lists.py",
+        "services/results.py",
+        "shared_production.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_planning_pipeline_run",
+      "ownership": "algorithm",
+      "files": [
+        "init_pipeline_db.py",
+        "legacy/run_ordinary_workflow_demo.py",
+        "planning_pipeline.py",
+        "planning_pipeline_api.py",
+        "planning_pipeline_runner.py",
+        "planning_result_commit.py",
+        "planning_workflow_worker.py"
+      ]
+    },
+    {
+      "table": "godp_planning_stage_run",
+      "ownership": "algorithm",
+      "files": [
+        "planning_pipeline.py",
+        "planning_pipeline_runner.py",
+        "planning_result_commit.py"
+      ]
+    },
+    {
+      "table": "godp_publication_receipt",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py"
+      ]
+    },
+    {
+      "table": "godp_slot_state",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "adapters/mysql/planning_queries.py",
+        "adapters/mysql/task_queries.py",
+        "bank_bridge/operations.py",
+        "hotspot_scheduler.py",
+        "init_shared_workflow_db.py",
+        "legacy/content_production.py",
+        "legacy/integration.py",
+        "legacy/run_ordinary_workflow_demo.py",
+        "ordinary_planning.py",
+        "planning_result_commit.py",
+        "refresh_auto_demo.py",
+        "repair_pending_slot_states.py",
+        "seed_demo.py",
+        "seed_prototype.py",
+        "services/catalog.py",
+        "services/content_status.py",
+        "services/manual_planning.py",
+        "services/periods.py",
+        "services/planning_slots.py",
+        "services/result_lists.py",
+        "services/results.py",
+        "services/usage.py",
+        "shared_production.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_source_sync_run",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py"
+      ]
+    },
+    {
+      "table": "godp_strategy_config",
+      "ownership": "algorithm",
+      "files": [
+        "ai_preparation.py",
+        "algorithm_config_commands.py",
+        "backfill_demo_account_data.py",
+        "bank_bridge/operations.py",
+        "onsite_check.py",
+        "ordinary_planning.py",
+        "ordinary_scheduler.py",
+        "preparation_scope.py",
+        "refresh_auto_demo.py",
+        "seed_demo.py",
+        "seed_prototype.py",
+        "services/account_mapping.py",
+        "services/catalog.py",
+        "services/configuration.py",
+        "services/labels.py",
+        "services/manual_planning.py",
+        "source_discovery.py",
+        "weekly_planning.py"
+      ]
+    },
+    {
+      "table": "godp_strategy_config_version",
+      "ownership": "algorithm",
+      "files": [
+        "algorithm_config_commands.py",
+        "bank_bridge/operations.py",
+        "seed_prototype.py",
+        "services/account_mapping.py",
+        "services/configuration.py",
+        "services/labels.py"
+      ]
+    },
+    {
+      "table": "godp_system_config",
+      "ownership": "algorithm",
+      "files": [
+        "consolidate_v19.py",
+        "deployment_environment.py",
+        "init_system_config.py",
+        "init_workflow_db.py",
+        "model_capacity.py",
+        "system_config.py"
+      ]
+    },
+    {
+      "table": "godp_t6_tag",
+      "ownership": "algorithm",
+      "files": [
+        "matching_quality_snapshot.py",
+        "t6_tags.py"
+      ]
+    },
+    {
+      "table": "godp_topic",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/local_sql.py",
+        "legacy/integration.py",
+        "matching_inputs.py",
+        "matching_supplemental.py",
+        "ordinary_planning.py",
+        "refresh_auto_demo.py",
+        "seed_demo.py",
+        "seed_failure_demo.py",
+        "seed_large_demo.py",
+        "seed_prototype.py"
+      ]
+    },
+    {
+      "table": "godp_topic_label_job",
+      "ownership": "algorithm",
+      "files": [
+        "legacy/integration.py",
+        "services/labels.py",
+        "source_discovery.py"
+      ]
+    },
+    {
+      "table": "godp_topic_official_usage",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/operations.py",
+        "legacy/content_production.py",
+        "legacy/integration.py",
+        "matching_supplemental.py",
+        "services/content_status.py",
+        "shared_production.py"
+      ]
+    },
+    {
+      "table": "godp_topic_official_usage_history",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "legacy/integration.py"
+      ]
+    },
+    {
+      "table": "godp_topic_profile",
+      "ownership": "algorithm",
+      "files": [
+        "bank_bridge/current_topics.py",
+        "matching_inputs.py",
+        "services/topic_vectors.py",
+        "source_discovery.py",
+        "topic_profile.py"
+      ]
+    },
+    {
+      "table": "godp_topic_source",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/local_sql.py",
+        "legacy/integration.py",
+        "matching_inputs.py",
+        "matching_supplemental.py",
+        "ordinary_planning.py",
+        "refresh_auto_demo.py",
+        "seed_demo.py",
+        "seed_large_demo.py",
+        "seed_prototype.py"
+      ]
+    },
+    {
+      "table": "godp_topic_tag",
+      "ownership": "algorithm",
+      "files": [
+        "bank_bridge/bridge.py",
+        "bank_bridge/current_topics.py",
+        "bank_bridge/operations.py",
+        "legacy/content_production.py",
+        "legacy/integration.py",
+        "matching_inputs.py",
+        "matching_supplemental.py",
+        "ordinary_planning.py",
+        "seed_prototype.py",
+        "services/catalog.py",
+        "services/labels.py",
+        "services/results.py",
+        "source_discovery.py"
+      ]
+    },
+    {
+      "table": "godp_topic_tag_history",
+      "ownership": "algorithm",
+      "files": [
+        "services/labels.py"
+      ]
+    },
+    {
+      "table": "godp_topic_usage_fact",
+      "ownership": "compatibility_or_business",
+      "files": [
+        "bank_bridge/operations.py",
+        "legacy/content_production.py",
+        "legacy/run_ordinary_workflow_demo.py",
+        "run_shared_workflow_acceptance.py",
+        "services/content_status.py",
+        "shared_production.py"
+      ]
+    }
+  ],
+  "limitations": [
+    "Static literal scan includes legacy/tool branches and may miss dynamically assembled SQL.",
+    "25 algorithm-owned tables are not proof that every compatibility execution path is satisfied.",
+    "Read README.md for branch gates, Java contracts, deployment and rollback rules."
+  ]
+}

@@ -43,10 +43,10 @@ def replace_aliases(original,replacement):
 
 def install(mode,namespace):
     if mode not in ('baseline','optimized') or not namespace:raise ValueError('Invalid benchmark mode')
-    from app.deployment_environment import current
+    from app.content_planning.deployment_environment import current
     if current()['PLANNING_ENV']!='outside':raise ValueError('Benchmark is outside-only')
-    from app.matching_quality_store import QualityRuntime
-    from app.matching_quality_snapshot import content_hash
+    from app.content_planning.matching_quality_store import QualityRuntime
+    from app.content_planning.matching_quality_snapshot import content_hash
     original_key=QualityRuntime.key
     @wraps(original_key)
     def isolated_key(self,kind,payload):
@@ -54,7 +54,7 @@ def install(mode,namespace):
         return content_hash({'benchmark_namespace':namespace,'original_key':key}),model
     QualityRuntime.key=isolated_key
     if mode=='optimized':return
-    from app import db,planning_input_runner
+    from app.content_planning import db,planning_input_runner
     import pymysql
     @contextmanager
     def direct_connection():

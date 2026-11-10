@@ -5,8 +5,8 @@ from datetime import date,datetime
 import io
 import unittest
 from unittest.mock import MagicMock,patch
-from app.services import result_export as exports
-from app.services.result_scope import ResultQuery,compile_scope
+from app.content_planning.services import result_export as exports
+from app.content_planning.services.result_scope import ResultQuery,compile_scope
 
 def item(identity):
     return dict(id=identity,account_id='A',account_name='Account A',publish_date=date(2026,11,4),

@@ -6,8 +6,8 @@ import re
 
 import pytest
 
-from app import algorithm_schema
-from app.table_audit import PUBLIC_COLUMNS, metadata_errors, normalize_ddl, validate_ddl
+from app.content_planning import algorithm_schema
+from app.content_planning.table_audit import PUBLIC_COLUMNS, metadata_errors, normalize_ddl, validate_ddl
 
 spec = importlib.util.spec_from_file_location('table_audit_migration', Path(__file__).resolve().parents[1] / 'tools/migrate_table_audit.py')
 migration = importlib.util.module_from_spec(spec)
@@ -93,7 +93,7 @@ def test_migration_rejects_unknown_or_conflicting_identifiers_instead_of_changin
 
 def test_manual_claim_query_filters_deleted_rows_outside_the_whole_or_condition():
     import ast
-    path=Path(__file__).resolve().parents[1]/'app/manual_compute.py'
+    path=Path(__file__).resolve().parents[1]/'app/content_planning/manual_compute.py'
     queries=[node.value for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))) if isinstance(node,ast.Constant) and isinstance(node.value,str)]
     query=next(value for value in queries if 'SELECT request_id,input_json' in value)
     assert re.search(r"WHERE del_flag='N' AND \(status='pending' OR .*\) ORDER BY",query)

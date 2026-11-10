@@ -11,10 +11,10 @@ import pymysql
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'python-backend'))
-from app.algorithm_schema import definitions
-from app.db import settings
-from app.java_development import java_database_settings
-from app.table_audit import PUBLIC_COLUMNS, metadata_errors
+from app.content_planning.algorithm_schema import definitions
+from app.content_planning.db import settings
+from app.content_planning.java_development import java_database_settings
+from app.content_planning.table_audit import PUBLIC_COLUMNS, metadata_errors
 
 
 def business_definitions():
@@ -195,13 +195,6 @@ def run(owner, output, apply, resume=False):
                     if fingerprint(after, names) != original:
                         raise ValueError('原业务字段指纹变化：' + table)
                     report['tables'][table].update(rows=len(after), original_fields_preserved=True)
-                if owner == 'business':
-                    from app.init_planner_db import statements
-                    source = (ROOT / 'java-backend/godp-planning-services/src/main/resources/db/planning-query-views.sql').read_text(encoding='utf-8')
-                    for sql in statements(source):
-                        cursor.execute(sql)
-                    db.commit()
-                    report['views_refreshed'] = 3
             report['status'] = 'passed' if apply else 'planned'
         finally:
             db.rollback()

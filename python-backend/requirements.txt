@@ -5,5 +5,6 @@ pydantic==2.13.3
 python-dotenv==1.2.2
 pymysql==1.1.1
 DBUtils==3.2.0
+httpx==0.28.1
 tzdata==2026.2
 

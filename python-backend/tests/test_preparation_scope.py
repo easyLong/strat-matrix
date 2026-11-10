@@ -4,9 +4,9 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app import preparation_scope as scope
-from app.account_profile import canonical_json
-from app.ai_preparation import advance_preparation
+from app.content_planning import preparation_scope as scope
+from app.content_planning.account_profile import canonical_json
+from app.content_planning.ai_preparation import advance_preparation
 import test_ai_preparation as prep_fixtures
 from test_matching_readiness import fixture, CHECKED_AT
 
@@ -80,7 +80,7 @@ class ScopedFreezeTests(unittest.TestCase):
         self.addCleanup(helper.doCleanups)
         helper.create()
         helper.store.ready_accounts()
-        with patch('app.ai_preparation.readiness_reasons', return_value=[
+        with patch('app.content_planning.ai_preparation.readiness_reasons', return_value=[
                 {'code': 'topic_awaiting_labels', 'topic_id': 'PENDING'}]):
             result = advance_preparation(123, 1)
         self.assertEqual(result['status'], 'waiting_inputs')
