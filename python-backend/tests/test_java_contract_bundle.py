@@ -15,6 +15,9 @@ class JavaContractBundleTests(unittest.TestCase):
             build_bundle(output)
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
+                self.assertIn('python-backend/BANK_MODEL_GATEWAY.md', names)
+                self.assertIn('python-backend/app/content_planning/native_model_protocol.py', names)
+                self.assertIn('python-backend/database/content_planning/migrations/20261111_add_native_model_protocol.sql', names)
                 self.assertIn('docs/integration/java-host/README.md', names)
                 self.assertIn('docs/integration/java-host/contracts.json', names)
                 self.assertFalse(any(name.startswith(('java-access/', 'backend/')) for name in names))

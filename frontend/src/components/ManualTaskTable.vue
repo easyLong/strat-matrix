@@ -34,10 +34,11 @@ export default {
   methods: {
     contentTone(task) {
       const label = contentLabel(task);
-      if (label === '待生成' || label === '—') return 'gray';
+      if (label === '待生成') return 'orange';
+      if (label === '—') return 'gray';
       if (label === '生成中') return 'blue';
       if (label === '已完成') return 'green';
-      if (label === '部分失败') return 'orange';
+      if (label === '部分失败') return 'red';
       if (label === '生成失败') return 'red';
       return 'gray';
     },
@@ -129,8 +130,8 @@ export default {
 .manual-task-table td{height:56px;padding:10px 14px;border-top:1px solid var(--neutral-100);color:var(--neutral-600);font-size:13px;line-height:20px;vertical-align:middle}
 .manual-task-table td:nth-child(2),.manual-task-table td:nth-child(6){white-space:nowrap}
 .manual-task-table tbody tr:hover{background:var(--hover-bg)}
-.manual-task-table tbody tr.has-failures{background:var(--processing-row)}
-.manual-task-table tbody tr.has-failures:hover{background:var(--processing-bg)}
+.manual-task-table tbody tr.has-failures{background:var(--danger-row)}
+.manual-task-table tbody tr.has-failures:hover{background:var(--danger-bg)}
 .manual-task-table .batch-identity-cell{min-width:260px;max-width:340px;color:var(--neutral-800)}
 .manual-batch-identity{display:flex;min-width:0;flex-direction:column;gap:3px}
 .manual-batch-identity b{overflow:hidden;color:var(--neutral-800);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
@@ -141,8 +142,8 @@ export default {
 .manual-content-status{display:flex;align-items:center;gap:8px;min-width:118px;white-space:nowrap}
 .action-cell{position:sticky;right:0;z-index:1;min-width:90px;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-100)}
 tr:hover .action-cell{background:var(--hover-bg)}
-tr.has-failures .action-cell{background:var(--processing-row)}
-tr.has-failures:hover .action-cell{background:var(--processing-bg)}
+tr.has-failures .action-cell{background:var(--danger-row)}
+tr.has-failures:hover .action-cell{background:var(--danger-bg)}
 .manual-task-actions{display:flex;align-items:center;gap:14px;white-space:nowrap}
 .manual-task-actions .text-btn{padding:0;border:0;background:transparent;font-size:12px;line-height:20px}
 .manual-action-empty{color:var(--neutral-300)}

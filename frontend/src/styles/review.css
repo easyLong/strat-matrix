@@ -67,7 +67,7 @@
 .planning-ui .card-head h2::before { flex:none;width:3px;height:16px;border-radius:2px;background:var(--primary-600);content:''; }
 .planning-ui .card-head h2:has(.manual-topic-substep-number)::before,.planning-ui .card-head h2.section-title-with-icon::before { display:none; }
 .planning-ui .config-overview-card .card-head { justify-content:space-between; }
-.planning-ui .config-glance-item,.planning-ui .production-timing-item,.planning-ui .manual-submit-summary>div { border-color:var(--primary-100);border-radius:12px;background:var(--primary-50); }
+.planning-ui .config-glance-item,.planning-ui .production-timing-item,.planning-ui .manual-submit-summary>div { border-color:var(--divider);border-radius:12px;background:var(--metric-background); }
 .planning-ui .config-glance-item>span { color:var(--text-secondary);font-size:14px; }
 .planning-ui .config-glance-item>b { margin-top:8px;font-size:16px; }
 .planning-ui .config-glance-days-list b { padding:0;border:0;background:transparent;color:var(--text-primary);font-size:14px; }
@@ -75,7 +75,7 @@
 .planning-ui .config-edit-actions { position:fixed;z-index:35;left:var(--sidebar-width);right:0;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding:14px 24px;border-top:1px solid var(--neutral-200);background:var(--surface);box-shadow:0 -4px 16px rgb(0 0 0 / 3%); }
 .planning-ui .config-stack { padding-bottom:80px; }
 .planning-ui .manual-create-toolbar { padding:0 0 16px;border-bottom:1px solid var(--divider);margin-bottom:20px; }
-.planning-ui .manual-create-toolbar .manual-back { border:1px solid var(--neutral-200);padding:0 12px;color:var(--text-secondary);background:var(--surface); }
+.planning-ui .manual-create-toolbar .manual-back { border:1px solid var(--neutral-200);padding:0 12px;color:var(--text-action-muted);background:var(--surface); }
 .planning-ui .manual-task-context { border-left:1px solid var(--neutral-200);padding-left:12px;color:var(--text-primary); }
 .planning-ui .manual-topic-picker { grid-template-columns:minmax(220px,27%) minmax(0,1fr);align-items:start; }
 .planning-ui .manual-topic-picked { padding:0;border:1px solid var(--neutral-200);border-radius:12px;background:var(--neutral-50);overflow:hidden; }
@@ -110,7 +110,7 @@
 .planning-ui .manual-import-metrics>div+div { border-left:1px solid var(--neutral-200); }
 .planning-ui .manual-import-metrics strong { margin:0;font-size:24px; }
 .planning-ui .manual-import-metrics small { font-size:14px; }
-.planning-ui .manual-import-metrics>div:nth-child(3) strong { color:var(--processing); }
+.planning-ui .manual-import-metrics>div:nth-child(3) strong { color:var(--warning); }
 .planning-ui .manual-import-metrics .warning { color:var(--danger); }
 .planning-ui .manual-import-details { min-height:0;max-height:min(52dvh,440px);margin:0 24px;overflow:auto; }
 .planning-ui .manual-import-issues-table { width:100%;min-width:560px; }
@@ -120,7 +120,7 @@
 .planning-ui .manual-import-issues-table small { display:block;max-width:320px;margin-top:4px;font-size:12px;color:var(--text-muted); }
 .planning-ui .import-issue-kind { display:inline-flex;align-items:center;gap:6px;white-space:nowrap; }
 .planning-ui .import-issue-kind::before { content:'';width:6px;height:6px;border-radius:50%;background:var(--danger); }
-.planning-ui .import-issue-kind.warning::before { background:var(--processing); }
+.planning-ui .import-issue-kind.warning::before { background:var(--warning); }
 .planning-ui .manual-import-dialog .manual-eligibility-actions { margin-top:20px;padding:16px 24px;border-top:1px solid var(--neutral-200); }
 .planning-ui .plan-detail-drawer { width:min(840px,calc(100vw - 24px)); }
 .planning-ui .plan-detail-drawer>.drawer-body { flex:1;min-height:0; }

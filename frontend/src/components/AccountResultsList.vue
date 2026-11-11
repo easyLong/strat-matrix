@@ -134,7 +134,7 @@ export default {
     <div v-else class="table-wrap account-dimension-table-scroll" tabindex="0" aria-label="账号列表"><table>
       <thead><tr><th>账号</th><th>属主 UM 号</th><th>属主组织</th><th>账号类型</th><th>平台</th><th>生命周期</th><th>粉丝量</th><th>账号状态</th><th>策划结果</th></tr></thead>
       <tbody><tr v-for="item in items" :key="item.account_id"><td><div class="account-name-cell"><b>{{item.account_name}}</b><small>{{item.account_id}}</small></div></td><td>{{item.profile?.um_no||'—'}}</td><td>{{item.profile?.organization||'—'}}</td><td><AccountTypeBadge :type="item.profile?.account_type||'—'" /></td><td>{{item.profile?.platform||'—'}}</td><td>{{item.profile?.lifecycle_stage||'—'}}</td><td>{{item.profile?.followers?.toLocaleString()??'—'}}</td><td><span :class="['tag',item.profile?.status==='启用'?'green':'gray']">{{item.profile?.status||'—'}}</span></td><td><button class="text-btn" @click="emit('view-plans',item)">查看策划</button></td></tr>
-        <tr v-if="!items.length"><td colspan="9" class="empty-state">暂无符合条件的账号</td></tr></tbody>
+        <tr v-if="!items.length"><td colspan="9"><div class="empty-state">暂无符合条件的账号</div></td></tr></tbody>
     </table></div>
     <ListPagination :page.sync="page" :page-size.sync="pageSize" :total="total" unit="个账号" class="list-pagination-inset" />
   </section>

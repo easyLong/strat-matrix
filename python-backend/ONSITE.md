@@ -90,7 +90,9 @@ DDL在MySQL中会自动提交；失败可能已有部分表生效，排除权限
 | `JAVA_API_BASE_URL` | Java内部资料查询前缀 |
 | `JAVA_API_TOKEN` | Python访问Java的内部令牌 |
 | `INTEGRATION_TOKEN` | Java访问Python的内部令牌 |
-| `MODEL_BASE_URL` | 文本、向量共用模型网关前缀；不含具体方法路径 |
+| `MODEL_BASE_URL` | `chat_completions` 为网关前缀；`doubao_native` 为行内完整文本接口地址，见 `BANK_MODEL_GATEWAY.md` |
+| `MODEL_PROTOCOL` | 默认 `chat_completions`；行内 `doubaoNative` 设为 `doubao_native` |
+| `EMBEDDING_BASE_URL` | 原生文本模式下单独确认的向量服务前缀；为空时阻止向量调用 |
 | `ARK_API_KEY` | 当前模型适配器的Bearer密钥，保持原键名 |
 | `MODEL_NAME` / `EMBEDDING_MODEL_NAME` | 共用文本及向量模型名称/接入点 |
 | `AUTO_PLANNING_POLICY_ID` | 已批准、可正式执行的V19策略ID，声明向量空间 |

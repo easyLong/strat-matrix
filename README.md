@@ -1,5 +1,7 @@
 # 多账号智能策划
 
+2026-11-11：三页面色系与日期控件已对齐；Python支持行内`doubaoNative`及行外兼容文本协议，Java环境仍由Spring profile/宿主配置管理。范围与验证见[页面与模型适配发布记录](docs/发布记录_2026-11-11_页面与模型适配.md)、[模型配置](python-backend/BANK_MODEL_GATEWAY.md)、[环境切换](docs/双环境切换_V0.1.md)。
+
 2026-11-10 Python模块化：`app/content_planning/` 支持独立运行与嵌入 FastAPI；原独立入口仍为 `app.main:app`。见 [接入说明](python-backend/INTEGRATION.md)、[验收记录](python-backend/VALIDATION.md) 和 [数据库依赖边界](python-backend/database/content_planning/README.md)。
 
 2026-11-10：Java业务查询已改为无视图的MyBatis直接查表。使用[DBA发布包V10](java-backend/godp-planning-services/src/main/resources/db/release/20261110-v10/README.md)，新库不创建视图，V9存量库仅切换查询代码。范围与验收见[无视图改造](docs/Java无视图查询改造_2026-11-10.md)。
@@ -18,7 +20,7 @@
 
 行外回归统一运行`python -m testing`；固定合成数据、算法基线、离线对比报告和分工程命令见[测试工具说明](testing/README.md)。默认不连接现有业务库或调用真实模型。
 
-部署模式统一使用`PLANNING_ENV=outside/inside`，保存在MySQL系统配置。切换与宿主装配说明见[双环境切换](docs/双环境切换_V0.1.md)；inside缺少宿主配置时明确报错，不降级到行外模拟。
+部署模式统一使用`PLANNING_ENV=outside/inside`。独立Python/本地启动器读取MySQL系统配置；行内Python可由宿主显式注入，Java使用宿主Spring profile与配置中心，不要求访问Python算法库。见[双环境切换](docs/双环境切换_V0.1.md)；inside缺少宿主配置时明确报错，不降级到行外模拟。
 
 本仓库现分为三个可独立构建的子项目，未来分别整合进客户现有三个工程：
 
@@ -53,7 +55,7 @@ flowchart LR
 
 ## 技术与运行结构
 
-- 前端：Node 16.13.0/npm 8，Vue 2.6.14、Vuex 3.6.0、Axios 1.8.2、Element UI 2.15.13、Vue Router 3、TypeScript；行外使用Vite构建，驻场复用宿主构建。
+- 前端：Node 16.13.0/npm 8，Vue 2.6.14、Vuex 3.6.0、Axios 1.8.2、Element UI 2.15.13、Vue Router 3、JavaScript/选项式API；行外使用Vite构建，驻场复用宿主构建。
 - Java业务子项目：Java 8、公开Spring Boot 2.7.18兼容开发壳，MyBatis持久化普通人工业务，XLSX导出使用Apache POI；未引入内部依赖。
 - 后端：Python 3.10.11、FastAPI、PyMySQL；使用独立环境安装`python-backend/requirements.txt`。
 - 数据库：Java业务库与Python算法库隔离；本地可见历史已迁入Java，原Python历史保留；迁入行内时分别发布两库脚本。

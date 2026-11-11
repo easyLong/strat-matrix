@@ -324,8 +324,8 @@ export default {
 :where(.planning-ui) .account-week-plan-card .ux-topic-detail-trigger:hover{color:var(--primary-600)}
 
 :where(.planning-ui) .planning-account-groups{display:grid!important;gap:14px!important;padding:0 20px 20px!important}
-:where(.planning-ui) .planning-account-groups .planning-account-group.ux-account-card{overflow:hidden;margin:0!important;border:1px solid var(--neutral-200)!important;border-radius:14px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgba(15,23,42,.03);transition:border-color .16s ease,box-shadow .16s ease}
-:where(.planning-ui) .planning-account-groups .planning-account-group.ux-account-card:hover{border-color:var(--neutral-300)!important;box-shadow:0 7px 24px rgba(15,23,42,.055)}
+:where(.planning-ui) .planning-account-groups .planning-account-group.ux-account-card{overflow:hidden;margin:0!important;border:1px solid var(--neutral-200)!important;border-radius:14px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgb(0 0 0 / 3%);transition:border-color .16s ease,box-shadow .16s ease}
+:where(.planning-ui) .planning-account-groups .planning-account-group.ux-account-card:hover{border-color:var(--neutral-300)!important;box-shadow:0 7px 24px rgb(0 0 0 / 5.5%)}
 :where(.planning-ui) .planning-account-groups .ux-account-card .planning-account-group-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:22px!important;min-height:0!important;padding:18px 20px!important;background:var(--surface)!important}
 :where(.planning-ui) .planning-account-groups .ux-account-main{display:flex!important;align-items:flex-start!important;gap:14px!important;min-width:0!important;flex:1 1 auto}
 :where(.planning-ui) .planning-account-groups .ux-account-avatar{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:var(--primary-50);color:var(--primary-600);font-size:16px;font-weight:700}
@@ -349,9 +349,9 @@ export default {
 :where(.planning-ui) .planning-account-groups .ux-expand-label{font-size:12px;line-height:18px;white-space:nowrap}
 :where(.planning-ui) .planning-account-groups .ux-account-card>.account-week-carousel{margin:0!important;padding:16px 18px 18px!important;border-top:1px solid var(--neutral-100);background:linear-gradient(180deg,var(--neutral-50),var(--surface) 76px)}
 :where(.planning-ui) .planning-account-groups .ux-account-card .account-week-calendar{padding:0!important}
-:where(.planning-ui) .planning-account-groups .ux-account-card .account-week-day{border-radius:10px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgba(15,23,42,.025)}
+:where(.planning-ui) .planning-account-groups .ux-account-card .account-week-day{border-radius:10px!important;background:var(--surface)!important;box-shadow:0 1px 2px rgb(0 0 0 / 2.5%)}
 :where(.planning-ui) .planning-account-groups .ux-account-card .account-week-plan-card{border-radius:8px!important;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}
-:where(.planning-ui) .planning-account-groups .ux-account-card .account-week-plan-card:hover{border-color:var(--primary-200)!important;box-shadow:0 5px 16px rgba(15,23,42,.06);transform:translateY(-1px)}
+:where(.planning-ui) .planning-account-groups .ux-account-card .account-week-plan-card:hover{border-color:var(--primary-200)!important;box-shadow:0 5px 16px rgb(0 0 0 / 6%);transform:translateY(-1px)}
 
 @media(max-width:900px){
   :where(.planning-ui) .planning-account-groups{padding:0 12px 16px!important}

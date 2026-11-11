@@ -68,8 +68,9 @@ Java 的 Python 基础地址改为 `http://<宿主>:<端口>/planning`，其余 
 | `PLANNING_JAVA_API_BASE_URL`、`PLANNING_JAVA_GATEWAY_URL`、`PLANNING_JAVA_API_TOKEN` | Java 资料能力与业务入口 |
 | `PLANNING_INTEGRATION_TOKEN` | 调用策划内部接口的服务令牌；转发层不自动补令牌 |
 | `PLANNING_MODEL_BASE_URL`、`PLANNING_ARK_API_KEY`、`PLANNING_MODEL_NAME`、`PLANNING_EMBEDDING_MODEL_NAME` | 模型网关及两类模型；其他已支持连接键可按 `PLANNING_` + 现有 catalog 键传入 |
-| `PLANNING_MODEL_PROTOCOL` | `chat_completions` 或 `custom`；默认实现兼容 Chat Completions 和文本 Embeddings，未声称兼容 Responses |
-| `PLANNING_MODEL_AUTHORIZATION_SCHEME`、`PLANNING_MODEL_HEADERS` | 默认 Bearer；附加头为字符串字典，不允许覆盖 Authorization、Host 或传输头 |
+| `PLANNING_MODEL_PROTOCOL` | `chat_completions`、`doubao_native` 或 `custom`；行内截图的 `doubaoNative` 使用 `doubao_native`，`MODEL_BASE_URL` 填完整接口地址 |
+| `PLANNING_EMBEDDING_BASE_URL` | 原生文本模式下的独立向量服务前缀；未确认时留空，向量请求将报配置未就绪，不回退公网 |
+| `PLANNING_MODEL_AUTHORIZATION_SCHEME`、`PLANNING_MODEL_HEADERS` | 兼容协议默认 Bearer，`none` 关闭 Authorization；原生文本按截图固定不发送 Authorization，也不会转发向量密钥。附加头为字符串字典，不允许覆盖 Authorization、Host 或传输头 |
 | `PLANNING_MAX_WORKERS`、`PLANNING_POOL_SIZE`、`PLANNING_POOL_TIMEOUT` | 默认 2、16、5 秒，均有范围校验 |
 | `PLANNING_CACHE_SECONDS`、`PLANNING_MAX_FORWARD_BODY_BYTES` | 默认 5 秒、16MiB；请求大小上限可调整 |
 | `PLANNING_RESOURCE_DIRECTORY` | 外置 SQL 资源的绝对目录，工具需要；运行健康检查不读取 SQL 文件 |

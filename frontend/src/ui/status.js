@@ -4,9 +4,9 @@ export function statusTone(status) {
         return 'gray';
     if (/失败|异常|错误|不通过/.test(text))
         return 'red';
-    if (/生产中|生成中|上传中/.test(text))
+    if (/生产中|生成中|上传中|进行中|执行中|处理中/.test(text))
         return 'blue';
-    if (/进行中|执行中|处理中|待|未提交|未生成/.test(text))
+    if (/待|未提交|未生成|未完成/.test(text))
         return 'orange';
     if (/完成|成功|已生成|已发布|启用|已连接/.test(text))
         return 'green';

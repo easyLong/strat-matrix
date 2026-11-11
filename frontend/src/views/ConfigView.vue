@@ -15,9 +15,11 @@ import { configValuesEqual } from '../ui/configHistory';
 import { recommendedTaxonomy, tagNames } from '../topicTaxonomy';
 import { api } from '../api';
 import { usePlanningStore } from '../store';
+import PlanningDateInput from '../components/PlanningDateInput.vue';
 export default {
   name: 'PlanningConfigPage',
   components: {
+    PlanningDateInput,
     LoadingSkeleton,
     LifecycleRulesEditor,
     TaxonomyPanel,
@@ -63,6 +65,7 @@ export default {
     }
   },
   computed: {
+    scheduleTimeInputId() { return `planning-time-${this._uid}`; },
     store() {
       return usePlanningStore();
     },
@@ -521,7 +524,7 @@ export default {
       <div class="card-body">
         <div class="form-grid config-control-grid">
           <div class="field"><span>每周内容推送日</span><div class="day-picker"><button v-for="day in [{ n: 1, label: '周一' }, { n: 2, label: '周二' }, { n: 3, label: '周三' }, { n: 4, label: '周四' }, { n: 5, label: '周五' }, { n: 6, label: '周六' }, { n: 7, label: '周日' }]" :key="day.n" class="day-chip" :class="{ active: planningDays.includes(day.n) }" type="button" :aria-pressed="planningDays.includes(day.n)" @keydown="movePlanningDay($event, day.n - 1)" @click="togglePlanningDay(day.n)">{{ day.label }}</button></div></div>
-          <label class="field"><span>自动策划调度时间</span><div class="schedule-picker"><select v-model.number="scheduleDay"><option :value="1">周一</option><option :value="2">周二</option><option :value="3">周三</option><option :value="4">周四</option><option :value="5">周五</option><option :value="6">周六</option><option :value="7">周日</option></select><input v-model="scheduleTime" type="time" /></div></label>
+          <div class="field"><label :for="scheduleTimeInputId">自动策划调度时间</label><div class="schedule-picker"><select v-model.number="scheduleDay" aria-label="自动策划调度日"><option :value="1">周一</option><option :value="2">周二</option><option :value="3">周三</option><option :value="4">周四</option><option :value="5">周五</option><option :value="6">周六</option><option :value="7">周日</option></select><PlanningDateInput v-model="scheduleTime" kind="time" :input-id="scheduleTimeInputId" required /></div></div>
           <label class="field"><span>营销内容周上限</span><div class="input-unit"><input v-model.number="draft.marketing_max" type="number" min="0" /><span>条 / 营销账号 / 周</span></div></label>
           <label class="field"><span>热点选题占比</span><div class="input-unit"><input v-model.number="hotspotRatio" type="number" min="0" max="100" /><span>%</span></div></label>
         </div>
@@ -567,7 +570,7 @@ export default {
       <div class="app-confirm-actions">
         <template v-if="confirmation.danger && confirmation.safePrimary">
           <button class="btn" type="button" @click="closeConfirmation(true)">{{ confirmation.confirmLabel }}</button>
-          <button ref="confirmationSafeAction" class="btn app-confirm-danger" type="button" @click="closeConfirmation(false)">{{ confirmation.cancelLabel }}</button>
+          <button ref="confirmationSafeAction" class="btn primary" type="button" @click="closeConfirmation(false)">{{ confirmation.cancelLabel }}</button>
         </template>
         <template v-else-if="confirmation.danger">
           <button ref="confirmationSafeAction" class="btn" type="button" @click="closeConfirmation(false)">{{ confirmation.cancelLabel }}</button>
@@ -634,14 +637,14 @@ export default {
 .tag-content .tag-pills{align-items:flex-start;gap:6px;min-height:0;padding:2px 0}
 .tag-pills>.pill-edit{display:inline-flex;align-items:center;justify-content:center;min-width:0;min-height:26px;max-width:100%;padding:3px 9px;border:1px solid var(--label-border);border-radius:5px;background:var(--label-background);color:var(--label-color);font-family:inherit;font-size:12px;font-weight:500;line-height:18px;overflow-wrap:anywhere;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .tag-pills>.pill-edit:not(:disabled):hover{border-color:var(--label-color)}
-.tag-pills>.pill-edit.disabled{border-style:dashed;border-color:var(--neutral-200);background:var(--neutral-50);color:var(--neutral-400);text-decoration:none}
+.tag-pills>.pill-edit.disabled{border-style:dashed;border-color:var(--neutral-200);background:var(--neutral-50);color:var(--text-disabled);text-decoration:none}
 .tag-pills>.pill-edit.selected{border-color:var(--label-color);box-shadow:0 0 0 1px var(--label-color)}
 .tag-pills>.pill-edit:focus-visible{outline:2px solid var(--primary-600);outline-offset:2px}
 .tag-pills>.pill-edit:disabled{cursor:default;opacity:.6}
 .app-confirm-mask{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;background:var(--mask)}
-.app-confirm{width:min(400px,100%);padding:26px 28px 22px;border:1px solid #e7ebf2;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-4);text-align:left;animation:app-confirm-in .16s ease-out}
-.app-confirm-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 0 16px;border:1px solid var(--primary-100);border-radius:50%;background:#f2f7ff;color:var(--primary-600);font-size:21px;font-weight:750}
-.app-confirm-icon.danger{border-color:var(--processing-bg);background:var(--processing-bg);color:var(--processing);font-size:23px}
+.app-confirm{width:min(400px,100%);padding:26px 28px 22px;border:1px solid var(--divider);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-4);text-align:left;animation:app-confirm-in .16s ease-out}
+.app-confirm-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 0 16px;border:1px solid var(--primary-100);border-radius:50%;background:var(--primary-50);color:var(--primary-600);font-size:21px;font-weight:750}
+.app-confirm-icon.danger{border-color:var(--warning-bg);background:var(--warning-bg);color:var(--warning);font-size:23px}
 .app-confirm h2{margin:0;color:var(--neutral-900);font-size:18px;line-height:1.4}
 .app-confirm p{margin:9px 0 24px;color:var(--neutral-500);font-size:13px;line-height:1.7}
 .app-confirm-actions{display:flex;justify-content:flex-end;gap:8px}

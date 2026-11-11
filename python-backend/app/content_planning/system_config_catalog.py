@@ -30,7 +30,9 @@ CATALOG = {
     "JAVA_API_TOKEN": Setting("keys", "Python访问Java资料服务的鉴权密钥", secret=True),
     "INTEGRATION_TOKEN": Setting("keys", "系统内部接口鉴权密钥", secret=True),
     "ARK_API_KEY": Setting("keys", "火山方舟豆包 API Key", secret=True),
-    "MODEL_BASE_URL": Setting("models", "文本与向量共用模型网关前缀；行外空值使用方舟，行内必须明确填写", ""),
+    "MODEL_BASE_URL": Setting("models", "模型地址：chat_completions为服务前缀，doubao_native为完整文本接口地址；行内必须填写", ""),
+    "MODEL_PROTOCOL": Setting("models", "文本模型协议；行内doubaoNative选择doubao_native", "chat_completions", choices=('chat_completions', 'doubao_native')),
+    "EMBEDDING_BASE_URL": Setting("models", "行内原生文本协议下单独配置的向量服务前缀；未确认前留空并阻止向量请求", ""),
     "MODEL_NAME": Setting("models", "全项目文本生成模型名称或接入点", "doubao-seed-2-1-lite-260915"),
     "EMBEDDING_MODEL_NAME": Setting("models", "全项目向量模型名称或接入点", "doubao-embedding-vision-251215"),
     "AI_API_MAX_CONCURRENT_REQUESTS": Setting('model_limits','模型能力入口最大并发请求数','4','int',minimum=1,maximum=64),
@@ -85,7 +87,7 @@ def validate_value(key: str, value: str, spec: Setting | None = None) -> str:
             raise ValueError(f'{key} 必须是无凭据的HTTP服务地址')
         if key == 'JAVA_GATEWAY_URL' and address.path not in ('', '/'):
             raise ValueError('JAVA_GATEWAY_URL 必须是服务根地址')
-    if key == 'MODEL_BASE_URL' and value:
+    if key in ('MODEL_BASE_URL', 'EMBEDDING_BASE_URL') and value:
         from .model_endpoint import resolve_base_url
-        resolve_base_url({'PLANNING_ENV':'outside', key:value})
+        resolve_base_url({'PLANNING_ENV':'outside', 'MODEL_BASE_URL':value})
     return value

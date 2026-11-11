@@ -25,12 +25,20 @@ def configuration_checks(values):
                  and not any(c in token for c in '\r\n\x00'))
     checks.append(check('service_authentication',valid_token,'内部接口需配置有效的INTEGRATION_TOKEN'))
     try:
-        from .doubao_labeling import read_config
+        from .doubao_labeling import read_config, read_embedding_config
         with override_config(values):
-            read_config()
-        checks.append(check('model_configuration',True,protocol='ark',network_verified=False))
+            cfg = read_config()
+        checks.append(check('model_configuration',True,protocol=cfg.protocol,network_verified=False))
+        if cfg.protocol == 'doubao_native':
+            try:
+                with override_config(values):
+                    read_embedding_config()
+                checks.append(check('embedding_configuration',True,network_verified=False))
+            except Exception:
+                checks.append(check('embedding_configuration',False,
+                                    '文本网关已配置；向量仍需确认EMBEDDING_BASE_URL、模型名及鉴权'))
     except Exception:
-        checks.append(check('model_configuration',False,'检查MODEL_BASE_URL、ARK_API_KEY及两个模型名称'))
+        checks.append(check('model_configuration',False,'检查模型协议、MODEL_BASE_URL、模型名称及对应鉴权'))
     return checks
 
 
@@ -105,7 +113,9 @@ def model_probe():
         cfg=read_config()
         context=dict(chat_model=cfg.chat_model,embedding_model=cfg.embedding_model)
         calls+=1
-        value=chat(context,'只返回JSON对象{"ok":true}。',{'probe':'synthetic-connectivity-only'},max_tokens=32)
+        value=chat(context,'只返回JSON对象{"ok":true}。',{'probe':'synthetic-connectivity-only'},max_tokens=32,
+                   response_schema={'type':'object','properties':{'ok':{'type':'boolean'}},
+                                    'required':['ok'],'additionalProperties':False}, response_name='ConnectivityProbe')
         if value!={'ok':True}:raise ValueError()
         calls+=1
         embedded=embed_text('技术连通性测试：不含账号、客户或选题信息',cfg)

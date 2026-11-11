@@ -90,6 +90,8 @@ class DoubaoConfig:
     embedding_model: str
     timeout: int
     managed_capacity: bool = False
+    protocol: str = 'chat_completions'
+    embedding_base_url: str = ''
 
 
 @dataclass(frozen=True)
@@ -111,23 +113,67 @@ def _timeout() -> int:
     return timeout
 
 
+def model_protocol(config=None):
+    from .context import current_runtime
+    runtime = current_runtime()
+    if runtime and runtime.config.model_protocol != 'chat_completions':
+        protocol = runtime.config.model_protocol
+    elif isinstance(config, DoubaoConfig):
+        protocol = config.protocol
+    else:
+        protocol = get_setting('MODEL_PROTOCOL', 'chat_completions')
+    if protocol not in ('chat_completions', 'doubao_native', 'custom'):
+        raise DoubaoConfigurationError('MODEL_PROTOCOL 不受支持')
+    return protocol
+
+
+def _native_embedding_url(values):
+    value = values.get('EMBEDDING_BASE_URL', '')
+    if not value:
+        raise DoubaoConfigurationError('行内向量接口尚未配置：需要确认并填写 EMBEDDING_BASE_URL')
+    try:
+        return resolve_base_url({'PLANNING_ENV': 'inside', 'MODEL_BASE_URL': value})
+    except ModelEndpointError:
+        raise DoubaoConfigurationError('EMBEDDING_BASE_URL 必须是有效的向量服务前缀') from None
+
+
+def json_output_format(config, name, schema):
+    if model_protocol(config) == 'doubao_native':
+        return {'type': 'json_schema', 'json_schema': {'name': name, 'strict': True, 'schema': schema}}
+    return {'type': 'json_object'}
+
+
 def read_embedding_config() -> EmbeddingConfig:
     key = get_setting("ARK_API_KEY", "").strip()
     embedding = get_setting("EMBEDDING_MODEL_NAME", "doubao-embedding-vision-251215").strip()
     if not key or not embedding:
         raise DoubaoConfigurationError("需要配置 ARK_API_KEY 和 EMBEDDING_MODEL_NAME")
     try:
-        base_url = resolve_base_url(snapshot())
+        values = snapshot()
+        base_url = _native_embedding_url(values) if model_protocol() == 'doubao_native' else resolve_base_url(values)
     except ModelEndpointError as error:
         raise DoubaoConfigurationError(str(error)) from None
     return EmbeddingConfig(base_url, key, embedding, _timeout(), managed_capacity=True)
 
 
 def read_config() -> DoubaoConfig:
-    embedding = read_embedding_config()
+    protocol = model_protocol()
     model = get_setting("MODEL_NAME", "doubao-seed-2-1-lite-260915").strip()
     if not model:
         raise DoubaoConfigurationError("需要配置 MODEL_NAME")
+    if protocol == 'doubao_native':
+        values = snapshot()
+        try:
+            base = resolve_base_url({'PLANNING_ENV': 'inside', 'MODEL_BASE_URL': values.get('MODEL_BASE_URL', '')})
+        except ModelEndpointError as error:
+            raise DoubaoConfigurationError(str(error)) from None
+        vector_base = _native_embedding_url(values) if values.get('EMBEDDING_BASE_URL') else ''
+        # The supplied bank text gateway has no Authorization header. The key
+        # remains available for the separately configured embedding service.
+        return DoubaoConfig(base, get_setting('ARK_API_KEY', '').strip(), model,
+                            get_setting('EMBEDDING_MODEL_NAME', '').strip(), _timeout(),
+                            managed_capacity=True, protocol=protocol, embedding_base_url=vector_base)
+    embedding = read_embedding_config()
     return DoubaoConfig(embedding.base_url, embedding.api_key, model,
                         embedding.embedding_model, embedding.timeout, managed_capacity=True)
 
@@ -143,7 +189,7 @@ def ark_post(config: DoubaoConfig | EmbeddingConfig, path: str, payload: dict) -
             adapter = runtime.model_adapters.get(kind)
             if adapter is not None:
                 return adapter.post(config, path, payload)
-            if runtime.config.model_protocol != 'chat_completions':
+            if runtime.config.model_protocol == 'custom':
                 raise DoubaoConfigurationError('当前模型协议需要显式的策划模型适配器')
         return _ark_post(config, path, payload)
 
@@ -153,17 +199,48 @@ class DoubaoRateLimited(CapacityExceeded, DoubaoUnavailable):
 
 
 def _ark_post(config: DoubaoConfig | EmbeddingConfig, path: str, payload: dict) -> dict:
+    native = isinstance(config, DoubaoConfig) and model_protocol(config) == 'doubao_native'
+    endpoint = config.base_url + path
+    if native:
+        from .native_model_protocol import request_body, completion_result, NativeProtocolError
+        if path == '/chat/completions':
+            try:
+                payload = request_body(payload)
+            except (NativeProtocolError, KeyError, TypeError):
+                raise DoubaoConfigurationError('行内文本模型请求格式不完整或不受支持') from None
+            endpoint = config.base_url  # Full doubaoNative URL; never append /chat/completions.
+        elif path.startswith('/embeddings'):
+            if not config.embedding_base_url:
+                raise DoubaoConfigurationError('行内向量接口尚未配置：需要确认并填写 EMBEDDING_BASE_URL')
+            if not config.api_key:
+                raise DoubaoConfigurationError('向量接口需要配置 ARK_API_KEY；鉴权方式不同可注入 embedding 适配器')
+            if not config.embedding_model:
+                raise DoubaoConfigurationError('向量接口需要配置 EMBEDDING_MODEL_NAME')
+            endpoint = config.embedding_base_url + path
+        else:
+            raise DoubaoConfigurationError('行内原生模型接口不支持此调用路径')
+    result = _post_json(config, endpoint, payload, authorize=not (native and path == '/chat/completions'))
+    if native and path == '/chat/completions':
+        try:
+            return completion_result(result)
+        except NativeProtocolError as error:
+            raise DoubaoResponseError(str(error)) from None
+    return result
+
+
+def _post_json(config, endpoint, payload, *, authorize=True):
     data = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
     from .context import current_runtime
     runtime = current_runtime()
     scheme = runtime.config.model_authorization_scheme if runtime else 'Bearer'
     headers = {
-        "Authorization": scheme + " " + config.api_key,
         "Content-Type": "application/json", "Accept": "application/json",
     }
+    if authorize and config.api_key and scheme.lower() != 'none':
+        headers['Authorization'] = scheme + ' ' + config.api_key
     if runtime is not None:
         headers.update(runtime.config.model_headers)
-    request = Request(config.base_url + path, data=data, method="POST", headers=headers)
+    request = Request(endpoint, data=data, method="POST", headers=headers)
     try:
         with open_request(request, timeout=config.timeout) as response:
             raw = response.read(2_000_001)
@@ -228,10 +305,16 @@ def label_topic(payload: LabelInput, config: DoubaoConfig | None = None) -> dict
                         "taxonomy_version": payload.taxonomy_version,
                         "dimension_names": DIMENSION_NAMES, "taxonomy": payload.taxonomy},
                        ensure_ascii=False, allow_nan=False)}]
+    schema = {'type': 'object', 'properties': {'labels': {
+        'type': 'object', 'properties': {
+            **{key: {'type': 'string', 'enum': values} for key, values in payload.taxonomy.items()},
+            'T6': {'type': 'string', 'minLength': 1, 'maxLength': 80}},
+        'required': list(DIMENSIONS), 'additionalProperties': False}},
+        'required': ['labels'], 'additionalProperties': False}
     for attempt in range(2):
         result = ark_post(config, "/chat/completions", {
             "model": config.chat_model, "messages": messages,
-            "response_format": {"type": "json_object"},
+            "response_format": json_output_format(config, 'TopicLabels', schema),
             "thinking": {"type": "disabled"}, "temperature": 0, "max_tokens": 1024,
         })
         try:

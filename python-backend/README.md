@@ -1,5 +1,7 @@
 # Python 子项目
 
+2026-11-11：新增行内 `doubaoNative` 文本协议适配，涵盖打标、账号映射及匹配精判；配置、向量边界和联调步骤见 [行内模型网关接入](BANK_MODEL_GATEWAY.md)。
+
 2026-11-10：运行代码已统一迁入 `app/content_planning/`，独立入口仍为 `app.main:app`。宿主通过 `install_content_planning()` 共用进程和端口，默认关闭、不自动建表；配置、生命周期、路由和交付命令见 [模块接入说明](INTEGRATION.md)。外置 SQL 位于 `database/content_planning/`，兼容路径额外依赖见 [数据库边界](database/content_planning/README.md)。
 
 行内运行版本已确认：**Python 3.10.11**。仓库根目录及本目录的`.python-version`记录目标版本；生产依赖以`requirements.txt`为准，开发测试使用`requirements-dev.txt`。请在该版本的独立虚拟环境安装，不沿用电脑全局Python的依赖。

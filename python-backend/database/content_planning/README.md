@@ -4,6 +4,8 @@
 
 ## 安装与升级
 
+- 基础配置数据使用当前数据库快照，见[行内基础数据初始化清单](../../../docs/行内基础数据初始化_2026-11-11.md)。只读导出工具为 `tools.content_planning.export_foundation_data`；标签、人设映射、算法规则及业务规则保留实际版本和状态，不从示例重新生成。
+
 - 首次算法库安装入口：`algorithm_schema.sql`，仅包含 25 张算法自有表，无 Java 业务表、原始资料表或策略自动批准。
 - `CREATE TABLE IF NOT EXISTS` 不升级已有字段。已有环境须结合 `migrations/` 和原发布版本逐项审核，尤其公共审计字段迁移；本次包路径调整本身不要求新增业务字段。
 - 配置缺项初始化是独立的显式步骤：`python -m tools.content_planning.initialize --apply --resource-directory <绝对目录> --config-file <宿主配置JSON>`。该命令会建表并补缺失配置键，不导入历史凭据，不创建演示数据。行内优先交 DBA 执行，不授予应用 DDL 权限。

@@ -39,20 +39,20 @@
 :where(.planning-ui) .card-head h2 { color: var(--neutral-900); font-size: 16px; line-height: 24px; font-weight: 600; }
 :where(.planning-ui) .card-body { padding: 24px; }
 :where(.planning-ui) .card-head small, :where(.planning-ui) .page-footnote { color: var(--neutral-500); font-size: 13px; line-height: 20px; }
-:where(.planning-ui) .btn { height: 36px; padding: 0 16px; gap: 6px; border-color: var(--neutral-200); border-radius: 6px; background: var(--surface); color: var(--neutral-600); font-size: 14px; line-height: 22px; font-weight: 500; }
+:where(.planning-ui) .btn { height: 36px; padding: 0 16px; gap: 6px; border-color: var(--neutral-200); border-radius: 6px; background: var(--surface); color: var(--text-action-muted); font-size: 14px; line-height: 22px; font-weight: 500; }
 :where(.planning-ui) .btn { position: relative; }
 :where(.planning-ui) .btn::after { content: ''; position: absolute; inset: -4px 0; }
-:where(.planning-ui) .btn:hover:not(:disabled) { border-color: var(--primary-300); background: var(--primary-50); color: var(--primary-600); }
-:where(.planning-ui) .btn:active:not(:disabled) { background: var(--primary-100); }
+:where(.planning-ui) .btn:hover:not(:disabled) { border-color: var(--text-disabled); background: var(--metric-background); color: var(--text-action-muted); }
+:where(.planning-ui) .btn:active:not(:disabled) { background: var(--divider); }
 :where(.planning-ui) .btn.primary { background: var(--primary-600); border-color: var(--primary-600); color: var(--surface); }
-:where(.planning-ui) .btn.primary:hover:not(:disabled) { background: var(--primary-500); border-color: var(--primary-500); color: var(--surface); }
+:where(.planning-ui) .btn.primary:hover:not(:disabled) { background: var(--brand-auxiliary); border-color: var(--brand-auxiliary); color: var(--surface); }
 :where(.planning-ui) .btn.primary:active:not(:disabled) { background: var(--primary-700); border-color: var(--primary-700); }
-:where(.planning-ui) .btn:disabled { opacity: 1; background: var(--neutral-100); border-color: var(--neutral-100); color: var(--neutral-300); cursor: not-allowed; }
+:where(.planning-ui) .btn:disabled { opacity: 1; background: var(--metric-background); border-color: var(--divider); color: var(--text-disabled); cursor: not-allowed; }
 :where(.planning-ui) .btn.danger-outline:not(:disabled) { border-color: var(--danger-border); color: var(--danger); }
 :where(.planning-ui) .btn.danger-outline:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
 :where(.planning-ui) .text-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 6px; border-radius: 4px; color: var(--primary-600); font-size: 14px; line-height: 22px; font-weight: 500; }
 :where(.planning-ui) .text-btn:hover:not(:disabled) { background: var(--primary-50); text-decoration: none; }
-:where(.planning-ui) .text-btn:disabled { opacity: 1; color: var(--neutral-400); cursor: not-allowed; }
+:where(.planning-ui) .text-btn:disabled { opacity: 1; color: var(--text-disabled); cursor: not-allowed; }
 :where(.planning-ui) .table-wrap td .text-btn { position: relative; min-height: 24px; padding: 1px 6px; }
 :where(.planning-ui) .table-wrap td .text-btn::after { content: ''; position: absolute; inset: -10px 0; }
 :where(.planning-ui) .field { gap: 8px; font-size: 13px; line-height: 20px; font-weight: 400; color: var(--neutral-600); }
@@ -62,7 +62,7 @@
 :where(.planning-ui) .field input, :where(.planning-ui) .field textarea, :where(.planning-ui) .field-input { min-height: 36px; border-radius: 6px; padding: 6px 12px; color: var(--neutral-800); font-size: 14px; line-height: 22px; font-weight: 400; }
 :where(.planning-ui) .field input:focus, :where(.planning-ui) .field textarea:focus, :where(.planning-ui) .field-input:focus, :where(.planning-ui) .input-unit:focus-within { border-color: var(--primary-600); box-shadow: var(--focus-ring); }
 :where(.planning-ui) .field input[aria-invalid='true'], :where(.planning-ui) input[aria-invalid='true'] { border-color: var(--danger); }
-:where(.planning-ui) .field input[aria-invalid='true']:focus { border-color: var(--danger); box-shadow: 0 0 0 3px rgb(229 72 77 / 14%); }
+:where(.planning-ui) .field input[aria-invalid='true']:focus { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-focus-color); }
 :where(.planning-ui) .field>.field-error { color: var(--danger); font-size: 12px; line-height: 18px; }
 :where(.planning-ui) .field input:disabled, :where(.planning-ui) .field textarea:disabled, :where(.planning-ui) select:disabled { background: var(--neutral-50); border-color: var(--neutral-100); color: var(--neutral-300); }
 :where(.planning-ui) select { color: var(--neutral-700); }
@@ -96,6 +96,21 @@
 :where(.planning-ui) .result-tabs button.active::after { display: none; }
 :where(.planning-ui) th { padding: 14px 16px; color: var(--neutral-500); background: var(--neutral-50); font-size: 13px; line-height: 20px; font-weight: 400; border-color: var(--neutral-200); }
 :where(.planning-ui) td { height: 52px; padding: 14px 16px; color: var(--neutral-700); font-size: 14px; line-height: 22px; border-color: var(--neutral-200); }
+/* Windows/Chrome的LCD子像素抗锯齿会让黑字边缘出现红蓝彩边。
+   在表格自身隔离合成绘制，保留原文字色；不对页面容器使用transform，
+   避免改变抽屉、悬浮操作区和固定滚动条的定位基准。 */
+:where(.planning-ui) table { backface-visibility: hidden; }
+/* 同一绘制规则覆盖表单、页面标题与BodyPortal中的抽屉/气泡。
+   backface-visibility不改变fixed控件的定位基准；不修改文字透明度。 */
+.planning-ui :is(.main,.sidebar,.topbar,.workspace-tabs),
+.planning-ui.planning-body-portal > * { backface-visibility: hidden; }
+/* Windows Chrome仍可能对有底色的表头、按钮和侧栏使用LCD子像素着色。
+   只为文字/控件建立独立绘制层，不在页面或弹层容器添加transform，
+   避免改变悬浮操作区、抽屉和底部滚动条的fixed定位基准。 */
+.planning-ui :is(button,input,select,textarea,th,td,h1,h2,h3,h4,p,summary,strong,b,small),
+.planning-ui .sidebar :is(.sidebar-title,.sidebar-foot,.nav-item span) { will-change:transform; }
+.planning-ui ::selection { background:var(--brand);color:var(--surface); }
+.planning-ui .taxonomy-action-field input:focus { outline:none;border-color:var(--brand);box-shadow:var(--focus-ring); }
 :where(.planning-ui) td b, :where(.planning-ui) .account-name-cell b { color: var(--neutral-800); font-weight: 500; }
 :where(.planning-ui) tbody tr:hover { background: var(--hover-bg); }
 :where(.planning-ui) tbody tr.selected { background: var(--selected-bg); }
@@ -104,19 +119,20 @@
 :where(.planning-ui) .account-name-cell small, :where(.planning-ui) td small { color: var(--neutral-400); font-size: 12px; line-height: 18px; font-weight: 400; }
 :where(.planning-ui) .tag { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 8px; border: 0; border-radius: 6px; font-size: 12px; line-height: 18px; font-weight: 500; }
 :where(.planning-ui) .tag.green { background: var(--success-bg); color: var(--success); }
-:where(.planning-ui) .tag.orange { background: var(--processing-bg); color: var(--processing); }
+:where(.planning-ui) .tag.orange { background: var(--warning-bg); color: var(--warning); }
 :where(.planning-ui) .tag.blue, :where(.planning-ui) .tag.purple { background: var(--primary-50); color: var(--primary-600); }
+:where(.planning-ui) .tag.auxiliary { background: var(--primary-100); color: var(--brand-auxiliary); }
 :where(.planning-ui) .tag.red { background: var(--danger-bg); color: var(--danger); }
 :where(.planning-ui) .tag.gray { background: var(--neutral-100); color: var(--neutral-500); }
 :where(.planning-ui) .account-type-badge { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 7px; border: 1px solid var(--neutral-200); border-radius: 4px; color: var(--neutral-500); font-size: 12px; line-height: 18px; white-space: nowrap; }
 :where(.planning-ui) .account-type-badge.certified { border-color: var(--primary-200); color: var(--primary-600); background: var(--primary-50); }
 :where(.planning-ui) .banner { padding: 12px 16px; border-radius: 8px; font-size: 13px; line-height: 20px; }
 :where(.planning-ui) .info-banner { background: var(--primary-50); border-color: var(--primary-100); color: var(--primary-700); }
-:where(.planning-ui) .warning-banner { background: var(--processing-bg); border-color: transparent; color: var(--processing); }
+:where(.planning-ui) .warning-banner { background: var(--warning-bg); border-color: transparent; color: var(--warning); }
 :where(.planning-ui) .success-banner { background: var(--success-bg); border-color: transparent; color: var(--success); }
 :where(.planning-ui) .error-banner { background: var(--danger-bg); border-color: transparent; color: var(--danger); }
 :where(.planning-ui) .empty-state { display: grid; justify-items: center; align-content: center; gap: 12px; min-height: 160px; padding: 24px; background: var(--neutral-50); color: var(--neutral-500); font-size: 14px; line-height: 22px; border-radius: 8px; }
-:where(.planning-ui) .empty-state::before { content: ''; display: block; width: 34px; height: 34px; border: 1px solid var(--neutral-200); border-radius: 50%; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23C4CCD8' stroke-width='1.6'%3E%3Cpath d='M5 5h14v15H5zM8 2v6m8-6v6M5 10h14m-10 3 6 4m0-4-6 4'/%3E%3C/svg%3E") center no-repeat; }
+:where(.planning-ui) .empty-state::before { content: ''; display: block; width: 34px; height: 34px; border: 1px solid var(--neutral-200); border-radius: 50%; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-opacity='.2' stroke-width='1.6'%3E%3Cpath d='M5 5h14v15H5zM8 2v6m8-6v6M5 10h14m-10 3 6 4m0-4-6 4'/%3E%3C/svg%3E") center no-repeat; }
 :where(.planning-ui) .empty-state b { font-size: 14px; font-weight: 500; color: var(--neutral-600); }
 :where(.planning-ui) .table-wrap .empty-state { margin: 8px; }
 :where(.planning-ui) .account-pagination { align-items: center; padding: 16px 0; gap: 8px; color: var(--neutral-500); font-size: 13px; line-height: 20px; }
@@ -284,3 +300,80 @@
   border-radius: var(--radius-button, 12px) !important;
 }
 :where(.planning-ui) .vue2-component-root { display: contents; }
+
+/* 颜色规范：禁用文字不再叠加opacity，避免偏离黑色20%的指定值。 */
+.planning-ui .btn:disabled,
+.planning-ui .account-pagination .btn:disabled,
+.planning-ui .text-btn:disabled { opacity:1;color:var(--text-disabled); }
+.planning-ui input:disabled,
+.planning-ui select:disabled,
+.planning-ui textarea:disabled { color:var(--text-disabled);-webkit-text-fill-color:var(--text-disabled);opacity:1; }
+.planning-ui .form-fieldset:disabled { opacity:1; }
+.planning-ui .manual-stepper .manual-step:disabled,
+.planning-ui .manual-stepper .manual-step:disabled>span { color:var(--text-disabled); }
+.planning-ui input::placeholder,
+.planning-ui textarea::placeholder { color:var(--text-placeholder);opacity:1; }
+.planning-ui .btn.app-confirm-danger:not(:disabled),
+.planning-ui .btn.app-confirm-danger:hover:not(:disabled),
+.planning-ui .btn.app-confirm-danger:active:not(:disabled) { background:var(--danger);border-color:var(--danger);color:var(--surface); }
+/* Element UI复用同一语义色，仅作用于本模块，不改变宿主工程组件。 */
+.planning-ui .el-button--primary { background:var(--brand);border-color:var(--brand);color:var(--surface); }
+.planning-ui .el-button--primary:hover,.planning-ui .el-button--primary:focus { background:var(--brand-auxiliary);border-color:var(--brand-auxiliary); }
+.planning-ui .el-button--success { background:var(--success);border-color:var(--success); }
+.planning-ui .el-button--warning { background:var(--warning);border-color:var(--warning); }
+.planning-ui .el-button--danger { background:var(--danger);border-color:var(--danger); }
+.planning-ui .el-button--text,.planning-ui .el-link--primary { color:var(--link); }
+.planning-ui .el-button.is-disabled { color:var(--text-disabled);background:var(--metric-background);border-color:var(--divider); }
+.planning-ui .el-input__inner,.planning-ui .el-textarea__inner { color:var(--text-primary);border-color:var(--divider); }
+.planning-ui .el-input__inner:focus,.planning-ui .el-textarea__inner:focus { border-color:var(--brand); }
+.planning-ui .el-input__inner::placeholder,.planning-ui .el-textarea__inner::placeholder { color:var(--text-placeholder); }
+.planning-ui .el-checkbox__input.is-checked .el-checkbox__inner,.planning-ui .el-checkbox__input.is-indeterminate .el-checkbox__inner,.planning-ui .el-radio__input.is-checked .el-radio__inner { background:var(--brand);border-color:var(--brand); }
+.planning-ui .el-checkbox__input.is-checked+.el-checkbox__label,.planning-ui .el-radio__input.is-checked+.el-radio__label,.planning-ui .el-tabs__item.is-active { color:var(--brand); }
+.planning-ui .el-tabs__active-bar { background:var(--brand); }
+
+/* 日期/时间统一使用Element UI，避免浏览器原生日历不可控的蓝色选中态。 */
+.planning-ui .planning-date-input.el-date-editor { width:100%;min-width:0;font-size:14px; }
+.planning-ui .manual-create-meta>.field { flex:0 1 180px;width:180px;min-width:0; }
+.planning-ui .planning-date-input .el-input__inner { box-sizing:border-box;width:100%;height:32px;min-height:32px;padding:0 30px 0 32px;border:1px solid var(--divider);border-radius:12px;background:var(--surface);color:var(--text-primary);font-size:14px;line-height:30px; }
+.planning-ui .planning-date-input .el-input__icon { width:24px;line-height:32px;color:var(--text-placeholder); }
+.planning-ui .planning-date-input .el-input__inner:focus { border-color:var(--brand);box-shadow:var(--focus-ring); }
+.planning-ui .planning-date-input.is-disabled .el-input__inner { background:var(--metric-background);color:var(--text-disabled); }
+.planning-ui .planning-date-input.is-disabled .el-input__icon { color:var(--text-disabled); }
+.planning-ui .query-filter-grid[data-query-filters] label>.planning-date-input { box-sizing:border-box;width:100%;min-width:0;height:32px; }
+.planning-ui .schedule-picker>.planning-date-input { flex:1;min-width:0; }
+.planning-ui.planning-picker-popper { z-index:2000;background:var(--surface);border:1px solid var(--divider);border-radius:12px;box-shadow:var(--shadow-3);color:var(--text-primary);font-family:var(--font-family);backface-visibility:hidden; }
+.planning-ui.planning-picker-popper .el-picker-panel__body-wrapper { border-radius:12px; }
+.planning-ui.planning-picker-popper .el-picker-panel__content { margin:12px;width:calc(100% - 24px); }
+.planning-ui.planning-picker-popper .el-date-picker__header-label { color:var(--text-primary); }
+.planning-ui.planning-picker-popper .el-picker-panel__icon-btn { color:var(--text-action-muted); }
+.planning-ui.planning-picker-popper .el-date-picker__header-label:hover,
+.planning-ui.planning-picker-popper .el-picker-panel__icon-btn:hover { color:var(--brand); }
+.planning-ui.planning-picker-popper table { width:100%;min-width:0;background:transparent; }
+.planning-ui.planning-picker-popper .el-date-table th { height:30px;padding:0;color:var(--text-secondary);background:var(--surface);border-bottom:1px solid var(--divider);font-size:12px;text-align:center; }
+.planning-ui.planning-picker-popper .el-date-table td { height:32px;padding:0;border:0;color:var(--text-primary);font-size:12px;text-align:center; }
+.planning-ui.planning-picker-popper .el-date-table tr:hover,
+.planning-ui.planning-picker-popper .el-date-table td>div { background:transparent; }
+.planning-ui.planning-picker-popper .el-date-table td.today span,
+.planning-ui.planning-picker-popper .el-date-table td.available:hover span { color:var(--brand); }
+.planning-ui.planning-picker-popper .el-date-table td.current:not(.disabled) span { background:var(--brand);color:var(--surface); }
+.planning-ui.planning-picker-popper .el-date-table td.prev-month,
+.planning-ui.planning-picker-popper .el-date-table td.next-month { color:var(--text-placeholder); }
+.planning-ui.planning-picker-popper .el-date-table td.disabled>div { background:var(--metric-background); }
+.planning-ui.planning-picker-popper .el-date-table td.disabled span { color:var(--text-disabled); }
+.planning-ui.planning-picker-popper .el-month-table td,
+.planning-ui.planning-picker-popper .el-year-table td { height:auto;padding:12px 0;border:0;background:transparent;text-align:center; }
+.planning-ui.planning-picker-popper :is(.el-month-table,.el-year-table) .cell { color:var(--text-primary); }
+.planning-ui.planning-picker-popper :is(.el-month-table,.el-year-table) td.current:not(.disabled) .cell,
+.planning-ui.planning-picker-popper :is(.el-month-table,.el-year-table) .cell:hover { color:var(--brand); }
+.planning-ui.planning-picker-popper .el-picker-panel__footer,
+.planning-ui.planning-picker-popper .el-time-panel__footer { border-color:var(--divider);background:var(--surface); }
+.planning-ui.planning-picker-popper .el-time-spinner__item { color:var(--text-secondary); }
+.planning-ui.planning-picker-popper .el-time-spinner__item.active:not(.disabled),
+.planning-ui.planning-picker-popper .el-time-panel__btn.confirm { color:var(--brand); }
+.planning-ui.planning-picker-popper .el-time-panel__btn.cancel { color:var(--text-action-muted); }
+.planning-ui.planning-picker-popper :is(.el-time-panel__content,.el-time-range-picker__body)::before,
+.planning-ui.planning-picker-popper :is(.el-time-panel__content,.el-time-range-picker__body)::after { border-color:var(--divider); }
+.planning-ui.planning-picker-popper .popper__arrow,
+.planning-ui.planning-picker-popper .popper__arrow::after { border-bottom-color:var(--surface); }
+.planning-ui.planning-picker-popper button:disabled { opacity:1;color:var(--text-disabled); }
+@media(max-width:580px) { .planning-ui .manual-create-meta>.field { flex:1 1 100%;width:100%; } }

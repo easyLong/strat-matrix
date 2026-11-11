@@ -23,7 +23,7 @@ def build_bundle(output: Path, wheel_dir: Path | None = None):
                        for part in path.relative_to(ROOT).parts)):
             continue
         files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
-    for name in ('.python-version', 'requirements.txt', 'README.md', 'ONSITE.md', 'INTEGRATION.md'):
+    for name in ('.python-version', 'requirements.txt', 'README.md', 'ONSITE.md', 'INTEGRATION.md', 'BANK_MODEL_GATEWAY.md'):
         path = ROOT / 'python-backend' / name
         files['python-backend/' + name] = path.read_bytes()
     for path in (ROOT / 'python-backend/database/content_planning').rglob('*'):

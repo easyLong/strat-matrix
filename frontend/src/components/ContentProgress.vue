@@ -47,5 +47,5 @@ export default {
 .completed{color:var(--success);font-weight:600}
 .separator{color:var(--neutral-300);font-weight:400}
 .total{color:var(--neutral-700);font-weight:500}
-.content-status{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-variant-numeric:tabular-nums}.content-status b{font-weight:600}.content-status>span{color:var(--neutral-500);font-weight:500}.status-completed b{color:var(--success)}.status-processing b{color:var(--primary-600)}.status-waiting b{color:var(--neutral-500)}
+.content-status{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-variant-numeric:tabular-nums}.content-status b{font-weight:600}.content-status>span{color:var(--text-secondary);font-weight:500}.status-completed b{color:var(--success)}.status-processing b{color:var(--processing)}.status-waiting b{color:var(--warning)}
 </style>

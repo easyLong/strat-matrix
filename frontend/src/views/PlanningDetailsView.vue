@@ -325,7 +325,7 @@ export default {
         <h2>{{ detailTitle }}</h2>
         <div v-if="isBatchMode" class="planning-detail-scope planning-batch-scope">
           <HoverHint text="周期" :show-icon="false" class="tag gray planning-context-tag">{{ cyclePeriodLabel(cycleStart) }}</HoverHint>
-          <HoverHint text="策划方式" :show-icon="false" :class="['tag', 'planning-context-tag', fixedPlanType === 'manual' ? 'orange' : 'blue']">{{ scopePlanType }}</HoverHint>
+          <HoverHint text="策划方式" :show-icon="false" :class="['tag', 'planning-context-tag', fixedPlanType === 'manual' ? 'auxiliary' : 'blue']">{{ scopePlanType }}</HoverHint>
           <HoverHint text="批次号" :show-icon="false" class="tag gray planning-context-tag"><span class="planning-batch-code">{{ currentBatch?.batch_code || '—' }}</span></HoverHint>
         </div>
         <div v-else-if="isAccountMode" class="planning-detail-scope">
@@ -364,7 +364,7 @@ export default {
       <section v-if="!isBatchMode && !isAccountMode && batchesExpanded" id="cycle-batch-list" class="cycle-batch-list">
         <div class="cycle-batch-title"><b>本周期批次</b><span>{{ batches.length }} 个批次</span></div>
         <div class="table-wrap"><table><thead><tr><th>批次</th><th>策划方式</th><th>账号数</th><th>策划状态</th><th>更新时间</th><th>操作</th></tr></thead>
-          <tbody><tr v-for="batch in pagedCycleBatches" :key="batch.id"><td><div class="cycle-batch-identity"><b>{{ batch.task_name || '—' }}</b><small>{{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td><td>{{ batch.account_count }}</td><td>{{ batch.planning_status || batch.status }}</td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="emit('open-batch', batch)">查看策划</button></td></tr><tr v-if="!batches.length"><td colspan="6" class="empty-state">暂无批次</td></tr></tbody>
+          <tbody><tr v-for="batch in pagedCycleBatches" :key="batch.id"><td><div class="cycle-batch-identity"><b>{{ batch.task_name || '—' }}</b><small>{{ batch.batch_code }}</small></div></td><td>{{ batch.plan_type === 'manual' ? '人工策划' : '自动策划' }}</td><td>{{ batch.account_count }}</td><td>{{ batch.planning_status || batch.status }}</td><td>{{ formatDateTime(batch.updated_at || batch.created_at) }}</td><td><button class="text-btn" type="button" @click="emit('open-batch', batch)">查看策划</button></td></tr><tr v-if="!batches.length"><td colspan="6"><div class="empty-state">暂无批次</div></td></tr></tbody>
         </table></div>
         <ListPagination v-if="batches.length > 10" :page.sync="batchPage" :page-size.sync="batchPageSize" :total="batches.length" unit="个批次" />
       </section>
@@ -431,7 +431,7 @@ export default {
 .account-plan-table-wrap{margin:0 20px 20px}.account-plan-table{table-layout:fixed;min-width:1180px}.account-plan-table th,.account-plan-table td{padding:14px 12px;vertical-align:top;line-height:22px}.account-plan-table td{color:var(--neutral-700)}.account-plan-date{white-space:nowrap;font-variant-numeric:tabular-nums}.account-plan-text{white-space:pre-wrap;overflow-wrap:anywhere}.account-plan-batch{overflow-wrap:anywhere}.account-plan-batch>span{display:block}.account-plan-batch>small{margin-top:3px;font-size:12px;line-height:18px}.account-plan-table .empty-state{text-align:center;padding:32px 12px;color:var(--neutral-400)}
 @media(max-width:980px){.account-plan-table-wrap{margin:0 12px 16px}}
 .planning-detail-head{align-items:flex-start;flex-wrap:wrap}.planning-detail-heading{flex:1 1 260px;min-width:0}.planning-detail-actions{display:flex;flex:0 0 auto;align-items:center;align-self:flex-start;justify-content:flex-end;flex-wrap:wrap;gap:8px;max-width:100%;margin-left:auto}.planning-detail-actions .btn{white-space:nowrap}.planning-detail-scope .planning-context-tag{min-width:0;max-width:100%;min-height:24px;padding:3px 8px;border-radius:6px;background:var(--neutral-100);color:var(--neutral-500);font-size:12px;line-height:18px;font-weight:500}.planning-batch-code{min-width:0;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.planning-batch-scope .planning-context-tag.orange{background:var(--processing-bg);color:var(--processing)}.planning-batch-scope .planning-context-tag.blue{background:var(--primary-50);color:var(--primary-600)}
+.planning-batch-scope .planning-context-tag.orange{background:var(--warning-bg);color:var(--warning)}.planning-batch-scope .planning-context-tag.blue{background:var(--primary-50);color:var(--primary-600)}
 .planning-detail-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px;min-width:0}.planning-scope-label{max-width:560px;overflow:hidden;text-overflow:ellipsis;font-size:12px}.planning-week-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--neutral-200);background:var(--neutral-50)}.planning-week-heading>span{color:var(--neutral-400);font-size:11px}.detail-query-btn{align-self:end;height:36px;min-width:80px;white-space:nowrap}
 .detail-filter-shell{margin:0 20px 16px;padding:12px 14px;border:1px solid var(--neutral-200);border-radius:10px;background:var(--surface)}
 .planning-detail-card>.detail-filter-shell{margin-top:16px;margin-bottom:0}

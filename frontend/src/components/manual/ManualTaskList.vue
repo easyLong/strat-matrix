@@ -203,8 +203,8 @@ export default {
 .manual-task-card td{height:52px;padding:12px 16px;color:var(--neutral-600);font-size:14px;line-height:22px;font-variant-numeric:tabular-nums}
 .manual-task-card tbody tr:nth-child(even){background:var(--surface)}
 .manual-task-card tbody tr:hover{background:var(--hover-bg)}
-.manual-task-card tbody tr.has-failures{background:var(--processing-row)}
-.manual-task-card tbody tr.has-failures:hover{background:var(--processing-bg)}
+.manual-task-card tbody tr.has-failures{background:var(--danger-row)}
+.manual-task-card tbody tr.has-failures:hover{background:var(--danger-bg)}
 .manual-task-card th:nth-child(n+3):nth-child(-n+6),.manual-task-card td:nth-child(n+3):nth-child(-n+6){text-align:center;white-space:nowrap}
 .manual-task-card td:first-child{min-width:150px;max-width:220px;color:var(--neutral-700);font-weight:500;overflow-wrap:anywhere}
 .manual-task-card th:last-child,.manual-task-card td:last-child{position:sticky;right:0;min-width:148px;background:var(--surface);box-shadow:-1px 0 0 var(--neutral-200)}

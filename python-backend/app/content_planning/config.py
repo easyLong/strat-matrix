@@ -65,7 +65,7 @@ class PlanningConfig:
             raise ValueError('Planning resource limits are invalid')
         if self.pool_timeout <= 0 or self.cache_seconds < 0 or self.max_forward_body_bytes < 1:
             raise ValueError('Planning timeout/cache/body limit is invalid')
-        if self.model_protocol not in ('chat_completions', 'custom'):
+        if self.model_protocol not in ('chat_completions', 'doubao_native', 'custom'):
             raise ValueError('Unsupported planning model protocol; provide a custom model adapter')
         if not self.model_authorization_scheme or any(c in self.model_authorization_scheme for c in '\r\n\x00'):
             raise ValueError('Planning model authorization scheme is invalid')
