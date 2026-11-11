@@ -10,6 +10,9 @@ public interface BankSourceMapper {
 
   List<Map<String, Object>> accounts(@Param("query") BankSourceContracts.Accounts query);
 
+  /** Batch enrichment for the current account page; never part of the page count. */
+  List<Map<String, Object>> accountInteractions(@Param("query") BankSourceContracts.Accounts query);
+
   Long countTopics(@Param("query") BankSourceContracts.Topics query);
 
   List<Map<String, Object>> topics(@Param("query") BankSourceContracts.Topics query);

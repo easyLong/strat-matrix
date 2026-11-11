@@ -139,9 +139,21 @@ public class LocalManualBusinessConfiguration {
   }
 
   @Bean(name="xiangliangOutsideSourceFacts")
+  @ConditionalOnProperty(name="planning.source.mode", havingValue="fixture", matchIfMissing=true)
   public SourceFacts outsideSourceFacts(Environment env) {
     return new FixtureSourceFacts(
         java.nio.file.Paths.get(env.getRequiredProperty("planning.source.fixture")));
+  }
+
+  @Bean(name="xiangliangSqlSourceFacts")
+  @ConditionalOnProperty(name="planning.source.mode", havingValue="sql")
+  public SourceFacts sqlSourceFacts(
+      @Qualifier("xiangliangManualBusinessDataSource") DataSource ds, Environment env) throws Exception {
+    return com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.source.bank.BankSourceSqlAdapter.create(
+        ds, new DataSourceTransactionManager(ds),
+        new org.springframework.core.io.DefaultResourceLoader().getResource(
+            env.getRequiredProperty("planning.source.mapper-location")),
+        java.time.ZoneId.of(env.getProperty("planning.source.storage-zone", "Asia/Shanghai")));
   }
 
   @Bean(name="xiangliangOutsideManualSource")

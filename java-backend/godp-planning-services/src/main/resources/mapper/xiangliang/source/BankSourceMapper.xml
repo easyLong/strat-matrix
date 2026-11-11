@@ -22,6 +22,10 @@
     <!-- 同countAccounts条件；按account_id稳定排序，分页后组装interactions。 -->
     <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.source.bank.BankSourceSqlRequired@missing('账号列表')"/>
   </select>
+  <select id="accountInteractions" resultType="map">
+    <!-- query.accountIds contains only IDs in the current page. -->
+    <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.source.bank.BankSourceSqlRequired@missing('账号互动明细')"/>
+  </select>
   <select id="countTopics" resultType="long">
     <!-- 条件：topicIds、source、topicType、availableOnly、validAt、更新时间及权限。 -->
     <bind name="siteSqlRequired" value="@com.pab.aitmp.aiis.godp.digital.marketing.services.service.xiangliang.source.bank.BankSourceSqlRequired@missing('选题总数')"/>

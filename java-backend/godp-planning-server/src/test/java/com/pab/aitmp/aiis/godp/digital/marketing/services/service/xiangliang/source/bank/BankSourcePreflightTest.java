@@ -19,7 +19,7 @@ class BankSourcePreflightTest {
     }
     assertThrows(IllegalStateException.class,() -> BankSourcePreflight.verify(new SqlSessionFactoryBuilder().build(config)));
   }
-  @Test void allTenExplicitSelectsPassPreflightWithoutADatasource() {
+  @Test void allExplicitSelectsPassPreflightWithoutADatasource() {
     Configuration config=new Configuration();
     for(java.lang.reflect.Method method:BankSourceMapper.class.getDeclaredMethods()) {
       config.addMappedStatement(new MappedStatement.Builder(config,BankSourceMapper.class.getName()+"."+method.getName(),

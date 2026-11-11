@@ -47,9 +47,9 @@
 
 六个业务Mapper装配前先执行元数据校验：缺XML/语句、BATCH执行器、非Spring事务工厂或标准JDBC绑定错库会阻止启动。自定义事务管理器未暴露JDBC资源时明确记录需由宿主验证。检查不连接数据库；宿主复用资源的别名示例见[HostBusinessBindings](HostBusinessBindings.java.example)，[只读合并预检](MAVEN_MODULES.md#合并前只读预检)用于识别现场差异，避免覆盖私有SQL。
 
-资料SQL使用独立的`mapper/xiangliang/source/BankSourceMapper.xml`。只有资料会话所属数据源具备相应读取权限时才加载，通过`xiangliangSourceSessions`、`xiangliangSourceTransactions`绑定；不默认把它加载进策划业务库会话。六个业务Mapper由`PlanningHostConfiguration`显式注册，宿主不要再对该包重复`MapperScan`。
+资料SQL使用独立的`mapper/xiangliang/source/BankSourceMapper.xml`。只有资料库数据源具备相应读取权限时才加载。推荐通过`BankSourceSqlAdapter.create`传入`xiangliangSourceDataSource`、`xiangliangSourceTransactions`、私有XML及存储时区；它创建独立资料会话，复用宿主连接池，不自动建表。不要把资料XML一并加载到策划业务会话。六个业务Mapper由`PlanningHostConfiguration`显式注册，宿主不要再对该包重复`MapperScan`。
 
-`SourceFacts`现有可复用的[BankSourceFacts骨架与查询契约](BANK_SOURCE_CONTRACT.md)、[67项字段映射表](BANK_SOURCE_FIELD_MAPPING.csv)和[装配示例](BankSourceBindings.java.example)。宿主可填MyBatis SQL，也可接已有Service，两种方式共用字段、分页、状态及关联校验。真实表名和状态编码尚待驻场填写；默认SQL及未实现方法明确返回503。它没有自动注册，不会替换当前outside模拟资料。
+`SourceFacts`现有可复用的[BankSourceFacts查询契约V0.3](BANK_SOURCE_CONTRACT.md)、[67项字段映射表](BANK_SOURCE_FIELD_MAPPING.csv)和[装配示例](BankSourceBindings.java.example)。宿主可填MyBatis SQL，也可接已有Service，两种方式共用字段、分页、状态及关联校验。公共XML保留占位，私有映射不进入公共仓库；工厂在装配时检查全部11条SELECT，缺文件或未填SQL即阻止启动。行外默认使用模拟资料，也可显式选择`planning.source.mode=sql`做源表联调；行内仍由宿主装配。验证结果及剩余口径见[2026-11-11接入记录](../../docs/发布记录_2026-11-11.md)。
 
 字段/编码差异可集中放在[现场映射规则](BankSourceSiteMapping.java.example)；账号互动支持每页一次批量查询，无需逐账号组装。现场可用`python -m testing.bank_source`有限样本只读验收，行外/行内使用同一命令，步骤见[测试说明](../../testing/README.md#资料适配只读验收)。
 

@@ -1,5 +1,7 @@
 # 项目文档目录
 
+- [2026-11-11 资料查询接入与交接记录](发布记录_2026-11-11.md)：行内SQL装配、7类POST资料查询、账号互动批量读取、152项Java回归及MySQL隔离验收，说明私有文件和生产验收边界。
+
 - [2026-11-10 发布与交接记录](发布记录_2026-11-10.md)：Python 0.3.0 模块化、Java 无视图 V10、前端名称、PRD 文件及数据库升级边界的本次提交总览。
 
 2026-11-10 Python模块化：运行代码迁入 `app/content_planning/`，支持独立 FastAPI 与宿主安装；配置、资源和接口按应用隔离，启动不建表。见 [接入说明](../python-backend/INTEGRATION.md)、[验收记录](../python-backend/VALIDATION.md) 与 [数据库依赖边界](../python-backend/database/content_planning/README.md)。

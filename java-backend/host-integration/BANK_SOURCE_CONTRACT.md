@@ -1,8 +1,14 @@
 # BankSourceFacts：行内资料查询与字段映射契约
 
-版本：V0.2，2026-11-03。本文件对应当前代码中的7项资料查询能力；沿用现有字段，不重新编排历史IF/OP编号。面向行内开发确认，真实表名、字段名和状态编码留待驻场填写。
+版本：V0.3，2026-11-11。本文件对应当前代码中的7项资料查询能力；沿用现有字段，不重新编排历史IF/OP编号。公共仓库保留稳定契约和SQL占位，现场表、字段及状态映射在私有XML中维护。
 
 配套文件：[字段映射表（CSV）](BANK_SOURCE_FIELD_MAPPING.csv)、[Bean装配示例](BankSourceBindings.java.example)、[只读SQL占位](../godp-planning-services/src/main/resources/mapper/xiangliang/source/BankSourceMapper.xml)、[宿主装配说明](README.md)。CSV为UTF-8带BOM，可用Excel打开。
+
+2026-11-11补充：提供 `BankSourceSqlAdapter.create(sourceDataSource, sourceTransactions, mapperXml, storageZone)` 统一装配。宿主传入资料库数据源、对应事务管理器及私有 XML 即可复用现有7类 POST 查询入口，无需再次编写 Controller。账号分页完成后，在同一只读事务内执行一次 `accountInteractions` 批量查询；空页不查互动。装配时检查所有11条语句，缺文件或仍有占位时启动失败，不回退模拟资料。
+
+行外 Java 可显式选择 `planning.source.mode=sql`、`planning.source.mapper-location=file:/绝对路径/BankSourceMapper.xml`，存储时区配置为 `planning.source.storage-zone=Asia/Shanghai`。此模式复用行外业务数据源，仅用于资料表位于同一开发库的联调；默认仍为 `fixture`。行内使用上方装配示例传入宿主资料数据源，不加载行外连接池、模拟数据或自动建表。原始私有 SQL 不进入公共仓库；查询代码不创建表、不写原始资料。
+
+查询接通与生产业务验收分开记录：`production-status` 的流水号关联、版本及内容范围，`marketing-status` 的任务号关联和完成数量，以及有效营销投放定义，都须与内容侧实际口径匹配。只能返回部分内容类型或固定版本的资料实现，不代表其他内容类型和重试版本也已验收。
 
 2026-11-05补充：营销选题不要求标题和大纲；活动类提供关联活动ID、名称、活动所属组织，银行产品类提供关联产品名称与产品ID。新增映射字段为`related_activity_id`、`activity_organization`、`related_product_id`，已有名称字段继续使用`related_activity`、`related_product`。非营销标题仍必填，不将活动名称伪装成选题标题。详情、预选及任务快照透传这些字段，不新增数据库列。
 
@@ -21,16 +27,16 @@
 
 基础资料只查询，不复制维护一份原始表。生命周期、T1–T6、向量及匹配分数不要求行内原始表提供。策划正式结果仍由现有Java业务服务写入业务库；本适配器不写原始资料、不触发内容生成、不创建表或调度器。
 
-日常outside继续使用`FixtureSourceFacts`。`BankSourceFacts`没有自动注册注解，也不会随环境开关自行启用；inside由宿主显式注册唯一的`SourceFacts` Bean，避免未填SQL影响当前开发。
+日常outside默认使用`FixtureSourceFacts`，仅显式设置`planning.source.mode=sql`时加载私有XML。`BankSourceFacts`本身没有自动注册注解；inside由宿主显式注册唯一的`SourceFacts` Bean，避免未填SQL影响当前开发。
 
 ## 2. 驻场选择一种查询接法
 
 | 接法 | 填写位置 | 共用不变的部分 |
 | --- | --- | --- |
-| 直接查询原始表 | `BankSourceMapper.xml`的10条SELECT：3组count/列表和4条列表查询；注册到资料所属MyBatis会话 | 请求对象、字段映射、结果校验、业务适配器、Python契约 |
+| 直接查询原始表 | `BankSourceMapper.xml`的11条SELECT：3组count/列表、4条列表查询和1条账号互动批量查询；注册到资料所属MyBatis会话 | 请求对象、字段映射、结果校验、业务适配器、Python契约 |
 | 调用已有Service/RPC | 宿主新建一个`BankSourceQueries`实现，覆盖7个方法；返回`PageRows`或记录列表 | 同上，无需强行改成SQL |
 
-SQL方式使用`MapperBankSourceQueries`，count与列表在同一只读事务中执行。`xiangliangSourceSessions`和`xiangliangSourceTransactions`必须指向同一资料数据源；它们与`xiangliangBusinessSessions`/业务事务可以不同。一个能力涉及多个既有服务或数据源时，优先在宿主的查询实现中组合，不能给一个MyBatis事务随意混用数据源。
+SQL方式通过`BankSourceSqlAdapter`装配`MapperBankSourceQueries`，count、列表及本页互动在同一只读事务中执行。装配示例传入的`xiangliangSourceDataSource`和`xiangliangSourceTransactions`必须指向同一资料库；工厂基于传入数据源创建独立MyBatis会话，不创建连接池。它们与`xiangliangBusinessSessions`/业务事务可以不同。复用宿主已有资料会话时，也可手工构造查询器并调用`verifyWith`绑定该会话工厂。一个能力涉及多个既有服务或数据源时，优先在宿主查询实现中组合，不能给一个MyBatis事务随意混用数据源。
 
 只读标记不是数据库权限控制。原始资料连接使用行内认可的只读权限；一致性隔离级别由宿主按数据库类型确定。需要跨页稳定快照时，由宿主提供相应读取保障，目前不声称OFFSET分页已具备快照能力。
 
@@ -149,7 +155,7 @@ mvn test -Dtest=BankSourceFactsTest,BankSourceSqlTest,BankSourceIntegrationTest,
 python -m testing
 ```
 
-覆盖7能力字段转换、分页/半开更新时间、真实H2 MyBatis参数绑定与资格过滤、10个SQL占位拒绝执行、只读事务、内部鉴权、错误隔离、Java→Python投影和Java/Python共用JSON结构。响应样例在[test fixture](../godp-planning-server/src/test/resources/bank-source/contract-sample.json)，全为合成资料。
+覆盖7能力字段转换、分页/半开更新时间、真实H2 MyBatis参数绑定与资格过滤、11个SQL占位拒绝执行、只读事务、内部鉴权、错误隔离、Java→Python投影和Java/Python共用JSON结构。响应样例在[test fixture](../godp-planning-server/src/test/resources/bank-source/contract-sample.json)，全为合成资料。
 
 ### V0.2：减少现场重复代码
 

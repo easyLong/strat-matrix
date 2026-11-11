@@ -116,13 +116,15 @@ class BankSourceSqlTest {
   }
 
   @Test
-  void allTenUnfilledSqlStatementsFailClosedAndNeverPretendNoData() throws Exception {
+  void allUnfilledSqlStatementsFailClosedAndNeverPretendNoData() throws Exception {
     DriverManagerDataSource ds = datasource();
     BankSourceMapper mapper = mapper(ds, "mapper/xiangliang/source/BankSourceMapper.xml");
     List<Supplier<?>> statements =
         Arrays.asList(
             () -> mapper.countAccounts(new BankSourceContracts.Accounts(map())),
             () -> mapper.accounts(new BankSourceContracts.Accounts(map())),
+            () -> mapper.accountInteractions(new BankSourceContracts.Accounts(
+                map("account_ids", Collections.singletonList("A1")))),
             () -> mapper.countTopics(new BankSourceContracts.Topics(map())),
             () -> mapper.topics(new BankSourceContracts.Topics(map())),
             () ->
